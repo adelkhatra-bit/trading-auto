@@ -397,6 +397,14 @@
       </div>
     </div>
 
+    <div id="biasBanner" style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px;margin:0 0 14px;border-radius:6px;background:#1e293b;font-size:12px;transition:background 0.3s">
+      <span id="biasLabel" style="font-weight:700;letter-spacing:1px;text-transform:uppercase">--</span>
+      <div style="flex:1;height:4px;margin:0 12px;background:#0f172a;border-radius:2px;overflow:hidden">
+        <div id="biasBar" style="height:100%;width:0%;transition:width 0.5s,background 0.3s;border-radius:2px"></div>
+      </div>
+      <span id="biasStrength" style="color:#64748b;font-size:11px">0%</span>
+    </div>
+
     <div class="controls">
       <div class="control-box">
         <label>Symbole</label>
@@ -594,6 +602,7 @@
       timeframe: 'H1',
       tradeMode: 'AUTO',
       agentSessionActive: false,
+      newsEvents: [],
       bridgeConfig: {
         agentName: 'orchestrator',
         bridgeSource: 'tradingview',
@@ -614,6 +623,54 @@
       candleRemaining: null,
       candleCountdownTimer: null
     };
+
+    function computeMarketBias(live, newsEvents) {
+      let score = 0;
+      let signals = 0;
+
+      const decision = ((live?.execution?.decision) ||
+        (live?.coach?.execution?.decision) || '').toUpperCase();
+      if (decision.includes('BUY') || decision.includes('LONG'))  { score += 2; signals++; }
+      if (decision.includes('SELL') || decision.includes('SHORT')){ score -= 2; signals++; }
+
+      const agents = live?.coach?.agents || live?.agents || {};
+      for (const [, agent] of Object.entries(agents)) {
+        const sig = (agent?.signal || agent?.recommendation || '').toUpperCase();
+        if (sig.includes('BUY') || sig.includes('LONG'))  { score += 1; signals++; }
+        if (sig.includes('SELL') || sig.includes('SHORT')){ score -= 1; signals++; }
+      }
+
+      if (Array.isArray(newsEvents)) {
+        newsEvents.forEach(e => {
+          const b = e?.bias?.direction || e?.bias || '';
+          if (b.includes('BULLISH')) score += 0.5;
+          if (b.includes('BEARISH')) score -= 0.5;
+        });
+      }
+
+      if (signals === 0) return { label: 'NEUTRE', color: '#64748b', score: 0, strength: 0 };
+
+      const newsLen = Array.isArray(newsEvents) ? newsEvents.length : 0;
+      const strength = Math.min(100, Math.round(Math.abs(score) / (signals + newsLen * 0.5 || 1) * 100));
+      if (score > 0.5)  return { label: 'HAUSSIER', color: '#22c55e', score, strength };
+      if (score < -0.5) return { label: 'BAISSIER', color: '#ef4444', score, strength };
+      return { label: 'NEUTRE', color: '#eab308', score: 0, strength };
+    }
+
+    function renderBiasBanner(live, newsEvents) {
+      const bias   = computeMarketBias(live, newsEvents);
+      const banner = document.getElementById('biasBanner');
+      const label  = document.getElementById('biasLabel');
+      const bar    = document.getElementById('biasBar');
+      const pct    = document.getElementById('biasStrength');
+      if (!banner) return;
+      banner.style.borderLeft = `3px solid ${bias.color}`;
+      label.style.color = bias.color;
+      label.textContent = bias.label;
+      bar.style.width = bias.strength + '%';
+      bar.style.background = bias.color;
+      pct.textContent = bias.strength + '%';
+    }
 
     async function setAgentSession(active, trigger) {
       try {
@@ -1388,6 +1445,9 @@
         const events = Array.isArray(data.events) ? data.events : (Array.isArray(data) ? data : []);
         const headlines = Array.isArray(data.headlines) ? data.headlines : [];
 
+        // Stocker pour le calcul du biais global
+        state.newsEvents = events;
+
         if (events.length === 0 && headlines.length === 0) {
           root.innerHTML = '<div class="item"><div class="meta muted">Aucun événement à venir.</div></div>';
           return;
@@ -1584,6 +1644,7 @@
       await loadPositions();
       await loadNews();
       await loadHistory();
+      renderBiasBanner(state.realtime, state.newsEvents);
     }
 
     document.getElementById('refreshBtn').addEventListener('click', refreshAll);
