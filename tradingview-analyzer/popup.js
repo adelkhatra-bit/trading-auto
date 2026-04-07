@@ -193,6 +193,7 @@ function connectCoachStream(symbol) {
         }
       }
       if (d.price) state.price = d.price;
+      renderPositionPanel(state.live, state.price);
       // Fermer automatiquement le stream si le trade est terminé
       if (d.tradeState && d.tradeState.phase === 'closed') {
         disconnectCoachStream();
@@ -1283,6 +1284,7 @@ async function refreshAll() {
     });
   }
   renderBiasBanner(state.live, state.newsEvents);
+  renderPositionPanel(state.live, state.price);
 }
 
 // ─── COACH NARRATIVE ──────────────────────────────────────────────────────────
