@@ -29,12 +29,16 @@ app.post('/tradingview/live', (req, res) => {
     console.log('[BACKEND RECEIVED]', { symbol: normalizedSymbol, timeframe, price: parsedPrice, timestamp, source });
     // Stockage en RAM par symbole (clé normalisée, prix en float)
     tvDataStore[normalizedSymbol] = {
-      symbol:    normalizedSymbol,
-      timeframe: (timeframe || '').toUpperCase().trim() || null,
-      price:     parsedPrice,
-      timestamp: timestamp || new Date().toISOString(),
-      source:    source || 'tradingview',
-      updatedAt: Date.now()
+      symbol:     normalizedSymbol,
+      timeframe:  (timeframe||'').toUpperCase().trim() || null,
+      price:      parsedPrice,
+      ask:        req.body.ask  ? parseFloat(req.body.ask)  : null,
+      bid:        req.body.bid  ? parseFloat(req.body.bid)  : null,
+      indicators: req.body.indicators || {},
+      legend:     req.body.legend     || {},
+      timestamp:  req.body.timestamp || new Date().toISOString(),
+      source:     req.body.source || 'tradingview',
+      updatedAt:  Date.now()
     };
     console.log('[BACKEND STORED]', normalizedSymbol, '→', tvDataStore[normalizedSymbol]);
     console.log(`[TV LIVE] ${normalizedSymbol} price=${parsedPrice} tf=${timeframe} stored at ${new Date().toISOString()}`);
