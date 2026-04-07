@@ -26,6 +26,7 @@ const state = {
   price:       null,
   sse:         null,
   live:        null,
+  newsEvents:  [],
   tradeState:  null,
   persistent:  false,
   lastRec:     null,
@@ -610,24 +611,19 @@ function renderDecision(live) {
       : (execDecision === 'NO_ENTRY_CONFLICT'
         ? 'Entrée bloquée: conflit de signal.'
         : 'Entrée non validée: attendre confirmation.');
-    // Couleur bouton ENTRER selon système couleur unifié
+    // Couleur bouton ENTRER : IDLE orange si canEnter=false, vert LONG, rouge SHORT
     if (!canEnter) {
-      // Orange = signal en cours d'analyse / pending
-      enterBtn.style.background = 'rgba(249,115,22,0.15)';
-      enterBtn.style.borderColor = COL_PENDING;
-      enterBtn.style.color = COL_PENDING;
+      // IDLE — orange pending, non cliquable
+      enterBtn.style.cssText = 'background:#f97316;color:#000;font-weight:700;opacity:0.7;';
     } else if (rec.indexOf('BUY') >= 0 || rec.indexOf('ACHAT') >= 0 || rec.indexOf('LONG') >= 0) {
-      enterBtn.style.background = 'rgba(34,197,94,0.15)';
-      enterBtn.style.borderColor = COL_LONG;
-      enterBtn.style.color = COL_LONG;
+      // LONG validé — fond vert
+      enterBtn.style.cssText = 'background:#22c55e;color:#000;font-weight:700;opacity:1;';
     } else if (rec.indexOf('SELL') >= 0 || rec.indexOf('VENTE') >= 0 || rec.indexOf('SHORT') >= 0) {
-      enterBtn.style.background = 'rgba(239,68,68,0.15)';
-      enterBtn.style.borderColor = COL_SHORT;
-      enterBtn.style.color = COL_SHORT;
+      // SHORT validé — fond rouge
+      enterBtn.style.cssText = 'background:#ef4444;color:#fff;font-weight:700;opacity:1;';
     } else {
-      enterBtn.style.background = '';
-      enterBtn.style.borderColor = '';
-      enterBtn.style.color = '';
+      // Neutre — orange pending par défaut
+      enterBtn.style.cssText = 'background:#f97316;color:#000;font-weight:700;opacity:0.7;';
     }
   }
 
@@ -895,6 +891,9 @@ async function renderNews(live) {
     }
   }
 
+  // Stocker pour le calcul du biais global
+  state.newsEvents = events;
+
   var html = events.slice(0, 5).map(formatNewsEvent);
 
   if (html.length === 0 && newsAgent.symbolImpact) {
@@ -923,6 +922,60 @@ async function renderNews(live) {
         '</div>';
       }).join('');
   }
+}
+
+// ─── MARKET BIAS ─────────────────────────────────────────────────────────────
+function computeMarketBias(live, newsEvents) {
+  var score = 0;
+  var signals = 0;
+
+  // Signaux techniques (depuis live.coach ou live.execution)
+  var decision = ((live && live.execution && live.execution.decision) ||
+    (live && live.coach && live.coach.execution && live.coach.execution.decision) || '').toUpperCase();
+  if (decision.includes('BUY') || decision.includes('LONG'))  { score += 2; signals++; }
+  if (decision.includes('SELL') || decision.includes('SHORT')){ score -= 2; signals++; }
+
+  // Multi-TF (depuis live.agents ou live.coach.agents)
+  var agents = (live && live.coach && live.coach.agents) || (live && live.agents) || {};
+  for (var key in agents) {
+    if (!Object.prototype.hasOwnProperty.call(agents, key)) continue;
+    var agent = agents[key];
+    var sig = ((agent && agent.signal) || (agent && agent.recommendation) || '').toUpperCase();
+    if (sig.includes('BUY') || sig.includes('LONG'))  { score += 1; signals++; }
+    if (sig.includes('SELL') || sig.includes('SHORT')){ score -= 1; signals++; }
+  }
+
+  // News bias
+  if (Array.isArray(newsEvents)) {
+    newsEvents.forEach(function(e) {
+      var b = (e && e.bias && e.bias.direction) || (e && e.bias) || '';
+      if (b.includes('BULLISH')) score += 0.5;
+      if (b.includes('BEARISH')) score -= 0.5;
+    });
+  }
+
+  if (signals === 0) return { label: 'NEUTRE', color: '#64748b', score: 0, strength: 0 };
+
+  var newsLen = Array.isArray(newsEvents) ? newsEvents.length : 0;
+  var strength = Math.min(100, Math.round(Math.abs(score) / (signals + newsLen * 0.5 || 1) * 100));
+  if (score > 0.5)  return { label: 'HAUSSIER', color: '#22c55e', score: score, strength: strength };
+  if (score < -0.5) return { label: 'BAISSIER', color: '#ef4444', score: score, strength: strength };
+  return { label: 'NEUTRE', color: '#eab308', score: 0, strength: strength };
+}
+
+function renderBiasBanner(live, newsEvents) {
+  var bias = computeMarketBias(live, newsEvents);
+  var banner = document.getElementById('biasBanner');
+  var label  = document.getElementById('biasLabel');
+  var bar    = document.getElementById('biasBar');
+  var pct    = document.getElementById('biasStrength');
+  if (!banner) return;
+  banner.style.borderLeft = '3px solid ' + bias.color;
+  label.style.color = bias.color;
+  label.textContent = bias.label;
+  bar.style.width = bias.strength + '%';
+  bar.style.background = bias.color;
+  pct.textContent = bias.strength + '%';
 }
 
 // ─── MAIN REFRESH ────────────────────────────────────────────────────────────
@@ -996,6 +1049,7 @@ async function loadRealtimePack() {
     ChartModule.loadChart(state.symbol, state.timeframe, levels, state.price);
   }
   checkEntryProximityAndBeep(live);
+  renderBiasBanner(state.live, state.newsEvents);
   scheduleSaveState();
 }
 
@@ -1170,6 +1224,7 @@ async function refreshAll() {
       error: e && e.message ? e.message : 'unknown'
     });
   }
+  renderBiasBanner(state.live, state.newsEvents);
 }
 
 // ─── COACH NARRATIVE ──────────────────────────────────────────────────────────
@@ -1232,8 +1287,16 @@ function playEntryBip() {
 
 // ─── TRADE ACTIONS ────────────────────────────────────────────────────────────
 async function sendTradeAction(action) {
+  var upperAction = String(action || '').toUpperCase();
+  var _enterBtn = (upperAction === 'ENTER' || upperAction === 'OPEN')
+    ? document.querySelector('[data-action="ENTER"]') : null;
+  // ENTER: passer en état LOADING
+  if (_enterBtn) {
+    _enterBtn.disabled = true;
+    _enterBtn.style.cssText = 'background:#374151;color:#94a3b8;font-weight:700;';
+    _enterBtn.textContent = 'EN COURS...';
+  }
   try {
-    var upperAction = String(action || '').toUpperCase();
     if (upperAction === 'ENTER' || upperAction === 'OPEN') {
       var liveExec = (state.live && state.live.execution) || (state.live && state.live.coach && state.live.coach.execution) || {};
       if (liveExec.canEnter !== true) {
@@ -1523,6 +1586,44 @@ function openWindow() {
   }
 }
 
+// ─── ANALYSER BUTTON STATES ────────────────────────────────────────────────────
+function setAnalyserState(btn, state_) {
+  if (!btn) return;
+  btn.classList.remove('analyzing');
+  btn.disabled = false;
+  switch (state_) {
+    case 'idle':
+      btn.style.cssText = 'background:#1e293b;color:#94a3b8;';
+      btn.textContent = 'ANALYSER';
+      break;
+    case 'analyzing':
+      btn.classList.add('analyzing');
+      btn.style.cssText = 'color:#fff;';
+      btn.textContent = 'ANALYSE EN COURS...';
+      btn.disabled = true;
+      break;
+    case 'buy':
+      btn.style.cssText = 'background:#22c55e;color:#000;font-weight:700;';
+      btn.textContent = '\u25b2 SIGNAL LONG';
+      setTimeout(function() { setAnalyserState(btn, 'idle'); }, 5000);
+      break;
+    case 'sell':
+      btn.style.cssText = 'background:#ef4444;color:#fff;font-weight:700;';
+      btn.textContent = '\u25bc SIGNAL SHORT';
+      setTimeout(function() { setAnalyserState(btn, 'idle'); }, 5000);
+      break;
+    case 'wait':
+      btn.style.cssText = 'background:#eab308;color:#000;font-weight:700;';
+      btn.textContent = '\u23f8 ON ATTEND';
+      setTimeout(function() { setAnalyserState(btn, 'idle'); }, 5000);
+      break;
+    case 'error':
+      btn.style.cssText = 'background:#374151;color:#94a3b8;';
+      btn.textContent = 'ANALYSER';
+      break;
+  }
+}
+
 // ─── BIND ─────────────────────────────────────────────────────────────────────
 function bindAll() {
   var ss = $('symbolSelect');
@@ -1650,10 +1751,7 @@ function bindAll() {
     var b = document.createElement('button');
     b.id = 'btnAnalyzeNow';
     b.className = 'btn-sub';
-    b.textContent = 'ANALYSER';
-    // État idle par défaut
-    b.style.background = '#1e293b';
-    b.style.color = '#94a3b8';
+    setAnalyserState(b, 'idle');
     b.addEventListener('click', async function() {
       // B5 FIX: always freshen state from TV/backend before analysing.
       // Clears userLocked so analysis always runs on the live TV context.
@@ -1695,9 +1793,7 @@ function bindAll() {
       setConn('ANALYSE...', 'warn');
       var an = $('analysisText'); if (an) an.textContent = 'ANALYSE EN COURS...';
       // Bouton en cours d'analyse → orange pulsing
-      b.classList.add('analyzing');
-      b.style.background = COL_PENDING;
-      b.style.color = '#fff';
+      setAnalyserState(b, 'analyzing');
       try {
         await setAgentSession(true, 'analyze');
         var resp = await fetchJson('/extension/command', {
@@ -1721,22 +1817,20 @@ function bindAll() {
           ? 'MTF ' + mtf.winner.tf + ' OK'
           : 'ANALYSE OK';
         setConn(connLabel, 'ok');
-        // Couleur bouton selon résultat
-        b.classList.remove('analyzing');
+        // Couleur bouton selon résultat (4 états visuels distincts)
         var winRec = (mtf && mtf.winner && mtf.winner.rec) || '';
         if (winRec.includes('BUY') || winRec.includes('LONG')) {
-          b.style.background = COL_LONG; b.style.color = '#fff';
+          setAnalyserState(b, 'buy');
         } else if (winRec.includes('SELL') || winRec.includes('SHORT')) {
-          b.style.background = COL_SHORT; b.style.color = '#fff';
+          setAnalyserState(b, 'sell');
         } else {
-          b.style.background = COL_WAIT; b.style.color = '#000';
+          setAnalyserState(b, 'wait');
         }
         // analysisText already set by analyzeAllTimeframesAndPickSetup; only fallback if still blank
         var an2 = $('analysisText');
         if (an2 && !an2.textContent) an2.textContent = 'Analyse reçue. Mise à jour UI terminée.';
       } catch (_) {
-        b.classList.remove('analyzing');
-        b.style.background = '#1e293b'; b.style.color = '#94a3b8';
+        setAnalyserState(b, 'error');
         setConn('ANALYSE KO', 'bad');
         var an3 = $('analysisText'); if (an3) an3.textContent = 'Échec analyse. Vérifier flux backend.';
         flowLog('ANALYSE ERROR', {

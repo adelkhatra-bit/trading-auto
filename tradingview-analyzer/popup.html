@@ -160,6 +160,13 @@ body.win{height:100vh}
     <span id="headAgent">AGENT --</span>
     <button id="btnDetach" title="Ouvrir fenetre">&#128204;</button>
   </div>
+  <div id="biasBanner" style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px;margin:4px 0 0;border-radius:4px;background:#1e293b;font-size:11px;transition:background 0.3s">
+    <span id="biasLabel" style="font-weight:700;letter-spacing:1px;text-transform:uppercase">--</span>
+    <div style="flex:1;height:4px;margin:0 8px;background:#0f172a;border-radius:2px;overflow:hidden">
+      <div id="biasBar" style="height:100%;width:0%;transition:width 0.5s,background 0.3s;border-radius:2px"></div>
+    </div>
+    <span id="biasStrength" style="color:#64748b;font-size:10px">0%</span>
+  </div>
 </div>
 <!-- SCROLL AREA -->
 <div id="scrollArea">
@@ -213,6 +220,31 @@ body.win{height:100vh}
       <span id="sigTime" class="sig-time">--:--</span>
     </div>
     <div id="analysisText">Analyse en cours...</div>
+  </div>
+
+  <!-- POSITION PANEL -->
+  <div id="positionPanel" style="display:none;padding:6px 10px;background:#0f172a;border-radius:6px;margin-bottom:4px;border:1px solid #1e293b">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span id="posDir" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px">LONG</span>
+      <span id="posPnl" style="font-size:12px;font-weight:700">+0.0 pips</span>
+    </div>
+    <!-- Barre SL → Entry → TP -->
+    <div style="position:relative;height:6px;background:#1e293b;border-radius:3px;margin:4px 0">
+      <div id="posSlZone" style="position:absolute;left:0;height:100%;background:rgba(239,68,68,0.3);border-radius:3px 0 0 3px"></div>
+      <div id="posTpZone" style="position:absolute;right:0;height:100%;background:rgba(34,197,94,0.3);border-radius:0 3px 3px 0"></div>
+      <div id="posPriceDot" style="position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;background:#f97316;transform:translateX(-50%);transition:left 0.5s"></div>
+    </div>
+    <!-- Niveaux -->
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;margin-top:2px">
+      <span id="posSlLbl">SL --</span>
+      <span id="posEntryLbl">Entry --</span>
+      <span id="posTpLbl">TP --</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;margin-top:3px">
+      <span id="posDistSl" style="color:#ef4444">-- pips SL</span>
+      <span id="posRr" style="color:#64748b">RR --</span>
+      <span id="posDistTp" style="color:#22c55e">TP -- pips</span>
+    </div>
   </div>
 
   <!-- MULTI-TF -->
