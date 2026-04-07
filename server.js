@@ -26,14 +26,17 @@ app.post('/tradingview/live', (req, res) => {
       return res.status(400).json({ error: 'price invalide' });
     }
 
-    if (!symbol || !timeframe || !price) {
-      return res.status(400).json({ ok: false, error: 'symbol, timeframe, price required' });
-    }
-    const payload = { symbol, timeframe, price, timestamp: timestamp || new Date().toISOString(), source: source || 'tradingview' };
-    console.log('[BACKEND RECEIVED]', payload);
-    // Stockage en RAM par symbole
-    tvDataStore[symbol] = { ...payload, updatedAt: Date.now() };
-    console.log('[BACKEND STORED]', symbol, '→', tvDataStore[symbol]);
+    console.log('[BACKEND RECEIVED]', { symbol: normalizedSymbol, timeframe, price: parsedPrice, timestamp, source });
+    // Stockage en RAM par symbole (clé normalisée, prix en float)
+    tvDataStore[normalizedSymbol] = {
+      symbol:    normalizedSymbol,
+      timeframe: (timeframe || '').toUpperCase().trim() || null,
+      price:     parsedPrice,
+      timestamp: timestamp || new Date().toISOString(),
+      source:    source || 'tradingview',
+      updatedAt: Date.now()
+    };
+    console.log('[BACKEND STORED]', normalizedSymbol, '→', tvDataStore[normalizedSymbol]);
 
     // Broadcast prix live vers clients SSE (dashboard + extension)
     try {
