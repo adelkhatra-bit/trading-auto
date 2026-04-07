@@ -354,6 +354,7 @@
         <a class="btn-link" href="AGENTS_MONITOR.html">Agents Monitor</a>
         <a class="btn-link" href="/agent-log">Agent Live Log</a>
         <a class="btn-link" href="/audit">Audit Dashboard</a>
+        <span style="margin-left:12px;font-size:13px;font-weight:700;letter-spacing:1px;">SERVEUR:&nbsp;<span id="sysStatus" style="color:#888;">--</span></span>
       </div>
     </div>
 
@@ -942,10 +943,31 @@
       }, 1000);
     }
 
+    function spreadDecimals(symbol) {
+      if (!symbol) return 2;
+      if (symbol.includes('JPY')) return 3;
+      if (['NAS100','US30','US500','DE40'].includes(symbol)) return 1;
+      return 2;
+    }
+
     async function loadMarket() {
       // Source unique : TradingView live
       try {
         const ext = await fetchJson('/extension/data');
+
+        // systemStatus : LIVE / OFFLINE
+        const sysEl = document.getElementById('sysStatus');
+        if (sysEl) {
+          const flux = ext.systemStatus?.fluxStatus;
+          if (flux === 'LIVE') {
+            sysEl.textContent = 'LIVE';
+            sysEl.style.color = '#00e676';
+          } else {
+            sysEl.textContent = 'OFFLINE';
+            sysEl.style.color = '#ff1744';
+          }
+        }
+
         if (!ext.ok || !ext.activeSymbol || !ext.currentData || typeof ext.currentData.price !== 'number') {
           setText('priceVal', 'NO DATA');
           setText('spreadVal', '--');
@@ -953,7 +975,17 @@
           return;
         }
         setText('priceVal', formatPrice(ext.currentData.price));
-        setText('spreadVal', '--');
+
+        // Spread réel depuis bid/ask
+        const bid = ext.currentData.bid;
+        const ask = ext.currentData.ask;
+        if (typeof bid === 'number' && typeof ask === 'number' && ask > bid) {
+          const dec = spreadDecimals(ext.activeSymbol?.symbol || state.symbol);
+          setText('spreadVal', (ask - bid).toFixed(dec));
+        } else {
+          setText('spreadVal', '--');
+        }
+
         setText('sourceVal', 'TradingView');
       } catch (_e) {
         setText('priceVal', 'NO DATA');
@@ -1346,6 +1378,10 @@
             await refreshAll();
           }
         } catch (_e) {}
+      };
+      state.sse.onerror = function() {
+        state.sse.close();
+        setTimeout(connectRealtimeSync, 3000); // retry apres 3s si le serveur redémarre
       };
     }
 
