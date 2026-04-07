@@ -914,7 +914,8 @@ async function renderNews(live) {
     }
     hdEl.innerHTML = '<div style="font-size:10px;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Headlines live</div>' +
       headlines.slice(0, 5).map(function(h) {
-        var biasColor = h.bias === 'Bullish' ? '#86efac' : h.bias === 'Bearish' ? '#fca5a5' : '#94a3b8';
+        // Système couleur unifié pour les headlines
+        var biasColor = h.bias === 'Bullish' ? COL_LONG : h.bias === 'Bearish' ? COL_SHORT : COL_WAIT;
         var age = h.ageMinutes < 60 ? h.ageMinutes + 'min' : Math.round(h.ageMinutes / 60) + 'h';
         return '<div style="margin-bottom:6px;padding:4px 6px;background:#1e293b;border-radius:4px;border-left:2px solid ' + biasColor + '">' +
           '<div style="font-size:11px;color:#e2e8f0;line-height:1.3">' + h.title + '</div>' +
@@ -1115,8 +1116,8 @@ async function analyzeAllTimeframesAndPickSetup() {
     });
     var narrativeText = buildCoachNarrative(tfResults, hasSetup ? winner.tf : null, state.symbol);
     coachEl.textContent = narrativeText;
-    var rDir = (winner.rec.includes('BUY') || winner.rec.includes('LONG')) ? '#86efac' :
-               (winner.rec.includes('SELL') || winner.rec.includes('SHORT')) ? '#fca5a5' : '#fbbf24';
+    var rDir = (winner.rec.includes('BUY') || winner.rec.includes('LONG')) ? COL_LONG :
+               (winner.rec.includes('SELL') || winner.rec.includes('SHORT')) ? COL_SHORT : COL_WAIT;
     coachEl.style.color = rDir;
   }
 
@@ -1328,10 +1329,15 @@ async function sendTradeAction(action) {
         if (rrVal    != null) msgLines.push('RR : 1:' + (typeof rrVal === 'number' ? rrVal.toFixed(1) : rrVal));
         msgLines.push(engagementMsg);
 
+        // Direction pour couleur confirmation
+        var entryDir = String((lh.virtualPosition && lh.virtualPosition.direction) || (lh.instantTrade && lh.instantTrade.direction) || analysis.recommendation || '').toUpperCase();
+        var confirmColor = (entryDir.indexOf('BUY') >= 0 || entryDir.indexOf('LONG') >= 0) ? COL_LONG : (entryDir.indexOf('SELL') >= 0 || entryDir.indexOf('SHORT') >= 0) ? COL_SHORT : COL_LONG;
+        var confirmBg = (entryDir.indexOf('BUY') >= 0 || entryDir.indexOf('LONG') >= 0) ? 'rgba(34,197,94,0.15)' : (entryDir.indexOf('SELL') >= 0 || entryDir.indexOf('SHORT') >= 0) ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)';
         var coach = $('coachText');
         if (coach) {
           coach.textContent = msgLines.join('\n');
-          coach.style.color = '#86efac';
+          coach.style.color = confirmColor;
+          coach.style.background = confirmBg;
         }
         var next = $('dg-nextaction');
         if (next) next.textContent = 'Prochaine action : ' + ((tr.management && tr.management.nextAction) || 'Monitoring live');
@@ -1344,7 +1350,7 @@ async function sendTradeAction(action) {
         ];
         var fallbackMsg = entryMessages2[Math.floor(Math.random() * entryMessages2.length)];
         var coach2 = $('coachText');
-        if (coach2) { coach2.textContent = fallbackMsg; coach2.style.color = '#86efac'; }
+        if (coach2) { coach2.textContent = fallbackMsg; coach2.style.color = COL_LONG; coach2.style.background = 'rgba(34,197,94,0.15)'; }
       }
     }
   } catch (e) {
@@ -1645,6 +1651,9 @@ function bindAll() {
     b.id = 'btnAnalyzeNow';
     b.className = 'btn-sub';
     b.textContent = 'ANALYSER';
+    // État idle par défaut
+    b.style.background = '#1e293b';
+    b.style.color = '#94a3b8';
     b.addEventListener('click', async function() {
       // B5 FIX: always freshen state from TV/backend before analysing.
       // Clears userLocked so analysis always runs on the live TV context.
@@ -1685,6 +1694,10 @@ function bindAll() {
       });
       setConn('ANALYSE...', 'warn');
       var an = $('analysisText'); if (an) an.textContent = 'ANALYSE EN COURS...';
+      // Bouton en cours d'analyse → orange pulsing
+      b.classList.add('analyzing');
+      b.style.background = COL_PENDING;
+      b.style.color = '#fff';
       try {
         await setAgentSession(true, 'analyze');
         var resp = await fetchJson('/extension/command', {
@@ -1708,10 +1721,22 @@ function bindAll() {
           ? 'MTF ' + mtf.winner.tf + ' OK'
           : 'ANALYSE OK';
         setConn(connLabel, 'ok');
+        // Couleur bouton selon résultat
+        b.classList.remove('analyzing');
+        var winRec = (mtf && mtf.winner && mtf.winner.rec) || '';
+        if (winRec.includes('BUY') || winRec.includes('LONG')) {
+          b.style.background = COL_LONG; b.style.color = '#fff';
+        } else if (winRec.includes('SELL') || winRec.includes('SHORT')) {
+          b.style.background = COL_SHORT; b.style.color = '#fff';
+        } else {
+          b.style.background = COL_WAIT; b.style.color = '#000';
+        }
         // analysisText already set by analyzeAllTimeframesAndPickSetup; only fallback if still blank
         var an2 = $('analysisText');
         if (an2 && !an2.textContent) an2.textContent = 'Analyse reçue. Mise à jour UI terminée.';
       } catch (_) {
+        b.classList.remove('analyzing');
+        b.style.background = '#1e293b'; b.style.color = '#94a3b8';
         setConn('ANALYSE KO', 'bad');
         var an3 = $('analysisText'); if (an3) an3.textContent = 'Échec analyse. Vérifier flux backend.';
         flowLog('ANALYSE ERROR', {
