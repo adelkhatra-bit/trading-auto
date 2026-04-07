@@ -876,43 +876,15 @@ async function analyzeAllTimeframesAndPickSetup() {
   var an = $('analysisText');
   if (an) an.textContent = analysisMsg;
 
-  // Build rich coach explanation
+  // Build coach narrative (conversational French)
   var coachEl = $('coachText');
   if (coachEl) {
-    var lines = [];
-    if (hasSetup) {
-      lines.push('[ANALYSE MTF] ' + state.symbol + ' — Regarder: ' + winner.tf);
-      lines.push('Direction: ' + dirLabel + (winner.strength ? ' | Force: ' + winner.strength + '%' : ''));
-      if (winner.setupType) lines.push('Type de setup: ' + winner.setupType.toUpperCase());
-      if (winner.reason)    lines.push('Signal: ' + winner.reason);
-      if (winner.entry)     lines.push('Entrée: ' + fmtPrice(winner.entry) +
-        (winner.sl ? ' • SL: ' + fmtPrice(winner.sl) : '') +
-        (winner.tp ? ' • TP: ' + fmtPrice(winner.tp) : ''));
-      if (winner.riskLevel) lines.push('Risque: ' + winner.riskLevel);
-      // Show lia text (richest explanation) or confirmation summary
-      if (winner.liaText) {
-        lines.push('---');
-        lines.push(winner.liaText);
-      } else if (otherDirectionals.length) {
-        lines.push('Confirmation: ' + otherDirectionals.map(function(s) {
-          var d = (s.rec.includes('BUY') || s.rec.includes('LONG')) ? '▲' : '▼';
-          return s.tf + ' ' + d;
-        }).join(', '));
-      }
-      lines.push('---');
-      lines.push('Analyse MTF complète: ' + snapshots.map(function(s) {
-        if (!s.directional) return s.tf + ':◼';
-        var d = (s.rec.includes('BUY') || s.rec.includes('LONG')) ? '▲' : '▼';
-        return s.tf + ':' + d + (s.strength ? s.strength + '%' : '');
-      }).join(' | '));
-    } else {
-      lines.push('[ANALYSE MTF] ' + state.symbol + ' — ' + allTFs.join('/'));
-      lines.push('Résultat: Aucun setup directionnel confirmé.');
-      lines.push('Marchés en consolidation ou signal insuffisant.');
-      lines.push('→ Attendre rupture de zone ou configuration claire avant entrée.');
-      lines.push('Scan: ' + snapshots.map(function(s) { return s.tf + ':◼'; }).join(' | '));
-    }
-    coachEl.textContent = lines.join('\n');
+    var tfResults = {};
+    snapshots.forEach(function(s) {
+      tfResults[s.tf] = { signal: s.rec, recommendation: s.rec };
+    });
+    var narrativeText = buildCoachNarrative(tfResults, hasSetup ? winner.tf : null, state.symbol);
+    coachEl.textContent = narrativeText;
     var rDir = (winner.rec.includes('BUY') || winner.rec.includes('LONG')) ? '#86efac' :
                (winner.rec.includes('SELL') || winner.rec.includes('SHORT')) ? '#fca5a5' : '#fbbf24';
     coachEl.style.color = rDir;
@@ -967,6 +939,64 @@ async function refreshAll() {
       error: e && e.message ? e.message : 'unknown'
     });
   }
+}
+
+// ─── COACH NARRATIVE ──────────────────────────────────────────────────────────
+function buildCoachNarrative(tfResults, bestTf, symbol) {
+  var lines = [];
+  lines.push('J\'analyse ' + symbol + ' sur toutes les unités de temps...');
+
+  var tfLabels = { M1:'le M1', M5:'le M5', M15:'le M15', H1:'le H1', H4:'le H4', D1:'le Daily' };
+  var noisy = [];
+  var clean = [];
+
+  for (var tf in tfResults) {
+    if (!Object.prototype.hasOwnProperty.call(tfResults, tf)) continue;
+    var r = tfResults[tf];
+    if (!r) continue;
+    var sig = (r.signal || r.recommendation || '').toUpperCase();
+    if (sig === 'WAIT' || sig === 'NEUTRE' || sig === 'NEUTRAL') noisy.push(tf);
+    else clean.push(tf);
+  }
+
+  if (noisy.length > 0) {
+    lines.push(noisy.map(function(t) { return tfLabels[t] || t; }).join(', ') + ' ' + (noisy.length > 1 ? 'sont bruyants' : 'est bruyant') + ' — pas de setup clair là.');
+  }
+  if (clean.length > 0) {
+    lines.push(clean.map(function(t) { return tfLabels[t] || t; }).join(', ') + ' ' + (clean.length > 1 ? 'montrent' : 'montre') + ' quelque chose de plus propre.');
+  }
+
+  if (bestTf && tfResults[bestTf]) {
+    var br = tfResults[bestTf];
+    var bsig = (br.signal || br.recommendation || '').toUpperCase();
+    var isBuy = bsig.includes('BUY') || bsig.includes('LONG') || bsig.includes('ACHAT');
+    var isSell = bsig.includes('SELL') || bsig.includes('SHORT') || bsig.includes('VENTE');
+    lines.push('→ ' + (tfLabels[bestTf] || bestTf) + ' est l\'unité de temps clé aujourd\'hui.');
+    if (isBuy) lines.push('Je vois une pression haussière. Si tu veux entrer, regarde ' + (tfLabels[bestTf] || bestTf) + '.');
+    else if (isSell) lines.push('La pression est baissière. Le ' + (tfLabels[bestTf] || bestTf) + ' donne le vrai contexte.');
+    else lines.push('Le marché hésite encore. On attend une confirmation.');
+  } else {
+    lines.push('Pas de setup structurant clair pour l\'instant. On observe.');
+  }
+
+  return lines.join('\n');
+}
+
+// ─── ENTRY BIP ────────────────────────────────────────────────────────────────
+function playEntryBip() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.15, 0.3].forEach(function(delay) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.12);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.15);
+    });
+  } catch(_) {}
 }
 
 // ─── TRADE ACTIONS ────────────────────────────────────────────────────────────
@@ -1033,8 +1063,9 @@ async function sendTradeAction(action) {
     await refreshAll();
     if (nextEl) nextEl.textContent = 'Action appliquée : ' + upperAction;
 
-    // ENTER/OPEN: force an explicit IA coaching response from live data.
+    // ENTER/OPEN: bip d'engagement + message coach avec SL/TP.
     if (upperAction === 'ENTER' || upperAction === 'OPEN') {
+      playEntryBip();
       try {
         var live = await fetchJson('/coach/realtime?symbol=' + encodeURIComponent(state.symbol) +
           '&tf=' + encodeURIComponent(state.timeframe) + '&mode=' + encodeURIComponent(state.tradeMode) + '&lang=fr');
@@ -1042,15 +1073,49 @@ async function sendTradeAction(action) {
         var risk = (live && live.coach && live.coach.agents && live.coach.agents.risk) || {};
         var tr = live && live.tradeReasoning ? live.tradeReasoning : {};
         var m = tr.metrics || {};
-        var conf = analysis.strength || analysis.confidence || '--';
-        var why = Array.isArray(tr.whyEntry) && tr.whyEntry.length ? tr.whyEntry[0] : (analysis.reason || 'Validation structure/prix');
-        var msg = 'ENTRÉE IA: ' + why + '\n' +
-          'SL: ' + (m.stopLoss != null ? fmtPrice(m.stopLoss) : '--') + ' | TP: ' + (m.takeProfit != null ? fmtPrice(m.takeProfit) : '--') + '\n' +
-          'Confiance: ' + conf + ' | Risque: ' + (risk.riskLevel || '--') + '\n' +
-          'Action: ' + ((tr.management && tr.management.nextAction) || 'Surveiller le flux live');
-        var coach = $('coachText'); if (coach) coach.textContent = msg;
-        var next = $('dg-nextaction'); if (next) next.textContent = 'Prochaine action : ' + ((tr.management && tr.management.nextAction) || 'Monitoring live');
-      } catch (_) {}
+
+        // Resolve entry/sl/tp from live state or tradeHint
+        var lh = state.live || {};
+        var vp = lh.virtualPosition || {};
+        var it = lh.instantTrade || {};
+        var entryVal = vp.entry != null ? vp.entry : (it.entry != null ? it.entry : (m.entry != null ? m.entry : null));
+        var slVal    = vp.sl    != null ? vp.sl    : (it.sl    != null ? it.sl    : (m.stopLoss  != null ? m.stopLoss  : null));
+        var tpVal    = vp.tp    != null ? vp.tp    : (it.tp    != null ? it.tp    : (m.takeProfit != null ? m.takeProfit : null));
+        var rrVal    = it.rrRatio || m.rrRatio || null;
+
+        var entryMessages = [
+          'Je reste avec toi. On la fait ensemble.',
+          'Position prise. Je surveille le marché pour toi.',
+          'Je te guide jusqu\'à la sortie. On y est.',
+          'Je suis là. Je te dis quand bouger.'
+        ];
+        var engagementMsg = entryMessages[Math.floor(Math.random() * entryMessages.length)];
+
+        var msgLines = [];
+        if (entryVal != null) msgLines.push('Entrée : ' + fmtPrice(entryVal));
+        if (slVal    != null) msgLines.push('SL : '     + fmtPrice(slVal));
+        if (tpVal    != null) msgLines.push('TP : '     + fmtPrice(tpVal));
+        if (rrVal    != null) msgLines.push('RR : 1:' + (typeof rrVal === 'number' ? rrVal.toFixed(1) : rrVal));
+        msgLines.push(engagementMsg);
+
+        var coach = $('coachText');
+        if (coach) {
+          coach.textContent = msgLines.join('\n');
+          coach.style.color = '#86efac';
+        }
+        var next = $('dg-nextaction');
+        if (next) next.textContent = 'Prochaine action : ' + ((tr.management && tr.management.nextAction) || 'Monitoring live');
+      } catch (_) {
+        var entryMessages2 = [
+          'Je reste avec toi. On la fait ensemble.',
+          'Position prise. Je surveille le marché pour toi.',
+          'Je te guide jusqu\'à la sortie. On y est.',
+          'Je suis là. Je te dis quand bouger.'
+        ];
+        var fallbackMsg = entryMessages2[Math.floor(Math.random() * entryMessages2.length)];
+        var coach2 = $('coachText');
+        if (coach2) { coach2.textContent = fallbackMsg; coach2.style.color = '#86efac'; }
+      }
     }
   } catch (e) {
     setConn('KO', 'bad');
