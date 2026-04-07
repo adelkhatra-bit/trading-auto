@@ -5920,6 +5920,29 @@ app.get('/tv/data', (req, res) => {
   res.json({ ok: data ? true : false, data, available: Object.keys(tvDataStore) });
 });
 
+// ─── WATCHLIST ────────────────────────────────────────────────────────────────
+const WATCHLIST_SYMBOLS = ['XAUUSD','EURUSD','GBPUSD','NAS100','US30','BTCUSD','USDJPY','USDCAD'];
+
+app.get('/watchlist', async (req, res) => {
+  try {
+    const items = WATCHLIST_SYMBOLS.map(sym => {
+      const tv = tvDataStore[sym];
+      const age = tv ? Math.round((Date.now() - (tv.updatedAt || 0)) / 1000) : null;
+      return {
+        symbol: sym,
+        price: tv?.price || null,
+        timeframe: tv?.timeframe || null,
+        ageSeconds: age,
+        live: age !== null && age < 30,
+        source: tv ? 'tradingview' : 'offline'
+      };
+    });
+    res.json({ ok: true, items });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ─── AGENT CONTROL ROUTES ────────────────────────────────────────────────────────
 app.post('/agent/enable', (req, res) => {
   surveillanceAgent.setActive(true);
@@ -8956,6 +8979,56 @@ app.get('/coach/stream', (req, res) => {
     coachStreamClients.delete(sessionId);
     console.log(`[COACH STREAM] Client déconnecté: ${sessionId}`);
   });
+});
+
+// ── STATS / EQUITY CURVE ─────────────────────────────────────────────────────
+app.get('/stats', (req, res) => {
+  try {
+    const symbol = req.query.symbol;
+    let trades = symbol ? tradeJournal.filter(t => t.symbol === symbol) : tradeJournal;
+
+    if (!trades.length) {
+      return res.json({ ok: true, empty: true, stats: {}, equity: [] });
+    }
+
+    const won = trades.filter(t => t.won);
+    const lost = trades.filter(t => !t.won);
+    const totalPips = trades.reduce((s, t) => s + (t.pnlPips || 0), 0);
+    const avgWin  = won.length  ? won.reduce((s,t) => s + (t.pnlPips||0), 0) / won.length   : 0;
+    const avgLoss = lost.length ? lost.reduce((s,t) => s + (t.pnlPips||0), 0) / lost.length : 0;
+    const profitFactor = avgLoss !== 0 ? Math.abs(avgWin / avgLoss).toFixed(2) : '--';
+    const maxDD = trades.reduce((dd, _, i) => {
+      const slice = trades.slice(0, i+1);
+      const peak = slice.reduce((p, t) => p + (t.pnlPips||0), 0);
+      return Math.min(dd, peak);
+    }, 0);
+
+    // Courbe d'équité (cumul pips)
+    let cumul = 0;
+    const equity = trades.slice().reverse().map(t => {
+      cumul += t.pnlPips || 0;
+      return { date: t.closedAt, pips: cumul, symbol: t.symbol, won: t.won };
+    });
+
+    res.json({
+      ok: true,
+      stats: {
+        total: trades.length,
+        won: won.length,
+        lost: lost.length,
+        winRate: Math.round(won.length / trades.length * 100),
+        totalPips,
+        avgWin: Math.round(avgWin),
+        avgLoss: Math.round(avgLoss),
+        profitFactor,
+        maxDrawdownPips: Math.round(maxDD),
+        avgDuration: trades.length ? Math.round(trades.reduce((s,t) => s+(t.durationMin||0), 0) / trades.length) : 0
+      },
+      equity
+    });
+  } catch(err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 async function pushCoachEvent(sessionId) {

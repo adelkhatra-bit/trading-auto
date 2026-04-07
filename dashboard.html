@@ -4,8 +4,62 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trading Auto - Dashboard Trading</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="/public/lightweight-charts.js"></script>
   <style>
+    /* ── TYPOGRAPHY & BASE ──────────── */
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+    /* ── SCROLLBAR CUSTOM ────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+    /* ── BOUTONS UNIFIÉS ─────────────── */
+    button, .btn {
+      transition: all 0.15s ease;
+      cursor: pointer;
+      border-radius: 6px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    button:active { transform: scale(0.97); }
+
+    /* ── COACH TEXT ──────────────────── */
+    #coachText {
+      line-height: 1.6 !important;
+      font-size: 12px !important;
+      padding: 10px !important;
+      border-radius: 6px;
+      background: rgba(15,23,42,0.8);
+    }
+
+    /* ── ALERT BANNER SLIDE ───────────── */
+    @keyframes slideDown {
+      from { transform: translateY(-100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    #alertBanner[style*='block'] {
+      animation: slideDown 0.3s ease;
+    }
+
+    /* ── PULSE ANALYSER ──────────────── */
+    @keyframes pulse-orange {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(249,115,22,0.4); }
+      50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(249,115,22,0); }
+    }
+    .analyzing {
+      animation: pulse-orange 1s infinite !important;
+    }
+
+    /* ── SÉPARATEURS ─────────────────── */
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #1e293b, transparent);
+      margin: 8px 0;
+    }
+
     /* ── COLOR SYSTEM VARIABLES ── */
     :root {
       --col-long:    #22c55e;
@@ -496,6 +550,11 @@
             <span id="posDistTp" style="color:#22c55e">TP -- pips</span>
           </div>
         </div>
+        <!-- WATCHLIST PANEL -->
+        <div id="watchlistPanel" style="background:#0f172a;border-radius:8px;padding:10px;border:1px solid #1e293b;margin-top:10px">
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Watchlist</div>
+          <div id="watchlistItems"></div>
+        </div>
       </div>
     </div>
 
@@ -553,6 +612,10 @@
         <h3>Historique Simple</h3>
         <div class="list" id="historyList">
           <div class="item"><div class="meta muted">Chargement historique...</div></div>
+        </div>
+        <div id="statsPanel" style="background:#0f172a;border-radius:8px;padding:10px;border:1px solid #1e293b;margin-top:8px">
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Performance</div>
+          <div id="statsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
         </div>
       </div>
       <div class="signal-box" style="border-color:#7c3aed;">
@@ -1749,6 +1812,35 @@
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── STATS / PERFORMANCE PANEL ────────────────────────────────────────────
+    function renderStats(s) {
+      const el = document.getElementById('statsGrid');
+      if (!el || !s) return;
+      const items = [
+        { label: 'Trades',    value: s.total, color: '#e2e8f0' },
+        { label: 'Win Rate',  value: s.winRate + '%', color: s.winRate >= 50 ? '#22c55e' : '#ef4444' },
+        { label: 'Total',     value: (s.totalPips >= 0 ? '+' : '') + s.totalPips + 'p', color: s.totalPips >= 0 ? '#22c55e' : '#ef4444' },
+        { label: 'Profit F.', value: s.profitFactor, color: parseFloat(s.profitFactor) >= 1.5 ? '#22c55e' : '#eab308' },
+        { label: 'Avg Win',   value: '+' + s.avgWin + 'p', color: '#22c55e' },
+        { label: 'Avg Loss',  value: s.avgLoss + 'p', color: '#ef4444' },
+        { label: 'Max DD',    value: s.maxDrawdownPips + 'p', color: '#f97316' },
+        { label: 'Avg Dur',   value: s.avgDuration + 'min', color: '#64748b' }
+      ];
+      el.innerHTML = items.map(i => `
+        <div style="background:#1e293b;border-radius:4px;padding:5px 7px">
+          <div style="font-size:9px;color:#64748b">${i.label}</div>
+          <div style="font-size:13px;font-weight:700;color:${i.color}">${i.value}</div>
+        </div>`).join('');
+    }
+
+    async function loadStats() {
+      try {
+        const data = await fetchJson('/stats?symbol=' + (state.symbol || ''));
+        if (data.ok && !data.empty) renderStats(data.stats);
+      } catch(_) {}
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
 
     async function refreshAll() {
       if (state.bridgeConfig.bridgeEnabled === false) {
@@ -1791,6 +1883,41 @@
       await loadHistory();
       renderBiasBanner(state.realtime, state.newsEvents);
       renderPositionPanel(state.realtime, state.price);
+      await loadStats();
+      await loadWatchlist();
+    }
+
+    async function loadWatchlist() {
+      try {
+        const data = await fetch(API + '/watchlist').then(r => r.json());
+        if (data.ok) renderWatchlist(data.items);
+      } catch(_) {}
+    }
+
+    function renderWatchlist(items) {
+      const el = document.getElementById('watchlistItems');
+      if (!el || !items) return;
+      el.innerHTML = items.map(item => {
+        const isActive = item.symbol === (state.activeSymbol || state.symbol);
+        const dotColor = item.live ? '#22c55e' : '#ef4444';
+        const activeBorder = isActive ? 'border-left:3px solid #f97316' : 'border-left:3px solid transparent';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 6px;margin-bottom:2px;border-radius:4px;background:${isActive ? 'rgba(249,115,22,0.08)' : 'transparent'};${activeBorder};cursor:pointer"
+          onclick="switchToSymbol('${item.symbol}')">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};display:inline-block"></span>
+            <span style="font-size:11px;font-weight:${isActive ? '700':'400'};color:${isActive ? '#f97316':'#e2e8f0'}">${item.symbol}</span>
+          </div>
+          <span style="font-size:11px;color:${item.live ? '#e2e8f0':'#334155'}">${item.price ? item.price.toFixed(item.symbol.includes('JPY') ? 3 : item.symbol.includes('BTC') ? 0 : 2) : '--'}</span>
+        </div>`;
+      }).join('');
+    }
+
+    function switchToSymbol(sym) {
+      fetch(API + '/extension/command', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ command: 'set-symbol', payload: { symbol: sym, timeframe: state.timeframe || 'H1' } })
+      }).then(() => { state.activeSymbol = sym; refreshAll(); });
     }
 
     document.getElementById('refreshBtn').addEventListener('click', refreshAll);
