@@ -55,23 +55,7 @@ app.post('/tradingview/live', (req, res) => {
   }
 });
 
-// Endpoint pour extension/data (et autres) qui renvoie la dernière valeur TradingView live
-app.get('/extension/data', (req, res) => {
-  try {
-    const { symbol } = req.query;
-    let data = null;
-    if (symbol && tvDataStore[symbol]) {
-      data = tvDataStore[symbol];
-    } else {
-      // Dernière valeur reçue (tous symboles)
-      const all = Object.values(tvDataStore);
-      data = all.length > 0 ? all.reduce((a, b) => (a.updatedAt > b.updatedAt ? a : b)) : null;
-    }
-    res.json({ ok: !!data, data });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+
 // server.js — Trading Auto Backend
 // Sources de données: MT5 (priorité 1) → TradingView (priorité 2) → Yahoo Finance (klines uniquement)
 // AUCUN Math.random() pour les prix — toutes les données sont réelles
