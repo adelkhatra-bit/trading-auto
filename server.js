@@ -2949,7 +2949,8 @@ app.get('/news', async (req, res) => {
     const intel = require('./src/agents/news-intelligence');
     const data = await intel.analyze(symbol);
     const news = Array.isArray(data.news) ? data.news : [];
-    res.json({ ok: true, news, source: 'multi-source-live', symbol, macroWarning: data.macroWarning || null, symbolImpact: data.symbolImpact || null });
+    const headlines = Array.isArray(data.headlines) ? data.headlines : [];
+    res.json({ ok: true, news, headlines, headlinesCount: headlines.length, source: 'multi-source-live', symbol, macroWarning: data.macroWarning || null, symbolImpact: data.symbolImpact || null });
   } catch {
     res.json({ ok: true, news: [], source: 'offline' });
   }
