@@ -1184,6 +1184,64 @@ async function analyzeAllTimeframesAndPickSetup() {
   return { winner: winner, snapshots: snapshots };
 }
 
+// ─── POSITION PANEL ───────────────────────────────────────────────────────────────────────────
+function renderPositionPanel(live, price) {
+  const panel = document.getElementById('positionPanel');
+  if (!panel) return;
+
+  const pos = live?.virtualPosition || live?.instantTrade || null;
+  const ts  = live?.tradeState || state.tradeState || null;
+
+  if (!ts?.entered || !pos?.entry) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  const entry = parseFloat(pos.entry);
+  const sl    = parseFloat(pos.sl);
+  const tp    = parseFloat(pos.tp);
+  const cur   = parseFloat(price || state.price || entry);
+  const isLong = tp > entry;
+
+  // Pip value
+  const pipMult = (state.symbol || '').includes('JPY') ? 100 : 10000;
+  const pnlPips = Math.round((cur - entry) * pipMult * (isLong ? 1 : -1));
+  const distSl  = Math.round(Math.abs(cur - sl) * pipMult);
+  const distTp  = Math.round(Math.abs(cur - tp) * pipMult);
+  const range   = Math.abs(tp - sl);
+  const rr      = range > 0 ? (Math.abs(tp - entry) / Math.abs(entry - sl)).toFixed(1) : '--';
+
+  // Position du prix sur la barre (0% = SL, 100% = TP)
+  const pct = range > 0 ? Math.max(0, Math.min(100, ((cur - sl) / range) * 100)) : 50;
+
+  // Couleurs
+  const dirColor = isLong ? '#22c55e' : '#ef4444';
+  const pnlColor = pnlPips >= 0 ? '#22c55e' : '#ef4444';
+  const dotColor = Math.abs(cur - sl) < Math.abs(cur - tp) ? '#ef4444' : (pnlPips > 0 ? '#22c55e' : '#f97316');
+
+  setText('posDir',      isLong ? '▲ LONG' : '▼ SHORT');
+  setText('posPnl',      (pnlPips >= 0 ? '+' : '') + pnlPips + ' pips');
+  setText('posSlLbl',    'SL ' + sl);
+  setText('posEntryLbl', 'E ' + entry);
+  setText('posTpLbl',    'TP ' + tp);
+  setText('posDistSl',   distSl + ' pips SL');
+  setText('posDistTp',   'TP ' + distTp + ' pips');
+  setText('posRr',       'RR 1:' + rr);
+
+  document.getElementById('posDir').style.color     = dirColor;
+  document.getElementById('posPnl').style.color     = pnlColor;
+  document.getElementById('posPriceDot').style.left = pct + '%';
+  document.getElementById('posPriceDot').style.background = dotColor;
+
+  // Taille des zones SL/TP
+  const slWidth = range > 0 ? Math.abs(entry - sl) / range * 100 : 33;
+  const tpWidth = range > 0 ? Math.abs(tp - entry) / range * 100 : 33;
+  document.getElementById('posSlZone').style.width = slWidth + '%';
+  document.getElementById('posTpZone').style.width = tpWidth + '%';
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function refreshAll() {
   if (state.bridgeConfig.bridgeEnabled === false) {
     renderBridgeOffState();
@@ -1307,6 +1365,8 @@ async function sendTradeAction(action) {
         if (nextBlocked) nextBlocked.textContent = 'Prochaine action : ' + blockedMsg;
         var coachBlocked = $('coachText');
         if (coachBlocked) coachBlocked.textContent = '[IA LIVE]\n' + blockedMsg + '\nNe pas entrer maintenant.';
+        // Restaurer bouton ENTRER (entrée bloquée)
+        if (_enterBtn) { _enterBtn.disabled = false; _enterBtn.style.cssText = ''; _enterBtn.textContent = 'ENTRER'; }
         return;
       }
     }
@@ -1359,6 +1419,18 @@ async function sendTradeAction(action) {
 
     // ENTER/OPEN: bip d'engagement + message coach avec SL/TP.
     if (upperAction === 'ENTER' || upperAction === 'OPEN') {
+      // CONFIRMED: clignotement 1x puis retour à l'état idle (renderDecision le reprendra)
+      if (_enterBtn) {
+        _enterBtn.disabled = false;
+        _enterBtn.style.cssText = 'background:#22c55e;color:#000;font-weight:700;transition:opacity 0.2s;';
+        _enterBtn.textContent = 'ENTRER';
+        setTimeout(function() {
+          if (_enterBtn) { _enterBtn.style.opacity = '0'; }
+          setTimeout(function() {
+            if (_enterBtn) { _enterBtn.style.opacity = '1'; _enterBtn.style.cssText = ''; }
+          }, 300);
+        }, 400);
+      }
       playEntryBip();
       try {
         var live = await fetchJson('/coach/realtime?symbol=' + encodeURIComponent(state.symbol) +
@@ -1417,6 +1489,8 @@ async function sendTradeAction(action) {
       }
     }
   } catch (e) {
+    // En cas d'erreur, restaurer le bouton ENTRER
+    if (_enterBtn) { _enterBtn.disabled = false; _enterBtn.style.cssText = ''; _enterBtn.textContent = 'ENTRER'; }
     setConn('KO', 'bad');
     var errEl = $('dg-nextaction');
     if (errEl) errEl.textContent = 'Echec action: ' + (e && e.message ? e.message : 'inconnue');
