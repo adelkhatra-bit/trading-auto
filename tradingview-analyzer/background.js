@@ -164,26 +164,26 @@ async function scrapAndSendTradingView() {
     systemState.lastUpdate = new Date().toISOString();
     persistBackgroundState();
 
-    await fetch(API + '/extension/command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        command: 'set-symbol',
-        payload: {
-          symbol: panelData.symbol,
-          timeframe: panelData.timeframe || systemState.activeTimeframe,
-          price: systemState.activePrice,
-          mode: systemState.activeMode || undefined,
-          source: 'tradingview-extension'  // tag so server/popup can recognise TV origin
-        }
-      }),
-      signal: AbortSignal.timeout(3000)
-    }).catch((err) => {
-      console.log('[TV PUSH][ERROR] Context sync error:', err.message);
-    });
-
-    if (!systemState.activePrice || systemState.activePrice <= 0) {
-      console.log('[BG-TV] Context synced without live price');
+    if (systemState.activePrice && systemState.activePrice > 0) {
+      await fetch(API + '/extension/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'set-symbol',
+          payload: {
+            symbol: panelData.symbol,
+            timeframe: panelData.timeframe || systemState.activeTimeframe,
+            price: systemState.activePrice,
+            mode: systemState.activeMode || undefined,
+            source: 'tradingview-extension'  // tag so server/popup can recognise TV origin
+          }
+        }),
+        signal: AbortSignal.timeout(3000)
+      }).catch((err) => {
+        console.log('[TV PUSH][ERROR] Context sync error:', err.message);
+      });
+    } else {
+      console.log('[BG] Skipping /extension/command: no valid price yet');
       return;
     }
 
