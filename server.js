@@ -8099,10 +8099,49 @@ app.get('/data/refresh', (_req, res) => {
     if (phase === 'be_reached') return `Break-even atteint. Risque zéro. On laisse courir vers le TP.`;
     if (phase === 'partial_taken') return `Première partie sécurisée. Laisse la position respirer — le reste court vers ${tp}.`;
     if (phase === 'trailing') return `On trail le SL. Reste calme et laisse le marché faire son travail.`;
-    if (phase === 'closed') return `Trade terminé. Bien joué. On analyse et on attend le prochain setup.`;
+    if (phase === 'closed') {
+      const entry = tradeState?.entry || liveData?.virtualPosition?.entry;
+      const exitPrice = liveData?.currentPrice || tradeState?.exitPrice;
+      if (entry && exitPrice) {
+        const pnlPips = Math.round((exitPrice - entry) * 10000);
+        const won = pnlPips > 0;
+        return won
+          ? `✅ Trade terminé — +${pnlPips} pips. Bien joué. On laisse le marché se repositionner et on attend le prochain setup.`
+          : `❌ Trade terminé — ${pnlPips} pips. Ça arrive. Le SL a fait son travail. On reste discipliné et on attend le prochain.`;
+      }
+      return `Trade terminé. On analyse et on prépare le suivant.`;
+    }
 
     return `Position ouverte. Je surveille le marché pour toi.`;
   }
+
+  app.post('/coach/close-summary', async (req, res) => {
+    try {
+      const { symbol, entry, exitPrice, sl, tp, direction, durationMin } = req.body;
+      const pipMult = (symbol || '').includes('JPY') ? 100 : 10000;
+      const pnlPips = Math.round((exitPrice - entry) * pipMult * (direction === 'SHORT' ? -1 : 1));
+      const won = pnlPips > 0;
+      const rr = tp && sl ? (Math.abs(tp - entry) / Math.abs(entry - sl)).toFixed(1) : '--';
+
+      const summary = {
+        ok: true,
+        won,
+        pnlPips,
+        entry, exitPrice, sl, tp, rr,
+        durationMin,
+        message: won
+          ? `✅ +${pnlPips} pips — Trade gagnant. Discipline respectée.`
+          : `❌ ${pnlPips} pips — SL touché. Gestion correcte, on passe au suivant.`,
+        color: won ? '#22c55e' : '#ef4444',
+        nextAction: 'Attendre le prochain setup. Ne pas sur-trader.'
+      };
+
+      pushLog('coach', 'trade-closed', summary.message, won ? 'ok' : 'warn');
+      res.json(summary);
+    } catch(err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
 
   app.get('/coach/realtime', async (req, res) => {
     try {
