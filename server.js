@@ -60,6 +60,13 @@ app.post('/tradingview/live', (req, res) => {
 // Sources de données: MT5 (priorité 1) → TradingView (priorité 2) → Yahoo Finance (klines uniquement)
 // AUCUN Math.random() pour les prix — toutes les données sont réelles
 
+// ── RÈGLE ARCHITECTURALE ────────────────────────────────────────────────────
+// SOURCE DE PRIX : TradingView est la source maître.
+// tvDataStore[symbol].price = prix de référence pour TOUS les agents.
+// Yahoo Finance = fallback uniquement si tvDataStore absent ou > 30s.
+// Toute déviation de cette règle doit être loggée [FALLBACK YAHOO].
+// ────────────────────────────────────────────────────────────────────────────
+
 'use strict';
 
 // ─── SINGLE-INSTANCE GUARD — abort immédiat si port déjà occupé ──────────────
@@ -2725,10 +2732,11 @@ app.get('/latest/:symbol', async (req, res) => {
   const data    = marketStore.getLatestForSymbol(profile.canonical);
   if (data) return res.json({ ok: true, symbol: profile.canonical, ...data });
 
-  // Pas de données MT5/TV → retourner prix Yahoo sans le présenter comme un signal
+  // Pas de données MT5/TV → fallback Yahoo (référence uniquement, jamais signal)
   try {
     const ysSym = toYahooSym(profile.canonical);
     if (!ysSym) return res.status(404).json({ ok: false, error: 'Aucune donnée pour ' + profile.canonical });
+    console.warn(`[FALLBACK YAHOO] /latest/${profile.canonical} — tvDataStore absent, fallback Yahoo Finance`);
     const price = await fetchYahooPrice(ysSym);
     res.json({ ok: true, symbol: profile.canonical, price, source: 'yahoo-reference', note: 'Prix de référence uniquement — connectez MT5' });
   } catch {
@@ -2757,15 +2765,27 @@ async function handleAnalyze(req, res) {
     const cached   = marketStore.analysisCache[profile.canonical];
     if (cached?.trade) return { ...cached.trade, probability: Math.round(cached.score || 65) };
 
-    // Essayer le prix Yahoo uniquement pour construire des niveaux
+    // Priorité : tvDataStore (source maître TradingView) → fallback Yahoo (niveaux uniquement)
     try {
-      const ySym  = toYahooSym(profile.canonical);
-      const price = ySym ? await fetchYahooPrice(ySym) : null;
+      // 1. TradingView — source maître
+      const tvEntry = tvDataStore[profile.canonical];
+      const tvAge   = tvEntry ? (Date.now() - (tvEntry.updatedAt || 0)) : Infinity;
+      let price = null;
+      if (tvEntry && tvAge < 30000 && parseFloat(tvEntry.price) > 0) {
+        price = parseFloat(tvEntry.price);
+      } else {
+        // 2. Fallback Yahoo Finance si tvDataStore absent ou > 30s
+        const ySym = toYahooSym(profile.canonical);
+        if (ySym) {
+          console.warn(`[FALLBACK YAHOO] /analyze ${profile.canonical} — tvDataStore ${tvEntry ? 'trop ancien (' + Math.round(tvAge / 1000) + 's)' : 'absent'}, fallback Yahoo Finance`);
+          price = await fetchYahooPrice(ySym);
+        }
+      }
       if (!price) return null;
       const direction = 'LONG';
       const levels    = calcTradeLevels(price, direction, profile, 'H1', null);
       const setup     = classifySetup('H1', direction, 65);
-      return { symbol: profile.canonical, direction, ...levels, score: 65, probability: 65, source: 'price-reference', ...setup };
+      return { symbol: profile.canonical, direction, ...levels, score: 65, probability: 65, source: tvEntry && tvAge < 30000 ? 'tradingview' : 'yahoo-reference', ...setup };
     } catch { return null; }
   }));
 
@@ -2951,6 +2971,7 @@ app.get('/quote', async (req, res) => {
   try {
     const ySym  = toYahooSym(sym);
     if (!ySym) throw new Error('non supporté');
+    console.warn(`[FALLBACK YAHOO] /quote ${sym} — marketStore absent, fallback Yahoo Finance`);
     const price = await fetchYahooPrice(ySym);
     // MODIFIÉ: Broadcast le price pour SSE real-time
     marketStore.broadcast({ type: 'quote', symbol: sym, price: price, source: 'yahoo-reference' });
@@ -4575,6 +4596,7 @@ async function runOrchestrationCycle() {
       // Fallback Yahoo Finance si tvDataStore absent ou trop ancien
       const yahoSym = toYahooSym(sym);
       if (!yahoSym) return;
+      console.warn(`[FALLBACK YAHOO] runOrchestrationCycle ${sym} — tvDataStore ${tvLive ? 'trop ancien (' + Math.round(tvAge / 1000) + 's)' : 'absent'}, fallback Yahoo Finance`);
       price = await fetchYahooPrice(yahoSym);
       if (!price || price <= 0) {
         pushLog('orchestrator', 'system', `BOUCLE ${sym} — prix indisponible`, 'warn', 'source:offline');
@@ -8535,7 +8557,8 @@ app.get('/data/refresh', (_req, res) => {
   app.listen(PORT, '0.0.0.0', () => {
   const _startTs = new Date().toISOString();
   console.log(`\n✅ Trading Auto Server — http://127.0.0.1:${PORT}`);
-  console.log(`📡 Sources: MT5 (priorité 1) → TradingView (priorité 2) → Yahoo (klines seulement)`);
+  console.log(`📡 Sources: TradingView (maître prix) → Yahoo Finance ([FALLBACK YAHOO] si TV absent/> 30s) · MT5 (klines historiques)`);
+  console.log(`📐 RÈGLE: tvDataStore[symbol].price = référence absolue. Yahoo = fallback loggué uniquement.`);
   console.log(`⚠️  Aucun Math.random() — toutes les données sont réelles`);
   console.log(`[BASELINE] PID=${process.pid} | PORT=${PORT} | STARTED=${_startTs} | INSTANCES=1`);
   console.log(`[BASELINE] Clean start — single instance confirmed\n`);
