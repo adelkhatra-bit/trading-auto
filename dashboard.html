@@ -355,6 +355,16 @@
     .news-avf-good { background: rgba(34,197,94,.15); color: #86efac; }
     .news-avf-bad { background: rgba(239,68,68,.15); color: #fca5a5; }
 
+    /* ── NEWS HEADLINES RSS ── */
+    .headlines-label { font-size: 10px; color: #64748b; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 1px; border-top: 1px solid #1e3a5f; padding-top: 6px; }
+    .news-headline { padding: 6px 8px; border-bottom: 1px solid #1e293b; }
+    .news-headline:last-child { border-bottom: none; }
+    .nh-title { font-size: 12px; color: #e2e8f0; line-height: 1.35; }
+    .nh-meta { font-size: 10px; color: #64748b; margin-top: 2px; }
+    .nb-bullish { color: #86efac; }
+    .nb-bearish { color: #fca5a5; }
+    .nb-neutral, .nb-undefined { color: #94a3b8; }
+
     @media (max-width: 1000px) {
       .grid-main { grid-template-columns: 1fr; }
       .signals { grid-template-columns: 1fr; }
@@ -1358,13 +1368,42 @@
       const root = document.getElementById('newsList');
       if (!root) return;
       try {
-        const data = await fetchJson('/economic-events?symbol=' + encodeURIComponent(state.symbol));
-        let events = Array.isArray(data.events) ? data.events : (Array.isArray(data) ? data : []);
-        if (events.length === 0) {
+        // Appel unifié /news?symbol= → events (calendar) + headlines (RSS live)
+        let data;
+        try {
+          data = await fetchJson('/news?symbol=' + encodeURIComponent(state.symbol));
+        } catch (_e1) {
+          // Fallback sur /economic-events si /news indisponible
+          data = await fetchJson('/economic-events?symbol=' + encodeURIComponent(state.symbol));
+        }
+
+        const events = Array.isArray(data.events) ? data.events : (Array.isArray(data) ? data : []);
+        const headlines = Array.isArray(data.headlines) ? data.headlines : [];
+
+        if (events.length === 0 && headlines.length === 0) {
           root.innerHTML = '<div class="item"><div class="meta muted">Aucun événement à venir.</div></div>';
           return;
         }
-        root.innerHTML = events.slice(0, 6).map(formatNewsEventDash).join('');
+
+        // Bloc 1 : calendar events
+        let html = events.length > 0
+          ? events.slice(0, 6).map(formatNewsEventDash).join('')
+          : '';
+
+        // Bloc 2 : RSS headlines live
+        if (headlines.length > 0) {
+          html += '<div class="headlines-label">Headlines live</div>' +
+            headlines.slice(0, 5).map(h => {
+              const age = h.ageMinutes < 60 ? h.ageMinutes + 'min' : Math.round(h.ageMinutes / 60) + 'h';
+              const biasCls = 'nb-' + String(h.bias || 'neutral').toLowerCase();
+              return `<div class="news-headline">
+                <div class="nh-title">${h.title}</div>
+                <div class="nh-meta">${h.source} · ${age} · <span class="${biasCls}">${h.bias}</span></div>
+              </div>`;
+            }).join('');
+        }
+
+        root.innerHTML = html || '<div class="item"><div class="meta muted">Aucun événement à venir.</div></div>';
       } catch (_e) {
         root.innerHTML = '<div class="item"><div class="meta muted">Calendrier temporairement indisponible.</div></div>';
       }
