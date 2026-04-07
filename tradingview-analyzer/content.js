@@ -301,47 +301,79 @@
   }
 
   // ── SCRAP THE REAL TRADINGVIEW PANEL ───────────────────────────────────
-  // Extrait: macro, tendance, corrélation, lecture, verdict, contexte, UT, force, RSI, anticipation, zone proche
+  // Extrait les données réellement disponibles dans le DOM natif TradingView
   function scrapeRealPanel() {
-    const panelData = {
-      scrapedAt: new Date().toISOString(),
-      symbol: detectSymbolFromTitle() || detectSymbolFromLocation() || detectSymbolFromDom(),
-      timeframe: detectTimeframe(),
-      price: detectLivePrice(),
-      panelText: {},
-      rawHTML: null,
-      pageTitle: document.title,
-      pageUrl: location.href
+    const data = {
+      scrapedAt:  new Date().toISOString(),
+      symbol:     detectSymbolFromTitle() || detectSymbolFromLocation() || detectSymbolFromDom(),
+      timeframe:  detectTimeframe(),
+      price:      detectLivePrice(),
+      pageTitle:  document.title,
+      pageUrl:    location.href,
+      indicators: {},
+      legend:     {}
     };
 
-    const panels = document.querySelectorAll('[class*="panel"], [class*="analysis"], [class*="table"]');
-
-    for (const panel of panels) {
-      const text = panel.innerText || panel.textContent;
-      if (text && (text.includes('Macro') || text.includes('Trend') || text.includes('RSI') ||
-                    text.includes('Signal') || text.includes('Verdict') || text.includes('Zone'))) {
-        panelData.rawHTML = panel.outerHTML.substring(0, 5000);
-
-        const lines = text.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
-        lines.forEach((line) => {
-          if (line.includes('Macro:') || line.includes('macro')) panelData.panelText.macro = line;
-          else if (line.includes('Trend') || line.includes('tendance')) panelData.panelText.trend = line;
-          else if (line.includes('Corr') || line.includes('corrélation')) panelData.panelText.correlation = line;
-          else if (line.includes('Reading') || line.includes('lecture')) panelData.panelText.reading = line;
-          else if (line.includes('Verdict')) panelData.panelText.verdict = line;
-          else if (line.includes('Context') || line.includes('contexte')) panelData.panelText.context = line;
-          else if (line.includes('UT') && line.match(/\d+|M\d+/)) panelData.panelText.timeframes = line;
-          else if (line.includes('RSI')) panelData.panelText.rsi = line;
-          else if (line.includes('Force') || line.includes('Strength')) panelData.panelText.strength = line;
-          else if (line.includes('Anticipation')) panelData.panelText.anticipation = line;
-          else if (line.includes('Zone') || line.includes('Niveau')) panelData.panelText.zone = line;
-        });
-
-        break;
+    // 1. Légende du chart (source la plus fiable)
+    // [data-name="legend-source-item"] contient: nom indicateur + valeurs OHLC + prix courant
+    const legendItems = document.querySelectorAll('[data-name="legend-source-item"]');
+    const legendValues = [];
+    legendItems.forEach((item, i) => {
+      const text = (item.innerText || item.textContent || '').trim();
+      if (!text) return;
+      // Premier item = données de la bougie principale (OHLC)
+      if (i === 0) {
+        const nums = text.match(/[\d.,]+/g);
+        if (nums && nums.length >= 4) {
+          data.legend.raw = text;
+          const prices = nums.map(n => parseFloat(n.replace(',','.'))).filter(n => n > 0);
+          if (prices.length >= 4) {
+            data.legend.open  = prices[0];
+            data.legend.high  = prices[1];
+            data.legend.low   = prices[2];
+            data.legend.close = prices[3];
+            // Utiliser close comme prix si detectLivePrice a échoué
+            if (!data.price && prices[3] > 0.5) data.price = prices[3];
+          }
+        }
+      } else {
+        // Autres items = indicateurs (RSI, MACD, EMA, etc.)
+        legendValues.push(text.slice(0, 100));
       }
+    });
+    if (legendValues.length) data.legend.indicators = legendValues;
+
+    // 2. Indicateurs depuis la légende (RSI, MA, EMA, MACD)
+    legendValues.forEach(txt => {
+      const upper = txt.toUpperCase();
+      const numMatch = txt.match(/[-\d.,]+/);
+      const val = numMatch ? parseFloat(numMatch[0].replace(',','.')) : null;
+      if (upper.includes('RSI') && val) data.indicators.rsi = val;
+      else if ((upper.includes('EMA') || upper.includes('MA(')) && val) data.indicators.ma = val;
+      else if (upper.includes('MACD') && val) data.indicators.macd = val;
+      else if (upper.includes('ATR') && val) data.indicators.atr = val;
+      else if (upper.includes('BB') && val) data.indicators.bb = val;
+      else if (upper.includes('STOCH') && val) data.indicators.stoch = val;
+      else if (upper.includes('VOL') && val) data.indicators.volume = val;
+    });
+
+    // 3. Ask/Bid si disponible (certaines vues TV affichent le spread)
+    const askEl = document.querySelector('[class*="ask"], [data-field="ask"]');
+    const bidEl = document.querySelector('[class*="bid"], [data-field="bid"]');
+    if (askEl) data.ask = parsePriceCandidate(askEl.textContent);
+    if (bidEl) data.bid = parsePriceCandidate(bidEl.textContent);
+
+    // 4. Dernier prix de clôture visible dans le DOM (axe Y du chart)
+    const priceScaleNums = document.querySelectorAll('[class*="priceAxis"] [class*="label"], [class*="price-axis"] span');
+    if (priceScaleNums.length > 0) {
+      const scaleVals = Array.from(priceScaleNums)
+        .map(el => parsePriceCandidate(el.textContent))
+        .filter(v => v && v > 0.5)
+        .sort((a,b) => a-b);
+      if (scaleVals.length) data.priceScaleRange = { min: scaleVals[0], max: scaleVals[scaleVals.length-1] };
     }
 
-    return panelData;
+    return data;
   }
 
   window.addEventListener('pagehide', cleanup, { once: true });
