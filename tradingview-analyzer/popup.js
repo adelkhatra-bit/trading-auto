@@ -105,6 +105,7 @@ function loadPersistedState() {
     if (Number.isFinite(Number(saved.price))) state.price = Number(saved.price);
     if (typeof saved.chartOpen === 'boolean') state.chartOpen = saved.chartOpen;
     if (typeof saved.userLocked === 'boolean') state.userLocked = saved.userLocked;
+    if (typeof saved.agentSessionActive === 'boolean') state.agentSessionActive = saved.agentSessionActive;
     if (saved.stats && typeof saved.stats === 'object') state.stats = Object.assign({}, state.stats, saved.stats);
     if (saved.alertedEntryKeys && typeof saved.alertedEntryKeys === 'object') state.alertedEntryKeys = saved.alertedEntryKeys;
   } catch (_) {}
@@ -119,6 +120,7 @@ function savePersistedState() {
       price: state.price,
       chartOpen: !!state.chartOpen,
       userLocked: !!state.userLocked,
+      agentSessionActive: !!state.agentSessionActive,
       stats: state.stats,
       alertedEntryKeys: state.alertedEntryKeys
     }));
@@ -219,6 +221,7 @@ async function setAgentSession(active, trigger) {
         body: JSON.stringify({ interval: 30000, trigger: trigger || 'manual' })
       });
       state.agentSessionActive = true;
+      scheduleSaveState();
       try {
         await fetchJson('/orchestration/run-now', {
           method: 'POST',
@@ -234,6 +237,7 @@ async function setAgentSession(active, trigger) {
       body: JSON.stringify({ trigger: trigger || 'manual' })
     });
     state.agentSessionActive = false;
+    scheduleSaveState();
   } catch (_) {}
 }
 
