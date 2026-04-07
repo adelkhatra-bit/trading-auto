@@ -107,6 +107,48 @@ if (!process.env.BROKER_MODE) process.env.BROKER_MODE = 'live';
 if (!process.env.SAFE_MODE) process.env.SAFE_MODE = '0';
 const SAFE_MODE = process.env.SAFE_MODE !== '0';
 
+// ── TRADE JOURNAL ─────────────────────────────────────────────────────────────
+const JOURNAL_FILE = path.join(__dirname, 'store', 'trade-journal.json');
+let tradeJournal = [];
+
+function loadJournal() {
+  try {
+    if (fs.existsSync(JOURNAL_FILE)) {
+      tradeJournal = JSON.parse(fs.readFileSync(JOURNAL_FILE, 'utf8'));
+    }
+  } catch(_) { tradeJournal = []; }
+}
+
+function saveJournal() {
+  try {
+    fs.writeFileSync(JOURNAL_FILE, JSON.stringify(tradeJournal, null, 2));
+  } catch(_) {}
+}
+
+function addTradeToJournal(trade) {
+  const entry = {
+    id: `T${Date.now()}`,
+    symbol: trade.symbol,
+    direction: trade.direction,
+    entry: trade.entry,
+    exit: trade.exit,
+    sl: trade.sl,
+    tp: trade.tp,
+    pnlPips: trade.pnlPips,
+    won: trade.won,
+    rr: trade.rr,
+    durationMin: trade.durationMin,
+    openedAt: trade.openedAt || new Date().toISOString(),
+    closedAt: new Date().toISOString(),
+    coachMessage: trade.coachMessage || ''
+  };
+  tradeJournal.unshift(entry); // plus récent en premier
+  if (tradeJournal.length > 200) tradeJournal = tradeJournal.slice(0, 200);
+  saveJournal();
+  return entry;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -8137,10 +8179,35 @@ app.get('/data/refresh', (_req, res) => {
       };
 
       pushLog('coach', 'trade-closed', summary.message, won ? 'ok' : 'warn');
+
+      const journalEntry = addTradeToJournal({
+        symbol, direction,
+        entry, exit: exitPrice,
+        sl, tp, pnlPips, won, rr,
+        durationMin,
+        openedAt: req.body.openedAt,
+        coachMessage: summary.message
+      });
+      summary.journalId = journalEntry.id;
+
       res.json(summary);
     } catch(err) {
       res.status(500).json({ ok: false, error: err.message });
     }
+  });
+
+  app.get('/journal', (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    const symbol = req.query.symbol;
+    let entries = symbol ? tradeJournal.filter(t => t.symbol === symbol) : tradeJournal;
+    const stats = {
+      total: entries.length,
+      won: entries.filter(t => t.won).length,
+      winRate: entries.length ? Math.round(entries.filter(t => t.won).length / entries.length * 100) : 0,
+      totalPips: entries.reduce((s, t) => s + (t.pnlPips || 0), 0),
+      avgRR: entries.length ? (entries.reduce((s,t) => s + parseFloat(t.rr||0), 0) / entries.length).toFixed(2) : '--'
+    };
+    res.json({ ok: true, entries: entries.slice(0, limit), stats });
   });
 
   app.get('/coach/realtime', async (req, res) => {
@@ -8614,6 +8681,7 @@ app.get('/data/refresh', (_req, res) => {
   console.log(`[BASELINE] PID=${process.pid} | PORT=${PORT} | STARTED=${_startTs} | INSTANCES=1`);
   console.log(`[BASELINE] Clean start — single instance confirmed\n`);
 
+  loadJournal();
   loadAgentHistoryFromDisk();
   runAgentHistoryCycle();
   if (_agentHistoryTimer) clearInterval(_agentHistoryTimer);
