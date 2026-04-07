@@ -295,7 +295,9 @@
   }
 
   function detectLivePrice() {
-    return detectPriceFromDom() || detectPriceFromTitle();
+    const price = detectPriceFromDom() || detectPriceFromTitle();
+    if (price !== null && price < 0.5) return null; // rejette prix invalide (<0.5 = artefact du titre)
+    return price;
   }
 
   // ── SCRAP THE REAL TRADINGVIEW PANEL ───────────────────────────────────
