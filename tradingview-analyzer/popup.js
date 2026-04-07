@@ -2217,11 +2217,29 @@ async function boot() {
   loadLiveSymbols();
   renderMultiTF();
 
+  await loadJournalStats();
+
   // Intervals
   setInterval(refreshAll,       8000);   // refresh core data every 8s
   setInterval(renderMultiTF,   30000);   // refresh multi-TF every 30s
   setInterval(refreshHealth,   10000);   // check health every 10s
   setInterval(loadLiveSymbols, 15000);   // refresh symbol list every 15s
+  setInterval(loadJournalStats, 60000);  // refresh journal stats every 60s
+}
+
+async function loadJournalStats() {
+  try {
+    const data = await fetchJson(`/journal?symbol=${state.symbol}&limit=100`);
+    if (!data.ok) return;
+    const s = data.stats;
+    const el = document.getElementById('journalStats');
+    if (!el) return;
+    el.innerHTML = `<span style="color:#64748b;font-size:10px">
+      ${s.total} trades ·
+      <span style="color:${s.winRate >= 50 ? '#22c55e' : '#ef4444'}">${s.winRate}% win</span> ·
+      <span style="color:${s.totalPips >= 0 ? '#22c55e' : '#ef4444'}">${s.totalPips >= 0 ? '+' : ''}${s.totalPips} pips</span>
+    </span>`;
+  } catch(_) {}
 }
 
 window.addEventListener('load', function() { boot().catch(function() {}); });
