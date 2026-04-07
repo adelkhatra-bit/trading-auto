@@ -465,6 +465,28 @@
         <div class="list" id="positionsList">
           <div class="item"><div class="meta muted">Chargement des positions...</div></div>
         </div>
+        <!-- POSITION PANEL -->
+        <div id="positionPanel" style="display:none;padding:6px 10px;background:#0f172a;border-radius:6px;margin-top:8px;border:1px solid #1e293b">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span id="posDir" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px">LONG</span>
+            <span id="posPnl" style="font-size:12px;font-weight:700">+0.0 pips</span>
+          </div>
+          <div style="position:relative;height:6px;background:#1e293b;border-radius:3px;margin:4px 0">
+            <div id="posSlZone" style="position:absolute;left:0;height:100%;background:rgba(239,68,68,0.3);border-radius:3px 0 0 3px"></div>
+            <div id="posTpZone" style="position:absolute;right:0;height:100%;background:rgba(34,197,94,0.3);border-radius:0 3px 3px 0"></div>
+            <div id="posPriceDot" style="position:absolute;top:-3px;width:12px;height:12px;border-radius:50%;background:#f97316;transform:translateX(-50%);transition:left 0.5s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#64748b;margin-top:2px">
+            <span id="posSlLbl">SL --</span>
+            <span id="posEntryLbl">Entry --</span>
+            <span id="posTpLbl">TP --</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;margin-top:3px">
+            <span id="posDistSl" style="color:#ef4444">-- pips SL</span>
+            <span id="posRr" style="color:#64748b">RR --</span>
+            <span id="posDistTp" style="color:#22c55e">TP -- pips</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1605,6 +1627,65 @@
       };
     }
 
+    // ─── POSITION PANEL ───────────────────────────────────────────────────────
+    function renderPositionPanel(live, price) {
+      const panel = document.getElementById('positionPanel');
+      if (!panel) return;
+
+      const pos = live?.virtualPosition || live?.instantTrade || null;
+      const ts  = live?.tradeState || null;
+
+      if (!ts?.entered || !pos?.entry) {
+        panel.style.display = 'none';
+        return;
+      }
+
+      panel.style.display = 'block';
+      const entry = parseFloat(pos.entry);
+      const sl    = parseFloat(pos.sl);
+      const tp    = parseFloat(pos.tp);
+      const cur   = parseFloat(price || state.price || entry);
+      const isLong = tp > entry;
+
+      // Pip value
+      const pipMult = (state.symbol || '').includes('JPY') ? 100 : 10000;
+      const pnlPips = Math.round((cur - entry) * pipMult * (isLong ? 1 : -1));
+      const distSl  = Math.round(Math.abs(cur - sl) * pipMult);
+      const distTp  = Math.round(Math.abs(cur - tp) * pipMult);
+      const range   = Math.abs(tp - sl);
+      const rr      = range > 0 ? (Math.abs(tp - entry) / Math.abs(entry - sl)).toFixed(1) : '--';
+
+      // Position du prix sur la barre (0% = SL, 100% = TP)
+      const pct = range > 0 ? Math.max(0, Math.min(100, ((cur - sl) / range) * 100)) : 50;
+
+      // Couleurs
+      const dirColor = isLong ? '#22c55e' : '#ef4444';
+      const pnlColor = pnlPips >= 0 ? '#22c55e' : '#ef4444';
+      const dotColor = Math.abs(cur - sl) < Math.abs(cur - tp) ? '#ef4444' : (pnlPips > 0 ? '#22c55e' : '#f97316');
+
+      setText('posDir',      isLong ? '▲ LONG' : '▼ SHORT');
+      setText('posPnl',      (pnlPips >= 0 ? '+' : '') + pnlPips + ' pips');
+      setText('posSlLbl',    'SL ' + sl);
+      setText('posEntryLbl', 'E ' + entry);
+      setText('posTpLbl',    'TP ' + tp);
+      setText('posDistSl',   distSl + ' pips SL');
+      setText('posDistTp',   'TP ' + distTp + ' pips');
+      setText('posRr',       'RR 1:' + rr);
+
+      document.getElementById('posDir').style.color     = dirColor;
+      document.getElementById('posPnl').style.color     = pnlColor;
+      document.getElementById('posPriceDot').style.left = pct + '%';
+      document.getElementById('posPriceDot').style.background = dotColor;
+
+      // Taille des zones SL/TP
+      const slWidth = range > 0 ? Math.abs(entry - sl) / range * 100 : 33;
+      const tpWidth = range > 0 ? Math.abs(tp - entry) / range * 100 : 33;
+      document.getElementById('posSlZone').style.width = slWidth + '%';
+      document.getElementById('posTpZone').style.width = tpWidth + '%';
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+
     async function refreshAll() {
       if (state.bridgeConfig.bridgeEnabled === false) {
         renderBridgeOffState();
@@ -1645,6 +1726,7 @@
       await loadNews();
       await loadHistory();
       renderBiasBanner(state.realtime, state.newsEvents);
+      renderPositionPanel(state.realtime, state.price);
     }
 
     document.getElementById('refreshBtn').addEventListener('click', refreshAll);
