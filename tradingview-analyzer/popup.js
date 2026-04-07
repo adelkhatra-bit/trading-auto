@@ -49,8 +49,66 @@ const state = {
   stats: { signals: 0, trades: 0, lastEvent: '--' },
   conn: { healthFails: 0, sseFails: 0, lastOkAt: 0 },
   beepCtx: null,
-  alertedEntryKeys: {}
+  alertedEntryKeys: {},
+  _alertedKeys: {}
 };
+
+// ── ALERT SYSTEM ──────────────────────────────────────────────────────────────
+const ALERT_SOUNDS = {
+  ENTRY_READY: { freq: 880,  count: 3, interval: 150 },
+  NEAR_SL:     { freq: 440,  count: 2, interval: 200 },
+  NEWS_HIGH:   { freq: 660,  count: 1, interval: 0   },
+  BE_REACHED:  { freq: 523,  count: 1, interval: 0   },
+  TP_REACHED:  { freq: 1047, count: 3, interval: 100 }
+};
+
+const ALERT_STYLES = {
+  ENTRY_READY: { bg: '#22c55e', color: '#000' },
+  NEAR_SL:     { bg: '#ef4444', color: '#fff' },
+  NEWS_HIGH:   { bg: '#f97316', color: '#fff' },
+  BE_REACHED:  { bg: '#3b82f6', color: '#fff' },
+  TP_REACHED:  { bg: '#22c55e', color: '#000' }
+};
+
+const ALERT_MESSAGES = {
+  ENTRY_READY: '🟢 SETUP PRÊT — ENTRÉE POSSIBLE',
+  NEAR_SL:     '⚠️ PROCHE DU SL — SURVEILLE',
+  NEWS_HIGH:   '📰 NEWS IMPACT FORT',
+  BE_REACHED:  '✅ BREAK-EVEN ATTEINT',
+  TP_REACHED:  '🎯 TP ATTEINT — FÉLICITATIONS'
+};
+
+function triggerAlert(type, extra) {
+  // Son
+  const s = ALERT_SOUNDS[type];
+  if (s) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < s.count; i++) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = s.freq;
+        const t = ctx.currentTime + i * (s.interval / 1000 + 0.12);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        osc.start(t); osc.stop(t + 0.12);
+      }
+    } catch(_) {}
+  }
+  // Banner
+  const banner = document.getElementById('alertBanner');
+  const textEl = document.getElementById('alertText');
+  if (!banner || !textEl) return;
+  const st = ALERT_STYLES[type] || {};
+  banner.style.background = st.bg || '#f97316';
+  banner.style.color = st.color || '#fff';
+  textEl.textContent = (ALERT_MESSAGES[type] || type) + (extra ? ' — ' + extra : '');
+  banner.style.display = 'block';
+  // Auto-hide après 6s sauf NEAR_SL
+  if (type !== 'NEAR_SL') setTimeout(() => { if (banner) banner.style.display = 'none'; }, 6000);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 let saveStateTimer = null;
 
@@ -196,7 +254,7 @@ function connectCoachStream(symbol) {
       renderPositionPanel(state.live, state.price);
       // Fermer automatiquement le stream si le trade est terminé
       if (d.tradeState && d.tradeState.phase === 'closed') {
-        disconnectCoachStream();
+        showTradeSummary(d.tradeState, d.price);
       }
     } catch (_) {}
   };
@@ -211,6 +269,33 @@ function connectCoachStream(symbol) {
 function disconnectCoachStream() {
   if (coachSse) { try { coachSse.close(); } catch (_) {} coachSse = null; }
   console.log('[COACH STREAM] Déconnecté');
+}
+
+async function showTradeSummary(tradeState, price) {
+  const pos = state.live?.virtualPosition || state.live?.instantTrade;
+  if (!pos?.entry) return;
+  try {
+    const resp = await fetchJson('/coach/close-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        symbol: state.symbol,
+        entry: pos.entry,
+        exitPrice: price || state.price,
+        sl: pos.sl, tp: pos.tp,
+        direction: pos.direction || (pos.tp > pos.entry ? 'LONG' : 'SHORT'),
+        durationMin: state._tradeStartAt ? Math.round((Date.now() - state._tradeStartAt) / 60000) : null
+      })
+    });
+    if (resp.ok) {
+      const el = document.getElementById('coachText');
+      if (el) {
+        el.style.color = resp.color;
+        el.textContent = resp.message + '\n\n' + resp.nextAction;
+      }
+      if (typeof disconnectCoachStream === 'function') disconnectCoachStream();
+    }
+  } catch(_) {}
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1409,9 +1494,11 @@ async function sendTradeAction(action) {
     });
     state.tradeState = d.state || state.tradeState;
     if (upperAction === 'ENTER' || upperAction === 'OPEN') {
+      state._tradeStartAt = Date.now();
       await setAgentSession(true, 'enter');
     } else if (upperAction === 'EXIT' || upperAction === 'RETEST') {
       await setAgentSession(false, 'exit');
+      if (upperAction === 'EXIT') showTradeSummary(d.state, state.price);
     }
     state.stats.trades++;
     state.stats.lastEvent = action + ' ' + fmtTime();
