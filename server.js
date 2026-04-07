@@ -5542,7 +5542,7 @@ app.get('/agents-bus', (req, res) => {
 });
 
 // ─── TRADINGVIEW WEBHOOK (ÉTAPE 1: Real data source) ──────────────────────────
-let tvDataStore = {}; // { SYMBOL: { price, rsi, macd, bb, timestamp, robotV12 } }
+// tvDataStore déclaré const ligne 2 — pas de redéclaration ici
 
 // Persistance tvDataStore
 const TV_CACHE_PATH = path.join(__dirname, 'tradingview-cache.json');
