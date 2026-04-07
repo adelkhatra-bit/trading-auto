@@ -1718,6 +1718,25 @@
         }
         return;
       }
+      if (msg.type === 'price-update') {
+        var sym = String(msg.symbol || '').toUpperCase();
+        var px  = Number(msg.price);
+        var tf  = String(msg.timeframe || '').toUpperCase();
+        if (sym && sym !== (state.symbol || '').toUpperCase()) {
+          state.symbol = sym;
+          const symbolSelect = document.getElementById('symbolSelect');
+          if (symbolSelect && Array.from(symbolSelect.options).some((o) => o.value === sym)) symbolSelect.value = sym;
+        }
+        if (Number.isFinite(px) && px > 1) {
+          setText('priceVal', typeof formatPrice === 'function' ? formatPrice(px) : String(px));
+        }
+        if (tf && ['M1','M5','M15','M30','H1','H4','D1','W1'].indexOf(tf) >= 0) {
+          state.timeframe = tf;
+          const timeframeSelect = document.getElementById('timeframeSelect');
+          if (timeframeSelect && Array.from(timeframeSelect.options).some((o) => o.value === tf)) timeframeSelect.value = tf;
+        }
+        return;
+      }
       const structuralSync = msg.type === 'initial-sync' || msg.type === 'active-symbol';
       if (!structuralSync) {
         if (msg.bridgeConfig) applyBridgeConfig(msg.bridgeConfig);
