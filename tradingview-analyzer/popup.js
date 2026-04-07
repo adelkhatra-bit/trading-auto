@@ -1646,8 +1646,36 @@ function bindAll() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+async function bootstrapSymbolFromExtension() {
+  // 1. Essayer le background de l'extension (symbole détecté depuis TradingView DOM)
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      const ctx = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'GET_ACTIVE_CONTEXT' }, (resp) => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve(resp);
+        });
+      });
+      if (ctx?.ok && ctx.context?.symbol) {
+        state.symbol = ctx.context.symbol;
+        if (ctx.context.timeframe) state.timeframe = ctx.context.timeframe;
+        if (ctx.context.price) state.price = ctx.context.price;
+        console.log('[BOOT] Symbole depuis TradingView extension:', state.symbol);
+        return true;
+      }
+    }
+  } catch (_) {}
+
+  // 2. Fallback localStorage (déjà géré par loadPersistedState, rien à faire)
+  // 3. Fallback XAUUSD reste en dernier recours
+  console.log('[BOOT] Aucun contexte TradingView live — fallback localStorage/XAUUSD');
+  return false;
+}
+
 async function boot() {
   loadPersistedState();
+  await bootstrapSymbolFromExtension();
+  updateHeader();
   state.persistent = isPersistent();
   if (state.persistent) {
     document.body.classList.add('win');
