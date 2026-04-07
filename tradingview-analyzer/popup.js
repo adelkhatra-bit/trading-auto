@@ -1,4 +1,17 @@
-﻿// popup.js v4.0 — Trading Auto — Compact + Resilient + Persistent
+﻿// popup.js v4.1 — Trading Auto — Unified Color System
+// COLOR SYSTEM (NON NEGOTIABLE):
+//   ORANGE  #f97316 = pending / signal incertain / "va se passer"
+//   VERT    #22c55e = confirmé LONG / achat / haussier / signal validé
+//   ROUGE   #ef4444 = confirmé SHORT / vente / baissier / signal invalidé
+//   JAUNE   #eab308 = WAIT / neutre / attention / news
+//   GRIS    #64748b = neutre / pas de signal / inactif
+//   BLANC   #f1f5f9 = texte principal
+const COL_LONG    = '#22c55e';
+const COL_SHORT   = '#ef4444';
+const COL_PENDING = '#f97316';
+const COL_WAIT    = '#eab308';
+const COL_NEUTRAL = '#64748b';
+const COL_TEXT    = '#f1f5f9';
 'use strict';
 
 const API = 'http://127.0.0.1:4000';
@@ -159,6 +172,46 @@ function checkEntryProximityAndBeep(live) {
   } catch (_) {}
 }
 
+// ── COACH STREAM SSE ─────────────────────────────────────────────────────────
+let coachSse = null;
+
+function connectCoachStream(symbol) {
+  if (coachSse) { try { coachSse.close(); } catch (_) {} }
+  coachSse = new EventSource(`${API}/coach/stream?symbol=${encodeURIComponent(symbol || state.symbol || 'XAUUSD')}`);
+  coachSse.onmessage = function(e) {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.coachMessage) {
+        const el = document.getElementById('coachText');
+        if (el) {
+          const msg = d.coachMessage;
+          const isAlert = msg.includes('SL') || msg.includes('Attention') || msg.includes('coupe');
+          const isGood  = msg.includes('TP') || msg.includes('avance') || msg.includes('trail') || msg.includes('break-even');
+          el.style.color = isAlert ? COL_SHORT : isGood ? COL_LONG : COL_PENDING;
+          el.textContent = msg;
+        }
+      }
+      if (d.price) state.price = d.price;
+      // Fermer automatiquement le stream si le trade est terminé
+      if (d.tradeState && d.tradeState.phase === 'closed') {
+        disconnectCoachStream();
+      }
+    } catch (_) {}
+  };
+  coachSse.onerror = function() {
+    setTimeout(() => {
+      if (state.agentSessionActive) connectCoachStream(symbol || state.symbol);
+    }, 3000);
+  };
+  console.log('[COACH STREAM] Connecté pour', symbol);
+}
+
+function disconnectCoachStream() {
+  if (coachSse) { try { coachSse.close(); } catch (_) {} coachSse = null; }
+  console.log('[COACH STREAM] Déconnecté');
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function setAgentSession(active, trigger) {
   try {
     if (active) {
@@ -169,6 +222,8 @@ async function setAgentSession(active, trigger) {
       });
       state.agentSessionActive = true;
       scheduleSaveState();
+      // Ouvrir le flux coach SSE en continu sur la position
+      connectCoachStream(state.symbol);
       try {
         await fetchJson('/orchestration/run-now', {
           method: 'POST',
@@ -184,6 +239,8 @@ async function setAgentSession(active, trigger) {
       body: JSON.stringify({ trigger: trigger || 'manual' })
     });
     state.agentSessionActive = false;
+    // Fermer le flux coach SSE à la sortie de position
+    disconnectCoachStream();
     scheduleSaveState();
   } catch (_) {}
 }
@@ -332,7 +389,26 @@ function updateHeader() {
   const sym  = $('headSym');   if (sym)  sym.textContent  = state.symbol;
   const tf   = $('headTF');    if (tf)   tf.textContent   = state.timeframe;
   const mode = $('headMode');  if (mode) mode.textContent = state.tradeMode;
-  const pr   = $('headPrice'); if (pr)   pr.textContent   = state.price ? fmtPrice(state.price) : '';
+  const pr   = $('headPrice');
+  if (pr) {
+    pr.textContent = state.price ? fmtPrice(state.price) : '';
+    // Couleur du prix selon état position
+    var live = state.live || {};
+    var vp = live.virtualPosition || live.coach && live.coach.virtualPosition || null;
+    var it = live.instantTrade || null;
+    var posDir = String((vp && vp.direction) || (it && it.direction) || '').toUpperCase();
+    var phase  = String((vp && vp.status) || (live.tradeState && live.tradeState.phase) || '').toUpperCase();
+    var isPending = phase.indexOf('PENDING') >= 0 || phase.indexOf('WAIT') >= 0;
+    if (isPending) {
+      pr.style.color = COL_PENDING;
+    } else if (posDir.indexOf('BUY') >= 0 || posDir.indexOf('LONG') >= 0) {
+      pr.style.color = COL_LONG;
+    } else if (posDir.indexOf('SELL') >= 0 || posDir.indexOf('SHORT') >= 0) {
+      pr.style.color = COL_SHORT;
+    } else {
+      pr.style.color = COL_TEXT;
+    }
+  }
   // Highlight active TF card
   MTFS.forEach(function(tf) { var c = $('tfc-' + tf); if (c) c.classList.toggle('active', tf === state.timeframe); });
   scheduleSaveState();
@@ -345,13 +421,13 @@ function updateAgentStatus(live) {
   const rec = String((agents.analysis && agents.analysis.recommendation) || '').toUpperCase();
   if (rec.indexOf('BUY') >= 0 || rec.indexOf('ACHAT') >= 0 || rec.indexOf('LONG') >= 0) {
     el.textContent = 'AGENT ACHAT';
-    el.style.background = 'rgba(22,163,74,.2)'; el.style.color = '#86efac'; el.style.borderColor = 'rgba(22,163,74,.4)';
+    el.style.background = 'rgba(34,197,94,.2)'; el.style.color = COL_LONG; el.style.borderColor = 'rgba(34,197,94,.4)';
   } else if (rec.indexOf('SELL') >= 0 || rec.indexOf('VENTE') >= 0 || rec.indexOf('SHORT') >= 0) {
     el.textContent = 'AGENT VENTE';
-    el.style.background = 'rgba(239,68,68,.2)'; el.style.color = '#fca5a5'; el.style.borderColor = 'rgba(239,68,68,.4)';
+    el.style.background = 'rgba(239,68,68,.2)'; el.style.color = COL_SHORT; el.style.borderColor = 'rgba(239,68,68,.4)';
   } else {
     el.textContent = 'AGENT ATTENTE';
-    el.style.background = ''; el.style.color = ''; el.style.borderColor = '';
+    el.style.background = ''; el.style.color = COL_WAIT; el.style.borderColor = '';
   }
 }
 
@@ -480,8 +556,18 @@ async function renderMultiTF() {
     var analysis = agents.analysis || {};
     var rec  = String(analysis.recommendation || 'WAIT').toUpperCase();
     var label = 'NEUTRE'; var cls = 'wait';
-    if (rec.indexOf('BUY') >= 0 || rec.indexOf('ACHAT') >= 0 || rec.indexOf('LONG') >= 0)   { label = 'ACHAT'; cls = 'buy'; }
-    else if (rec.indexOf('SELL') >= 0 || rec.indexOf('VENTE') >= 0 || rec.indexOf('SHORT') >= 0) { label = 'VENTE'; cls = 'sell'; }
+    var cardBg = 'rgba(234,179,8,0.1)'; var cardBorder = COL_WAIT;
+    if (rec.indexOf('BUY') >= 0 || rec.indexOf('ACHAT') >= 0 || rec.indexOf('LONG') >= 0) {
+      label = 'ACHAT'; cls = 'buy';
+      cardBg = 'rgba(34,197,94,0.1)'; cardBorder = COL_LONG;
+    } else if (rec.indexOf('SELL') >= 0 || rec.indexOf('VENTE') >= 0 || rec.indexOf('SHORT') >= 0) {
+      label = 'VENTE'; cls = 'sell';
+      cardBg = 'rgba(239,68,68,0.1)'; cardBorder = COL_SHORT;
+    }
+
+    // Appliquer couleurs à la carte entière
+    var card = $('tfc-' + tf);
+    if (card) { card.style.background = cardBg; card.style.borderColor = cardBorder; }
 
     var rsiRaw = (agents.technicals && agents.technicals.rsi) || (agents.risk && agents.risk.rsi) || null;
     var rsi = rsiRaw != null ? Number(rsiRaw).toFixed(0) : '--';
@@ -524,6 +610,25 @@ function renderDecision(live) {
       : (execDecision === 'NO_ENTRY_CONFLICT'
         ? 'Entrée bloquée: conflit de signal.'
         : 'Entrée non validée: attendre confirmation.');
+    // Couleur bouton ENTRER selon système couleur unifié
+    if (!canEnter) {
+      // Orange = signal en cours d'analyse / pending
+      enterBtn.style.background = 'rgba(249,115,22,0.15)';
+      enterBtn.style.borderColor = COL_PENDING;
+      enterBtn.style.color = COL_PENDING;
+    } else if (rec.indexOf('BUY') >= 0 || rec.indexOf('ACHAT') >= 0 || rec.indexOf('LONG') >= 0) {
+      enterBtn.style.background = 'rgba(34,197,94,0.15)';
+      enterBtn.style.borderColor = COL_LONG;
+      enterBtn.style.color = COL_LONG;
+    } else if (rec.indexOf('SELL') >= 0 || rec.indexOf('VENTE') >= 0 || rec.indexOf('SHORT') >= 0) {
+      enterBtn.style.background = 'rgba(239,68,68,0.15)';
+      enterBtn.style.borderColor = COL_SHORT;
+      enterBtn.style.color = COL_SHORT;
+    } else {
+      enterBtn.style.background = '';
+      enterBtn.style.borderColor = '';
+      enterBtn.style.color = '';
+    }
   }
 
   // Verdict
@@ -637,14 +742,29 @@ function renderCoach(live) {
 
   var rec = String(((getAgents(live).analysis || {}).recommendation) || '').toUpperCase();
   var gate = String((live && live.tradeReasoning && live.tradeReasoning.marketGate) || '').toUpperCase();
-  if (gate.indexOf('FERM') >= 0 || gate.indexOf('BLOC') >= 0 || rec.indexOf('WAIT') >= 0 || rec.indexOf('ATTENTE') >= 0) {
-    el.style.color = '#fbbf24';
+  var txtLow = txt.toLowerCase();
+  // Messages spéciaux : proche SL / proche TP / break-even
+  if (txtLow.indexOf('break-even') >= 0 || txtLow.indexOf('breakeven') >= 0) {
+    el.style.color = COL_PENDING;
+    el.style.background = '';
+  } else if (txtLow.indexOf('proche sl') >= 0 || txtLow.indexOf('near sl') >= 0) {
+    el.style.color = COL_SHORT;
+    el.style.background = 'rgba(239,68,68,0.1)';
+  } else if (txtLow.indexOf('proche tp') >= 0 || txtLow.indexOf('near tp') >= 0) {
+    el.style.color = COL_LONG;
+    el.style.background = 'rgba(34,197,94,0.1)';
+  } else if (gate.indexOf('FERM') >= 0 || gate.indexOf('BLOC') >= 0 || rec.indexOf('WAIT') >= 0 || rec.indexOf('ATTENTE') >= 0) {
+    el.style.color = COL_WAIT;
+    el.style.background = '';
   } else if (rec.indexOf('SELL') >= 0 || rec.indexOf('SHORT') >= 0 || rec.indexOf('VENTE') >= 0) {
-    el.style.color = '#fca5a5';
+    el.style.color = COL_SHORT;
+    el.style.background = '';
   } else if (rec.indexOf('BUY') >= 0 || rec.indexOf('LONG') >= 0 || rec.indexOf('ACHAT') >= 0) {
-    el.style.color = '#86efac';
+    el.style.color = COL_LONG;
+    el.style.background = '';
   } else {
     el.style.color = '#cbd5e1';
+    el.style.background = '';
   }
 }
 
