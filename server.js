@@ -4611,13 +4611,25 @@ async function runOrchestrationCycle() {
   const tf = (activeSymbol.timeframe || 'H1').toUpperCase();
 
   try {
-    // 1. Prix live (Yahoo cache 1min ou MT5 store)
-    const yahoSym = toYahooSym(sym);
-    if (!yahoSym) return;
-    const price = await fetchYahooPrice(yahoSym);
-    if (!price || price <= 0) {
-      pushLog('orchestrator', 'system', `BOUCLE ${sym} — prix indisponible`, 'warn', 'source:offline');
-      return;
+    // 1. Prix live — TradingView est la source maître
+    let price;
+    const tvLive = tvDataStore[sym];
+    const tvAge  = tvLive ? (Date.now() - (tvLive.updatedAt || 0)) : Infinity;
+    if (tvLive && tvAge < 30000) {
+      // TradingView price disponible et récent (< 30s) — on l'utilise directement
+      price = parseFloat(tvLive.price);
+      pushLog('orchestrator', 'system',
+        `BOUCLE ${sym} — prix TradingView (${(tvAge / 1000).toFixed(1)}s)`,
+        'ok', `source:TradingView · price:${price}`);
+    } else {
+      // Fallback Yahoo Finance si tvDataStore absent ou trop ancien
+      const yahoSym = toYahooSym(sym);
+      if (!yahoSym) return;
+      price = await fetchYahooPrice(yahoSym);
+      if (!price || price <= 0) {
+        pushLog('orchestrator', 'system', `BOUCLE ${sym} — prix indisponible`, 'warn', 'source:offline');
+        return;
+      }
     }
 
     pushLog('orchestrator', 'technicalAgent',
