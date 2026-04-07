@@ -37,6 +37,7 @@ app.post('/tradingview/live', (req, res) => {
       updatedAt: Date.now()
     };
     console.log('[BACKEND STORED]', normalizedSymbol, '→', tvDataStore[normalizedSymbol]);
+    console.log(`[TV LIVE] ${normalizedSymbol} price=${parsedPrice} tf=${timeframe} stored at ${new Date().toISOString()}`);
 
     // Broadcast prix live vers clients SSE (dashboard + extension)
     try {
@@ -68,6 +69,33 @@ app.post('/tradingview/live', (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// ── SOURCE UNIQUE DE PRIX ─────────────────────────────────────────────────
+// Retourne le prix live TradingView si < 30s, sinon null.
+// AUCUN fallback fake. Si null → le système se bloque proprement.
+function getLivePrice(symbol) {
+  const entry = tvDataStore[symbol?.toUpperCase()];
+  if (!entry) return null;
+  const ageMs = Date.now() - (entry.updatedAt || 0);
+  if (ageMs > 30000) return null;          // stale > 30s = pas fiable
+  if (!entry.price || entry.price <= 0) return null;
+  return { price: entry.price, ageMs, symbol: entry.symbol, timeframe: entry.timeframe };
+}
+
+function requireLivePrice(symbol, res) {
+  const live = getLivePrice(symbol);
+  if (!live) {
+    res.status(503).json({
+      ok: false,
+      error: 'NO_LIVE_PRICE',
+      message: `Prix TradingView non disponible pour ${symbol}. Ouvrez TradingView et attendez la synchronisation.`,
+      hint: 'Vérifiez que content.js est actif sur TradingView et que le backend reçoit les ticks.'
+    });
+    return null;
+  }
+  return live;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 
 // server.js — Trading Auto Backend
@@ -5916,6 +5944,50 @@ app.get('/bridge/robot-v12/status', (req, res) => {
   res.json({ ok: symbols.length > 0, connected: ageMs != null && ageMs < 120000, symbols, lastSymbol: last, robotV12: d?.robotV12 || null, ageMs, bridgeConfig });
 });
 
+app.get('/bridge/health', (req, res) => {
+  const now = Date.now();
+
+  // Maillon 1 : TradingView → tvDataStore
+  const tvEntries = Object.entries(tvDataStore);
+  const latestTv = tvEntries.length > 0
+    ? tvEntries.reduce((a, b) => (a[1].updatedAt || 0) > (b[1].updatedAt || 0) ? a : b)
+    : null;
+  const tvAgeSeconds = latestTv ? Math.round((now - (latestTv[1].updatedAt || 0)) / 1000) : null;
+  const tvLive = tvAgeSeconds !== null && tvAgeSeconds < 30;
+
+  // Maillon 2 : SSE clients connectés
+  const sseClients = typeof extensionSyncClients !== 'undefined' ? extensionSyncClients.length : 0;
+  const coachClients = typeof coachStreamClients !== 'undefined' ? coachStreamClients.size : 0;
+
+  // Maillon 3 : Backend OK
+  const backendUptime = process.uptime();
+
+  const chain = {
+    tradingview: {
+      ok: tvLive,
+      symbol: latestTv ? latestTv[1].symbol : null,
+      price: latestTv ? latestTv[1].price : null,
+      timeframe: latestTv ? latestTv[1].timeframe : null,
+      ageSeconds: tvAgeSeconds,
+      label: tvLive ? 'LIVE' : tvAgeSeconds !== null ? `STALE (${tvAgeSeconds}s)` : 'NO DATA'
+    },
+    backend: {
+      ok: true,
+      uptimeSeconds: Math.round(backendUptime),
+      label: 'OK'
+    },
+    sseClients: {
+      extension: sseClients,
+      coach: coachClients,
+      ok: sseClients > 0,
+      label: sseClients > 0 ? `${sseClients} client(s)` : 'NO CLIENT'
+    },
+    overall: tvLive && backendUptime > 0
+  };
+
+  res.json({ ok: chain.overall, chain, timestamp: new Date().toISOString() });
+});
+
 app.get('/tv/data', (req, res) => {
   const symbol = (req.query.symbol || '').toUpperCase();
   if (!symbol) return res.json({ ok: true, count: Object.keys(tvDataStore).length, data: tvDataStore });
@@ -8018,6 +8090,17 @@ app.get('/data/refresh', (_req, res) => {
     const state = getCoachTradeState(symbol, timeframe);
 
     if (action === 'ENTER' || action === 'OPEN') {
+      const live = getLivePrice(symbol);
+      if (!live) {
+        return res.status(503).json({
+          ok: false,
+          error: 'ENTRY_BLOCKED_NO_LIVE_PRICE',
+          message: "Entrée bloquée : prix TradingView non disponible. Synchronisez le flux avant d'entrer."
+        });
+      }
+    }
+
+    if (action === 'ENTER' || action === 'OPEN') {
       const preSnapshot = await computeCoachAnalysisSnapshot(symbol, timeframe, 'fr', state, {
         forceFresh: true,
         mode
@@ -8240,6 +8323,11 @@ app.get('/data/refresh', (_req, res) => {
     try {
       const raw = String(req.query.symbol || marketStore.lastActiveSymbol || getLatestTradingviewRuntime().symbol || '').toUpperCase();
       const symbol = normalizeSymbol(raw).canonical || raw;
+      if (!symbol) return res.status(400).json({ ok: false, error: 'symbol required' });
+
+      const live = requireLivePrice(symbol, res);
+      if (!live) return; // requireLivePrice a déjà envoyé la réponse 503
+
       const timeframe = String(req.query.tf || 'H1').toUpperCase();
       const requestedMode = String(req.query.mode || req.query.setup || activeSymbol?.mode || bridgeConfig.bridgeMode || 'AUTO').toUpperCase();
       const mode = resolveRuntimeMode(requestedMode, symbol, timeframe);
