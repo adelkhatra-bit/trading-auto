@@ -189,11 +189,16 @@ async function scrapAndSendTradingView() {
 
     // Correction : push live vers /tradingview/live (backend réel)
     const livePayload = {
-      symbol: panelData.symbol,
-      timeframe: panelData.timeframe || systemState.activeTimeframe,
-      price: systemState.activePrice,
-      timestamp: new Date().toISOString(),
-      source: 'tradingview-extension'
+      symbol:     panelData.symbol,
+      timeframe:  panelData.timeframe || systemState.activeTimeframe,
+      price:      systemState.activePrice,
+      timestamp:  new Date().toISOString(),
+      source:     'tradingview-extension',
+      // NOUVEAU
+      indicators: panelData.indicators || {},
+      legend:     panelData.legend     || {},
+      ask:        panelData.ask        || null,
+      bid:        panelData.bid        || null
     };
     console.log('[TV PUSH] Envoi TradingView → backend:', livePayload);
     const tvResp = await fetch(API + '/tradingview/live', {
