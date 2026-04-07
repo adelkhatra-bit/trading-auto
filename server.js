@@ -64,6 +64,10 @@ app.post('/tradingview/live', (req, res) => {
       }
     } catch (_) {}
 
+    // Émettre active-symbol pour propager symbole + TF + prix vers popup et dashboard
+    if (typeof emitResolvedActiveSymbol === 'function') {
+      emitResolvedActiveSymbol('tradingview-live');
+    }
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
