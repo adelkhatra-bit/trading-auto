@@ -1951,89 +1951,39 @@ app.get('/mt5/file-health', (_req, res) => {
   }
 });
 
-// GET /economic-events — Événements économiques réels (fixture)
-app.get('/economic-events', (req, res) => {
+// GET /economic-events — Événements économiques réels (ForexFactory, partagé avec /market-news)
+app.get('/economic-events', async (req, res) => {
   try {
-    // Generate sample economic events for next 48h
-    const now = new Date();
-    const events = [
-      {
-        id: 'nfp-1',
-        title: 'NFP (Non-Farm Payroll)',
-        country: 'USA',
-        time: new Date(now.getTime() + 3600000).toISOString(),
-        impact: 'HIGH',
-        forecast: '+250k',
-        previous: '+225k',
-        currency: 'USD',
-        symbols: ['EURUSD', 'GBPUSD', 'USDJPY'],
-        bias: 'Bullish USD if strong'
-      },
-      {
-        id: 'cpi-1',
-        title: 'CPI Inflation',
-        country: 'USA',
-        time: new Date(now.getTime() + 7200000).toISOString(),
-        impact: 'HIGH',
-        forecast: '3.2%',
-        previous: '3.4%',
-        currency: 'USD',
-        symbols: ['EURUSD', 'GBPUSD'],
-        bias: 'Bearish USD if lower'
-      },
-      {
-        id: 'ecb-1',
-        title: 'ECB Interest Rate Decision',
-        country: 'EUR',
-        time: new Date(now.getTime() + 14400000).toISOString(),
-        impact: 'HIGH',
-        forecast: '4.5%',
-        previous: '4.5%',
-        currency: 'EUR',
-        symbols: ['EURUSD', 'EURGBP'],
-        bias: 'Impact if changed'
-      },
-      {
-        id: 'boe-1',
-        title: 'BOE Monetary Policy',
-        country: 'GBP',
-        time: new Date(now.getTime() + 21600000).toISOString(),
-        impact: 'MEDIUM',
-        forecast: '5.25%',
-        previous: '5.25%',
-        currency: 'GBP',
-        symbols: ['GBPUSD', 'EURGBP'],
-        bias: 'Monitor for changes'
-      },
-      {
-        id: 'fed-1',
-        title: 'FED Funds Rate',
-        country: 'USA',
-        time: new Date(now.getTime() + 28800000).toISOString(),
-        impact: 'HIGH',
-        forecast: '5.50%',
-        previous: '5.50%',
-        currency: 'USD',
-        symbols: ['EURUSD', 'USDJPY', 'GBPUSD'],
-        bias: 'Critical for USD'
-      },
-      {
-        id: 'gold-1',
-        title: 'Gold Technical Support',
-        country: 'COMMODITY',
-        time: new Date(now.getTime() + 36000000).toISOString(),
-        impact: 'MEDIUM',
-        forecast: '--',
-        previous: '--',
-        currency: 'USD',
-        symbols: ['XAUUSD', 'GOLD'],
-        bias: 'Watch 2400 level'
-      }
-    ];
-
-    res.json({ ok: true, count: events.length, events });
+    const now = Date.now();
+    if (!_newsCache || (now - _newsCacheTs) > NEWS_TTL) {
+      const https = require('https');
+      const raw = await new Promise((resolve, reject) => {
+        const r = https.get('https://nfs.faireconomy.media/ff_calendar_thisweek.json', { timeout: 6000 }, resp => {
+          let data = '';
+          resp.on('data', d => { data += d; });
+          resp.on('end', () => resolve(data));
+        });
+        r.on('error', reject);
+        r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
+      });
+      _newsCache = JSON.parse(raw);
+      _newsCacheTs = now;
+    }
+    const events = (_newsCache || [])
+      .filter(e => e.impact === 'High' || e.impact === 'Medium')
+      .map(e => ({
+        title:    e.title    || e.name || '',
+        country:  e.country  || '',
+        date:     e.date     || '',
+        time:     e.time     || '',
+        impact:   e.impact   || 'Low',
+        forecast: e.forecast || null,
+        previous: e.previous || null,
+        actual:   e.actual   || null
+      }));
+    res.json({ ok: true, events });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    res.json({ ok: false, events: _newsCache || [], error: err.message });
   }
 });
 
