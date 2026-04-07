@@ -1047,7 +1047,6 @@ async function renderNews(live) {
     }
     hdEl.innerHTML = '<div style="font-size:10px;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Headlines live</div>' +
       headlines.slice(0, 5).map(function(h) {
-        // Système couleur unifié pour les headlines
         var biasColor = h.bias === 'Bullish' ? COL_LONG : h.bias === 'Bearish' ? COL_SHORT : COL_WAIT;
         var age = h.ageMinutes < 60 ? h.ageMinutes + 'min' : Math.round(h.ageMinutes / 60) + 'h';
         return '<div style="margin-bottom:6px;padding:4px 6px;background:#1e293b;border-radius:4px;border-left:2px solid ' + biasColor + '">' +
@@ -1056,6 +1055,59 @@ async function renderNews(live) {
         '</div>';
       }).join('');
   }
+
+  // Mettre à jour le ticker avec toutes les headlines disponibles
+  if (headlines.length > 0) {
+    updateNewsTicker(headlines);
+  }
+}
+
+// ─── NEWS TICKER ─────────────────────────────────────────────────────────────
+function updateNewsTicker(headlines) {
+  var inner = document.getElementById('tickerInner');
+  if (!inner || !headlines || !headlines.length) return;
+  var items = headlines.map(function(h) {
+    var biasChar = h.bias === 'Bullish' ? '▲' : h.bias === 'Bearish' ? '▼' : '●';
+    var biasColor = h.bias === 'Bullish' ? COL_LONG : h.bias === 'Bearish' ? COL_SHORT : COL_NEUTRAL;
+    return '<span style="margin:0 24px"><span style="color:' + biasColor + '">' + biasChar + '</span> ' + h.title + ' <span style="color:#334155">[' + h.source + ' · ' + h.ageMinutes + 'min]</span></span>';
+  }).join('');
+  inner.innerHTML = items + items; // double pour boucle continue
+  var duration = Math.max(20, headlines.length * 8);
+  inner.style.animation = 'tickerScroll ' + duration + 's linear infinite';
+}
+
+// ─── MARKET SESSION BADGE ─────────────────────────────────────────────────────
+function renderMarketSession(live) {
+  var el = document.getElementById('marketSession');
+  if (!el) return;
+  var status = (live && live.marketStatus) || (live && live.market_status);
+  if (!status) return;
+
+  var isOpen = status.isOpen || status.market === 'open';
+  var session = status.session || (status.sessions && status.sessions[0]) || '';
+
+  if (!isOpen) {
+    el.style.background = '#1e293b';
+    el.style.color = '#ef4444';
+    el.style.border = '';
+    el.textContent = '⏸ FERMÉ';
+    return;
+  }
+
+  var sessionColors = {
+    'LONDON':   '#3b82f6',
+    'NEW_YORK': '#f97316',
+    'TOKYO':    '#eab308',
+    'SYDNEY':   '#8b5cf6',
+    'OVERLAP':  '#22c55e'
+  };
+  var key = Object.keys(sessionColors).find(function(k) { return String(session).toUpperCase().includes(k); }) || '';
+  var color = sessionColors[key] || '#22c55e';
+
+  el.style.background = color + '22';
+  el.style.color = color;
+  el.style.border = '1px solid ' + color + '44';
+  el.textContent = '● ' + (key || 'OUVERT');
 }
 
 // ─── MARKET BIAS ─────────────────────────────────────────────────────────────
@@ -1165,6 +1217,7 @@ async function loadRealtimePack() {
   renderNews(payload);
   updateAgentStatus(payload);
   updateHeader();
+  renderMarketSession(live);
 
   // Chart: only load if open
   if (state.chartOpen && typeof ChartModule !== 'undefined' && ChartModule && ChartModule.loadChart) {

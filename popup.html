@@ -109,6 +109,7 @@ textarea::placeholder{color:#334155}
   <div class='hdr-right'>
     <span class='hdr-time' id='hdr-time'>00:00:00</span>
     <span class='vol-pill LOW' id='vol-pill'>LOW</span>
+    <span id="marketSession" style="font-size:9px;padding:2px 5px;border-radius:3px;background:#1e293b;color:#64748b;margin-left:4px">--</span>
   </div>
 </header>
 
@@ -343,6 +344,19 @@ textarea::placeholder{color:#334155}
 </div>
 
 </div>
+
+<div id="newsTicker" style="position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid #1e293b;padding:4px 0;overflow:hidden;height:20px;z-index:100">
+  <div id="tickerInner" style="display:inline-block;white-space:nowrap;animation:tickerScroll 30s linear infinite;font-size:10px;color:#64748b;padding-left:100%">
+    Chargement des news...
+  </div>
+</div>
+<style>
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+</style>
+
 <script src='popup.js'></script>
 </body>
 </html>

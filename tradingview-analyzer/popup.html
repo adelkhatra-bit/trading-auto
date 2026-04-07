@@ -23,6 +23,10 @@
 .bg-pending  { background: rgba(249,115,22,0.12); border-left: 3px solid var(--col-pending); }
 @keyframes pulse-orange { 0%,100%{opacity:1} 50%{opacity:0.5} }
 .analyzing { animation: pulse-orange 1.2s infinite; background: var(--col-pending) !important; }
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
 /* ─────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',sans-serif;font-size:12px;background:#0f1117;color:#e2e8f0;
@@ -162,6 +166,7 @@ body.win{height:100vh}
     <span id="headMode" class="hmode">AUTO</span>
     <span id="headPrice" class="hprice"></span>
     <span id="headAgent">AGENT --</span>
+    <span id="marketSession" style="font-size:9px;padding:2px 5px;border-radius:3px;background:#1e293b;color:#64748b;margin-left:4px">--</span>
     <button id="btnDetach" title="Ouvrir fenetre">&#128204;</button>
   </div>
   <div id="biasBanner" style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px;margin:4px 0 0;border-radius:4px;background:#1e293b;font-size:11px;transition:background 0.3s">
@@ -327,6 +332,12 @@ body.win{height:100vh}
   <div id="windowActions" hidden>
     <button id="focusTradingViewBtn">&#127760; TradingView</button>
     <button id="closeWindowBtn">&#10005; Fermer</button>
+  </div>
+</div>
+
+<div id="newsTicker" style="position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid #1e293b;padding:4px 0;overflow:hidden;height:20px;z-index:100">
+  <div id="tickerInner" style="display:inline-block;white-space:nowrap;animation:tickerScroll 30s linear infinite;font-size:10px;color:#64748b;padding-left:100%">
+    Chargement des news...
   </div>
 </div>
 

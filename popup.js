@@ -82,6 +82,52 @@ function formatPrice(value) {
   return Math.abs(num) >= 1000 ? num.toFixed(2) : num.toFixed(5);
 }
 
+function updateNewsTicker(headlines) {
+  const inner = document.getElementById('tickerInner');
+  if (!inner || !headlines || !headlines.length) return;
+  const items = headlines.map(function(h) {
+    const biasChar = h.bias === 'Bullish' ? '▲' : h.bias === 'Bearish' ? '▼' : '●';
+    const biasColor = h.bias === 'Bullish' ? '#22c55e' : h.bias === 'Bearish' ? '#ef4444' : '#64748b';
+    return '<span style="margin:0 24px"><span style="color:' + biasColor + '">' + biasChar + '</span> ' + h.title + ' <span style="color:#334155">[' + h.source + ' · ' + h.ageMinutes + 'min]</span></span>';
+  }).join('');
+  inner.innerHTML = items + items; // double pour boucle continue
+  const duration = Math.max(20, headlines.length * 8);
+  inner.style.animation = 'tickerScroll ' + duration + 's linear infinite';
+}
+
+function renderMarketSession(live) {
+  const el = document.getElementById('marketSession');
+  if (!el) return;
+  const status = (live && live.marketStatus) || (live && live.market_status);
+  if (!status) return;
+
+  const isOpen = status.isOpen || status.market === 'open';
+  const session = status.session || (status.sessions && status.sessions[0]) || '';
+
+  if (!isOpen) {
+    el.style.background = '#1e293b';
+    el.style.color = '#ef4444';
+    el.style.border = '';
+    el.textContent = '⏸ FERMÉ';
+    return;
+  }
+
+  const sessionColors = {
+    'LONDON':   '#3b82f6',
+    'NEW_YORK': '#f97316',
+    'TOKYO':    '#eab308',
+    'SYDNEY':   '#8b5cf6',
+    'OVERLAP':  '#22c55e'
+  };
+  const key = Object.keys(sessionColors).find(function(k) { return String(session).toUpperCase().includes(k); }) || '';
+  const color = sessionColors[key] || '#22c55e';
+
+  el.style.background = color + '22';
+  el.style.color = color;
+  el.style.border = '1px solid ' + color + '44';
+  el.textContent = '● ' + (key || 'OUVERT');
+}
+
 function updateClock() {
   const now = new Date();
   setText('hdr-time', now.toLocaleTimeString('fr-FR', { hour12: false }));
@@ -183,6 +229,12 @@ async function hydrateFromSnapshot() {
     applyActiveSymbol(data.activeSymbol || null);
     applyCurrentData(data.currentData || data.activeSymbol || null);
     applyBridgeConfig(data.bridgeConfig || null);
+    if (data.headlines && data.headlines.length) {
+      updateNewsTicker(data.headlines);
+    }
+    if (data.live || data.marketStatus) {
+      renderMarketSession(data.live || data);
+    }
     updateStatus('Snapshot chargé', 'ok');
   } catch (error) {
     updateStatus('Snapshot indisponible: ' + error.message, 'err');
@@ -229,6 +281,16 @@ function handleSseMessage(data) {
     const pxStr = px ? ' @ ' + formatPrice(px) : '';
     const prefix = data.type === 'mt5-data' ? '📡 MT5' : '⚡ FLUX';
     updateStatus(prefix + ': ' + sym + pxStr + rsiStr, 'ok');
+  }
+
+  // Mise à jour ticker news
+  if (data.headlines && data.headlines.length) {
+    updateNewsTicker(data.headlines);
+  }
+
+  // Mise à jour session marché
+  if (data.live || data.marketStatus) {
+    renderMarketSession(data.live || data);
   }
 }
 
