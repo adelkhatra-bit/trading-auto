@@ -49,6 +49,17 @@ app.post('/tradingview/live', (req, res) => {
       // Non bloquant — le broadcast est best-effort
     }
 
+    // Push aux clients coach en position (SSE /coach/stream)
+    try {
+      if (typeof coachStreamClients !== 'undefined' && coachStreamClients.size > 0) {
+        coachStreamClients.forEach((client, sid) => {
+          if (client.symbol === normalizedSymbol) {
+            pushCoachEvent(sid);
+          }
+        });
+      }
+    } catch (_) {}
+
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -8808,3 +8819,66 @@ app.post('/orchestration/run-now', async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// ── COACH STREAM — SSE dédié suivi de position ────────────────────────────
+const coachStreamClients = new Map(); // sessionId → { res, symbol, lastPush }
+
+app.get('/coach/stream', (req, res) => {
+  const symbol = (req.query.symbol || '').toUpperCase() || 'XAUUSD';
+  const sessionId = `${symbol}_${Date.now()}`;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  coachStreamClients.set(sessionId, { res, symbol, lastPush: 0 });
+  console.log(`[COACH STREAM] Client connecté: ${sessionId}`);
+
+  // Push initial immédiat
+  pushCoachEvent(sessionId);
+
+  // Heartbeat toutes les 15s
+  const hb = setInterval(() => {
+    try { res.write(': heartbeat\n\n'); } catch (_) { clearInterval(hb); }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(hb);
+    coachStreamClients.delete(sessionId);
+    console.log(`[COACH STREAM] Client déconnecté: ${sessionId}`);
+  });
+});
+
+async function pushCoachEvent(sessionId) {
+  const client = coachStreamClients.get(sessionId);
+  if (!client) return;
+  try {
+    const { symbol } = client;
+    const tvLive = tvDataStore[symbol];
+    // Utilise getCoachTradeState si disponible (défini dans le bloc coach ci-dessus)
+    const tradeState = (typeof getCoachTradeState === 'function')
+      ? getCoachTradeState(symbol, 'H1')
+      : null;
+    const price = tvLive?.price || null;
+
+    const payload = {
+      symbol,
+      price,
+      timestamp: new Date().toISOString(),
+      tradeState,
+      coachMessage: (typeof generatePositionCoachMessage === 'function')
+        ? generatePositionCoachMessage(tradeState, { currentPrice: price })
+        : 'Je surveille le marché pour toi.',
+      source: tvLive ? 'tradingview' : 'fallback'
+    };
+
+    client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    client.lastPush = Date.now();
+  } catch (err) {
+    console.warn('[COACH STREAM] Push error:', err.message);
+    coachStreamClients.delete(sessionId);
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
