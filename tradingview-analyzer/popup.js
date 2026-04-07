@@ -1819,6 +1819,26 @@ function handleSync(msg) {
     // Bot-alive visual: show live data arriving
     showLiveFlux(msg);
     checkEntryProximityAndBeep(state.live || {});
+  } else if (msg.type === 'price-update') {
+    var tickSym = String(msg.symbol || '').toUpperCase();
+    var symbolMatch = !tickSym || tickSym === (state.symbol || '').toUpperCase();
+    if (symbolMatch) {
+      var newPrice = Number(msg.price);
+      if (Number.isFinite(newPrice) && newPrice > 1) { // guard > 1 pour éviter prix "1" du titre
+        state.price = newPrice;
+      }
+      var newTf = String(msg.timeframe || '').toUpperCase();
+      if (newTf && TFS.indexOf(newTf) >= 0) {
+        state.timeframe = newTf;
+        var tfSel = document.getElementById('tfSelect');
+        if (tfSel) tfSel.value = state.timeframe;
+      }
+      if (tickSym && tickSym !== (state.symbol || '').toUpperCase() && !state.userLocked) {
+        state.symbol = tickSym;
+      }
+      updateHeader();
+    }
+    if (typeof showLiveFlux === 'function') showLiveFlux(msg);
   }
 }
 
