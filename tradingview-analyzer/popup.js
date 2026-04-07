@@ -747,18 +747,32 @@ async function renderNews(live) {
   var agents = getAgents(live);
   var newsAgent = agents.news || {};
   var events = Array.isArray(newsAgent.upcomingEvents) ? newsAgent.upcomingEvents : [];
+  var headlines = [];
 
-  // Si pas d'événements avec le nouveau format (stars/bias), fetcher /economic-events
+  // Appeler /news?symbol= pour obtenir events + headlines unifiés
   var hasNewFormat = events.length > 0 && events[0] && (events[0].stars != null || events[0].bias != null);
   if (!hasNewFormat) {
     try {
-      var data = await fetchJson('/economic-events?symbol=' + encodeURIComponent(state.symbol));
+      var data = await fetchJson('/news?symbol=' + encodeURIComponent(state.symbol));
       if (Array.isArray(data.events) && data.events.length > 0) {
         events = data.events;
       } else if (Array.isArray(data)) {
         events = data;
       }
-    } catch (_) {}
+      if (Array.isArray(data.headlines)) {
+        headlines = data.headlines;
+      }
+    } catch (_) {
+      // Fallback sur /economic-events si /news indisponible
+      try {
+        var fallback = await fetchJson('/economic-events?symbol=' + encodeURIComponent(state.symbol));
+        if (Array.isArray(fallback.events) && fallback.events.length > 0) {
+          events = fallback.events;
+        } else if (Array.isArray(fallback)) {
+          events = fallback;
+        }
+      } catch (_2) {}
+    }
   }
 
   var html = events.slice(0, 5).map(formatNewsEvent);
@@ -768,6 +782,26 @@ async function renderNews(live) {
   }
 
   root.innerHTML = html.join('') || '<div class="ni"><span class="nt">Aucun événement à venir</span></div>';
+
+  // --- Headlines RSS live ---
+  if (headlines.length > 0) {
+    var hdEl = document.getElementById('headlinesList');
+    if (!hdEl) {
+      hdEl = document.createElement('div');
+      hdEl.id = 'headlinesList';
+      hdEl.style.cssText = 'margin-top:8px;border-top:1px solid #334155;padding-top:6px;';
+      root.appendChild(hdEl);
+    }
+    hdEl.innerHTML = '<div style="font-size:10px;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;">Headlines live</div>' +
+      headlines.slice(0, 5).map(function(h) {
+        var biasColor = h.bias === 'Bullish' ? '#86efac' : h.bias === 'Bearish' ? '#fca5a5' : '#94a3b8';
+        var age = h.ageMinutes < 60 ? h.ageMinutes + 'min' : Math.round(h.ageMinutes / 60) + 'h';
+        return '<div style="margin-bottom:6px;padding:4px 6px;background:#1e293b;border-radius:4px;border-left:2px solid ' + biasColor + '">' +
+          '<div style="font-size:11px;color:#e2e8f0;line-height:1.3">' + h.title + '</div>' +
+          '<div style="font-size:10px;color:#64748b;margin-top:2px">' + h.source + ' · ' + age + ' · <span style="color:' + biasColor + '">' + h.bias + '</span></div>' +
+        '</div>';
+      }).join('');
+  }
 }
 
 // ─── MAIN REFRESH ────────────────────────────────────────────────────────────
