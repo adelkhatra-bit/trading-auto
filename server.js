@@ -8022,6 +8022,54 @@ app.get('/data/refresh', (_req, res) => {
     res.json({ ok: true, state: updated, lia: tradeActionLia });
   });
 
+  function generatePositionCoachMessage(tradeState, liveData) {
+    const price = liveData?.currentPrice || liveData?.price;
+    const entry = tradeState?.entry || liveData?.virtualPosition?.entry;
+    const sl    = tradeState?.sl    || liveData?.virtualPosition?.sl;
+    const tp    = tradeState?.tp    || liveData?.virtualPosition?.tp;
+    const phase = tradeState?.phase;
+    const entered = tradeState?.entered;
+    const bePlaced = tradeState?.bePlaced;
+
+    if (!entered) {
+      return "J'observe le marché. Dis-moi quand tu es prêt à entrer.";
+    }
+
+    if (price && entry && sl && tp) {
+      const distSL = Math.abs(price - sl);
+      const distTP = Math.abs(price - tp);
+      const pct = distSL / Math.abs(entry - sl);
+      const isBuy = tp > entry;
+
+      // Proche du SL
+      if (pct < 0.15) {
+        return `Attention — le prix s'approche du SL (${sl}). Surveille bien. Si la structure casse, on coupe proprement.`;
+      }
+      // Proche du TP
+      if (distTP < distSL * 0.3) {
+        return `On s'approche du TP (${tp}). Si tu veux sécuriser une partie maintenant, c'est le bon moment.`;
+      }
+      // Break-even non encore placé
+      if (!bePlaced && pct > 0.5) {
+        return `Le trade avance bien. Pense à remonter le SL au break-even (${entry}) pour protéger l'entrée.`;
+      }
+      // En cours propre
+      if (isBuy) {
+        return `Position longue en cours. Prix à ${price}, on vise ${tp}. Je surveille la structure. Tiens le cap.`;
+      } else {
+        return `Position courte en cours. Prix à ${price}, on vise ${tp}. Je surveille la pression vendeuse.`;
+      }
+    }
+
+    // Phases nommées
+    if (phase === 'be_reached') return `Break-even atteint. Risque zéro. On laisse courir vers le TP.`;
+    if (phase === 'partial_taken') return `Première partie sécurisée. Laisse la position respirer — le reste court vers ${tp}.`;
+    if (phase === 'trailing') return `On trail le SL. Reste calme et laisse le marché faire son travail.`;
+    if (phase === 'closed') return `Trade terminé. Bien joué. On analyse et on attend le prochain setup.`;
+
+    return `Position ouverte. Je surveille le marché pour toi.`;
+  }
+
   app.get('/coach/realtime', async (req, res) => {
     try {
       const raw = String(req.query.symbol || marketStore.lastActiveSymbol || getLatestTradingviewRuntime().symbol || '').toUpperCase();
@@ -8224,6 +8272,17 @@ app.get('/data/refresh', (_req, res) => {
         ? String(virtualPack.virtualPosition.source || 'virtual-position')
         : String(instantTrade?.source || 'none');
       const levelValues = virtualPack.virtualPosition || instantTrade || null;
+
+      // Fallback coach LIA : si la position est entrée et que le LIA IA n'a pas produit de réponse valide,
+      // on utilise generatePositionCoachMessage pour produire un message de suivi en français naturel.
+      let coachLia = effectiveCoach?.lia || null;
+      const liveSnapshot = { currentPrice, virtualPosition: virtualPack.virtualPosition };
+      if (tradeState?.entered && (!coachLia?.response || coachLia.response.length < 10)) {
+        coachLia = { ok: true, response: generatePositionCoachMessage(tradeState, liveSnapshot) };
+      }
+      if (coachLia && effectiveCoach) {
+        effectiveCoach = { ...effectiveCoach, lia: coachLia };
+      }
 
       res.json({
         ok: true,
