@@ -671,27 +671,103 @@ function renderBridgeOffState() {
   }
 }
 
-function renderNews(live) {
-  var root = $('newsList');
-  if (!root) return;
-  var agents = getAgents(live);
-  var news   = agents.news || {};
-  var events = Array.isArray(news.upcomingEvents) ? news.upcomingEvents : [];
-  var html   = [];
+function formatNewsEvent(e) {
+  // Étoiles
+  var stars = Math.min(5, Math.max(0, Number(e.stars) || 0));
+  var starsHtml = '<span class="ns">' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + '</span>';
 
-  events.slice(0, 3).forEach(function(e) {
-    var u = String(e.urgency || e.impact || 'LOW').toUpperCase();
-    var cls = u === 'ULTRA' ? 'ux' : u === 'HIGH' ? 'uh' : u === 'MEDIUM' ? 'um' : 'ul';
-    var title = e.event || e.title || 'News';
-    var mins = Number.isFinite(Number(e.mins)) ? e.mins + ' min' : '--';
-    html.push('<div class="ni"><strong>' + title + '</strong><span class="urg ' + cls + '">' + u + '</span> — ' + mins + '</div>');
-  });
-
-  if (news.symbolImpact) {
-    html.push('<div class="ni">' + news.symbolImpact + '</div>');
+  // Timing
+  var mins = Number.isFinite(Number(e.minsUntil)) ? Number(e.minsUntil) : null;
+  var timingHtml;
+  if (mins === null) {
+    timingHtml = '<span class="nt">--</span>';
+  } else if (mins >= -5 && mins <= 5) {
+    timingHtml = '<span class="nt nt-now">En cours</span>';
+  } else if (mins > 0) {
+    var h = Math.floor(mins / 60);
+    timingHtml = h > 0
+      ? '<span class="nt nt-soon">Dans ' + h + 'h' + (mins % 60 > 0 ? (mins % 60) + 'min' : '') + '</span>'
+      : '<span class="nt nt-soon">Dans ' + mins + 'min</span>';
+  } else {
+    var absM = Math.abs(mins);
+    var hP = Math.floor(absM / 60);
+    timingHtml = hP > 0
+      ? '<span class="nt nt-past">Il y a ' + hP + 'h' + (absM % 60 > 0 ? (absM % 60) + 'min' : '') + '</span>'
+      : '<span class="nt nt-past">Il y a ' + absM + 'min</span>';
   }
 
-  root.innerHTML = html.join('') || '';
+  // Biais
+  var bias = e.bias || {};
+  var biasDir = String(bias.direction || 'UNCERTAIN').toUpperCase();
+  var biasMap = {
+    'BULLISH_USD': '📈 Haussier USD',
+    'BEARISH_USD': '📉 Baissier USD',
+    'NEUTRAL':     '➡️ Neutre',
+    'UNCERTAIN':   '⚠️ Incertain'
+  };
+  var biasText = biasMap[biasDir] || '⚠️ Incertain';
+  var biasCls = biasDir === 'BULLISH_USD' ? 'nb-bull' : biasDir === 'BEARISH_USD' ? 'nb-bear' : 'nb-neu';
+  var biasHtml = '<span class="nb ' + biasCls + '">' + biasText + '</span>';
+
+  // Actual vs Forecast
+  var avfHtml = '';
+  if (e.actual != null && e.actual !== '') {
+    var isBetter = false, isWorse = false;
+    var actualN = parseFloat(e.actual), forecastN = parseFloat(e.forecast);
+    if (!isNaN(actualN) && !isNaN(forecastN)) {
+      if (biasDir === 'BEARISH_USD') {
+        isBetter = actualN < forecastN;
+        isWorse  = actualN > forecastN;
+      } else {
+        isBetter = actualN > forecastN;
+        isWorse  = actualN < forecastN;
+      }
+    }
+    var avfCls = isBetter ? 'nav-good' : isWorse ? 'nav-bad' : '';
+    var forecastStr = (e.forecast != null && e.forecast !== '') ? ' vs Prévu: ' + e.forecast : '';
+    avfHtml = '<span class="nav ' + avfCls + '">Réel: ' + e.actual + forecastStr + '</span>';
+  }
+
+  var title = e.title || e.event || 'Événement';
+  var country = e.country ? '<span class="nco">' + e.country + '</span>' : '';
+  var time = e.time ? '<span class="ntime">' + e.time + '</span>' : '';
+
+  return '<div class="ni">' +
+    '<div class="ni-head">' + starsHtml + country + time + timingHtml + '</div>' +
+    '<div class="ni-title"><strong>' + title + '</strong></div>' +
+    '<div class="ni-foot">' + biasHtml + avfHtml + '</div>' +
+  '</div>';
+}
+
+async function renderNews(live) {
+  var root = $('newsList');
+  if (!root) return;
+
+  // Tenter d'abord les événements depuis le payload realtime (agents.news)
+  var agents = getAgents(live);
+  var newsAgent = agents.news || {};
+  var events = Array.isArray(newsAgent.upcomingEvents) ? newsAgent.upcomingEvents : [];
+
+  // Si pas d'événements avec le nouveau format (stars/bias), fetcher /economic-events
+  var hasNewFormat = events.length > 0 && events[0] && (events[0].stars != null || events[0].bias != null);
+  if (!hasNewFormat) {
+    try {
+      var data = await fetchJson('/economic-events?symbol=' + encodeURIComponent(state.symbol));
+      if (Array.isArray(data.events) && data.events.length > 0) {
+        events = data.events;
+      } else if (Array.isArray(data)) {
+        events = data;
+      }
+    } catch (_) {}
+  }
+
+  var html = events.slice(0, 5).map(formatNewsEvent);
+
+  if (html.length === 0 && newsAgent.symbolImpact) {
+    html.push('<div class="ni"><span class="nav">' + newsAgent.symbolImpact + '</span></div>');
+  }
+
+  root.innerHTML = html.join('') || '<div class="ni"><span class="nt">Aucun événement à venir</span></div>';
 }
 
 // ─── MAIN REFRESH ────────────────────────────────────────────────────────────
