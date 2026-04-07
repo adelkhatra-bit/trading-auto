@@ -3,7 +3,115 @@
 <head>
 <meta charset="utf-8"/>
 <title>Trading Auto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
+/* ── TYPOGRAPHY & BASE ──────────── */
+* { box-sizing: border-box; }
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* ── SCROLLBAR CUSTOM ────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+/* ── BOUTONS UNIFIÉS ─────────────── */
+button, .btn {
+  transition: all 0.15s ease;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+button:active { transform: scale(0.97); }
+
+/* ── BADGE CONNEXION ─────────────── */
+#conn {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* ── PRIX HEADER ─────────────────── */
+#headPrice {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── CARDS TF — HOVER ────────────── */
+.tfc {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.tfc:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* ── COACH TEXT ──────────────────── */
+#coachText {
+  line-height: 1.6 !important;
+  font-size: 12px !important;
+  padding: 10px !important;
+  border-radius: 6px;
+  background: rgba(15,23,42,0.8);
+}
+
+/* ── NEWS ITEMS ──────────────────── */
+#newsList > div {
+  border-radius: 5px;
+  margin-bottom: 4px;
+  padding: 5px 7px;
+}
+
+/* ── SÉPARATEURS ─────────────────── */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #1e293b, transparent);
+  margin: 8px 0;
+}
+
+/* ── PULSE ANALYSER ──────────────── */
+@keyframes pulse-orange {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(249,115,22,0.4); }
+  50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(249,115,22,0); }
+}
+.analyzing {
+  animation: pulse-orange 1s infinite !important;
+}
+
+/* ── ALERT BANNER SLIDE ───────────── */
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+#alertBanner[style*="block"] {
+  animation: slideDown 0.3s ease;
+}
+
+/* ── BIAIS BANNER ─────────────────── */
+#biasBanner {
+  transition: border-left-color 0.5s, background 0.5s;
+}
+
+/* ── POSITION PANEL ──────────────── */
+#positionPanel {
+  border-radius: 8px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* ── JOURNAL STATS ───────────────── */
+#journalStats {
+  border-top: 1px solid #1e293b;
+  padding-top: 4px;
+  margin-top: 4px;
+}
+
 /* ── COLOR SYSTEM VARIABLES ─────── */
 :root {
   --col-long:    #22c55e;
@@ -29,7 +137,7 @@
 }
 /* ─────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;font-size:12px;background:#0f1117;color:#e2e8f0;
+body{font-family:'Inter','Segoe UI',sans-serif;font-size:12px;background:#0f1117;color:#e2e8f0;
   display:flex;flex-direction:column;height:620px;overflow:hidden}
 body.win{height:100vh}
 /* ── STICKY HEADER ─────────────── */
