@@ -1,4 +1,4 @@
-// news-engine.js v1.0 — News économiques, biais directionnel, score de confiance
+// news-engine.js v2.0 — News économiques, biais directionnel, score de confiance
 var NewsEngine = (function () {
   'use strict';
 
@@ -8,72 +8,106 @@ var NewsEngine = (function () {
 
   var IMPACT_COL = { High: '#ef4444', Medium: '#f59e0b', Low: '#64748b' };
 
-  // Patterns → biais (avant news = prévision, après = interprétation)
-  var PATTERNS = [
-    {
-      keys: ['CPI', 'INFLATION', 'PPI', 'PCE'],
-      currency: 'USD',
-      before: { high: { dir: 'USD ↑ · Or ↓ · Indices ↓', why: 'Inflation forte = politique monétaire restrictive, dollar haussier' },
-                low:  { dir: 'USD ↓ · Or ↑ · Indices ↑', why: 'Inflation faible = assouplissement probable, dollar baissier' } },
-      after:  { surprise_high: 'Surprise haussière: USD probable hausse immédiate', surprise_low: 'Surprise baissière: USD sous pression, or en hausse potentielle' }
-    },
-    {
-      keys: ['NFP', 'NON-FARM', 'PAYROLL', 'EMPLOYMENT', 'JOBS', 'UNEMPLOYMENT'],
-      currency: 'USD',
-      before: { high: { dir: 'USD ↑ · Indices ↑', why: 'Emploi fort = croissance, optimisme, Fed moins dovish' },
-                low:  { dir: 'USD ↓ · Or ↑', why: 'Emploi faible = Fed dovish probable, dollar affaibli' } },
-      after:  { surprise_high: 'Emploi meilleur que prévu: USD haussier, risk-on probable', surprise_low: 'Emploi décevant: risk-off, valeurs refuge haussières' }
-    },
-    {
-      keys: ['FED', 'FOMC', 'INTEREST RATE', 'RATE DECISION', 'FEDERAL RESERVE'],
-      currency: 'USD',
-      before: { high: { dir: 'USD ↑ · Or ↓', why: 'Hausse de taux = dollar fort, or sous pression' },
-                low:  { dir: 'USD ↓ · Or ↑', why: 'Baisse/pause taux = dollar affaibli, or et indices en hausse' } },
-      after:  { surprise_high: 'Hawkish: USD en hausse, or et indices sous pression', surprise_low: 'Dovish: USD sous pression, or et indices haussiers' }
-    },
-    {
-      keys: ['GDP', 'PIB', 'GROWTH', 'GROSS DOMESTIC'],
-      currency: 'USD',
-      before: { high: { dir: 'Risk-on · USD mixte', why: 'Croissance forte = optimisme, mais impact USD variable' },
-                low:  { dir: 'Risk-off · Or ↑', why: 'Croissance faible = récession risk, valeurs refuge' } },
-      after:  { surprise_high: 'GDP meilleur: confiance économique, risk-on', surprise_low: 'GDP décevant: risk-off, or potentiellement haussier' }
-    },
-    {
-      keys: ['PMI', 'ISM', 'MANUFACTURING', 'SERVICES'],
-      currency: 'USD',
-      before: { high: { dir: 'Indices ↑ · USD ↑', why: 'PMI élevé = activité économique forte' },
-                low:  { dir: 'Risk-off', why: 'PMI < 50 = contraction, sentiment négatif' } },
-      after:  { surprise_high: 'PMI au-dessus des attentes: sentiment positif', surprise_low: 'PMI décevant: crainte de ralentissement' }
-    },
-    {
-      keys: ['ECB', 'EUROPEAN CENTRAL', 'BCE'],
-      currency: 'EUR',
-      before: { high: { dir: 'EUR ↑', why: 'BCE hawkish = euro haussier' },
-                low:  { dir: 'EUR ↓', why: 'BCE dovish = euro sous pression' } },
-      after:  { surprise_high: 'BCE hawkish surprise: EUR en hausse forte', surprise_low: 'BCE dovish: EUR sous pression' }
-    }
-  ];
+  // ── Mapping devise/pays → symboles affectés ──────────────────────────────────
+  var ASSET_MAP = {
+    USD:    ['XAUUSD','XAGUSD','NAS100','US30','US500','EURUSD','GBPUSD','USDJPY','USDCAD','USDCHF','NZDUSD','AUDUSD','BTCUSD'],
+    EUR:    ['EURUSD','EURGBP','EURJPY'],
+    GBP:    ['GBPUSD','GBPJPY','EURGBP'],
+    JPY:    ['USDJPY','EURJPY','GBPJPY'],
+    CAD:    ['USDCAD'],
+    AUD:    ['AUDUSD'],
+    NZD:    ['NZDUSD'],
+    CHF:    ['USDCHF'],
+    GOLD:   ['XAUUSD'],
+    SILVER: ['XAGUSD'],
+    CNY:    ['XAUUSD']
+  };
 
-  function inferBias(event) {
-    if (!event) return null;
-    var title = (event.title || event.name || '').toUpperCase();
-    for (var i = 0; i < PATTERNS.length; i++) {
-      var p = PATTERNS[i];
-      if (p.keys.some(function (k) { return title.includes(k); })) {
-        var impact = (event.impact || 'Low');
-        var conf = impact === 'High' ? 72 : impact === 'Medium' ? 58 : 40;
-        return {
-          currency: p.currency,
-          impact: impact,
-          conf: conf,
-          before: p.before,
-          after: p.after
-        };
-      }
-    }
-    return null;
+  // Mots-clés titre → symbole (fallback quand country ne matche pas directement)
+  var SYMBOL_KEYWORDS = {
+    XAUUSD: ['gold','bullion','fed','federal reserve','inflation','cpi','pce','nfp','payroll','geopolit','ukraine','middle east','china','dollar','dxy','rate'],
+    XAGUSD: ['silver','gold','fed','inflation','cpi'],
+    NAS100: ['nasdaq','tech','fed','rate','gdp','employment','payroll'],
+    US30:   ['dow','fed','rate','gdp','employment'],
+    US500:  ['s&p','sp500','fed','rate','gdp','employment','payroll'],
+    EURUSD: ['ecb','euro','europe','eurozone','german','france','inflation'],
+    GBPUSD: ['boe','bank of england','uk','britain','sterling'],
+    USDJPY: ['boj','bank of japan','japan','yen'],
+    BTCUSD: ['crypto','bitcoin','btc','fed','rate','inflation']
+  };
+
+  // ── Parsing numérique (supprime %, k, K, m, M, b, B, virgules) ───────────────
+  function parseNumeric(s) {
+    if (!s) return null;
+    var n = parseFloat(String(s).replace(/[%kKmMbB,\+]/g, ''));
+    return isNaN(n) ? null : n;
   }
 
+  // ── Inférence du biais directionnel à partir de forecast vs previous ─────────
+  function inferBias(event) {
+    var fc = parseNumeric(event.forecast);
+    var pr = parseNumeric(event.previous);
+    var ac = parseNumeric(event.actual);
+
+    // Post-news : actual vs forecast
+    if (ac !== null && fc !== null) {
+      var surprise = ac - fc;
+      if (Math.abs(surprise) < 0.01) {
+        return { direction: 'NEUTRAL', magnitude: 20, confidence: 60 };
+      }
+      return {
+        direction:  surprise > 0 ? 'BULLISH_USD' : 'BEARISH_USD',
+        magnitude:  Math.min(100, Math.abs(surprise) * 10),
+        confidence: 75
+      };
+    }
+
+    // Pre-news : forecast vs previous
+    if (fc !== null && pr !== null) {
+      var delta = fc - pr;
+      if (Math.abs(delta) < 0.01) {
+        return { direction: 'NEUTRAL', magnitude: 15, confidence: 40 };
+      }
+      return {
+        direction:  delta > 0 ? 'BULLISH_USD' : 'BEARISH_USD',
+        magnitude:  Math.min(80, Math.abs(delta) * 10),
+        confidence: 45
+      };
+    }
+
+    return { direction: 'UNCERTAIN', magnitude: 10, confidence: 20 };
+  }
+
+  // ── Score d'impact en étoiles (1-5) ─────────────────────────────────────────
+  function impactStars(event) {
+    if (event.impact === 'High')   return 5;
+    if (event.impact === 'Medium') return 3;
+    return 1;
+  }
+
+  // ── Pertinence d'un événement pour un symbole donné ──────────────────────────
+  function isRelevant(event, symbol) {
+    if (!symbol) return true;
+
+    // 1. Vérification via ASSET_MAP (pays de l'événement)
+    var country = (event.country || '').toUpperCase();
+    if (ASSET_MAP[country] && ASSET_MAP[country].indexOf(symbol) !== -1) {
+      return true;
+    }
+
+    // 2. Vérification via mots-clés dans le titre
+    var keywords = SYMBOL_KEYWORDS[symbol];
+    if (keywords) {
+      var title = (event.title || event.name || '').toLowerCase();
+      for (var i = 0; i < keywords.length; i++) {
+        if (title.indexOf(keywords[i]) !== -1) return true;
+      }
+    }
+
+    return false;
+  }
+
+  // ── Parsing du timestamp ─────────────────────────────────────────────────────
   function parseTs(e) {
     // ForexFactory: date "04-01-2026", time "8:30am"
     try {
@@ -89,6 +123,7 @@ var NewsEngine = (function () {
     } catch (_) { return null; }
   }
 
+  // ── Label temps lisible ──────────────────────────────────────────────────────
   function timeLabel(minsUntil) {
     if (minsUntil === null) return '';
     if (minsUntil < 0) return 'Il y a ' + Math.abs(minsUntil) + 'min';
@@ -97,6 +132,7 @@ var NewsEngine = (function () {
     return 'Dans ' + Math.floor(minsUntil / 60) + 'h' + (minsUntil % 60 ? (minsUntil % 60) + 'm' : '');
   }
 
+  // ── Fetch avec cache ─────────────────────────────────────────────────────────
   async function fetchNews() {
     var now = Date.now();
     if (_cache && (now - _cacheTs) < TTL) return _cache;
@@ -114,6 +150,7 @@ var NewsEngine = (function () {
     return _cache || [];
   }
 
+  // ── API principale : événements filtrés par symbole ──────────────────────────
   async function getUpcoming(symbol) {
     var all = await fetchNews();
     var now = Date.now();
@@ -122,35 +159,45 @@ var NewsEngine = (function () {
         var ts = parseTs(e);
         if (!ts) return false;
         var diff = (ts - now) / 60000;
-        return diff > -60 && diff < 24 * 60;
+        if (diff <= -60 || diff >= 24 * 60) return false;
+        // Filtrage par symbole
+        return isRelevant(e, symbol);
       })
       .map(function (e) {
         var ts = parseTs(e);
-        var mins = ts ? Math.round((ts - now) / 60000) : null;
-        var bias = inferBias(e);
+        var minsUntil = ts ? Math.round((ts - now) / 60000) : null;
         return {
-          title:    e.title || e.name || '?',
-          country:  e.country || '?',
-          impact:   e.impact || 'Low',
-          time:     e.time || '',
-          mins:     mins,
-          timeLabel: timeLabel(mins),
-          bias:     bias,
-          isRecent: mins !== null && mins < 0 && mins > -60,
-          isSoon:   mins !== null && mins >= 0 && mins < 60
+          title:     e.title || e.name || '?',
+          country:   e.country || '?',
+          impact:    e.impact || 'Low',
+          time:      e.time || '',
+          date:      e.date || '',
+          forecast:  e.forecast || null,
+          previous:  e.previous || null,
+          actual:    e.actual   || null,
+          minsUntil: minsUntil,
+          timeLabel: timeLabel(minsUntil),
+          stars:     impactStars(e),
+          bias:      inferBias(e),
+          isRecent:  minsUntil !== null && minsUntil < 0 && minsUntil > -60,
+          isSoon:    minsUntil !== null && minsUntil >= 0 && minsUntil < 60
         };
       })
       .sort(function (a, b) {
-        var da = a.mins === null ? 9999 : a.mins;
-        var db = b.mins === null ? 9999 : b.mins;
+        var da = a.minsUntil === null ? 9999 : a.minsUntil;
+        var db = b.minsUntil === null ? 9999 : b.minsUntil;
         return da - db;
       })
       .slice(0, 10);
   }
 
   return {
-    getUpcoming: getUpcoming,
-    inferBias:   inferBias,
-    IMPACT_COL:  IMPACT_COL
+    getUpcoming:  getUpcoming,
+    inferBias:    inferBias,
+    impactStars:  impactStars,
+    isRelevant:   isRelevant,
+    IMPACT_COL:   IMPACT_COL,
+    ASSET_MAP:    ASSET_MAP,
+    SYMBOL_KEYWORDS: SYMBOL_KEYWORDS
   };
 })();
