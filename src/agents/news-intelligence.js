@@ -1,5 +1,12 @@
 // Agent: news-intelligence — news, macro events, symbol impact (real web sources)
 
+const RSS_SOURCES = {
+  FOREX: 'https://www.forexlive.com/feed/news',
+  GOLD:  'https://www.kitco.com/rss/KitcoNewsAll.xml',
+  MACRO: 'https://feeds.reuters.com/reuters/businessNews',
+  FX2:   'https://www.fxstreet.com/rss/news'
+};
+
 const FOREX_FACTORY_FALLBACK = [
   { time:'08:30', currency:'USD', event:'CPI m/m',                    impact:'HIGH' },
   { time:'08:30', currency:'USD', event:'Core CPI m/m',               impact:'HIGH' },
@@ -128,8 +135,73 @@ async function fetchLiveNews(symbol) {
   return merged;
 }
 
+async function fetchRssHeadlines(symbol) {
+  const assetSources = {
+    XAUUSD:  [RSS_SOURCES.GOLD,  RSS_SOURCES.MACRO, RSS_SOURCES.FOREX],
+    XAGUSD:  [RSS_SOURCES.GOLD,  RSS_SOURCES.MACRO],
+    BTCUSD:  [RSS_SOURCES.FOREX, RSS_SOURCES.MACRO],
+    ETHUSD:  [RSS_SOURCES.FOREX, RSS_SOURCES.MACRO],
+    NAS100:  [RSS_SOURCES.MACRO, RSS_SOURCES.FOREX],
+    US30:    [RSS_SOURCES.MACRO, RSS_SOURCES.FOREX],
+    EURUSD:  [RSS_SOURCES.FX2,   RSS_SOURCES.FOREX],
+    GBPUSD:  [RSS_SOURCES.FX2,   RSS_SOURCES.FOREX],
+    DEFAULT: [RSS_SOURCES.FOREX, RSS_SOURCES.FX2]
+  };
+
+  const sources = assetSources[symbol] || assetSources.DEFAULT;
+  const headlines = [];
+
+  await Promise.allSettled(sources.map(async (url) => {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(4000),
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TradingBot/1.0)' }
+      });
+      if (!res.ok) return;
+      const xml = await res.text();
+      // Parse RSS items (title + pubDate)
+      const items = [...xml.matchAll(/<item[^>]*>([\s\S]*?)<\/item>/gi)];
+      for (const item of items.slice(0, 8)) {
+        const titleMatch = item[1].match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+        const dateMatch  = item[1].match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i);
+        const linkMatch  = item[1].match(/<link[^>]*>([\s\S]*?)<\/link>/i);
+        if (!titleMatch) continue;
+        const title = titleMatch[1].trim().replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+        const pubDate = dateMatch ? new Date(dateMatch[1].trim()) : new Date();
+        const ageMs = Date.now() - pubDate.getTime();
+        if (ageMs > 6 * 3600 * 1000) continue; // ignorer > 6h
+        headlines.push({
+          title,
+          source: new URL(url).hostname,
+          pubDate: pubDate.toISOString(),
+          ageMinutes: Math.round(ageMs / 60000),
+          link: linkMatch ? linkMatch[1].trim() : null
+        });
+      }
+    } catch (_) {}
+  }));
+
+  // Déduplique par titre similaire + trie par récence
+  const seen = new Set();
+  return headlines
+    .filter(h => { const k = h.title.slice(0,40); if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a,b) => a.ageMinutes - b.ageMinutes)
+    .slice(0, 10)
+    .map(h => ({
+      ...h,
+      bias: detectNewsBias(h.title),
+      relevant: isNewsRelevantForSymbol(symbol, h.title),
+      stars: h.ageMinutes < 30 ? 5 : h.ageMinutes < 120 ? 4 : h.ageMinutes < 240 ? 3 : 2
+    }))
+    .filter(h => h.relevant);
+}
+
 async function analyze(symbol) {
-  const [upcomingEvents, liveNews] = await Promise.all([getUpcomingEvents(), fetchLiveNews(symbol)]);
+  const [upcomingEvents, liveNews, rssHeadlines] = await Promise.all([
+    getUpcomingEvents(),
+    fetchLiveNews(symbol),
+    fetchRssHeadlines(symbol).catch(() => [])
+  ]);
 
   // Filter events relevant to the symbol
   const symbolCurrency = symbol?.substring(0, 3) || '';
@@ -155,6 +227,8 @@ async function analyze(symbol) {
     symbol,
     upcomingEvents: relevantEvents,
     news: normalizedNews,
+    headlines: rssHeadlines,
+    headlinesCount: rssHeadlines.length,
     macroWarning,
     symbolImpact: relevantEvents.some((e) => e.impact === 'HIGH')
       ? 'Risque macro élevé détecté pour ' + symbol
