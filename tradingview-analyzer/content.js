@@ -180,14 +180,14 @@
     // Sélecteurs ciblant les éléments portant le symbole dans l'interface TradingView
     const selectors = [
       '[data-symbol]',
-      '[data-name="symbol-short"]',
+      '[data-name="legend-source-item"] [data-symbol]',
+      'button[id*="header-toolbar-symbol"]',
+      '[class*="symbolTitle"][class*="main"]',
+      '[data-field="symbol"]',
+      // Existants en fallback
       '[class*="symbolTitle"]',
-      '[class*="symbol-title"]',
-      '[class*="symbol_title"]',
-      '[class*="ticker"]',
-      '[class*="symbol"][class*="text"]',
-      '[class*="header-chart-panel"] [class*="symbol"]',
-      '[class*="mainTitle"]'
+      '[class*="tickerHeadline"]',
+      '[class*="ticker"]'
     ];
 
     for (const selector of selectors) {
@@ -256,15 +256,22 @@
 
   function detectPriceFromDom() {
     const selectors = [
+      // Data attributes — plus stables que les class names
+      '[data-last-price]',
+      '[data-symbol-last]',
+      '[data-field="last_price"]',
+      '[data-field="close"]',
+      // Aria — semi-stable
+      '[aria-label*="price" i]',
+      '[aria-label*="last" i]',
+      // Existants (gardés en fallback)
       '[data-field-key="last"]',
       '[data-name="legend-source-item"] [class*="last"]',
-      '[data-name="legend-source-item"] [class*="price"]',
       '[class*="lastPrice"]',
       '[class*="priceText"]',
       '[class*="priceWrapper"]',
-      '[data-name="legend-source-item"]',
-      '[data-symbol-last]',
-      '[data-last-price]'
+      '[class*="last-"]',
+      '[data-name="legend-source-item"]'
     ];
 
     for (const selector of selectors) {
