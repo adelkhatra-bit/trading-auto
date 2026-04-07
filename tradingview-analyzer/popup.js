@@ -248,12 +248,34 @@ function connectCoachStream(symbol) {
           const isGood  = msg.includes('TP') || msg.includes('avance') || msg.includes('trail') || msg.includes('break-even');
           el.style.color = isAlert ? COL_SHORT : isGood ? COL_LONG : COL_PENDING;
           el.textContent = msg;
+          // ALERT: NEAR_SL — message coach contient SL + Attention
+          if (msg.includes('SL') && msg.includes('Attention')) {
+            triggerAlert('NEAR_SL');
+          }
         }
       }
       if (d.price) state.price = d.price;
       renderPositionPanel(state.live, state.price);
-      // Fermer automatiquement le stream si le trade est terminé
+      // ALERT: BE_REACHED
+      if (d.tradeState && d.tradeState.phase === 'be_reached') {
+        const _beKey = [state.symbol, 'BE_REACHED'].join('|');
+        if (!state._alertedKeys[_beKey]) {
+          state._alertedKeys[_beKey] = true;
+          triggerAlert('BE_REACHED');
+        }
+      }
+      // ALERT: TP_REACHED — trade fermé avec PnL positif
       if (d.tradeState && d.tradeState.phase === 'closed') {
+        const _pnl = Number(d.tradeState.pnlPips || d.tradeState.pnl || 0);
+        if (_pnl > 0) {
+          const _tpKey = [state.symbol, 'TP_REACHED', d.tradeState.closeTime || Date.now()].join('|');
+          if (!state._alertedKeys[_tpKey]) {
+            state._alertedKeys[_tpKey] = true;
+            triggerAlert('TP_REACHED');
+          }
+        }
+        // Reset BE key for next trade
+        delete state._alertedKeys[[state.symbol, 'BE_REACHED'].join('|')];
         showTradeSummary(d.tradeState, d.price);
       }
     } catch (_) {}
@@ -681,6 +703,18 @@ function renderDecision(live) {
   var execution = (live && live.execution) || (live && live.coach && live.coach.execution) || {};
   var priceConsistency = (live && live.priceConsistency) || {};
   var canEnter = execution.canEnter === true;
+  // ALERT: ENTRY_READY — fire once per entry opportunity
+  if (canEnter) {
+    var _entryKey = [state.symbol, state.timeframe, 'ENTRY_READY'].join('|');
+    if (!state._alertedKeys[_entryKey]) {
+      state._alertedKeys[_entryKey] = true;
+      triggerAlert('ENTRY_READY');
+    }
+  } else {
+    // Reset key so next valid canEnter fires again
+    var _entryKeyReset = [state.symbol, state.timeframe, 'ENTRY_READY'].join('|');
+    delete state._alertedKeys[_entryKeyReset];
+  }
   var execDecision = String(execution.decision || '').toUpperCase();
   var rec      = String(analysis.recommendation || 'ATTENTE').toUpperCase();
   var reason   = analysis.reason || (live && live.tradeReasoning && Array.isArray(live.tradeReasoning.whyEntry) && live.tradeReasoning.whyEntry[0]) || 'Pas de raison disponible';
@@ -979,6 +1013,20 @@ async function renderNews(live) {
 
   // Stocker pour le calcul du biais global
   state.newsEvents = events;
+
+  // ALERT: NEWS_HIGH — event avec impact fort dans les 30 prochaines minutes
+  events.forEach(function(ev) {
+    var stars = Number(ev.stars || ev.impact || 0);
+    var mins  = Number.isFinite(Number(ev.minsUntil)) ? Number(ev.minsUntil)
+                : (Number.isFinite(Number(ev.minutesUntil)) ? Number(ev.minutesUntil) : -1);
+    if (stars >= 4 && mins >= 0 && mins <= 30) {
+      var _newsKey = 'NEWS_HIGH|' + (ev.id || ev.title || '') + '|' + (ev.time || mins);
+      if (!state._alertedKeys[_newsKey]) {
+        state._alertedKeys[_newsKey] = true;
+        triggerAlert('NEWS_HIGH', String(ev.title || '').slice(0, 30));
+      }
+    }
+  });
 
   var html = events.slice(0, 5).map(formatNewsEvent);
 
