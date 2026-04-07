@@ -334,6 +334,27 @@
 
     .muted { color: #6f8baa; }
 
+    /* ── NEWS CALENDAR ── */
+    .news-item { padding: 6px 0; border-top: 1px solid #1e3a5f; display: block; }
+    .news-item:first-child { border-top: none; }
+    .news-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+    .news-title { font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 3px; }
+    .news-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .news-stars { color: #f59e0b; letter-spacing: -1px; font-size: 12px; }
+    .news-country { font-size: 10px; background: rgba(59,130,246,.15); color: #93c5fd; border-radius: 4px; padding: 1px 5px; font-weight: 700; }
+    .news-time { font-size: 10px; color: #64748b; }
+    .news-timing { font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 700; background: rgba(100,116,139,.2); color: #94a3b8; }
+    .news-timing-now { background: rgba(239,68,68,.2); color: #fca5a5; }
+    .news-timing-soon { background: rgba(234,179,8,.15); color: #fde047; }
+    .news-timing-past { background: rgba(100,116,139,.12); color: #64748b; }
+    .news-bias { font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 700; }
+    .news-bias-bull { background: rgba(34,197,94,.15); color: #86efac; }
+    .news-bias-bear { background: rgba(239,68,68,.15); color: #fca5a5; }
+    .news-bias-neu { background: rgba(100,116,139,.2); color: #94a3b8; }
+    .news-avf { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: rgba(100,116,139,.15); color: #94a3b8; }
+    .news-avf-good { background: rgba(34,197,94,.15); color: #86efac; }
+    .news-avf-bad { background: rgba(239,68,68,.15); color: #fca5a5; }
+
     @media (max-width: 1000px) {
       .grid-main { grid-template-columns: 1fr; }
       .signals { grid-template-columns: 1fr; }
@@ -458,6 +479,15 @@
       </div>
       <div class="coach-box">
         <div class="signal-text" id="positionCoachText">Aucune position active. Attendre une entree validee.</div>
+      </div>
+    </div>
+
+    <div class="signals">
+      <div class="signal-box">
+        <h3>Calendrier Economique</h3>
+        <div class="list" id="newsList">
+          <div class="item"><div class="meta muted">Chargement des evenements...</div></div>
+        </div>
       </div>
     </div>
 
@@ -642,6 +672,11 @@
       const historyRoot = document.getElementById('historyList');
       if (historyRoot) {
         historyRoot.innerHTML = '<div class="item"><div class="meta muted">Bridge OFF - historique live gelé.</div></div>';
+      }
+
+      const newsRoot = document.getElementById('newsList');
+      if (newsRoot) {
+        newsRoot.innerHTML = '<div class="item"><div class="meta muted">Bridge OFF - calendrier suspendu.</div></div>';
       }
 
       renderRobotV12(null);
@@ -1257,6 +1292,84 @@
       }
     }
 
+    function formatNewsEventDash(e) {
+      const stars = Math.min(5, Math.max(0, Number(e.stars) || 0));
+      const starsHtml = '<span class="news-stars">' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + '</span>';
+
+      const mins = Number.isFinite(Number(e.minsUntil)) ? Number(e.minsUntil) : null;
+      let timingCls = 'news-timing', timingLabel;
+      if (mins === null) {
+        timingLabel = '--';
+      } else if (mins >= -5 && mins <= 5) {
+        timingCls += ' news-timing-now';
+        timingLabel = 'En cours';
+      } else if (mins > 0) {
+        timingCls += ' news-timing-soon';
+        const h = Math.floor(mins / 60);
+        timingLabel = h > 0
+          ? 'Dans ' + h + 'h' + (mins % 60 > 0 ? (mins % 60) + 'min' : '')
+          : 'Dans ' + mins + 'min';
+      } else {
+        timingCls += ' news-timing-past';
+        const absM = Math.abs(mins);
+        const hP = Math.floor(absM / 60);
+        timingLabel = hP > 0
+          ? 'Il y a ' + hP + 'h' + (absM % 60 > 0 ? (absM % 60) + 'min' : '')
+          : 'Il y a ' + absM + 'min';
+      }
+      const timingHtml = '<span class="' + timingCls + '">' + timingLabel + '</span>';
+
+      const bias = e.bias || {};
+      const biasDir = String(bias.direction || 'UNCERTAIN').toUpperCase();
+      const biasMap = {
+        'BULLISH_USD': ['📈 Haussier USD', 'news-bias news-bias-bull'],
+        'BEARISH_USD': ['📉 Baissier USD', 'news-bias news-bias-bear'],
+        'NEUTRAL':     ['➡️ Neutre',       'news-bias news-bias-neu'],
+        'UNCERTAIN':   ['⚠️ Incertain',    'news-bias news-bias-neu']
+      };
+      const [biasText, biasCls] = biasMap[biasDir] || ['⚠️ Incertain', 'news-bias news-bias-neu'];
+      const biasHtml = '<span class="' + biasCls + '">' + biasText + '</span>';
+
+      let avfHtml = '';
+      if (e.actual != null && e.actual !== '') {
+        const actualN = parseFloat(e.actual), forecastN = parseFloat(e.forecast);
+        let isBetter = false, isWorse = false;
+        if (!isNaN(actualN) && !isNaN(forecastN)) {
+          if (biasDir === 'BEARISH_USD') { isBetter = actualN < forecastN; isWorse = actualN > forecastN; }
+          else { isBetter = actualN > forecastN; isWorse = actualN < forecastN; }
+        }
+        const avfCls = isBetter ? 'news-avf news-avf-good' : isWorse ? 'news-avf news-avf-bad' : 'news-avf';
+        const forecastStr = (e.forecast != null && e.forecast !== '') ? ' vs Prévu: ' + e.forecast : '';
+        avfHtml = '<span class="' + avfCls + '">Réel: ' + e.actual + forecastStr + '</span>';
+      }
+
+      const title = e.title || e.event || 'Événement';
+      const countryHtml = e.country ? '<span class="news-country">' + e.country + '</span>' : '';
+      const timeHtml = e.time ? '<span class="news-time">' + e.time + '</span>' : '';
+
+      return '<div class="news-item">' +
+        '<div class="news-head">' + starsHtml + countryHtml + timeHtml + timingHtml + '</div>' +
+        '<div class="news-title">' + title + '</div>' +
+        '<div class="news-foot">' + biasHtml + avfHtml + '</div>' +
+      '</div>';
+    }
+
+    async function loadNews() {
+      const root = document.getElementById('newsList');
+      if (!root) return;
+      try {
+        const data = await fetchJson('/economic-events?symbol=' + encodeURIComponent(state.symbol));
+        let events = Array.isArray(data.events) ? data.events : (Array.isArray(data) ? data : []);
+        if (events.length === 0) {
+          root.innerHTML = '<div class="item"><div class="meta muted">Aucun événement à venir.</div></div>';
+          return;
+        }
+        root.innerHTML = events.slice(0, 6).map(formatNewsEventDash).join('');
+      } catch (_e) {
+        root.innerHTML = '<div class="item"><div class="meta muted">Calendrier temporairement indisponible.</div></div>';
+      }
+    }
+
     async function sendTradeAction(action) {
       try {
         const actionName = String(action || '').toUpperCase();
@@ -1422,6 +1535,7 @@
       await loadMarket();
       await loadAnalysis();
       await loadPositions();
+      await loadNews();
       await loadHistory();
     }
 
