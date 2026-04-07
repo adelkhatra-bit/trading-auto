@@ -907,6 +907,37 @@ function renderBridgeOffState() {
   }
 }
 
+async function renderBridgeHealth() {
+  try {
+    const data = await fetchJson('/bridge/health');
+    const dot = (id, ok, warn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.background = ok ? '#22c55e' : (warn ? '#f97316' : '#ef4444');
+      el.style.boxShadow = ok ? '0 0 4px #22c55e88' : 'none';
+    };
+    dot('bh-tv',  data.chain.tradingview.ok,  data.chain.tradingview.ageSeconds < 60);
+    dot('bh-srv', data.chain.backend.ok,       false);
+    dot('bh-sse', data.chain.sseClients.ok,    false);
+
+    const lbl = document.getElementById('bh-label');
+    if (lbl) {
+      if (!data.chain.tradingview.ok) {
+        lbl.style.color = '#ef4444';
+        lbl.textContent = 'TV HORS LIGNE';
+      } else {
+        lbl.style.color = '#22c55e';
+        lbl.textContent = `${data.chain.tradingview.symbol || '--'} · ${data.chain.tradingview.ageSeconds}s`;
+      }
+    }
+  } catch(_) {
+    ['bh-tv','bh-srv','bh-sse'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.background = '#ef4444';
+    });
+  }
+}
+
 function formatNewsEvent(e) {
   // Étoiles
   var stars = Math.min(5, Math.max(0, Number(e.stars) || 0));
@@ -1471,6 +1502,7 @@ async function refreshAll() {
   }
   renderBiasBanner(state.live, state.newsEvents);
   renderPositionPanel(state.live, state.price);
+  renderBridgeHealth();
 }
 
 // ─── COACH NARRATIVE ──────────────────────────────────────────────────────────
@@ -2273,11 +2305,12 @@ async function boot() {
   await loadJournalStats();
 
   // Intervals
-  setInterval(refreshAll,       8000);   // refresh core data every 8s
-  setInterval(renderMultiTF,   30000);   // refresh multi-TF every 30s
-  setInterval(refreshHealth,   10000);   // check health every 10s
-  setInterval(loadLiveSymbols, 15000);   // refresh symbol list every 15s
-  setInterval(loadJournalStats, 60000);  // refresh journal stats every 60s
+  setInterval(refreshAll,          8000);   // refresh core data every 8s
+  setInterval(renderMultiTF,      30000);   // refresh multi-TF every 30s
+  setInterval(refreshHealth,      10000);   // check health every 10s
+  setInterval(loadLiveSymbols,    15000);   // refresh symbol list every 15s
+  setInterval(loadJournalStats,   60000);   // refresh journal stats every 60s
+  setInterval(renderBridgeHealth,  5000);   // bridge health dots every 5s
 }
 
 async function loadJournalStats() {
