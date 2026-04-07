@@ -1,0 +1,262 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<title>Trading Auto</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;font-size:12px;background:#0f1117;color:#e2e8f0;
+  display:flex;flex-direction:column;height:620px;overflow:hidden}
+body.win{height:100vh}
+/* ── STICKY HEADER ─────────────── */
+#stickyHead{background:#161b27;border-bottom:1px solid #2d3748;padding:6px 10px;flex-shrink:0}
+.hrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ok-badge,.warn-badge,.bad-badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px}
+.ok-badge{background:rgba(22,163,74,.2);color:#86efac;border:1px solid rgba(22,163,74,.4)}
+.warn-badge{background:rgba(234,179,8,.2);color:#fde047;border:1px solid rgba(234,179,8,.4)}
+.bad-badge{background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.4)}
+.hsym{font-weight:800;font-size:13px;color:#f1f5f9}
+.htf,.hmode{font-size:10px;color:#94a3b8;padding:2px 5px;background:#1e2535;border-radius:4px}
+.hprice{font-size:12px;font-weight:600;color:#fbbf24;margin-left:auto}
+#headAgent{font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid #2d3748;color:#94a3b8}
+#btnDetach{margin-left:4px;background:#1e2535;border:1px solid #2d3748;color:#94a3b8;
+  font-size:11px;padding:2px 8px;border-radius:4px;cursor:pointer}
+#btnDetach:hover{background:#2d3748;color:#e2e8f0}
+/* ── SCROLL AREA ────────────────── */
+#scrollArea{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+#scrollArea::-webkit-scrollbar{width:4px}
+#scrollArea::-webkit-scrollbar-thumb{background:#2d3748;border-radius:2px}
+/* ── CONTROLS ───────────────────── */
+.ctrl-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:5px}
+.ctrl-row select{background:#1e2535;border:1px solid #2d3748;color:#e2e8f0;padding:4px 6px;
+  border-radius:5px;font-size:11px;cursor:pointer;outline:none}
+.ctrl-row select:focus{border-color:#3b82f6}
+/* ── BLOCS ──────────────────────── */
+.bloc{background:#1a1f2e;border:1px solid #2d3748;border-radius:6px;padding:8px}
+.bloc-title{font-size:10px;font-weight:700;color:#64748b;letter-spacing:.06em;margin-bottom:5px}
+.bloc-title.toggle{cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none}
+.bloc-title.toggle:hover{color:#94a3b8}
+/* ── SIGNAL ─────────────────────── */
+.sig-row{display:flex;align-items:baseline;gap:8px}
+.signal{font-size:22px;font-weight:800;letter-spacing:.04em}
+.signal.buy{color:#22c55e}.signal.sell{color:#ef4444}.signal.wait{color:#f59e0b}
+.sig-time{font-size:10px;color:#64748b;margin-left:auto}
+.bdg{font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid transparent}
+.bdg.ok{background:rgba(22,163,74,.15);color:#86efac;border-color:rgba(22,163,74,.3)}
+.bdg.warn{background:rgba(234,179,8,.15);color:#fde047;border-color:rgba(234,179,8,.3)}
+.bdg.bad{background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.3)}
+#analysisText{font-size:11px;color:#94a3b8;margin-top:5px;line-height:1.4}
+/* ── MULTI-TF ───────────────────── */
+.tf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.tfc{background:#1a1f2e;border:1px solid #2d3748;border-radius:6px;padding:5px 4px;
+  text-align:center;cursor:pointer;transition:border-color .15s}
+.tfc:hover{border-color:#3b82f6}
+.tfc.active{border-color:#22c55e;background:rgba(22,163,74,.06)}
+.tfc-lbl{font-size:10px;color:#64748b;font-weight:600;margin-bottom:2px}
+.tfc-sig{font-size:12px;font-weight:800}.tfc-sig.buy{color:#22c55e}.tfc-sig.sell{color:#ef4444}.tfc-sig.wait{color:#f59e0b}
+.tfc-sub{font-size:9px;color:#64748b;margin-top:1px}
+/* ── DECISION ───────────────────── */
+.verdict{display:inline-block;font-size:18px;font-weight:800}
+.verdict.buy{color:#22c55e}.verdict.sell{color:#ef4444}.verdict.wait{color:#f59e0b}
+.tags-row{display:flex;gap:5px;margin:4px 0}
+.tag{font-size:10px;padding:2px 7px;border-radius:12px;font-weight:600}
+.tag.ok{background:rgba(22,163,74,.2);color:#86efac}
+.tag.warn{background:rgba(234,179,8,.2);color:#fde047}
+.tag.bad{background:rgba(239,68,68,.2);color:#fca5a5}
+.tag.blue{background:rgba(59,130,246,.2);color:#93c5fd}
+#dg-reason{margin-top:6px;padding:8px 10px;border-radius:5px;font-size:12px;
+  line-height:1.5;border-left:3px solid #3b82f6;background:rgba(59,130,246,.08);color:#cbd5e1}
+#dg-reason.buy{border-left-color:#22c55e;background:rgba(22,163,74,.08);color:#bbf7d0}
+#dg-reason.sell{border-left-color:#ef4444;background:rgba(239,68,68,.08);color:#fecaca}
+#dg-reason.bad{border-left-color:#ef4444;background:rgba(239,68,68,.12);color:#fca5a5;font-weight:600}
+#dg-nextaction{margin-top:5px;font-size:10px;color:#64748b}
+#coachText{font-size:12px;line-height:1.5;color:#d4e3f5;white-space:pre-line}
+/* ── ACTIONS ────────────────────── */
+.acts-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:2px}
+.btn-sub{padding:5px;border-radius:5px;border:1px solid #2d3748;background:#1e2535;
+  color:#e2e8f0;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-sub:hover{background:#2d3748;border-color:#3b82f6}
+.btn-sub.buy{border-color:rgba(22,163,74,.5);background:rgba(22,163,74,.1);color:#86efac}
+.btn-sub.buy:hover{background:rgba(22,163,74,.25)}
+.btn-sub.sell{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.1);color:#fca5a5}
+.btn-sub.sell:hover{background:rgba(239,68,68,.25)}
+/* ── STATS ──────────────────────── */
+.stats-row{display:flex;gap:4px;align-items:center}
+.sc{flex:1;background:#1a1f2e;border:1px solid #2d3748;border-radius:5px;padding:5px 6px;text-align:center}
+.sc-val{display:block;font-size:14px;font-weight:700;color:#f1f5f9}
+.sc-lbl{display:block;font-size:9px;color:#64748b;margin-top:1px}
+#statLastEvent{font-size:9px;color:#64748b;flex:2;text-align:right;padding:0 4px}
+/* ── DIAGNOSTIC ─────────────────── */
+#diagLine{font-size:10px;color:#64748b;padding:4px 8px;background:#1a1f2e;
+  border-radius:4px;border:1px solid #2d3748;line-height:1.4}
+#diagLine.blocking{color:#fca5a5;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3)}
+/* ── CHART ──────────────────────── */
+.chart-body{margin-top:4px}
+.chart-body.hidden{display:none}
+#chart-container{height:200px;width:100%;background:#0d1117;border-radius:4px;overflow:hidden}
+#chart-msg{font-size:10px;color:#64748b;padding:4px 0}
+/* ── COACH ──────────────────────── */
+#coachText{font-size:13px;color:#cbd5e1;line-height:1.65;margin-bottom:6px;font-weight:600;white-space:pre-line}
+.ni{font-size:10px;color:#94a3b8;padding:3px 0;border-top:1px solid #2d3748;display:flex;align-items:center;gap:5px}
+.urg{font-size:9px;padding:1px 5px;border-radius:10px;font-weight:700;letter-spacing:.04em}
+.ul{background:rgba(100,116,139,.2);color:#94a3b8}
+.um{background:rgba(234,179,8,.15);color:#fde047}
+.uh{background:rgba(249,115,22,.15);color:#fdba74}
+.ux{background:rgba(239,68,68,.2);color:#fca5a5}
+/* ── WINDOW ACTIONS ─────────────── */
+#windowActions{display:flex;gap:5px}
+#windowActions button{flex:1;padding:5px;border-radius:5px;border:1px solid #2d3748;
+  background:#1e2535;color:#e2e8f0;font-size:11px;font-weight:600;cursor:pointer}
+#windowActions button:hover{background:#2d3748}
+</style>
+</head>
+<body>
+<!-- STICKY HEADER -->
+<div id="stickyHead">
+  <div class="hrow">
+    <span id="conn" class="warn-badge">SYNC</span>
+    <span id="headSym" class="hsym">XAUUSD</span>
+    <span id="headTF" class="htf">H1</span>
+    <span id="headMode" class="hmode">AUTO</span>
+    <span id="headPrice" class="hprice"></span>
+    <span id="headAgent">AGENT --</span>
+    <button id="btnDetach" title="Ouvrir fenetre">&#128204;</button>
+  </div>
+</div>
+<!-- SCROLL AREA -->
+<div id="scrollArea">
+  <!-- CONTROLS -->
+  <div class="ctrl-row">
+    <select id="symbolSelect">
+      <option value="XAUUSD">XAUUSD</option>
+      <option value="EURUSD">EURUSD</option>
+      <option value="GBPUSD">GBPUSD</option>
+      <option value="USDJPY">USDJPY</option>
+      <option value="USDCHF">USDCHF</option>
+      <option value="AUDUSD">AUDUSD</option>
+      <option value="NZDUSD">NZDUSD</option>
+      <option value="USDCAD">USDCAD</option>
+      <option value="BTCUSD">BTCUSD</option>
+      <option value="ETHUSD">ETHUSD</option>
+      <option value="XAGUSD">XAGUSD</option>
+      <option value="US30">US30</option>
+      <option value="NAS100">NAS100</option>
+      <option value="SPX500">SPX500</option>
+      <option value="GBPJPY">GBPJPY</option>
+      <option value="EURJPY">EURJPY</option>
+    </select>
+    <select id="tfSelect">
+      <option value="M1">M1</option>
+      <option value="M5">M5</option>
+      <option value="M15">M15</option>
+      <option value="M30">M30</option>
+      <option value="H1" selected>H1</option>
+      <option value="H4">H4</option>
+      <option value="D1">D1</option>
+      <option value="W1">W1</option>
+    </select>
+    <select id="modeSelect">
+      <option value="AUTO" selected>AUTO</option>
+      <option value="SCALPER">SCALP</option>
+      <option value="SNIPER">SNIPER</option>
+      <option value="SWING">SWING</option>
+      <option value="ANALYSE">ANALYSE</option>
+      <option value="ALERTE">ALERTE</option>
+      <option value="EXECUTION_PREPAREE">EXEC_PREP</option>
+    </select>
+  </div>
+
+  <!-- SIGNAL LIVE -->
+  <div class="bloc">
+    <div class="sig-row">
+      <span id="signalText" class="signal wait">ATTENTE</span>
+      <span id="webhookBadge" class="bdg warn">WH --</span>
+      <span id="bridgeBadge" class="bdg warn">MT5 --</span>
+      <span id="sigTime" class="sig-time">--:--</span>
+    </div>
+    <div id="analysisText">Analyse en cours...</div>
+  </div>
+
+  <!-- MULTI-TF -->
+  <div class="tf-grid">
+    <div class="tfc" id="tfc-M1" data-tfc="M1">
+      <div class="tfc-lbl">M1</div>
+      <div class="tfc-sig wait" id="tfc-M1-t">--</div>
+      <div class="tfc-sub" id="tfc-M1-s">RSI --</div>
+    </div>
+    <div class="tfc" id="tfc-M5" data-tfc="M5">
+      <div class="tfc-lbl">M5</div>
+      <div class="tfc-sig wait" id="tfc-M5-t">--</div>
+      <div class="tfc-sub" id="tfc-M5-s">RSI --</div>
+    </div>
+    <div class="tfc" id="tfc-M15" data-tfc="M15">
+      <div class="tfc-lbl">M15</div>
+      <div class="tfc-sig wait" id="tfc-M15-t">--</div>
+      <div class="tfc-sub" id="tfc-M15-s">RSI --</div>
+    </div>
+    <div class="tfc" id="tfc-H1" data-tfc="H1">
+      <div class="tfc-lbl">H1</div>
+      <div class="tfc-sig wait" id="tfc-H1-t">--</div>
+      <div class="tfc-sub" id="tfc-H1-s">RSI --</div>
+    </div>
+  </div>
+
+  <!-- DECISION AGENT -->
+  <div class="bloc">
+    <div class="bloc-title">&#129302; DECISION AGENT</div>
+    <div>
+      <span id="dg-verdict" class="verdict wait">ATTENTE</span>
+      <span class="tags-row" style="display:inline-flex;margin-left:8px;vertical-align:middle">
+        <span id="dg-risk" class="tag warn">--</span>
+        <span id="dg-anticip" class="tag blue">--</span>
+      </span>
+    </div>
+    <div id="dg-reason">Raison : analyse en cours...</div>
+    <div id="dg-nextaction"></div>
+    <div class="acts-grid" style="margin-top:8px">
+      <button class="btn-sub buy" data-action="ENTER">&#9654; ENTRER</button>
+      <button class="btn-sub sell" data-action="EXIT">&#9632; SORTIR</button>
+      <button class="btn-sub" data-action="BE">&#9650; BREAKEVEN</button>
+      <button class="btn-sub" data-action="WAIT">&#9889; PATIENTER</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="sc"><span class="sc-val" id="statSignals">0</span><span class="sc-lbl">Signaux</span></div>
+    <div class="sc"><span class="sc-val" id="statTrades">0</span><span class="sc-lbl">Actions</span></div>
+    <div class="sc"><span class="sc-val" id="statRate">--</span><span class="sc-lbl">Taux</span></div>
+    <div id="statLastEvent">Dernier: --</div>
+  </div>
+
+  <!-- DIAGNOSTIC -->
+  <div id="diagLine">Diagnostic : initialisation...</div>
+
+  <!-- GRAPHIQUE -->
+  <div class="bloc">
+    <div class="bloc-title toggle" id="toggleChart">&#128200; GRAPHIQUE &#9654;</div>
+    <div id="chartBody" class="chart-body hidden">
+      <div id="chart-container"></div>
+      <div id="chart-msg"></div>
+    </div>
+  </div>
+
+  <!-- COACH LIA -->
+  <div class="bloc">
+    <div class="bloc-title">&#128172; COACH LIA</div>
+    <div id="coachText">Coach indisponible.</div>
+    <div id="newsList"></div>
+  </div>
+
+  <!-- WINDOW ACTIONS (persistent mode) -->
+  <div id="windowActions" hidden>
+    <button id="focusTradingViewBtn">&#127760; TradingView</button>
+    <button id="closeWindowBtn">&#10005; Fermer</button>
+  </div>
+</div>
+
+<script src="lightweight-charts.min.js"></script>
+<script src="chart-module.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

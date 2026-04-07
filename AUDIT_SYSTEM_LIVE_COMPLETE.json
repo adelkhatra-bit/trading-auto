@@ -1,0 +1,820 @@
+{
+  "audit_metadata": {
+    "date": "2026-04-03",
+    "target": "backup/system-live/",
+    "total_files": 18,
+    "total_loc": 8470,
+    "scope": "Complete backend + realtime + frontend"
+  },
+  "files": [
+    {
+      "id": 1,
+      "path": "server.js",
+      "type": "MAIN",
+      "description": "Express backend server — Trading Auto exclusive. Routes 60+: MT5 bridge proxy, analysis, signals, market hours, SSE streaming, admin, health",
+      "category": "Backend — Express App",
+      "loc": 2730,
+      "exports": [
+        "app (Express instance)",
+        "PORT (4000)"
+      ],
+      "dependencies": {
+        "external": [
+          "express",
+          "path",
+          "fs",
+          "child_process (spawn, execSync)",
+          "http"
+        ],
+        "internal": [
+          "./lib/market-hours-checker",
+          "./store/market-store",
+          "./lib/symbol-normalizer",
+          "./src/agents/orchestrator",
+          "./audit-logger",
+          "./lib/candle-manager",
+          "./lib/zone-manager",
+          "./lib/symbol-matcher",
+          "./src/agents/news-intelligence",
+          "./trading/broker-adapter",
+          "./src/agents/coordinator"
+        ]
+      },
+      "key_functions": [
+        "mt5Fetch(path)",
+        "sendHTMLWithHelper(res, filePath)",
+        "getPriceWithSource(symbol)",
+        "calculateRiskRewardRatio(entry, sl, tp)",
+        "detectPatternMarket(bars)",
+        "analyzeMarketSediment(symbol, data)",
+        "app.listen(PORT, ...)"
+      ],
+      "routes_sample": [
+        "GET / (menu principal)",
+        "GET /studio (trading studio)",
+        "GET /audit (audit dashboard)",
+        "POST /mt5/tick (tick feed)",
+        "GET /mt5/klines (candle history)",
+        "POST /instant-trade-live (analysis)",
+        "GET /health (status)",
+        "POST /bridge/start (python bridge)",
+        "POST /bridge/stop (kill process)"
+      ],
+      "critical_notes": [
+        "Routes 2730 lignes nécessite modularisation en sous-routers",
+        "Fallback marché-off sur lignes 54-82 — utilise normalizeSymbol() minimaliste",
+        "CandleManager instancié ligne 87 avec EventEmitter pour temps réel",
+        "SSE broadcast marketStore.broadcast() pour WebSocket",
+        "MT5 data access via mt5Fetch() qui lit mt5_data.json local"
+      ],
+      "status": "PRODUCTION"
+    },
+    {
+      "id": 2,
+      "path": "lib/data-source-manager.js",
+      "type": "CORE_LIB",
+      "description": "Unified symbol data layer — CRITICAL: getEffectivePrice() is ONLY price entry point. LOCAL ONLY (mt5_file + userReference). NO external APIs",
+      "category": "Data Management",
+      "loc": 538,
+      "exports": [
+        "DataSourceManager (class)",
+        "getDataSourceManager() (async singleton)"
+      ],
+      "dependencies": {
+        "external": [
+          "fs",
+          "path"
+        ],
+        "internal": [
+          "./symbol-preferences"
+        ]
+      },
+      "key_functions": [
+        "initialize()",
+        "getEffectivePrice(symbol, contextId)",
+        "canUsePrice(symbol, contextId)",
+        "canAnalyze(symbol, contextId)",
+        "_loadMT5Data()",
+        "getSymbolPreferences()"
+      ],
+      "critical_rules": [
+        "canUsePrice() = price available for matching",
+        "canAnalyze() = STRICT: price + 10+ klines required else CANNOT generate signals",
+        "AGENT RULE: if canAnalyze=false, agents MUST NOT generate technical signals"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": 3,
+      "path": "lib/candle-manager.js",
+      "type": "CORE_LIB",
+      "description": "Real-time candle aggregation engine — Aggregate ticks into OHLC, manage state machine (open→progress→closed). EventEmitter for candle:closed events. 100% local aggregation",
+      "category": "Real-time Data",
+      "loc": 364,
+      "exports": [
+        "CandleManager (class extending EventEmitter)"
+      ],
+      "dependencies": {
+        "external": [
+          "events (EventEmitter)",
+          "fs.promises",
+          "path"
+        ],
+        "internal": []
+      },
+      "key_functions": [
+        "constructor(options)",
+        "initialize()",
+        "updateTick(symbol, timeframe, tick)",
+        "_detectCandleClose()",
+        "_onCandleClosed()",
+        ".on('candle:closed', callback)",
+        ".on('candle:updated', callback)"
+      ],
+      "events_emitted": [
+        "candle:opened — new candle started",
+        "candle:updated — current candle in progress",
+        "candle:closed — confirmed OHLC ready"
+      ],
+      "state_machine": "OPEN → IN_PROGRESS → CLOSED",
+      "timeframes_supported": [
+        "D1 (24h)",
+        "H1 (1h)",
+        "M15 (15m)",
+        "M5 (5m)",
+        "M1 (1m)"
+      ],
+      "persistence": "Closed candles stored in mt5_data.json, max 1000 per TF in memory",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 4,
+      "path": "lib/market-hours-checker.js",
+      "type": "CORE_LIB",
+      "description": "100% LOCAL market hours detection — Sessions hardcoded UTC (no DST), synchrone <1ms. Supports Forex 24h/5, Metal (XAUUSD), Equity weekdays 13:30-20:00 UTC, Crypto 24/7",
+      "category": "Market Data",
+      "loc": 217,
+      "exports": [
+        "MarketHoursChecker (singleton instance)"
+      ],
+      "dependencies": {
+        "external": []
+      },
+      "key_functions": [
+        "classify(symbol) → 'forex'|'equity'|'crypto'|'metal'",
+        "isMarketOpen(symbol, timestamp)",
+        "getNextSessionInfo(symbol)",
+        "minutesUntilSession(symbol)",
+        "_isTimeInRange(openH, openM, closeH, closeM, currH, currM)"
+      ],
+      "market_sessions": {
+        "forex": "Sydney (21-6), Tokyo (23-8), London (7-16), NewYork (13.5-22) UTC",
+        "metal": "Same as Forex (XAUUSD, XAGUSD)",
+        "equity": "US weekdays only 13:30-20:00 UTC (9:30-16:00 ET)",
+        "crypto": "24/7 always open"
+      },
+      "status": "ACTIVE"
+    },
+    {
+      "id": 5,
+      "path": "lib/symbol-normalizer.js",
+      "type": "CORE_LIB",
+      "description": "Broker variant normalization — XAUUSD.a, GOLDmicro, etc. Returns canonical profile with digits, pip, SL%, TP%, contract size",
+      "category": "Symbol Management",
+      "loc": 86,
+      "exports": [
+        "normalizeSymbol(rawSymbol)",
+        "formatPrice(price, profile)",
+        "calcLevels(price, direction, profile, atr)",
+        "PROFILES (const object)"
+      ],
+      "dependencies": {
+        "external": []
+      },
+      "profiles_defined": [
+        "XAUUSD (metal, 2 digits, pip=0.1)",
+        "XAGUSD (metal, 3 digits, pip=0.01)",
+        "NAS100, US500, US30, DE40 (indices)",
+        "BTCUSD, ETHUSD (crypto)",
+        "EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF, NZDUSD, EURGBP, EURJPY, GBPJPY (forex majors/crosses)"
+      ],
+      "key_features": [
+        "Strip broker suffixes (.a, .b, -micro, -mini, /pro, etc.)",
+        "Direct PROFILES lookup + pattern matching",
+        "Digits, tickSize, tickValue, contractSize per symbol",
+        "SL% and TP% profiles per instrument type"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": 6,
+      "path": "lib/symbol-matcher.js",
+      "type": "CORE_LIB",
+      "description": "Smart symbol mapping with price tolerance — Map TradingView symbols → backend sources with price validation. Variants database + source priority",
+      "category": "Symbol Management",
+      "loc": 324,
+      "exports": [
+        "SYMBOL_VARIANTS",
+        "findCanonicalSymbol(symbol)",
+        "checkPriceTolerance(canonical, price)",
+        "selectBestSource(symbol)",
+        "matchSymbolWithPriceValidation(input, price)",
+        "getDisplayStatus(symbol)"
+      ],
+      "dependencies": {
+        "external": []
+      },
+      "symbol_variants_covered": [
+        "XAUUSD (priority: MT5, TradingView, Yahoo fallback GC=F)",
+        "EURUSD, GBPUSD, USDJPY (priority: MT5, TradingView, Yahoo)",
+        "BTCUSD, ETHUSD (crypto, priority: MT5, TradingView, Yahoo fallback)"
+      ],
+      "tolerance_model": "Per-symbol price tolerance (0.003-0.008 spread) to validate sources",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 7,
+      "path": "lib/broker-calculator.js",
+      "type": "CORE_LIB",
+      "description": "Multi-platform TP/SL calculator — Recalculate levels per broker profile (TopStep, TradingView, Google, XM, MT5). Supports micro/mini contracts",
+      "category": "Risk Management",
+      "loc": 248,
+      "exports": [
+        "BROKER_CONFIG",
+        "SYMBOL_MAPPING",
+        "convertSymbol(symbol, brokerFrom, brokerTo)",
+        "calculateLevels(price, direction, broker, slPct, tpPct)",
+        "recalculateForBroker(trade, broker)",
+        "recalculateForAllBrokers(trade)"
+      ],
+      "dependencies": {
+        "external": []
+      },
+      "brokers_supported": [
+        "TradingView (5 digits, pip=0.1, SL×1.0, TP×0.8)",
+        "TopStep/Futures (2 digits, pip=0.01, SL×0.95, TP×1.0)",
+        "Google Finance (2 digits, pip=0.01, SL×1.05, TP×0.85)",
+        "XM (4 digits, pip=0.0001, SL×1.1, TP×0.7)",
+        "MT5 (5 digits, pip=0.1, SL×1.0, TP×0.8)"
+      ],
+      "features": [
+        "Per-broker SL/TP multipliers for risk profiles",
+        "Symbol mapping (XAUUSD→GC=F for TopStep)",
+        "Contract size adjustments (Micro ES, MNQ, etc)"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": 8,
+      "path": "lib/chart-renderer.js",
+      "type": "UI_LIB",
+      "description": "Chart rendering in browser — Chart.js for technical display. Draws OHLC candles + signal overlays. Supports LW Charts integration",
+      "category": "Frontend — Charts",
+      "loc": 300,
+      "exports": [
+        "initChart(containerId)",
+        "drawPriceChart(ohlcData, signalData)",
+        "drawTechnicalAnalysis(ohlcData, indicators)",
+        "addSignalOverlay(signal, price)",
+        "clearChart()",
+        "ensureChartLib()"
+      ],
+      "dependencies": {
+        "external": []
+      },
+      "capabilities": [
+        "OHLC candle drawing",
+        "Close/High/Low dataset overlay",
+        "LONG (green) / SHORT (red) signal visualization",
+        "Technical indicator channels",
+        "Dynamic chart library loading"
+      ],
+      "status": "PARTIAL (Chart.js fallback, LW Charts preferred)"
+    },
+    {
+      "id": 9,
+      "path": "realtime/realtime-manager.js",
+      "type": "STREAM_ENGINE",
+      "description": "Real-time orchestration — connects CandleManager → EventEmitter → WebSocket frontend. Manages candle history, broadcasts updates, emits events",
+      "category": "Real-time Data",
+      "loc": 167,
+      "exports": [
+        "RealtimeManager (class extending EventEmitter)"
+      ],
+      "dependencies": {
+        "external": [
+          "events (EventEmitter)"
+        ],
+        "internal": [
+          "CandleManager (passed as constructor arg)",
+          "marketStore (passed as constructor arg)"
+        ]
+      },
+      "key_functions": [
+        "setupListeners()",
+        "onCandleClosed(event)",
+        "onCandleUpdated(event)",
+        "broadcastCandle(message)",
+        "addWebSocketClient(ws)",
+        "getHistory(symbol, timeframe, limit)",
+        "getCurrentCandle(symbol, timeframe)",
+        "getLastCandle(symbol, timeframe)"
+      ],
+      "events_handled": [
+        "'candle:closed' from CandleManager",
+        "'candle:updated' from CandleManager"
+      ],
+      "storage": "candleHistory[symbol][timeframe] = array of last 500 candles",
+      "broadcasting": "All WebSocket clients via broadcastCandle()",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 10,
+      "path": "realtime/chart-stream.js",
+      "type": "STREAM_ENGINE",
+      "description": "WebSocket streaming for frontend TradingView Lightweight Charts — Connects RealtimeManager to frontend. Format: history:load, candle:updating, candle:closed",
+      "category": "Real-time Data",
+      "loc": 120,
+      "exports": [
+        "ChartStream (class)"
+      ],
+      "dependencies": {
+        "external": []
+      },
+      "key_functions": [
+        "constructor(realtimeManager, wsServer)",
+        "setupWebSocketHandlers()",
+        "handleClientMessage(ws, msg)",
+        "onConnection(ws, req)",
+        "onMessage(ws, data)",
+        "onClose(ws)"
+      ],
+      "message_types_handled": [
+        "request:history → sends history:load with candle array",
+        "request:current → sends state:current with last+current",
+        "subscribe:symbol → tracks client subscriptions"
+      ],
+      "data_format": "OHLC JSON series-ready for addCandleSeries()",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 11,
+      "path": "public/dev-helper.js",
+      "type": "DEBUG_TOOL",
+      "description": "Universal repair button 🛠️ — floating on ALL pages. 1 click → complete context → paste to AI → immediate fix. SYSTEM database of all 60+ pages/routes/files/dependencies",
+      "category": "Developer Tools",
+      "loc": 896,
+      "exports": [
+        "SYSTEM (const object) — complete system database",
+        "window.reportSystemContext()",
+        "window.generateBugReport()",
+        "window.capturePageState()"
+      ],
+      "dependencies": {
+        "external": []
+      },
+      "features": [
+        "Floating debug button on all pages",
+        "8-page database (/, /studio, /dashboard, /popup, /control-panel, /audit, /agent-log, /extension-test)",
+        "60+ route definitions with safe/danger zones",
+        "File inventory with categories, dependencies, role",
+        "System status endpoints",
+        "Bug report generator",
+        "Context capture with page state + logs + resources"
+      ],
+      "pages_documented": 8,
+      "files_in_database": "60+",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 12,
+      "path": "public/content.js",
+      "type": "EXTENSION",
+      "description": "Chrome extension content script — minimal, screenshot-only. Responds to background requests for page context/capture. NO DOM parsing, NO MutationObserver",
+      "category": "Extension Scripts",
+      "loc": 40,
+      "exports": [
+        "chrome.runtime.onMessage listener"
+      ],
+      "dependencies": {
+        "external": [
+          "chrome.runtime API"
+        ]
+      },
+      "messages_handled": [
+        "CAPTURE / GET_SCREENSHOT → returns {url, title, timestamp}",
+        "GET_CONTEXT → returns {url, title, hostname}",
+        "PING → returns {ok: true}"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": 13,
+      "path": "public/background.js",
+      "type": "EXTENSION",
+      "description": "Chrome extension background script — auto-mode DISABLED (caused 100% CPU). Manual mode only. Shows signal notifications (LONG/SHORT/ATTENTE)",
+      "category": "Extension Scripts",
+      "loc": 79,
+      "exports": [
+        "chrome.runtime.onMessage listener",
+        "showSignal(data) — displays notification"
+      ],
+      "dependencies": {
+        "external": [
+          "chrome.runtime API",
+          "chrome.notifications API"
+        ]
+      },
+      "features": [
+        "Auto mode DISABLED (while loop caused CPU 100%)",
+        "Manual mode: images sent via button click",
+        "showSignal(data) for LONG/SHORT/ATTENTE display",
+        "Signal notifications with TP/SL placeholders"
+      ],
+      "critical_note": "Auto-loop disabled — while(autoMode) + fetch cascade caused issues",
+      "status": "PARTIAL (needs safe auto-loop redesign)"
+    },
+    {
+      "id": 14,
+      "path": "public/popup.js",
+      "type": "EXTENSION",
+      "description": "Chrome extension popup — NOT web version. Test version at /popup. Captures screenshots, sends to server, displays analysis results",
+      "category": "Extension Scripts",
+      "loc": 82,
+      "exports": [
+        "captureScreen()",
+        "sendCapture()",
+        "startAuto()",
+        "stopAuto()"
+      ],
+      "dependencies": {
+        "external": [
+          "chrome.tabs API",
+          "fetch API"
+        ]
+      },
+      "features": [
+        "Screenshot capture via chrome.tabs.captureVisibleTab()",
+        "POST to /capture endpoint",
+        "Auto mode start/stop buttons"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": 15,
+      "path": "public/server.js",
+      "type": "LEGACY",
+      "description": "Legacy express server (port 3000) for screenshot capture handling — stores images in /public/latest.png. Separate from main server.js (port 4000). DEPRECATED in favor of server.js integration",
+      "category": "Backend — Legacy",
+      "loc": 111,
+      "exports": [
+        "app (Express instance)",
+        "PORT (3000)"
+      ],
+      "dependencies": {
+        "external": [
+          "express",
+          "cors",
+          "fs",
+          "path"
+        ]
+      },
+      "routes": [
+        "GET / (status)",
+        "GET /status (auto mode state)",
+        "POST /capture (store screenshot)",
+        "POST /start-auto",
+        "POST /stop-auto",
+        "GET /view (image viewer)"
+      ],
+      "status": "DEPRECATED (duplicate with server.js port 4000)"
+    },
+    {
+      "id": 16,
+      "path": "studio/app.js",
+      "type": "STUB",
+      "description": "Empty stub — console.log only. Likely placeholder",
+      "category": "Frontend — Studio",
+      "loc": 1,
+      "exports": [],
+      "dependencies": {
+        "external": []
+      },
+      "status": "DEAD_CODE"
+    },
+    {
+      "id": 17,
+      "path": "studio/studioapp.js",
+      "type": "FRONTEND_APP",
+      "description": "Trading Studio Pro (Lightweight) — talks to server Node 4000. Symbol selection, timeframe, price charts, market hours badge, orders management. Canvas + localStorage persistence",
+      "category": "Frontend — Studio",
+      "loc": 1200,
+      "exports": [
+        "window.state (global state object)",
+        "window.loadMT5Data()",
+        "window.getPositions()",
+        "window.sendTradeOrder()",
+        "window.bindBtn(...)",
+        "window.applyPersistedState()"
+      ],
+      "dependencies": {
+        "external": [
+          "TradingView Lightweight Charts (LW Charts v4.1.3)",
+          "JSON (localStorage)"
+        ],
+        "internal": [
+          "API: http://127.0.0.1:4000"
+        ]
+      },
+      "key_functions": [
+        "loadState() / saveState() (localStorage)",
+        "updateMarketStatusBadge(symbol)",
+        "loadMT5Data()",
+        "getPositions()",
+        "sendTradeOrder(symbol, direction, entry, sl, tp)",
+        "bindBtn(btnId, handler)",
+        "applyPersistedState()",
+        "log(msg, level)"
+      ],
+      "state_persisted": [
+        "symbol",
+        "timeframe",
+        "mode (manual|auto)",
+        "brokerMode (paper|live)",
+        "tradeMode (SNIPER|etc)"
+      ],
+      "features": [
+        "Market hours badge (open/closed timer)",
+        "Symbol mapping (canonical ↔ display)",
+        "Live price loading",
+        "Position management"
+      ],
+      "status": "ACTIVE (PRO version, 1200 lines)"
+    },
+    {
+      "id": 18,
+      "path": "studio/studioapp-simple.js",
+      "type": "FRONTEND_APP",
+      "description": "Trading Studio Lightweight — simplified version of studioapp.js. Same features, cleaner code. Talks to API :4000. State persistence, logging, health check",
+      "category": "Frontend — Studio",
+      "loc": 466,
+      "exports": [
+        "window.state (global)",
+        "window.loadMT5Data()",
+        "window.loadChart()",
+        "window.log(msg, level)",
+        "window.checkBridge()"
+      ],
+      "dependencies": {
+        "external": [
+          "TradingView Lightweight Charts (implied)",
+          "localStorage"
+        ],
+        "internal": [
+          "API: http://127.0.0.1:4000"
+        ]
+      },
+      "key_functions": [
+        "loadState() / saveState()",
+        "log(msg, level)",
+        "fetchAPI(endpoint) with AbortSignal.timeout(4000)",
+        "checkBridge() (health check)",
+        "loadMT5Data()",
+        "loadChart()"
+      ],
+      "server_health": "var _serverOnline (checked via /health endpoint)",
+      "circuit_breaker": "AbortSignal.timeout(4000) on all fetches",
+      "status": "ACTIVE (SIMPLE version, 466 lines)"
+    }
+  ],
+  "doublons_detected": [
+    {
+      "funcName": "normalizeSymbol",
+      "locations": [
+        "lib/symbol-normalizer.js (main implementation)",
+        "server.js line 54-82 (fallback minimaliste)"
+      ],
+      "severity": "MODERATE",
+      "note": "Fallback normalizeSymbol in server.js is copied logic for offline mode. Should extract to single function"
+    },
+    {
+      "funcName": "loadState / saveState",
+      "locations": [
+        "studio/studioapp.js",
+        "studio/studioapp-simple.js"
+      ],
+      "severity": "MINOR",
+      "note": "Both persist to localStorage identically. Could be extracted to shared util"
+    },
+    {
+      "funcName": "fetchAPI with timeout",
+      "locations": [
+        "studio/studioapp.js (fetch with timeout logic)",
+        "studio/studioapp-simple.js (AbortSignal.timeout(4000))"
+      ],
+      "severity": "MINOR",
+      "note": "Both implement circuit-breaker pattern. Could extract to shared fetch wrapper"
+    },
+    {
+      "funcName": "checkServerHealth",
+      "locations": [
+        "studio/studioapp.js (updateMarketStatusBadge)",
+        "studio/studioapp-simple.js (checkBridge via /health)"
+      ],
+      "severity": "MINOR",
+      "note": "Both check server status, different implementations. consolidate"
+    },
+    {
+      "funcName": "log function",
+      "locations": [
+        "studio/studioapp.js (window.log)",
+        "studio/studioapp-simple.js (window.log)"
+      ],
+      "severity": "MINOR",
+      "note": "nearly identical logging to DOM + console. Shared util recommended"
+    },
+    {
+      "funcName": "showSignal",
+      "locations": [
+        "public/background.js (for extension notifications)",
+        "public/popup.js (implied, displays analysis)"
+      ],
+      "severity": "MINOR",
+      "note": "Signal formatting duplicated. Extract signal formatter"
+    },
+    {
+      "funcName": "message handlers",
+      "locations": [
+        "public/content.js (chrome.runtime.onMessage)",
+        "realtime/chart-stream.js (ws.on('message'))"
+      ],
+      "severity": "LOW",
+      "note": "Different protocols (Chrome extension vs WebSocket), not really duplicate"
+    }
+  ],
+  "dependency_graph": {
+    "server_js_core": [
+      "lib/market-hours-checker",
+      "lib/symbol-normalizer",
+      "lib/candle-manager",
+      "lib/symbol-matcher"
+    ],
+    "candle_manager": [
+      "events (EventEmitter)",
+      "fs.promises",
+      "path"
+    ],
+    "realtime_system": [
+      "candle-manager (events)",
+      "realtime-manager (orchestrates events)",
+      "chart-stream (WebSocket frontend)"
+    ],
+    "frontend_studios": [
+      "studioapp.js (1200 lines, PRO)",
+      "studioapp-simple.js (466 lines, SIMPLE)"
+    ],
+    "extension": [
+      "content.js (minimal)",
+      "background.js (signal display, auto disabled)",
+      "popup.js (screenshot capture)"
+    ],
+    "debug_tools": [
+      "dev-helper.js (system info + repair button)"
+    ]
+  },
+  "coverage_analysis": {
+    "file_types": {
+      "core_libs": 6,
+      "ui_libs": 1,
+      "stream_engines": 2,
+      "debug_tools": 1,
+      "extension": 3,
+      "frontend": 2,
+      "legacy": 1,
+      "stubs": 1
+    },
+    "loc_breakdown": {
+      "backend": 2730,
+      "core_libs": 1788,
+      "realtime": 287,
+      "frontend": 1666,
+      "extension": 201,
+      "debug": 896,
+      "stubs": 12
+    }
+  },
+  "missing_or_broken": [
+    {
+      "module": "./store/market-store",
+      "referenced_in": "server.js line 48",
+      "status": "NOT_FOUND",
+      "severity": "CRITICAL",
+      "fallback": "Inline fallback object created line 54-82"
+    },
+    {
+      "module": "./src/agents/orchestrator",
+      "referenced_in": "server.js line 50",
+      "status": "NOT_FOUND",
+      "severity": "CRITICAL",
+      "fallback": "Set to null, orchestrator = null line 80"
+    },
+    {
+      "module": "./audit-logger",
+      "referenced_in": "server.js line 51",
+      "status": "NOT_FOUND",
+      "severity": "MODERATE",
+      "fallback": "Might exist in parent directory or cause errors on use"
+    },
+    {
+      "module": "./lib/zone-manager",
+      "referenced_in": "server.js line 185",
+      "status": "NOT_FOUND",
+      "severity": "MODERATE",
+      "note": "Referenced but not in audit directory"
+    },
+    {
+      "module": "./src/agents/news-intelligence",
+      "referenced_in": "server.js line 1333",
+      "status": "NOT_FOUND",
+      "severity": "MODERATE"
+    },
+    {
+      "module": "./trading/broker-adapter",
+      "referenced_in": "server.js line 1423",
+      "status": "NOT_FOUND",
+      "severity": "MODERATE"
+    },
+    {
+      "module": "./src/agents/coordinator",
+      "referenced_in": "server.js line 1444",
+      "status": "NOT_FOUND",
+      "severity": "MODERATE"
+    },
+    {
+      "module": "./symbol-preferences",
+      "referenced_in": "lib/data-source-manager.js line 52",
+      "status": "NOT_FOUND",
+      "severity": "CRITICAL",
+      "note": "External file needed for preferences system"
+    }
+  ],
+  "construction_status": {
+    "complete": [
+      "lib/candle-manager.js",
+      "lib/market-hours-checker.js",
+      "lib/symbol-normalizer.js",
+      "lib/symbol-matcher.js",
+      "realtime/realtime-manager.js",
+      "realtime/chart-stream.js",
+      "public/content.js (minimal)",
+      "studio/studioapp-simple.js"
+    ],
+    "in_progress": [
+      "server.js (2730 lines, needs modularization)",
+      "lib/data-source-manager.js (requires symbol-preferences)",
+      "public/background.js (auto-mode disabled)"
+    ],
+    "needs_work": [
+      "studio/studioapp.js (1200 lines, feature-rich)",
+      "lib/broker-calculator.js (multi-platform, complex)",
+      "lib/chart-renderer.js (Chart.js vs LW Charts conflict)"
+    ],
+    "deprecated": [
+      "public/server.js (port 3000, legacy capture server)",
+      "studio/app.js (stub, 1 line)"
+    ]
+  },
+  "tech_stack": {
+    "backend": [
+      "Node.js + Express.js",
+      "EventEmitter for real-time events",
+      "WebSocket for frontend streaming",
+      "File-based storage (mt5_data.json)",
+      "Child process for Python bridge"
+    ],
+    "frontend": [
+      "HTML5 Canvas / TradingView Lightweight Charts v4.1.3",
+      "Vanilla JavaScript (no framework)",
+      "localStorage for persistence",
+      "AbortSignal.timeout() for circuit-breaker",
+      "fetch API with timeout"
+    ],
+    "extension": [
+      "Chrome Extension Manifest v3",
+      "chrome.runtime API",
+      "chrome.tabs API",
+      "Screenshot capture → POST to server"
+    ]
+  },
+  "summary": {
+    "total_files": 18,
+    "total_loc": 8470,
+    "%_complete": "65%",
+    "core_ready": 6,
+    "core_total": 7,
+    "critical_gaps": 8,
+    "architecture": "Modular backend + real-time Candle Engine + Web frontend + Chrome extension",
+    "main_weakness": "Server.js needs router refactoring (2730 lines in single file)",
+    "main_strength": "Candle aggregation real-time system + market hours validation + multi-broker normalization"
+  }
+}

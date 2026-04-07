@@ -1,0 +1,26 @@
+﻿﻿console.log('STUDIO APP DEMARRE');
+
+async function checkServer() {
+  const el = document.getElementById('status');
+  try {
+    const res = await fetch('http://127.0.0.1:4000/health');
+    const data = await res.json();
+    console.log('SERVEUR CONNECTE', data);
+    if (el) {
+      el.textContent = '✅ CONNECTE';
+      el.style.color = 'lime';
+    }
+  } catch (e) {
+    console.error('SERVEUR NON CONNECTE', e);
+    if (el) {
+      el.textContent = '❌ NON CONNECTE';
+      el.style.color = 'red';
+    }
+  }
+}
+
+window.addEventListener('load', () => {
+  checkServer();
+  setInterval(checkServer, 3000);
+});
+

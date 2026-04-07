@@ -1,0 +1,79 @@
+{
+  "safeMode": {
+    "enabled": true,
+    "timestamp": "2026-04-02T00:00:00Z",
+    "reason": "Critical performance issue - infinite loops causing 100% CPU and system freeze"
+  },
+  "disabledFeatures": {
+    "agent_worker_polling": {
+      "was": "setInterval(loop, 5000) - polling tasks.json every 5 seconds",
+      "why": "Continuous fs.readFileSync + parsing caused CPU 100%",
+      "now": "DISABLED - call /check-agent-tasks on demand",
+      "reactivate": "POST /agent-worker/enable?interval=5000"
+    },
+    "extension_auto_capture": {
+      "was": "autoLoop() with while(autoMode) infinite loop",
+      "why": "Continuous chrome.tabs.captureVisibleTab in loop = CPU pegging",
+      "now": "DISABLED - screenshots only on user action",
+      "reactivate": "POST /extension/auto-mode/enable?interval=10000"
+    },
+    "price_stream_generator": {
+      "was": "while(true) generator polling prices infinitely",
+      "why": "Infinite generator = memory leak + CPU spike",
+      "now": "DISABLED - returns single snapshot instead",
+      "reactivate": "Not recommended - use HTTP /mt5/live endpoint"
+    },
+    "mt5_bridge_health_check": {
+      "was": "setInterval(checkMT5Bridge, 15000) - polling every 15 seconds",
+      "why": "HTTP requests to stalled bridge caused timeouts + retries",
+      "now": "DISABLED - call /mt5/status on demand",
+      "reactivate": "POST /mt5/health-check/enable?interval=60000"
+    },
+    "analysis_auto_loop": {
+      "was": "setInterval(analyze, 2000) - polling every 2 seconds",
+      "why": "Excessive fs.readFileSync + JSON.parse in tight loop",
+      "now": "DISABLED - call analyze via POST /analyze",
+      "reactivate": "POST /analyzer/enable?interval=5000 (minimum 1000ms)"
+    },
+    "continuous_orchestration": {
+      "was": "setInterval(runOrchestrationCycle, 30000) - every 30 seconds",
+      "why": "Ran regardless of active symbol - wasted CPU between trades",
+      "now": "DISABLED - trigger via POST /orchestration/run-now",
+      "reactivate": "POST /orchestration/enable?interval=60000"
+    }
+  },
+  "safeApiEndpoints": {
+    "status": {
+      "GET /health": "Server status",
+      "GET /orchestration-status": "Is orchestration auto running?",
+      "GET /mt5/status": "MT5 bridge connectivity",
+      "POST /mt5/health-check/enable": "Start MT5 health checks",
+      "POST /mt5/health-check/disable": "Stop MT5 health checks"
+    },
+    "manual_triggers": {
+      "POST /orchestration/run-now": "Execute one orchestration cycle NOW",
+      "POST /check-agent-tasks": "Poll tasks.json once",
+      "POST /analyze": "Run analysis once",
+      "POST /analyze/enable": "Enable auto-analysis with interval"
+    }
+  },
+  "guidelines": {
+    "rule_1": "Never enable multiple automatic loops simultaneously",
+    "rule_2": "Minimum interval between cycles: 1000ms (1 second)",
+    "rule_3": "Prefer HTTP polling (on-demand) over continuous loops",
+    "rule_4": "If CPU > 50%, disable auto features immediately",
+    "rule_5": "Monitor /system-log for 'error' or 'warn' status"
+  },
+  "reactivationSteps": {
+    "step_1": "Verify system is stable (CPU < 30%, Memory < 500MB for Node)",
+    "step_2": "Start with one feature only",
+    "step_3": "Use large intervals first (e.g., 60000ms = 60 seconds)",
+    "step_4": "Monitor /health endpoint continuously",
+    "step_5": "Gradually reduce intervals if needed"
+  },
+  "emergencyShutdown": {
+    "windows": "taskkill /F /IM node.exe",
+    "linux": "pkill -9 node",
+    "curl": "curl -X POST http://localhost:4000/orchestration/disable && curl -X POST http://localhost:4000/mt5/health-check/disable"
+  }
+}

@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Auto - Dashboard Trading</title>
+  <script src="/public/lightweight-charts.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      color: #e5edf8;
+      background:
+        radial-gradient(1200px 420px at 20% -10%, rgba(34, 197, 94, 0.14), transparent 60%),
+        radial-gradient(1000px 420px at 110% -15%, rgba(59, 130, 246, 0.16), transparent 60%),
+        linear-gradient(145deg, #07121f, #0a1a2d 60%, #0d223a);
+      padding: 20px;
+    }
+
+    .menu-button {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 10px 14px;
+      box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
+      z-index: 9;
+    }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding-top: 34px;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .title h1 {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      color: #f8fbff;
+    }
+
+    .title p {
+      margin-top: 6px;
+      color: #8ea4bf;
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-link {
+      border: 1px solid #2b4767;
+      color: #b9cbe2;
+      background: rgba(14, 31, 53, 0.9);
+      text-decoration: none;
+      padding: 8px 12px;
+      font-size: 12px;
+      border-radius: 8px;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .control-box {
+      background: rgba(12, 27, 45, 0.92);
+      border: 1px solid #24456a;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .control-box label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #6f8baa;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .control-box select,
+    .control-box button {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #2b4767;
+      background: #102740;
+      color: #e6eef8;
+      padding: 10px;
+      font-size: 13px;
+    }
+
+    .control-box button {
+      cursor: pointer;
+      font-weight: 700;
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      border-color: #0ea5e9;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .card {
+      background: linear-gradient(150deg, rgba(15, 32, 52, 0.96), rgba(10, 23, 39, 0.94));
+      border: 1px solid #25466b;
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 90px;
+    }
+
+    .card .lbl {
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #6e8cac;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .card .val {
+      font-size: 25px;
+      font-weight: 800;
+      color: #f6f9ff;
+      line-height: 1.1;
+      white-space: pre-line;
+    }
+
+    .val.up { color: #22c55e; }
+    .val.down { color: #ef4444; }
+    .val.warn { color: #f59e0b; }
+    .val.neutral { color: #93c5fd; font-size: 16px; }
+
+    .grid-main {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+    }
+
+    .panel {
+      background: rgba(10, 24, 40, 0.95);
+      border: 1px solid #25466b;
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 240px;
+    }
+
+    .panel h2 {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #9fc4ea;
+      margin-bottom: 10px;
+    }
+
+    #chartContainer {
+      width: 100%;
+      height: 320px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #091929;
+      border: 1px solid #1f3c5d;
+    }
+
+    .chart-note {
+      margin-top: 8px;
+      color: #7c98b6;
+      font-size: 12px;
+    }
+
+    .list {
+      display: grid;
+      gap: 8px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .item {
+      border: 1px solid #24456a;
+      background: rgba(13, 30, 50, 0.8);
+      border-radius: 8px;
+      padding: 9px;
+    }
+
+    .item .head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+
+    .badge.buy { background: rgba(34, 197, 94, 0.22); color: #86efac; }
+    .badge.sell { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
+    .badge.flat { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
+
+    .meta {
+      color: #99b1cb;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .signals {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .signal-box {
+      background: rgba(10, 24, 40, 0.95);
+      border: 1px solid #25466b;
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 120px;
+    }
+
+    .signal-box h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #9fc4ea;
+      margin-bottom: 8px;
+    }
+
+    .signal-text {
+      color: #d4e3f5;
+      font-size: 14px;
+      line-height: 1.55;
+      white-space: pre-line;
+    }
+
+    #coachText {
+      font-size: 15px;
+      line-height: 1.65;
+      font-weight: 600;
+    }
+
+    #coachText.coach-buy { color: #86efac; }
+    #coachText.coach-sell { color: #fca5a5; }
+    #coachText.coach-warn { color: #fbbf24; }
+    #coachText.coach-neutral { color: #cbd5e1; }
+
+    .coach-box {
+      background: rgba(11, 32, 53, 0.9);
+      border: 1px solid #245e8c;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .reasoning-box {
+      background: rgba(12, 30, 50, 0.8);
+      border: 1px dashed #2f5d85;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 8px;
+      color: #b9cde6;
+      white-space: pre-line;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .trade-actions {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+    }
+
+    .trade-actions button {
+      border-radius: 8px;
+      border: 1px solid #30567c;
+      background: #0f2b47;
+      color: #d5e6f8;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .trade-actions button:hover {
+      border-color: #3b82f6;
+      background: #123459;
+    }
+
+    .bridge-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin: 0 8px;
+      vertical-align: middle;
+      background: #6b7280;
+    }
+
+    .muted { color: #6f8baa; }
+
+    @media (max-width: 1000px) {
+      .grid-main { grid-template-columns: 1fr; }
+      .signals { grid-template-columns: 1fr; }
+      .title h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="menu-button">Retour Menu</a>
+
+  <div class="container">
+    <div class="topbar">
+      <div class="title">
+        <h1>Trading Dashboard</h1>
+        <p>Vue trading utilisateur: prix, bougies reelles, positions, historique et signaux.</p>
+      </div>
+      <div class="actions">
+        <a class="btn-link" href="AGENTS_MONITOR.html">Agents Monitor</a>
+        <a class="btn-link" href="/agent-log">Agent Live Log</a>
+        <a class="btn-link" href="/audit">Audit Dashboard</a>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="control-box">
+        <label>Symbole</label>
+        <select id="symbolSelect"></select>
+      </div>
+      <div class="control-box">
+        <label>Timeframe</label>
+        <select id="timeframeSelect">
+          <option value="M1">M1</option>
+          <option value="M5">M5</option>
+          <option value="M15">M15</option>
+          <option value="H1" selected>H1</option>
+          <option value="H4">H4</option>
+          <option value="D1">D1</option>
+        </select>
+      </div>
+      <div class="control-box">
+        <label>Mode</label>
+        <select id="tradeModeSelect">
+          <option value="AUTO" selected>AUTO</option>
+          <option value="SCALPER">SCALPER</option>
+          <option value="SNIPER">SNIPER</option>
+          <option value="SWING">SWING</option>
+          <option value="ANALYSE">ANALYSE</option>
+          <option value="ALERTE">ALERTE</option>
+          <option value="EXECUTION_PREPAREE">EXECUTION_PREPAREE</option>
+        </select>
+      </div>
+      <div class="control-box">
+        <label>Actualisation</label>
+        <button id="refreshBtn" type="button">Rafraichir maintenant</button>
+        <button id="analyzeBtn" type="button" style="margin-top:6px;">ANALYSER</button>
+        <button id="bridgeToggleBtn" type="button" style="margin-top:6px;">BRIDGE ON</button>
+        <button id="sourceTvBtn" type="button" style="margin-top:6px;">TradingView ON</button>
+        <button id="sourceMt5Btn" type="button" style="margin-top:6px;">MT5 OFF</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="card"><div class="lbl">Prix Live</div><div class="val" id="priceVal">--</div></div>
+      <div class="card"><div class="lbl">Spread</div><div class="val" id="spreadVal">--</div></div>
+      <div class="card"><div class="lbl">Direction</div><div class="val" id="dirVal">--</div></div>
+      <div class="card"><div class="lbl">Signal</div><div class="val" id="signalVal">--</div></div>
+      <div class="card"><div class="lbl">Source</div><div class="val" id="sourceVal">--</div></div>
+      <div class="card"><div class="lbl">Maj</div><div class="val" id="timeVal">--</div></div>
+      <div class="card"><div class="lbl">Cloture Bougie</div><div class="val neutral" id="candleCloseVal">--</div></div>
+    </div>
+
+    <div class="grid-main">
+      <div class="panel">
+        <h2>Graphique Bougies Reelles (MT5)</h2>
+        <div id="chartContainer"></div>
+        <div class="chart-note" id="chartNote">Chargement du flux de marche...</div>
+      </div>
+
+      <div class="panel">
+        <h2>Positions Ouvertes</h2>
+        <div class="list" id="positionsList">
+          <div class="item"><div class="meta muted">Chargement des positions...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="signals">
+      <div class="signal-box">
+        <h3>Signaux / Analyse</h3>
+        <div class="signal-text" id="analysisText">Analyse en attente...</div>
+      </div>
+      <div class="signal-box">
+        <h3>Coach Execution</h3>
+        <div class="coach-box">
+          <div class="signal-text" id="coachText">Coach en attente...</div>
+        </div>
+        <div class="reasoning-box" id="reasoningText">Raisonnement en attente...</div>
+      </div>
+    </div>
+
+    <div class="signals">
+      <div class="signal-box">
+        <h3>Statut Marche</h3>
+        <div class="signal-text" id="marketStatusText">Statut marche en attente...</div>
+      </div>
+      <div class="signal-box">
+        <h3>Sessions</h3>
+        <div class="signal-text" id="sessionOpeningsText">Sessions en attente...</div>
+      </div>
+    </div>
+
+    <div class="signal-box" style="margin-top: 12px;">
+      <h3>Actions Trade</h3>
+      <div class="trade-actions">
+        <button type="button" data-trade-action="ENTER">ENTER</button>
+        <button type="button" data-trade-action="BE">BE</button>
+        <button type="button" data-trade-action="TAKE_PROFIT">TAKE PROFIT</button>
+        <button type="button" data-trade-action="EXIT">EXIT</button>
+        <button type="button" data-trade-action="RETEST">RETEST</button>
+        <button type="button" data-trade-action="WAIT">WAIT</button>
+      </div>
+      <div class="coach-box">
+        <div class="signal-text" id="positionCoachText">Aucune position active. Attendre une entree validee.</div>
+      </div>
+    </div>
+
+    <div class="signals">
+      <div class="signal-box">
+        <h3>Historique Simple</h3>
+        <div class="list" id="historyList">
+          <div class="item"><div class="meta muted">Chargement historique...</div></div>
+        </div>
+      </div>
+      <div class="signal-box" style="border-color:#7c3aed;">
+        <h3 style="color:#c4b5fd;">ROBOT V12 FR - Bridge TradingView <span class="bridge-dot" id="robotBridgeDot"></span><span id="robotBridgeStatus">Non connecte</span></h3>
+        <div class="reasoning-box" id="robotMacro">Verdict: --</div>
+        <div class="reasoning-box" id="robotScores">Short: -- | Long: --</div>
+        <div class="reasoning-box" id="robotAnticipation">RAS</div>
+        <div class="reasoning-box" id="robotTech">Lectures multi-TF indisponibles.</div>
+        <div class="reasoning-box" id="robotZones">Zones de liquidite indisponibles.</div>
+        <div class="reasoning-box" id="robotWebhookUrl">Webhook TradingView: http://127.0.0.1:4000/bridge/robot-v12</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+        // --- NO DATA HANDLER ---
+        function handleNoData() {
+          setText('priceVal', 'NO DATA');
+          setText('spreadVal', 'NO DATA');
+          setText('dirVal', 'NO DATA');
+          setText('signalVal', 'NO DATA');
+          setText('sourceVal', 'NO DATA');
+          setText('timeVal', 'NO DATA');
+          setText('candleCloseVal', 'NO DATA');
+          setText('analysisText', 'NO DATA');
+          setText('coachText', 'NO DATA');
+          setText('reasoningText', 'NO DATA');
+          setText('marketStatusText', 'NO DATA');
+          setText('sessionOpeningsText', 'NO DATA');
+          setText('positionCoachText', 'NO DATA');
+          setText('chartNote', 'NO DATA');
+          var chart = document.getElementById('chartContainer');
+          if (chart) chart.innerHTML = '<div style="color:#f87171;font-weight:bold;padding:20px;">NO DATA</div>';
+        }
+        // --- POLL LIVE DATA WITH NO DATA CHECK ---
+        async function pollLiveData() {
+          try {
+            const res = await fetch(API + '/extension/data', { method: 'GET', headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+            if (!data || typeof data.price !== 'number' || !data.candles || !Array.isArray(data.candles) || data.candles.length === 0 || data.status !== 'LIVE') {
+              handleNoData();
+              return;
+            }
+            // Données valides : update normal (rien à faire ici, le code existant gère l'affichage)
+          } catch (e) {
+            handleNoData();
+          }
+        }
+        // --- POLL COACH DATA WITH NO DATA CHECK ---
+        async function pollCoachData() {
+          try {
+            const res = await fetch(API + '/coach/realtime', { method: 'GET', headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+            if (!data || !data.decision || data.status !== 'LIVE') {
+              handleNoData();
+              return;
+            }
+            // Données valides : update normal (rien à faire ici, le code existant gère l'affichage)
+          } catch (e) {
+            handleNoData();
+          }
+        }
+      // --- ACTIVATE POLLING ---
+      setInterval(pollLiveData, 1500);
+      setInterval(pollCoachData, 1500);
+    const API = 'http://127.0.0.1:4000';
+    const BASE_SYMBOL_GROUPS = [
+      { label: 'Metaux', symbols: ['XAUUSD', 'XAGUSD', 'XPTUSD'] },
+      { label: 'Forex Majeurs', symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD'] },
+      { label: 'Forex Mineurs', symbols: ['EURGBP', 'EURJPY', 'EURAUD', 'EURNZD', 'EURCAD', 'EURCHF', 'GBPJPY', 'GBPAUD', 'GBPNZD', 'GBPCAD', 'GBPCHF', 'AUDJPY', 'AUDNZD', 'AUDCAD', 'AUDCHF', 'NZDJPY', 'NZDCAD', 'NZDCHF', 'CADJPY', 'CADCHF', 'CHFJPY'] },
+      { label: 'Indices', symbols: ['NAS100', 'US30', 'SPX500', 'GER40', 'UK100', 'JPN225', 'HK50', 'AUS200'] },
+      { label: 'Energie', symbols: ['WTI', 'BRENT', 'NATGAS'] },
+      { label: 'Crypto', symbols: ['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD'] }
+    ];
+
+    const state = {
+      symbol: 'XAUUSD',
+      timeframe: 'H1',
+      tradeMode: 'AUTO',
+      agentSessionActive: false,
+      bridgeConfig: {
+        agentName: 'orchestrator',
+        bridgeSource: 'tradingview',
+        activeSource: 'tradingview',
+        bridgeMode: 'AUTO',
+        bridgeEnabled: true,
+        tradingviewEnabled: true,
+        mt5Enabled: false,
+        sendPreAlerts: true,
+        sendSignals: true,
+        symbolAliasBridge: ''
+      },
+      lastLiveCoachRefreshAt: 0,
+      prices: [],
+      sse: null,
+      realtime: null,
+      lastPushedContext: '',
+      candleRemaining: null,
+      candleCountdownTimer: null
+    };
+
+    async function setAgentSession(active, trigger) {
+      try {
+        if (active) {
+          await fetchJson('/orchestration/enable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interval: 30000, trigger: trigger || 'manual' })
+          });
+          await fetchJson('/orchestration/run-now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trigger: trigger || 'manual' })
+          });
+          state.agentSessionActive = true;
+          return;
+        }
+        await fetchJson('/orchestration/disable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trigger: trigger || 'manual' })
+        });
+        state.agentSessionActive = false;
+      } catch (_e) {}
+    }
+
+    let lwChart = null;
+    let candleSeries = null;
+    let entryPriceLine = null;
+    let slPriceLine = null;
+    let tpPriceLine = null;
+
+    function buildRealtimePath() {
+      return '/coach/realtime?symbol=' + encodeURIComponent(state.symbol) +
+        '&tf=' + encodeURIComponent(state.timeframe) +
+        '&mode=' + encodeURIComponent(state.tradeMode) +
+        '&lang=fr';
+    }
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function renderBridgeOffState() {
+      state.realtime = null;
+      setText('sourceVal', 'BRIDGE OFF');
+      setText('signalVal', 'OFF');
+      setText('analysisText', 'Bridge desactive. Donnees live gelees (dernier snapshot non actif).');
+      setText('coachText', 'Bridge desactive. Coach en pause.\nRelancez BRIDGE ON puis ANALYSER pour reprendre un suivi actif.');
+      const coachEl = document.getElementById('coachText');
+      if (coachEl) coachEl.className = 'signal-text coach-neutral';
+      setText('reasoningText', 'Bridge OFF | Raisonnement live suspendu | Donnees affichees non actives.');
+      setText('marketStatusText', 'Bridge OFF');
+      setText('sessionOpeningsText', 'Bridge OFF');
+      setText('positionCoachText', 'Bridge OFF. Reactivez le bridge pour reprendre le suivi.');
+      const enterBtn = document.querySelector('[data-trade-action="ENTER"]');
+      if (enterBtn) {
+        enterBtn.disabled = true;
+        enterBtn.title = 'Bridge inactif: entrée désactivée.';
+      }
+      setText('chartNote', 'BRIDGE OFF | FLUX LIVE SUSPENDU | ' + new Date().toLocaleTimeString('fr-FR'));
+
+      const root = document.getElementById('positionsList');
+      if (root) {
+        root.innerHTML = '<div class="item"><div class="meta muted">Bridge OFF - aucune action live en cours.</div></div>';
+      }
+
+      const dot = document.getElementById('robotBridgeDot');
+      const statusEl = document.getElementById('robotBridgeStatus');
+      if (dot) dot.style.background = '#6b7280';
+      if (statusEl) statusEl.textContent = 'Bridge OFF - synchronisation TradingView suspendue';
+
+      const historyRoot = document.getElementById('historyList');
+      if (historyRoot) {
+        historyRoot.innerHTML = '<div class="item"><div class="meta muted">Bridge OFF - historique live gelé.</div></div>';
+      }
+
+      renderRobotV12(null);
+    }
+
+    function setSourceToggleButtons() {
+      const tvBtn = document.getElementById('sourceTvBtn');
+      const mt5Btn = document.getElementById('sourceMt5Btn');
+      const active = String(state.bridgeConfig.activeSource || 'tradingview').toLowerCase() === 'mt5' ? 'mt5' : 'tradingview';
+      const tvOn = active === 'tradingview' && state.bridgeConfig.tradingviewEnabled !== false;
+      const mt5On = active === 'mt5' && state.bridgeConfig.mt5Enabled === true;
+      if (tvBtn) tvBtn.textContent = tvOn ? 'TradingView ON' : 'TradingView OFF';
+      if (mt5Btn) mt5Btn.textContent = mt5On ? 'MT5 ON' : 'MT5 OFF';
+    }
+
+    async function toggleSource(nextSource) {
+      const source = String(nextSource || '').toLowerCase() === 'mt5' ? 'mt5' : 'tradingview';
+      try {
+        await fetchJson('/extension/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command: 'set-bridge-config',
+            payload: source === 'tradingview'
+              ? {
+                  activeSource: 'tradingview',
+                  tradingviewEnabled: true,
+                  mt5Enabled: false,
+                  updatedBy: 'dashboard-source-toggle'
+                }
+              : {
+                  activeSource: 'mt5',
+                  tradingviewEnabled: false,
+                  mt5Enabled: true,
+                  updatedBy: 'dashboard-source-toggle'
+                }
+          })
+        });
+      } catch (_e) {}
+    }
+
+    function applyBridgeConfig(cfg) {
+      if (!cfg) return;
+      state.bridgeConfig = Object.assign({}, state.bridgeConfig, cfg);
+      if (state.bridgeConfig.activeSource !== 'mt5') state.bridgeConfig.activeSource = 'tradingview';
+      const enabled = state.bridgeConfig.bridgeEnabled !== false;
+      const bridgeBtn = document.getElementById('bridgeToggleBtn');
+      if (bridgeBtn) bridgeBtn.textContent = enabled ? 'BRIDGE ON' : 'BRIDGE OFF';
+      const dot = document.getElementById('robotBridgeDot');
+      const statusEl = document.getElementById('robotBridgeStatus');
+      if (enabled) {
+        if (dot) dot.style.background = '#22c55e';
+        if (statusEl) statusEl.textContent = 'Bridge ACTIF - synchronisation en cours';
+      } else {
+        if (dot) dot.style.background = '#6b7280';
+        if (statusEl) statusEl.textContent = 'Bridge OFF - synchronisation TradingView suspendue';
+      }
+      if (state.bridgeConfig.bridgeMode) {
+        state.tradeMode = String(state.bridgeConfig.bridgeMode).toUpperCase();
+      }
+      const modeSelect = document.getElementById('tradeModeSelect');
+      if (modeSelect && Array.from(modeSelect.options).some((o) => o.value === state.tradeMode)) {
+        modeSelect.value = state.tradeMode;
+      }
+      if (enabled) {
+        const src = String(state.bridgeConfig.activeSource || state.bridgeConfig.bridgeSource || 'tradingview').toUpperCase();
+        setText('sourceVal', src);
+      } else if (!enabled) {
+        setText('sourceVal', 'BRIDGE OFF');
+      }
+      setSourceToggleButtons();
+    }
+
+    async function fetchJson(path, options) {
+      const r = await fetch(API + path, options || { headers: { 'Accept': 'application/json' } });
+      const t = await r.text();
+      let d = {};
+      try { d = JSON.parse(t || '{}'); } catch (_e) { throw new Error('Reponse non JSON'); }
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      return d;
+    }
+
+    function formatPrice(v) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return '--';
+      if (Math.abs(n) >= 1000) return n.toFixed(2);
+      return n.toFixed(5);
+    }
+
+    function populateSymbolSelect() {
+      const select = document.getElementById('symbolSelect');
+      if (!select) return;
+      select.innerHTML = '';
+
+      BASE_SYMBOL_GROUPS.forEach((group) => {
+        const og = document.createElement('optgroup');
+        og.label = group.label;
+        group.symbols.forEach((sym) => {
+          const opt = document.createElement('option');
+          opt.value = sym;
+          opt.textContent = sym;
+          if (sym === state.symbol) opt.selected = true;
+          og.appendChild(opt);
+        });
+        select.appendChild(og);
+      });
+    }
+
+    function initLwChart() {
+      const container = document.getElementById('chartContainer');
+      if (!container || !window.LightweightCharts) return;
+
+      if (lwChart) {
+        try { lwChart.remove(); } catch (_e) {}
+      }
+
+      lwChart = window.LightweightCharts.createChart(container, {
+        width: container.clientWidth || 900,
+        height: 320,
+        layout: { background: { color: '#091929' }, textColor: '#9fc4ea' },
+        grid: { vertLines: { color: 'rgba(55,95,140,0.25)' }, horzLines: { color: 'rgba(55,95,140,0.25)' } },
+        rightPriceScale: { borderColor: '#1f3c5d' },
+        timeScale: { borderColor: '#1f3c5d', timeVisible: true, secondsVisible: false },
+        crosshair: { mode: 1 }
+      });
+
+      candleSeries = lwChart.addCandlestickSeries({
+        upColor: '#22c55e',
+        downColor: '#ef4444',
+        wickUpColor: '#22c55e',
+        wickDownColor: '#ef4444',
+        borderVisible: false
+      });
+    }
+
+    function renderTradeLevelsOnChart(positionLike) {
+      if (!candleSeries) return;
+      try {
+        if (entryPriceLine) { candleSeries.removePriceLine(entryPriceLine); entryPriceLine = null; }
+        if (slPriceLine) { candleSeries.removePriceLine(slPriceLine); slPriceLine = null; }
+        if (tpPriceLine) { candleSeries.removePriceLine(tpPriceLine); tpPriceLine = null; }
+      } catch (_e) {}
+
+      if (!positionLike) return;
+
+      const entry = Number(positionLike.entry);
+      const sl = Number(positionLike.sl);
+      const tp = Number(positionLike.tp);
+
+      if (Number.isFinite(entry) && entry > 0) {
+        entryPriceLine = candleSeries.createPriceLine({
+          price: entry,
+          color: '#60a5fa',
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: 'ENTRY'
+        });
+      }
+      if (Number.isFinite(sl) && sl > 0) {
+        slPriceLine = candleSeries.createPriceLine({
+          price: sl,
+          color: '#ef4444',
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: 'SL'
+        });
+      }
+      if (Number.isFinite(tp) && tp > 0) {
+        tpPriceLine = candleSeries.createPriceLine({
+          price: tp,
+          color: '#22c55e',
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: 'TP'
+        });
+      }
+    }
+
+    async function loadCandleChart() {
+      // Source unique : TradingView live
+      try {
+        const ext = await fetchJson('/extension/data');
+        if (!ext.ok || !ext.activeSymbol || !ext.currentData || !Array.isArray(ext.currentData.candles)) {
+          const note = document.getElementById('chartNote');
+          if (note) note.textContent = 'NO DATA — aucune bougie TradingView live.';
+          return;
+        }
+        const candles = ext.currentData.candles.map((c) => ({
+          time: Math.floor((Number(c.time) > 1e12 ? Number(c.time) : Number(c.time) * 1000) / 1000),
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close)
+        })).filter((c) => Number.isFinite(c.time) && c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0)
+          .sort((a, b) => a.time - b.time);
+        if (!lwChart || !candleSeries) initLwChart();
+        if (!candleSeries) return;
+        if (candles.length === 0) {
+          const note = document.getElementById('chartNote');
+          if (note) note.textContent = 'NO DATA — bougies TradingView invalides.';
+          return;
+        }
+        candleSeries.setData(candles);
+        lwChart.timeScale().fitContent();
+        const note = document.getElementById('chartNote');
+        if (note) note.textContent = candles.length + ' bougies TradingView live | ' + ext.activeSymbol.symbol + ' ' + ext.activeSymbol.timeframe + ' | ' + new Date().toLocaleTimeString('fr-FR');
+        state.prices = candles.map((c) => c.close);
+        const vp = state.realtime?.virtualPosition || null;
+        const tr = state.realtime?.instantTrade || null;
+        renderTradeLevelsOnChart(vp || tr || null);
+      } catch (_e) {
+        const note = document.getElementById('chartNote');
+        if (note) note.textContent = 'NO DATA — TradingView live indisponible.';
+      }
+    }
+
+    function updateSymbolSelectOptions(symbolEntries) {
+      const symbolSelect = document.getElementById('symbolSelect');
+      if (!symbolSelect) return;
+
+      const unique = Array.from(new Set((Array.isArray(symbolEntries) ? symbolEntries : [])
+        .map((entry) => (typeof entry === 'string' ? entry : entry?.symbol))
+        .map((s) => String(s || '').toUpperCase())
+        .filter(Boolean)));
+
+      Array.from(symbolSelect.options).forEach((opt) => {
+        const isLive = unique.includes(opt.value);
+        const base = opt.textContent.replace(/^●\s*/, '');
+        opt.textContent = isLive ? ('● ' + base) : base;
+        opt.style.fontWeight = isLive ? '800' : '';
+        opt.style.color = isLive ? '#22c55e' : '';
+      });
+
+      const existingValues = Array.from(symbolSelect.options).map((o) => o.value);
+      unique.forEach((sym) => {
+        if (!existingValues.includes(sym)) {
+          const opt = document.createElement('option');
+          opt.value = sym;
+          opt.textContent = '● ' + sym;
+          opt.style.fontWeight = '800';
+          opt.style.color = '#22c55e';
+          symbolSelect.appendChild(opt);
+        }
+      });
+    }
+
+    async function loadLiveSymbols() {
+      try {
+        const prev = state.symbol;
+        const d = await fetchJson('/mt5/live-symbols');
+        const symbols = Array.isArray(d.symbols) ? d.symbols : [];
+        updateSymbolSelectOptions(symbols);
+
+        const values = Array.from(document.getElementById('symbolSelect').options).map((o) => o.value);
+        if (values.includes(prev)) {
+          document.getElementById('symbolSelect').value = prev;
+        }
+      } catch (_e) {}
+    }
+
+    function renderCandleCloseLabel() {
+      const sec = Number(state.candleRemaining);
+      if (!Number.isFinite(sec) || sec < 0) {
+        setText('candleCloseVal', '--');
+        return;
+      }
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      setText('candleCloseVal', m + 'm ' + String(s).padStart(2, '0') + 's');
+    }
+
+    async function loadCandleClosure() {
+      try {
+        const secFromRealtime = Number(state.realtime?.candleClosure?.secondsRemaining);
+        if (Number.isFinite(secFromRealtime)) {
+          state.candleRemaining = Math.max(0, secFromRealtime);
+          renderCandleCloseLabel();
+          return;
+        }
+        const d = await fetchJson('/chart-data?symbol=' + encodeURIComponent(state.symbol) + '&timeframe=' + encodeURIComponent(state.timeframe));
+        const sec = Number(d?.closure?.secondsRemaining);
+        state.candleRemaining = Number.isFinite(sec) ? Math.max(0, sec) : null;
+        renderCandleCloseLabel();
+      } catch (_e) {
+        state.candleRemaining = null;
+        renderCandleCloseLabel();
+      }
+    }
+
+    function startCandleCountdown() {
+      if (state.candleCountdownTimer) clearInterval(state.candleCountdownTimer);
+      state.candleCountdownTimer = setInterval(() => {
+        if (!Number.isFinite(state.candleRemaining)) return;
+        state.candleRemaining = Math.max(0, state.candleRemaining - 1);
+        renderCandleCloseLabel();
+      }, 1000);
+    }
+
+    async function loadMarket() {
+      // Source unique : TradingView live
+      try {
+        const ext = await fetchJson('/extension/data');
+        if (!ext.ok || !ext.activeSymbol || !ext.currentData || typeof ext.currentData.price !== 'number') {
+          setText('priceVal', 'NO DATA');
+          setText('spreadVal', '--');
+          setText('sourceVal', 'NO DATA');
+          return;
+        }
+        setText('priceVal', formatPrice(ext.currentData.price));
+        setText('spreadVal', '--');
+        setText('sourceVal', 'TradingView');
+      } catch (_e) {
+        setText('priceVal', 'NO DATA');
+        setText('spreadVal', '--');
+        setText('sourceVal', 'NO DATA');
+      }
+      setText('timeVal', new Date().toLocaleTimeString('fr-FR'));
+    }
+
+    async function loadBridgeRobotStatus() {
+      try {
+        const d = await fetchJson('/bridge/robot-v12/status?symbol=' + encodeURIComponent(state.symbol));
+        return d?.robotV12 || null;
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    function renderRobotV12(v12) {
+      const dot = document.getElementById('robotBridgeDot');
+      const statusEl = document.getElementById('robotBridgeStatus');
+
+      if (!v12 || !v12.receivedAt) {
+        if (dot) dot.style.background = '#6b7280';
+        if (statusEl) statusEl.textContent = 'Non connecte - configurer alerte TradingView vers http://127.0.0.1:4000/bridge/robot-v12';
+        setText('robotMacro', 'Verdict: --');
+        setText('robotScores', 'Short: -- | Long: --');
+        setText('robotAnticipation', 'RAS');
+        setText('robotTech', 'Lectures multi-TF indisponibles.');
+        setText('robotZones', 'Zones de liquidite indisponibles.');
+        return;
+      }
+
+      const ageMs = Date.now() - new Date(v12.receivedAt).getTime();
+      const fresh = ageMs < 120000;
+      if (dot) dot.style.background = fresh ? '#22c55e' : '#f59e0b';
+      if (statusEl) {
+        statusEl.textContent = fresh
+          ? ('CONNECTE - ' + new Date(v12.receivedAt).toLocaleTimeString('fr-FR'))
+          : ('Dernier signal: ' + Math.round(ageMs / 1000) + 's');
+      }
+
+      setText('robotMacro', 'Verdict: ' + (v12.verdict || '--') +
+        '\nMacro bear: ' + (v12.macro_bear ?? '--') + '% | Macro bull: ' + (v12.macro_bull ?? '--') + '%\nContexte: ' + (v12.contexte || '--'));
+
+      setText('robotScores', 'Short: ' + (v12.short_score ?? '--') + '% | Long: ' + (v12.long_score ?? '--') + '%\nZone proche: ' + (v12.zone_proche || 'RAS'));
+
+      const antTxt = (v12.anticipation || 'RAS') + ' - ' + (v12.anticipation_force ?? '--') + '%';
+      setText('robotAnticipation', antTxt);
+      const antEl = document.getElementById('robotAnticipation');
+      if (antEl) {
+        const a = String(v12.anticipation || '').toUpperCase();
+        antEl.style.color = a.includes('LONG') ? '#22c55e' : (a.includes('SHORT') ? '#ef4444' : '#9fc4ea');
+      }
+
+      const r1 = Number(v12.rsi_1m);
+      const r5 = Number(v12.rsi_5m);
+      const r15 = Number(v12.rsi_15m);
+      const r60 = Number(v12.rsi_60m);
+      setText('robotTech',
+        '1m: ' + (v12.lecture_1m || '--') + ' (RSI ' + (Number.isFinite(r1) ? r1.toFixed(1) : '--') + ')' +
+        '\n5m: ' + (v12.lecture_5m || '--') + ' (RSI ' + (Number.isFinite(r5) ? r5.toFixed(1) : '--') + ')' +
+        '\n15m: ' + (v12.lecture_15m || '--') + ' (RSI ' + (Number.isFinite(r15) ? r15.toFixed(1) : '--') + ')' +
+        '\n1h: ' + (v12.lecture_60m || '--') + ' (RSI ' + (Number.isFinite(r60) ? r60.toFixed(1) : '--') + ')'
+      );
+
+      setText('robotZones',
+        'Zone haute: ' + (v12.liq_haute_active ? 'ACTIVE' : 'off') + ' | Zone basse: ' + (v12.liq_basse_active ? 'ACTIVE' : 'off') +
+        '\nTop zone: ' + (v12.in_top_zone ? 'OUI' : 'non') + ' | Bot zone: ' + (v12.in_bot_zone ? 'OUI' : 'non') +
+        '\nVolume: ' + (v12.volume_etat || '--') + ' | RSI etat: ' + (v12.rsi_etat || '--')
+      );
+    }
+
+    async function loadAnalysis() {
+      if (state.bridgeConfig.bridgeEnabled === false) {
+        renderRobotV12(null);
+        return;
+      }
+      if (!state.agentSessionActive || !state.realtime) {
+        setText('signalVal', 'WAIT');
+        setText('analysisText', 'Session agent inactive. Cliquez ANALYSER pour lancer une analyse réelle.');
+        setText('coachText', 'Coach inactif. Cliquez ENTRER après validation pour activer le suivi live.');
+        setText('reasoningText', 'Raisonnement live en attente d\'activation.');
+        setText('positionCoachText', 'Aucune position active. Utilisez ANALYSER puis ENTER.');
+        const enterBtn = document.querySelector('[data-trade-action="ENTER"]');
+        if (enterBtn) {
+          enterBtn.disabled = true;
+          enterBtn.title = 'Analyse requise avant entrée.';
+        }
+        return;
+      }
+      try {
+        const a = state.realtime?.coach || {};
+        const execution = state.realtime?.execution || a?.execution || {};
+        const canEnter = execution.canEnter === true;
+        const execDecision = String(execution.decision || '').toUpperCase();
+        const reasoning = state.realtime?.tradeReasoning || {};
+        const marketStatus = state.realtime?.marketStatus || {};
+        const sessions = marketStatus?.sessions || {};
+        const signal = String(a?.agents?.analysis?.recommendation || a?.signal?.verdict || '--').toUpperCase();
+        setText('signalVal', signal === '--' ? 'NEUTRE' : signal);
+
+        const explain = a?.agents?.explainer;
+        const reasons = Array.isArray(explain?.whyEntry) ? explain.whyEntry.slice(0, 4).join(' | ') : '';
+        const txt = [
+          'Raison: ' + (a?.agents?.analysis?.reason || a?.signal?.rationale || 'n/a'),
+          'Logique: ' + (a?.agents?.strategy?.logic || 'n/a'),
+          'Impact news: ' + (a?.agents?.news?.symbolImpact || 'n/a'),
+          reasons ? ('Pourquoi entree: ' + reasons) : ''
+        ].filter(Boolean).join('\n');
+
+        const coachBaseText = ((a?.lia?.ok ? a?.lia?.response : '') || a?.goldCoach?.summary || 'Attendre confirmation structure avant toute entree.').trim();
+        const coachSourceTag = a?.lia?.ok ? '[IA LIVE]' : '[FALLBACK LIVE]';
+        const coachText = coachSourceTag + '\n' + coachBaseText;
+
+        const whyEntry = Array.isArray(reasoning?.whyEntry) ? reasoning.whyEntry.slice(0, 3).join(' | ') : 'n/a';
+        const whySl = Array.isArray(reasoning?.whySl) ? reasoning.whySl.slice(0, 2).join(' | ') : 'n/a';
+        const whyTp = Array.isArray(reasoning?.whyTp) ? reasoning.whyTp.slice(0, 2).join(' | ') : 'n/a';
+        const duration = reasoning?.expectedDuration || '--';
+        const style = reasoning?.setupType || '--';
+        const priceConsistency = state.realtime?.priceConsistency || {};
+        const priceLine = (typeof priceConsistency.coherent === 'boolean')
+          ? ('Prix décision/header/graph: ' + (priceConsistency.coherent ? 'COHÉRENT' : 'INCOHÉRENT') +
+             ' | décision=' + (priceConsistency.decisionPrice != null ? formatPrice(priceConsistency.decisionPrice) : '--') +
+             ' | header=' + (priceConsistency.headerPrice != null ? formatPrice(priceConsistency.headerPrice) : '--') +
+             ' | graph=' + (priceConsistency.chartPrice != null ? formatPrice(priceConsistency.chartPrice) : '--'))
+          : 'Prix décision/header/graph: n/a';
+
+        const sessionsText = Array.isArray(sessions?.sessions)
+          ? sessions.sessions.slice(0, 4).map((s) => s.label + ': ' + (s.isOpen ? ('OUVERT (' + (s.closesInFormatted || '--') + ')') : ('ouvre dans ' + (s.opensInFormatted || '--')))).join(' | ')
+          : 'Sessions indisponibles';
+        const overlapText = Array.isArray(sessions?.overlaps)
+          ? sessions.overlaps.map((o) => o.label + ': ' + (o.isOpen ? ('ACTIF (' + (o.closesInFormatted || '--') + ')') : ('dans ' + (o.opensInFormatted || '--')))).join(' | ')
+          : 'Overlaps indisponibles';
+        const marketGate = reasoning?.marketGate || (marketStatus?.isOpen ? 'Marche ouvert.' : 'Marche ferme.');
+
+        setText('analysisText', txt || 'Signal analyse disponible.');
+        setText('coachText', coachText);
+        if (execDecision === 'NO_ENTRY_CONFLICT') {
+          setText('positionCoachText', 'PAS D\'ENTRÉE / CONFLIT DE SIGNAL. Attendre alignement TradingView.');
+        } else if (canEnter) {
+          setText('positionCoachText', 'ENTRÉE VALIDÉE: vous pouvez cliquer ENTER.');
+        } else {
+          setText('positionCoachText', 'ENTRÉE NON VALIDÉE: attendre confirmation, ne pas entrer maintenant.');
+        }
+
+        const enterBtn = document.querySelector('[data-trade-action="ENTER"]');
+        if (enterBtn) {
+          enterBtn.disabled = !canEnter;
+          enterBtn.title = canEnter
+            ? 'Entrée validée par le coach.'
+            : (execution.reason || (execDecision === 'NO_ENTRY_CONFLICT'
+              ? 'Conflit de signal: entrée bloquée.'
+              : 'Entrée non validée: attendre confirmation.'));
+        }
+
+        const coachEl = document.getElementById('coachText');
+        if (coachEl) {
+          const rec = String(signal || '').toUpperCase();
+          const blocked = String(marketGate || '').toUpperCase().includes('FERM') || String(marketGate || '').toUpperCase().includes('BLOC');
+          if (blocked || rec.includes('WAIT') || rec.includes('ATTENTE') || rec === '--') coachEl.className = 'signal-text coach-warn';
+          else if (rec.includes('SELL') || rec.includes('SHORT') || rec.includes('VENTE')) coachEl.className = 'signal-text coach-sell';
+          else if (rec.includes('BUY') || rec.includes('LONG') || rec.includes('ACHAT')) coachEl.className = 'signal-text coach-buy';
+          else coachEl.className = 'signal-text coach-neutral';
+        }
+        setText('reasoningText', [
+          'Style: ' + style + ' | Duree estimee: ' + duration,
+          'Pourquoi entree: ' + whyEntry,
+          'Pourquoi SL: ' + whySl,
+          'Pourquoi TP: ' + whyTp,
+          priceLine
+        ].join('\n'));
+        setText('marketStatusText', marketGate);
+        setText('sessionOpeningsText', sessionsText + '\n' + overlapText);
+
+        const robotFromRealtime = state.realtime?.robotV12 || state.realtime?.sync?.currentData?.robotV12 || null;
+        if (robotFromRealtime) {
+          renderRobotV12(robotFromRealtime);
+        } else {
+          const robotFromBridge = await loadBridgeRobotStatus();
+          renderRobotV12(robotFromBridge);
+        }
+      } catch (_e) {
+        setText('signalVal', 'N/A');
+        setText('analysisText', 'Analyse temporairement indisponible.');
+        setText('coachText', 'Coach trading temporairement indisponible.');
+        setText('reasoningText', 'Raisonnement indisponible.');
+        setText('marketStatusText', 'Statut marche indisponible.');
+        setText('sessionOpeningsText', 'Sessions indisponibles.');
+        renderRobotV12(null);
+      }
+    }
+
+    async function loadPositions() {
+      const root = document.getElementById('positionsList');
+      if (!root) return;
+
+      try {
+        const pack = state.realtime || await fetchJson(buildRealtimePath());
+        const vp = pack.virtualPosition || null;
+        const next = pack.nextAction || null;
+        const trade = pack.instantTrade || null;
+        const livePosition = trade || vp || null;
+
+        if (!livePosition) {
+          root.innerHTML = '<div class="item"><div class="meta muted">Aucune position ouverte detectee.</div></div>';
+          setText('positionCoachText', (next && next.primary) || 'Aucune position active. Attendre une entree validee.');
+          return;
+        }
+
+        const side = String(livePosition.direction || livePosition.side || 'flat').toLowerCase();
+        const badgeCls = side.includes('buy') || side.includes('long') ? 'buy' : (side.includes('sell') || side.includes('short') ? 'sell' : 'flat');
+        const currentPrice = vp?.currentPrice != null ? vp.currentPrice : (pack.chart?.price || pack.chart?.bid || null);
+        const pnlPoints = vp?.pnlPoints != null ? vp.pnlPoints : null;
+        const liveStatus = vp?.status || pack.tradeState?.phase || '--';
+        const liveGuidance = (next && next.primary) || vp?.lastGuidance || 'Suivi de position actif.';
+
+        root.innerHTML =
+          '<div class="item">' +
+            '<div class="head">' +
+              '<strong>' + state.symbol + '</strong>' +
+              '<span class="badge ' + badgeCls + '">' + (side || 'flat') + '</span>' +
+            '</div>' +
+            '<div class="meta">' +
+              'Entry: ' + formatPrice(livePosition.entry) + '<br>' +
+              'SL: ' + formatPrice(livePosition.sl) + '<br>' +
+              'TP: ' + formatPrice(livePosition.tp) + '<br>' +
+              'RR: ' + (livePosition.rrRatio || '--') + '<br>' +
+              'Prix live: ' + formatPrice(currentPrice) + '<br>' +
+              'PnL points: ' + (pnlPoints != null ? String(pnlPoints) : '--') + '<br>' +
+              'Phase: ' + liveStatus + '<br>' +
+              'Virtuel: ' + (vp ? (((vp.status || 'OPEN') + ' | progression ' + (vp.progressToTp ?? 0) + '%')) : 'oui') + '<br>' +
+              'Guidance: ' + liveGuidance +
+            '</div>' +
+          '</div>';
+
+        setText('positionCoachText', liveGuidance);
+      } catch (_e) {
+        root.innerHTML = '<div class="item"><div class="meta muted">Positions indisponibles pour le moment.</div></div>';
+        setText('positionCoachText', 'Suivi IA temporairement indisponible.');
+      }
+    }
+
+    async function loadHistory() {
+      const root = document.getElementById('historyList');
+      if (!root) return;
+      try {
+        const h = await fetchJson('/agents/history?limit=8');
+        const logs = Array.isArray(h.history) ? h.history : [];
+        if (logs.length === 0) {
+          root.innerHTML = '<div class="item"><div class="meta muted">Historique vide.</div></div>';
+          return;
+        }
+
+        root.innerHTML = logs.map((e) => {
+          const when = new Date(e.ts || Date.now()).toLocaleTimeString('fr-FR');
+          const active = e.summary && e.summary.active != null ? e.summary.active : '--';
+          const blocked = e.summary && e.summary.blocked != null ? e.summary.blocked : '--';
+          const action = 'Cycle agents: actifs=' + active + ' bloques=' + blocked;
+          return (
+            '<div class="item">' +
+              '<div class="head"><strong>history-agent</strong><span class="muted">' + when + '</span></div>' +
+              '<div class="meta">' + action + '</div>' +
+            '</div>'
+          );
+        }).join('');
+      } catch (_e) {
+        root.innerHTML = '<div class="item"><div class="meta muted">Historique indisponible.</div></div>';
+      }
+    }
+
+    async function sendTradeAction(action) {
+      try {
+        const actionName = String(action || '').toUpperCase();
+        if (actionName === 'ENTER' || actionName === 'OPEN') {
+          const execution = state.realtime?.execution || state.realtime?.coach?.execution || {};
+          if (execution.canEnter !== true) {
+            setText('positionCoachText', execution.reason || 'Entrée non validée: attendre confirmation, ne pas entrer.');
+            return;
+          }
+        }
+        setText('positionCoachText', 'Action en cours: ' + actionName + '...');
+
+        await fetchJson('/coach/trade-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            symbol: state.symbol,
+            timeframe: state.timeframe,
+            mode: state.tradeMode,
+            action
+          })
+        });
+
+        const upperAction = actionName;
+        if (upperAction === 'ENTER' || upperAction === 'OPEN') {
+          await setAgentSession(true, 'enter');
+        } else if (upperAction === 'EXIT' || upperAction === 'RETEST') {
+          await setAgentSession(false, 'exit');
+          // Nettoyage complet de l’état position/coach/tracés
+          if (entryPriceLine) { try { candleSeries.removePriceLine(entryPriceLine); } catch(_){} entryPriceLine = null; }
+          if (slPriceLine) { try { candleSeries.removePriceLine(slPriceLine); } catch(_){} slPriceLine = null; }
+          if (tpPriceLine) { try { candleSeries.removePriceLine(tpPriceLine); } catch(_){} tpPriceLine = null; }
+          setText('positionCoachText', 'Aucune position active. Surveillance en attente.');
+          setText('coachText', 'Coach inactif. Cliquez ANALYSER ou PATIENTER pour relancer la surveillance.');
+          setText('analysisText', 'Analyse en attente.');
+        }
+
+        if (action === 'ENTER' || action === 'OPEN') {
+          try {
+            const live = await fetchJson(buildRealtimePath());
+            const analysis = live?.coach?.agents?.analysis || {};
+            const risk = live?.coach?.agents?.risk || {};
+            const tr = live?.tradeReasoning || {};
+            const m = tr.metrics || {};
+            const conf = analysis.strength || analysis.confidence || '--';
+            const why = Array.isArray(tr.whyEntry) && tr.whyEntry.length ? tr.whyEntry[0] : (analysis.reason || 'Validation structure/prix');
+            setText('coachText', [
+              'ENTRÉE IA: ' + why,
+              'SL: ' + (m.stopLoss != null ? formatPrice(m.stopLoss) : '--') + ' | TP: ' + (m.takeProfit != null ? formatPrice(m.takeProfit) : '--'),
+              'Confiance: ' + conf + ' | Risque: ' + (risk.riskLevel || '--'),
+              'Action: ' + ((tr.management && tr.management.nextAction) || 'Surveiller le flux live')
+            ].join('\n'));
+          } catch (_e) {}
+        }
+
+        await refreshAll();
+        setText('positionCoachText', 'Action appliquee: ' + upperAction);
+      } catch (e) {
+        setText('positionCoachText', 'Echec action: ' + (e && e.message ? e.message : 'erreur inconnue'));
+      }
+    }
+
+    async function pushExtensionContext() {
+      return;
+    }
+
+    function handleSyncMessage(msg) {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'bridge-config') {
+        applyBridgeConfig(msg.bridgeConfig || msg);
+        return;
+      }
+      if (msg.type === 'mt5-data' || msg.type === 'tradingview-data') {
+        const src = msg.type === 'mt5-data' ? 'MT5' : 'TV';
+        setText('chartNote', 'BOT ACTIF | DONNÉES REÇUES | Source ' + src + ' | ' + new Date().toLocaleTimeString('fr-FR'));
+        const now = Date.now();
+        if (state.bridgeConfig.bridgeEnabled !== false && state.agentSessionActive && (now - state.lastLiveCoachRefreshAt) >= 1500) {
+          state.lastLiveCoachRefreshAt = now;
+          fetchJson(buildRealtimePath()).then((live) => {
+            state.realtime = live;
+            loadAnalysis();
+            loadPositions();
+          }).catch(() => {});
+        }
+        return;
+      }
+      const structuralSync = msg.type === 'initial-sync' || msg.type === 'active-symbol';
+      if (!structuralSync) {
+        if (msg.bridgeConfig) applyBridgeConfig(msg.bridgeConfig);
+        return;
+      }
+      const active = msg.activeSymbol || msg;
+
+      if (active.symbol) state.symbol = String(active.symbol).toUpperCase();
+      if (active.timeframe) state.timeframe = String(active.timeframe).toUpperCase();
+      if (active.mode) state.tradeMode = String(active.mode).toUpperCase();
+      if (msg.bridgeConfig) applyBridgeConfig(msg.bridgeConfig);
+
+      const symbolSelect = document.getElementById('symbolSelect');
+      const timeframeSelect = document.getElementById('timeframeSelect');
+      const modeSelect = document.getElementById('tradeModeSelect');
+
+      if (symbolSelect && Array.from(symbolSelect.options).some((o) => o.value === state.symbol)) symbolSelect.value = state.symbol;
+      if (timeframeSelect && Array.from(timeframeSelect.options).some((o) => o.value === state.timeframe)) timeframeSelect.value = state.timeframe;
+      if (modeSelect && Array.from(modeSelect.options).some((o) => o.value === state.tradeMode)) modeSelect.value = state.tradeMode;
+    }
+
+    function connectRealtimeSync() {
+      if (state.sse) {
+        try { state.sse.close(); } catch (_e) {}
+      }
+
+      state.sse = new EventSource(API + '/extension/sync');
+      state.sse.onmessage = async (event) => {
+        try {
+          const msg = JSON.parse(event.data || '{}');
+          handleSyncMessage(msg);
+          if (msg.type === 'initial-sync' || msg.type === 'active-symbol' || msg.type === 'bridge-config') {
+            await refreshAll();
+          }
+        } catch (_e) {}
+      };
+    }
+
+    async function refreshAll() {
+      if (state.bridgeConfig.bridgeEnabled === false) {
+        renderBridgeOffState();
+        return;
+      }
+
+      try {
+        const ext = await fetchJson('/extension/data');
+        applyBridgeConfig(ext.bridgeConfig || null);
+        const active = ext.activeSymbol || {};
+        if (active.symbol) state.symbol = String(active.symbol).toUpperCase();
+        if (active.timeframe) state.timeframe = String(active.timeframe).toUpperCase();
+        if (active.mode) state.tradeMode = String(active.mode).toUpperCase();
+
+        const symbolSelect = document.getElementById('symbolSelect');
+        const timeframeSelect = document.getElementById('timeframeSelect');
+        const modeSelect = document.getElementById('tradeModeSelect');
+        if (symbolSelect && Array.from(symbolSelect.options).some((o) => o.value === state.symbol)) symbolSelect.value = state.symbol;
+        if (timeframeSelect && Array.from(timeframeSelect.options).some((o) => o.value === state.timeframe)) timeframeSelect.value = state.timeframe;
+        if (modeSelect && Array.from(modeSelect.options).some((o) => o.value === state.tradeMode)) modeSelect.value = state.tradeMode;
+      } catch (_e) {}
+
+      try {
+        if (state.agentSessionActive) {
+          state.realtime = await fetchJson(buildRealtimePath());
+        } else {
+          state.realtime = null;
+        }
+      } catch (_e) {
+        state.realtime = null;
+      }
+
+      // Suppression de tout polling/fallback : pipeline unique TradingView
+      await loadCandleChart();
+      await loadMarket();
+      await loadAnalysis();
+      await loadPositions();
+      await loadHistory();
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+
+    document.getElementById('analyzeBtn').addEventListener('click', async () => {
+      try {
+        setText('analysisText', 'ANALYSE EN COURS...');
+        setText('chartNote', 'BOT ACTIF | ANALYSE EN COURS | ' + new Date().toLocaleTimeString('fr-FR'));
+        await setAgentSession(true, 'analyze');
+        await fetchJson('/extension/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'analyze', payload: { symbol: state.symbol, timeframe: state.timeframe, mode: state.tradeMode } })
+        });
+        await refreshAll();
+        setText('chartNote', 'BOT ACTIF | ANALYSE TERMINÉE | ' + new Date().toLocaleTimeString('fr-FR'));
+      } catch (_e) {
+        setText('analysisText', 'Analyse indisponible.');
+      }
+    });
+
+    document.getElementById('bridgeToggleBtn').addEventListener('click', async () => {
+      const next = state.bridgeConfig.bridgeEnabled === false;
+      try {
+        await fetchJson('/extension/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'set-bridge-config', payload: { bridgeEnabled: next, updatedBy: 'dashboard' } })
+        });
+      } catch (_e) {}
+    });
+
+    document.getElementById('sourceTvBtn').addEventListener('click', async () => {
+      await toggleSource('tradingview');
+      await refreshAll();
+    });
+
+    document.getElementById('sourceMt5Btn').addEventListener('click', async () => {
+      await toggleSource('mt5');
+      await refreshAll();
+    });
+
+    document.getElementById('symbolSelect').addEventListener('change', (e) => {
+      const sel = document.getElementById('symbolSelect');
+      if (sel) sel.value = state.symbol;
+      setText('chartNote', 'Symbole verrouille: miroir strict de TradingView.');
+    });
+
+    document.getElementById('timeframeSelect').addEventListener('change', (e) => {
+      const sel = document.getElementById('timeframeSelect');
+      if (sel) sel.value = state.timeframe;
+      setText('chartNote', 'Timeframe verrouille: miroir strict de TradingView.');
+    });
+
+    document.getElementById('tradeModeSelect').addEventListener('change', (e) => {
+      state.tradeMode = String(e.target.value || 'AUTO').toUpperCase();
+      fetchJson('/extension/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'set-bridge-config',
+          payload: { bridgeMode: state.tradeMode, updatedBy: 'dashboard' }
+        })
+      }).catch(() => {});
+      refreshAll();
+    });
+
+
+    document.querySelectorAll('[data-trade-action]').forEach((btn) => {
+      const action = btn.getAttribute('data-trade-action');
+      if (action === 'WAIT') {
+        btn.addEventListener('click', async () => {
+          // PATIENTER = surveillance active sans prise de position
+          setText('positionCoachText', 'Surveillance active en cours : le coach analyse en temps réel, aucune position prise.');
+          await setAgentSession(true, 'wait');
+          await refreshAll();
+        });
+      } else {
+        btn.addEventListener('click', () => sendTradeAction(action));
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (!lwChart) return;
+      const container = document.getElementById('chartContainer');
+      if (!container) return;
+      lwChart.applyOptions({ width: container.clientWidth || 900, height: 320 });
+    });
+
+    window.addEventListener('load', async () => {
+      populateSymbolSelect();
+
+      try {
+        const ext = await fetchJson('/extension/data');
+        applyBridgeConfig(ext.bridgeConfig || null);
+        const active = ext.activeSymbol || {};
+        state.symbol = String(active.symbol || document.getElementById('symbolSelect').value || state.symbol).toUpperCase();
+        state.timeframe = String(active.timeframe || document.getElementById('timeframeSelect').value || state.timeframe).toUpperCase();
+        state.tradeMode = String(active.mode || document.getElementById('tradeModeSelect').value || state.tradeMode).toUpperCase();
+      } catch (_e) {
+        state.symbol = String(document.getElementById('symbolSelect').value || state.symbol).toUpperCase();
+        state.timeframe = String(document.getElementById('timeframeSelect').value || state.timeframe).toUpperCase();
+        state.tradeMode = String(document.getElementById('tradeModeSelect').value || state.tradeMode).toUpperCase();
+      }
+
+      const symbolSelect = document.getElementById('symbolSelect');
+      const timeframeSelect = document.getElementById('timeframeSelect');
+      const modeSelect = document.getElementById('tradeModeSelect');
+      if (symbolSelect && Array.from(symbolSelect.options).some((o) => o.value === state.symbol)) symbolSelect.value = state.symbol;
+      if (timeframeSelect && Array.from(timeframeSelect.options).some((o) => o.value === state.timeframe)) timeframeSelect.value = state.timeframe;
+      if (modeSelect && Array.from(modeSelect.options).some((o) => o.value === state.tradeMode)) modeSelect.value = state.tradeMode;
+
+      initLwChart();
+      connectRealtimeSync();
+      startCandleCountdown();
+      fetchJson('/orchestration/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trigger: 'boot-manual' })
+      }).catch(() => {});
+      await refreshAll();
+      // SUPPRIMÉ : setInterval polling — la synchro se fait uniquement sur tick TradingView
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+{
+    "indicators":  {
+                       "rsi":  52.3,
+                       "atr":  8.5,
+                       "ma20":  2372.5,
+                       "macd":  {
+                                    "histogram":  0.07,
+                                    "value":  0.45,
+                                    "signal":  0.38
+                                }
+                   },
+    "analysis":  {
+                     "confidence":  "MEDIUM",
+                     "direction":  "LONG",
+                     "tp":  2378.5,
+                     "rr_ratio":  2.3,
+                     "sl":  2373.2,
+                     "score":  65,
+                     "entry":  2375.3
+                 },
+    "session":  {
+                    "london":  {
+                                   "status":  "open",
+                                   "closes_at":  "17:30 UTC",
+                                   "opens_at":  "09:00 UTC"
+                               },
+                    "newyork":  {
+                                    "status":  "open",
+                                    "closes_at":  "21:00 UTC",
+                                    "opens_at":  "14:30 UTC"
+                                },
+                    "sydney":  {
+                                   "status":  "closed",
+                                   "closes_at":  "06:30 UTC",
+                                   "opens_at":  "22:00 UTC"
+                               },
+                    "tokyo":  {
+                                  "status":  "closed",
+                                  "closes_at":  "09:00 UTC",
+                                  "opens_at":  "00:00 UTC"
+                              }
+                },
+    "symbol":  {
+                   "timeframe":  "H1",
+                   "name":  "XAUUSD",
+                   "ask":  2375.4,
+                   "bid":  2375.2,
+                   "volume":  12500,
+                   "price":  2375.3,
+                   "spread":  0.2
+               },
+    "state":  {
+                  "market_status":  "open",
+                  "active":  true,
+                  "timestamp":  "2026-04-02T16:00:00Z"
+              },
+    "chart":  {
+                  "candles":  [
+                                  {
+                                      "low":  2374.5,
+                                      "time":  "2026-04-02T16:00:00Z",
+                                      "close":  2375.3,
+                                      "open":  2375,
+                                      "high":  2376.5
+                                  },
+                                  {
+                                      "low":  2373,
+                                      "time":  "2026-04-02T15:00:00Z",
+                                      "close":  2375,
+                                      "open":  2373.5,
+                                      "high":  2375.5
+                                  }
+                              ],
+                  "timeframe":  "H1"
+              }
+}

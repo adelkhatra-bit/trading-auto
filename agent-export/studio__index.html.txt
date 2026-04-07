@@ -1,0 +1,14 @@
+﻿﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Studio</title>
+  <link rel="stylesheet" href="studiostyles.css">
+</head>
+<body>
+  <h1>STUDIO</h1>
+  <p id="status">Connexion...</p>
+  <script src="studioapp.js"></script>
+</body>
+</html>
+

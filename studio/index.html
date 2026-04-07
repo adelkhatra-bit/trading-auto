@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Studio Pro</title>
+  <!-- TradingView Lightweight Charts -->
+  <script>
+    function loadScript(src, cb) {
+      var s = document.createElement('script');
+      s.src = src; s.onload = function() { if(cb) cb(null); };
+      s.onerror = function() { console.error('Script failed:', src); if(cb) cb(new Error('load failed')); };
+      document.head.appendChild(s);
+    }
+    loadScript('https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js', function(err) {
+      if (err) {
+        loadScript('https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js', null);
+      }
+    });
+  </script>
+  <style>
+    .menu-button {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+      text-decoration: none;
+    }
+    .menu-button:hover {
+      background: linear-gradient(135deg, #2563eb, #1e40af);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+    }
+    
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #07132a;
+      --surf:    #0d1e38;
+      --surf2:   #0a1628;
+      --bord:    #1e3a5f;
+      --bord2:   #243b5e;
+      --text:    #e0f2fe;
+      --muted:   #64748b;
+      --green:   #10b981;
+      --red:     #ef4444;
+      --blue:    #3b82f6;
+      --yellow:  #f59e0b;
+      --rad:     6px;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────── */
+    #header {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      background: var(--surf);
+      border-bottom: 2px solid var(--blue);
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    #header h1 { font-size: 1rem; color: var(--blue); white-space: nowrap; }
+    .hstatus { display: flex; align-items: center; gap: 1rem; font-size: 0.75rem; flex-wrap: wrap; }
+    .sdot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 3px; animation: blink 2s infinite; }
+    .sdot.on { background: var(--green); }
+    .sdot.off { background: var(--red); }
+    .sdot.warn { background: var(--yellow); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    /* ── CRITICAL BAR ────────────────────────────────────── */
+    #cbar {
+      flex: 0 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding: 0.4rem 1rem;
+      background: #060f22;
+      border-bottom: 1px solid var(--bord);
+      align-items: stretch;
+    }
+    .citem {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--surf);
+      border: 1px solid var(--bord);
+      border-radius: var(--rad);
+      padding: 0.3rem 0.75rem;
+      min-width: 80px;
+    }
+    .clbl { font-size: 0.55rem; text-transform: uppercase; color: var(--muted); letter-spacing: .08em; margin-bottom: 2px; }
+    .cval { font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1; }
+    .citem.candle { border-left: 3px solid var(--yellow); }
+    .citem.candle .cval { color: var(--yellow); font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+    .cprog { width: 100%; height: 3px; background: var(--bord); border-radius: 2px; margin-top: 3px; }
+    .cprogfill { height: 100%; background: linear-gradient(90deg, var(--green), var(--yellow)); border-radius: 2px; transition: width 0.9s linear; }
+    .citem select {
+      background: transparent; border: none; color: var(--text);
+      font-size: 0.9rem; font-weight: 700; cursor: pointer; outline: none;
+      -webkit-appearance: none; text-align: center;
+    }
+    .citem select option { background: var(--surf); color: var(--text); }
+
+    /* ── BODY LAYOUT ─────────────────────────────────────── */
+    #body {
+      flex: 1 1 0;
+      display: grid;
+      grid-template-columns: 200px 1fr 260px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* ── SIDEBAR LEFT ─────────────────────────────────────── */
+    #sleft {
+      background: var(--surf);
+      border-right: 1px solid var(--bord);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding: 0.75rem 0.5rem;
+      overflow-y: auto;
+    }
+    .bgrp-title {
+      font-size: 0.58rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .1em;
+      padding: 0 0.25rem;
+      margin-bottom: 0.15rem;
+    }
+    .bgrp { display: flex; flex-direction: column; gap: 0.3rem; }
+    .sbtn {
+      width: 100%;
+      padding: 0.45rem 0.65rem;
+      border-radius: var(--rad);
+      border: 1px solid var(--bord2);
+      background: rgba(30,58,95,.35);
+      color: var(--text);
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      transition: background .12s, border-color .12s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sbtn:hover:not(:disabled) { background: rgba(59,130,246,.18); border-color: var(--blue); }
+    .sbtn:disabled { opacity: .4; cursor: not-allowed; }
+    .sbtn.g { border-color: #166534; }
+    .sbtn.g:hover:not(:disabled) { background: rgba(16,185,129,.15); border-color: var(--green); }
+    .sbtn.y { border-color: #854d0e; }
+    .sbtn.y:hover:not(:disabled) { background: rgba(245,158,11,.15); border-color: var(--yellow); }
+    .sbtn.r { border-color: #7f1d1d; }
+    .sbtn.r:hover:not(:disabled) { background: rgba(239,68,68,.15); border-color: var(--red); }
+
+    /* ── CENTER ──────────────────────────────────────────── */
+    #center {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Chart area */
+    #chart-area {
+      flex: 0 0 auto;
+      padding: 0.6rem;
+      border-bottom: 1px solid var(--bord);
+    }
+    #chart-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      margin-bottom: 0.4rem;
+      flex-wrap: wrap;
+    }
+    .tfbtn {
+      padding: 0.15rem 0.45rem;
+      border: 1px solid var(--bord2);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.68rem;
+      cursor: pointer;
+      transition: all .12s;
+    }
+    .tfbtn:hover, .tfbtn.active {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    #chart-sym-sel {
+      margin-left: auto;
+      background: var(--surf);
+      border: 1px solid var(--bord2);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.72rem;
+    }
+    #chart-sym-sel option { background: var(--surf); }
+
+    #chart-wrap {
+      position: relative;
+      width: 100%;
+      height: 260px;
+      background: #050e1e;
+      border-radius: var(--rad);
+      overflow: hidden;
+    }
+    #tv-chart {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    #chart-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    #chart-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 3px;
+      padding: 0 2px;
+    }
+
+    /* Trades area */
+    #trades-area {
+      flex: 1 1 0;
+      overflow-y: auto;
+      padding: 0.6rem;
+    }
+    #trades-title {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .08em;
+      margin-bottom: 0.4rem;
+    }
+    #trade-cards { display: flex; flex-direction: column; gap: 0.4rem; }
+
+    /* ── SIDEBAR RIGHT ────────────────────────────────────── */
+    #sright {
+      background: var(--surf);
+      border-left: 1px solid var(--bord);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.6rem 0.5rem;
+      overflow-y: auto;
+    }
+    .ipanel {
+      background: var(--surf2);
+      border: 1px solid var(--bord);
+      border-radius: var(--rad);
+      padding: 0.5rem 0.6rem;
+      flex: 0 0 auto;
+    }
+    .ipanel h3 {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .08em;
+      margin-bottom: 0.4rem;
+    }
+    .ibody { font-size: 0.72rem; max-height: 140px; overflow-y: auto; }
+    .ta-row { display: flex; justify-content: space-between; gap: 0.25rem; padding: 0.2rem 0; border-bottom: 1px solid #0f1f3d; font-size: 0.7rem; }
+    .ta-row:last-child { border-bottom: none; }
+    .ev-item { display: flex; gap: 0.4rem; padding: 0.2rem 0; border-bottom: 1px solid #0f1f3d; font-size: 0.68rem; }
+    .ev-item:last-child { border-bottom: none; }
+    .ev-time { color: var(--yellow); min-width: 38px; }
+    .ev-HIGH { color: var(--red); font-weight: 700; font-size: .6rem; }
+    .ev-MEDIUM { color: var(--yellow); font-size: .6rem; }
+    .ev-LOW { color: var(--green); font-size: .6rem; }
+    .ev-name { color: var(--text); flex: 1; }
+    .opp-row { display: flex; gap: 0.3rem; align-items: center; padding: 0.2rem 0; border-bottom: 1px solid #0f1f3d; font-size: 0.7rem; }
+    .opp-row:last-child { border-bottom: none; }
+
+    /* ── LOG BAR ─────────────────────────────────────────── */
+    #logbar {
+      flex: 0 0 auto;
+      height: 110px;
+      min-height: 60px;
+      background: #040d1a;
+      border-top: 1px solid var(--bord);
+      overflow-y: auto;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.68rem;
+      font-family: 'Courier New', monospace;
+    }
+    .log-ok   { color: var(--green); }
+    .log-err  { color: var(--red); }
+    .log-warn { color: var(--yellow); }
+    .log-info { color: #7ba4d4; }
+
+    /* ── AGENTS LIVE MONITOR ─────────────────────────── */
+    #agents-monitor {
+      flex: 0 0 auto;
+      background: #0a1420;
+      border-top: 2px solid var(--blue);
+      border-bottom: 1px solid var(--bord);
+      padding: 0.75rem;
+      max-height: 180px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    #agents-monitor h3 {
+      font-size: 0.8rem;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    #agent-states {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--bord2);
+    }
+    .agent-state {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.6rem;
+      background: var(--surf2);
+      border: 1px solid var(--bord);
+      border-radius: var(--rad);
+      font-size: 0.7rem;
+      color: var(--text);
+    }
+    .agent-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    .agent-dot.idle { background: var(--muted); animation: none; }
+    .agent-dot.working { background: var(--green); }
+    .agent-dot.error { background: var(--red); animation: none; }
+    @keyframes pulse { 0%, 100%{opacity:1} 50%{opacity:0.6} }
+    #agents-log {
+      flex: 1;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 0.65rem;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .agent-log-entry {
+      padding: 0.2rem 0;
+      word-break: break-word;
+    }
+    .agent-log-entry span.timestamp { color: #7ba4d4; font-weight: 500; }
+    .agent-log-entry span.from { color: var(--blue); }
+    .agent-log-entry span.ok { color: var(--green); }
+    .agent-log-entry span.err { color: var(--red); }
+    .agent-log-entry span.action { color: var(--yellow); }
+
+    /* ── RESPONSIVE ──────────────────────────────────────── */
+    @media (max-width: 1050px) {
+      #body { grid-template-columns: 175px 1fr; }
+      #sright { display: none; }
+    }
+    @media (max-width: 680px) {
+      html, body { overflow: auto; }
+      #body { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+      #sleft { flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--bord); max-height: none; }
+      .bgrp { flex-direction: row; flex-wrap: wrap; }
+      .sbtn { width: auto; }
+    }
+    
+    /* 🔙 BOUTON RETOUR AU MENU */
+    .menu-button {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 9999;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+      text-decoration: none;
+      display: inline-block;
+    }
+    .menu-button:hover {
+      background: linear-gradient(135deg, #2563eb, #1e40af);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+  </style>
+</head>
+<body>
+<a href="/" class="menu-button">🏠 Menu</a>
+
+<!-- HEADER -->
+<div id="header">
+  <h1>⚡ Trading Studio Pro</h1>
+  <div class="hstatus">
+    <span><span class="sdot off" id="server-dot"></span><span id="status">INIT</span></span>
+    <span><span class="sdot off" id="source-dot"></span><span id="data-source">—</span></span>
+    <span id="flux-status" style="color:var(--red);font-weight:600;">OFFLINE</span>
+    <span style="color:var(--muted);" id="health-time"></span>
+  </div>
+</div>
+
+<!-- CRITICAL BAR -->
+<div id="cbar">
+  <div class="citem">
+    <div class="clbl">Symbole</div>
+    <div class="cval">
+      <select id="symbol-select">
+        <option value="EUR/USD">EUR/USD</option>
+        <option value="GBP/USD">GBP/USD</option>
+        <option value="USD/JPY">USD/JPY</option>
+        <option value="AUD/USD">AUD/USD</option>
+        <option value="USD/CAD">USD/CAD</option>
+        <option value="XAU/USD">XAU/USD</option>
+        <option value="BTC/USD">BTC/USD</option>
+        <option value="ETH/USD">ETH/USD</option>
+      </select>
+    </div>
+  </div>
+  <div class="citem">
+    <div class="clbl">Prix Live</div>
+    <div class="cval" id="critical-price" style="color:var(--blue);">--</div>
+  </div>
+  <div class="citem">
+    <div class="clbl">Signal</div>
+    <div class="cval" id="critical-signal">--</div>
+  </div>
+  <div class="citem">
+    <div class="clbl">Score</div>
+    <div class="cval" id="critical-score">--%</div>
+  </div>
+  <div class="citem candle">
+    <div class="clbl">⏱ Clôture Bougie</div>
+    <div class="cval">
+      <span id="candle-minutes">--</span>:<span id="candle-seconds">--</span>
+    </div>
+    <div class="cprog"><div class="cprogfill" id="candle-bar" style="width:0%"></div></div>
+  </div>
+  <div class="citem" style="min-width:120px;">
+    <div class="clbl">Sync Symbole</div>
+    <div class="cval" id="sync-status" style="font-size:.72rem;color:var(--muted);">—</div>
+    <div style="font-size:.55rem;color:var(--muted);margin-top:2px;" id="sync-source">Source: —</div>
+  </div>
+  <div class="citem" style="min-width:90px;">
+    <div class="clbl">Mode Auto</div>
+    <div class="cval" id="engine-mode" style="font-size:.8rem;color:var(--yellow);">MANUAL</div>
+  </div>
+  <div class="citem" style="min-width:110px;border-left:3px solid #7c3aed;">
+    <div class="clbl">⚡ Setup Type</div>
+    <div class="cval">
+      <select id="trade-mode-sel" style="background:transparent;border:none;color:#a78bfa;font-size:.88rem;font-weight:700;cursor:pointer;outline:none;-webkit-appearance:none;text-align:center;">
+        <option value="SCALPER">SCALPER</option>
+        <option value="SNIPER"  selected>SNIPER</option>
+        <option value="SWING">SWING</option>
+      </select>
+    </div>
+  </div>
+  <div class="citem" style="min-width:90px;">
+    <div class="clbl">Broker</div>
+    <div class="cval" id="broker-mode-display" style="font-size:.8rem;color:var(--muted);">LIVE</div>
+  </div>
+</div>
+
+<!-- BODY -->
+<div id="body">
+
+  <!-- SIDEBAR LEFT -->
+  <div id="sleft">
+    <div>
+      <div class="bgrp-title">📊 Marché</div>
+      <div class="bgrp">
+        <button class="sbtn g"  id="btn-get-positions">📊 Positions</button>
+        <button class="sbtn g"  id="btn-instant-trade">⚡ Signal Live</button>
+        <button class="sbtn"    id="btn-analyze-market">🔍 Analyser</button>
+      </div>
+    </div>
+    <div>
+      <div class="bgrp-title">🤖 Agents</div>
+      <div class="bgrp">
+        <button class="sbtn"    id="btn-agents-report">🤖 Agents Report</button>
+        <button class="sbtn y"  id="btn-capture-screen">📸 Screen</button>
+      </div>
+    </div>
+    <div>
+      <div class="bgrp-title">🚀 Exécution</div>
+      <div class="bgrp">
+        <button class="sbtn g"  id="btn-execute-trade">🚀 Exécuter</button>
+        <button class="sbtn"    id="btn-open-popup">📱 Popup</button>
+        <button class="sbtn y"  id="btn-toggle-broker">🔌 Broker</button>
+        <button class="sbtn y"  id="btn-toggle-mode">🔄 Auto/Manual</button>
+      </div>
+    </div>
+    <div>
+      <div class="bgrp-title">⚙️ Système</div>
+      <div class="bgrp">
+        <button class="sbtn"    id="btn-test-system">🧪 Test Routes</button>
+        <button class="sbtn"    id="btn-toggle-debug">🛠 Debug</button>
+        <button class="sbtn r"  id="btn-clear-logs">🗑 Logs</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div id="center">
+    <div id="chart-area">
+      <div id="chart-toolbar">
+        <button class="tfbtn" data-tf="M1">M1</button>
+        <button class="tfbtn" data-tf="M2">M2</button>
+        <button class="tfbtn" data-tf="M3">M3</button>
+        <button class="tfbtn" data-tf="M5">M5</button>
+        <button class="tfbtn" data-tf="M10">M10</button>
+        <button class="tfbtn" data-tf="M15">M15</button>
+        <button class="tfbtn" data-tf="M30">M30</button>
+        <button class="tfbtn" data-tf="M45">M45</button>
+        <button class="tfbtn active" data-tf="H1">H1</button>
+        <button class="tfbtn" data-tf="H2">H2</button>
+        <button class="tfbtn" data-tf="H4">H4</button>
+        <button class="tfbtn" data-tf="D1">D1</button>
+        <select id="chart-sym-sel">
+          <option value="EUR/USD">EUR/USD</option>
+          <option value="GBP/USD">GBP/USD</option>
+          <option value="USD/JPY">USD/JPY</option>
+          <option value="AUD/USD">AUD/USD</option>
+          <option value="XAU/USD" selected>XAU/USD</option>
+          <option value="BTC/USD">BTC/USD</option>
+          <option value="ETH/USD">ETH/USD</option>
+        </select>
+      </div>
+      <div id="chart-wrap">
+        <div id="tv-chart" style="position:absolute;top:0;left:0;width:100%;height:100%;"></div>
+        <div id="chart-overlay">Chargement…</div>
+      </div>
+      <div id="chart-footer">
+        <span id="chart-label">XAU/USD · H1</span>
+        <span id="chart-count"></span>
+      </div>
+    </div>
+
+    <div id="trades-area">
+      <div id="trades-title">Signaux &amp; Positions</div>
+      <div id="trade-cards"></div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR RIGHT -->
+  <div id="sright">
+    <!-- AGENTS LIVE LOG — panneau principal, toujours visible -->
+    <div class="ipanel" id="agents-live-log-panel" style="border:1.5px solid #7c3aed;background:rgba(49,10,100,.18);">
+      <h3 style="color:#a78bfa;display:flex;align-items:center;justify-content:space-between;">
+        📟 AGENTS LIVE LOG
+        <span id="agents-log-badge" style="font-size:9px;background:#7c3aed;color:#fff;border-radius:3px;padding:1px 5px;">0 MSG</span>
+      </h3>
+      <div class="ibody" id="agents-live-log" style="max-height:180px;overflow-y:auto;font-size:0.63rem;font-family:monospace;background:#040d1a;border-radius:3px;padding:0.3rem;">
+        <div style="color:#475569;text-align:center;">— En attente de messages... —</div>
+      </div>
+    </div>
+
+    <!-- AI COMMUNICATION VISIBILITY -->
+    <div class="ipanel">
+      <h3>🤝 Agents · Statut Live</h3>
+      <div class="ibody" id="comm-panel">
+        <div id="comm-status" style="display:flex;gap:.6rem;font-size:0.72rem;margin-bottom:0.4rem;">
+          <div style="flex:1;background:#0a1628;border:1px solid #1e3a5f;border-radius:4px;padding:3px 6px;">
+            🟢 Claude<br><span id="claude-status" style="font-size:9px;">offline</span>
+          </div>
+          <div style="flex:1;background:#0a1628;border:1px solid #1e3a5f;border-radius:4px;padding:3px 6px;">
+            🔵 Copilot<br><span id="copilot-status" style="font-size:9px;">en attente</span>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">📨 Messages inter-IA</div>
+        <div id="comm-messages" style="font-size:0.64rem;max-height:80px;overflow-y:auto;border:1px solid var(--bord2);border-radius:3px;padding:0.25rem;background:#040d1a;">
+          <div style="color:var(--muted);text-align:center;">— Aucun message —</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENT BUS TASKS (temps réel) -->
+    <div class="ipanel">
+      <h3>🗂 Tâches Agents <span style="font-size:0.65rem;color:var(--muted);">(auto-refresh 8s)</span></h3>
+      <div class="ibody" id="agent-tasks-panel" style="max-height:180px;overflow-y:auto;">
+        <div style="color:var(--muted);font-size:9px;text-align:center;padding:.3rem;">— Chargement... —</div>
+      </div>
+    </div>
+    
+    <div class="ipanel">
+      <h3>📊 Agents Techniques</h3>
+      <div class="ibody" id="ta-panel"><span style="color:var(--muted)">— cliquez Agents Report —</span></div>
+    </div>
+    <div class="ipanel">
+      <h3>🌍 Calendrier Macro</h3>
+      <div class="ibody"><ul id="economic-items" style="list-style:none;padding:0;margin:0;"></ul></div>
+    </div>
+    <div class="ipanel">
+      <h3>📡 News / X <span style="font-size:0.7rem;color:var(--muted);">(auto-refresh 15s)</span></h3>
+      <div class="ibody"><ul id="social-items" style="list-style:none;padding:0;margin:0;"></ul></div>
+    </div>
+    <div class="ipanel">
+      <h3>🎯 Opportunités</h3>
+      <div class="ibody" id="opportunities-list"><span style="color:var(--muted)">— cliquez Analyser —</span></div>
+    </div>
+  </div>
+
+</div><!-- /body -->
+
+<!-- AGENTS LIVE MONITOR -->
+<div id="agents-monitor">
+  <h3>🤖 Agents Live Monitor</h3>
+  <div id="agent-states"></div>
+  <div id="agents-log"></div>
+</div>
+
+<!-- LOG BAR -->
+<div id="logbar" id="maintenance-log"></div>
+
+<script src="/studio/studioapp.js" defer></script>
+</body>
+</html>

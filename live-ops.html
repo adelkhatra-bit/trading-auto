@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Auto - Live Ops</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: #eaf2ff;
+      background: radial-gradient(circle at 20% 20%, #132d4a 0%, #071423 45%, #040b14 100%);
+      min-height: 100vh;
+    }
+    .menu-button {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 12px;
+      z-index: 20;
+      border: 1px solid rgba(255,255,255,.15);
+    }
+    .wrap {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 64px 16px 16px;
+    }
+    h1 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      color: #7dd3fc;
+      letter-spacing: .02em;
+    }
+    .sub {
+      color: #93c5fd;
+      margin-bottom: 14px;
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+    }
+    .card {
+      background: rgba(6, 22, 40, .85);
+      border: 1px solid #254a70;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,.25);
+    }
+    .kpi { grid-column: span 3; }
+    .wide { grid-column: span 6; }
+    .full { grid-column: span 12; }
+    .title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #7fb4e8;
+      margin-bottom: 8px;
+    }
+    .value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #f0f8ff;
+    }
+    .ok { color: #22c55e; }
+    .warn { color: #f59e0b; }
+    .err { color: #ef4444; }
+    .muted { color: #94a3b8; font-size: 12px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      text-align: left;
+      padding: 6px 4px;
+      border-bottom: 1px solid rgba(127, 180, 232, .15);
+    }
+    th { color: #93c5fd; font-weight: 600; }
+    .log {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      max-height: 220px;
+      overflow-y: auto;
+      background: rgba(2, 9, 18, .8);
+      border: 1px solid #17324e;
+      border-radius: 8px;
+      padding: 8px;
+      white-space: pre-wrap;
+    }
+    .chat-log {
+      max-height: 360px;
+      overflow-y: auto;
+      border: 1px solid #17324e;
+      border-radius: 10px;
+      background: rgba(2, 9, 18, .85);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-item {
+      border: 1px solid rgba(127, 180, 232, .2);
+      border-left: 4px solid #3b82f6;
+      border-radius: 8px;
+      padding: 8px;
+      background: rgba(10, 26, 42, .75);
+      font-size: 12px;
+    }
+    .chat-head {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .chip {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 10px;
+      border: 1px solid rgba(255,255,255,.16);
+      color: #dbeafe;
+    }
+    .chip.wait { border-color: #9ca3af; color: #cbd5e1; }
+    .chip.run { border-color: #f59e0b; color: #fde68a; }
+    .chip.done { border-color: #22c55e; color: #86efac; }
+    .chip.block { border-color: #ef4444; color: #fca5a5; }
+    .chat-body {
+      color: #e2e8f0;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+    .chat-meta {
+      color: #93c5fd;
+      font-size: 11px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+    .chat-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    select {
+      background: #08182b;
+      border: 1px solid #2c5279;
+      color: #eaf2ff;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .row { display: flex; gap: 8px; align-items: center; }
+    input[type="text"] {
+      flex: 1;
+      min-width: 240px;
+      background: #08182b;
+      border: 1px solid #2c5279;
+      color: #eaf2ff;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    button {
+      border: 1px solid #3b82f6;
+      background: #1e3a8a;
+      color: #eaf2ff;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    @media (max-width: 1024px) {
+      .kpi { grid-column: span 6; }
+      .wide { grid-column: span 12; }
+    }
+    @media (max-width: 640px) {
+      .kpi, .wide, .full { grid-column: span 12; }
+      .row { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+  <a class="menu-button" href="/">Retour menu</a>
+  <div class="wrap">
+    <h1>Live Ops Cockpit</h1>
+    <div class="sub">Vue unique temps reel: serveur, endpoints, SSE, audit, et journal humain.</div>
+
+    <div class="grid">
+      <section class="card kpi">
+        <div class="title">Serveur</div>
+        <div id="k-server" class="value">...</div>
+        <div id="k-uptime" class="muted">uptime --</div>
+      </section>
+      <section class="card kpi">
+        <div class="title">Flux Donnees</div>
+        <div id="k-flux" class="value">...</div>
+        <div id="k-age" class="muted">age --</div>
+      </section>
+      <section class="card kpi">
+        <div class="title">Contexte Actif</div>
+        <div id="k-symbol" class="value">--</div>
+        <div id="k-price" class="muted">price --</div>
+      </section>
+      <section class="card kpi">
+        <div class="title">Orchestration</div>
+        <div id="k-orch" class="value">...</div>
+        <div id="k-timer" class="muted">timer --</div>
+      </section>
+
+      <section class="card wide">
+        <div class="title">Endpoints Critiques</div>
+        <table id="endpoints-table">
+          <thead><tr><th>Endpoint</th><th>Declare</th><th>HTTP</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="card wide">
+        <div class="title">Connexions Audit</div>
+        <table id="connections-table">
+          <thead><tr><th>Connexion</th><th>Status</th><th>Issues</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="card full">
+        <div class="title">Evenements Stream + Extension Sync</div>
+        <div id="stream-log" class="log"></div>
+      </section>
+
+      <section class="card full">
+        <div class="title">Chat Lia Vivant (humain + inter-agents)</div>
+        <div id="chat-log" class="chat-log"></div>
+      </section>
+
+      <section class="card full">
+        <div class="title">Composer Message (humain vers agents)</div>
+        <div class="chat-controls">
+          <input id="chat-from" type="text" value="human" placeholder="emetteur (human ou agent)" />
+          <select id="chat-to"></select>
+          <select id="chat-phase">
+            <option value="en attente">en attente</option>
+            <option value="en cours" selected>en cours</option>
+            <option value="terminé">terminé</option>
+            <option value="bloqué">bloqué</option>
+          </select>
+        </div>
+        <div class="chat-controls">
+          <select id="chat-status">
+            <option value="action" selected>action</option>
+            <option value="info">info</option>
+            <option value="warning">warning</option>
+            <option value="error">error</option>
+          </select>
+          <input id="chat-cause" type="text" placeholder="cause" />
+          <input id="chat-impact" type="text" placeholder="impact" />
+        </div>
+        <div class="chat-controls" style="grid-template-columns: 1fr 1fr;">
+          <input id="chat-solution" type="text" placeholder="solution" />
+          <input id="chat-message" type="text" placeholder="message conversationnel" />
+        </div>
+        <div class="row">
+          <button id="chat-send">Envoyer au bus agents</button>
+          <select id="design-page">
+            <option value="live-ops.html">live-ops.html</option>
+            <option value="dashboard.html">dashboard.html</option>
+            <option value="index.html">index.html</option>
+            <option value="agent-log-page.html">agent-log-page.html</option>
+          </select>
+          <button id="design-run">Lancer analyse design</button>
+          <button id="run-now">Run Orchestration</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://127.0.0.1:4000';
+    const streamLogEl = document.getElementById('stream-log');
+    const chatLogEl = document.getElementById('chat-log');
+    let streamEs = null;
+    let extEs = null;
+    let agentEs = null;
+
+    function esc(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function phaseClass(phase) {
+      const p = String(phase || '').toLowerCase();
+      if (p.includes('attente')) return 'wait';
+      if (p.includes('cours')) return 'run';
+      if (p.includes('termin')) return 'done';
+      if (p.includes('bloqu')) return 'block';
+      return 'run';
+    }
+
+    function appendChatItem(item) {
+      if (!item) return;
+      const ts = item.ts || new Date().toISOString();
+      const headFrom = item.agent || item.from || 'system';
+      const headTo = item.to || 'all';
+      const status = item.status || 'info';
+      const phase = item.phase || 'en cours';
+      const message = item.message || item.action || '';
+      const cause = item.cause || (item.detail && item.detail.cause) || '';
+      const impact = item.impact || (item.detail && item.detail.impact) || '';
+      const solution = item.solution || (item.detail && item.detail.solution) || '';
+
+      const el = document.createElement('div');
+      el.className = 'chat-item';
+      el.innerHTML = `
+        <div class="chat-head">
+          <span class="chip">${esc(headFrom)} -> ${esc(headTo)}</span>
+          <span class="chip ${phaseClass(phase)}">${esc(phase)}</span>
+          <span class="chip">${esc(status)}</span>
+          <span class="muted">${esc(new Date(ts).toLocaleTimeString('fr-FR'))}</span>
+        </div>
+        <div class="chat-body">${esc(message)}</div>
+        <div class="chat-meta">
+          <div><strong>Cause:</strong> ${esc(cause || '-')}</div>
+          <div><strong>Impact:</strong> ${esc(impact || '-')}</div>
+          <div><strong>Solution:</strong> ${esc(solution || '-')}</div>
+        </div>
+      `;
+      chatLogEl.prepend(el);
+      while (chatLogEl.children.length > 120) {
+        chatLogEl.removeChild(chatLogEl.lastChild);
+      }
+    }
+
+    function writeLog(prefix, payload) {
+      const ts = new Date().toLocaleTimeString('fr-FR');
+      const line = `[${ts}] ${prefix} ${typeof payload === 'string' ? payload : JSON.stringify(payload)}`;
+      streamLogEl.textContent = line + '\n' + streamLogEl.textContent;
+      if (streamLogEl.textContent.length > 24000) {
+        streamLogEl.textContent = streamLogEl.textContent.slice(0, 24000);
+      }
+    }
+
+    function statusClass(v) {
+      const s = String(v || '').toUpperCase();
+      if (s.includes('OK') || s.includes('LIVE') || s.includes('ONLINE') || s === 'TRUE') return 'ok';
+      if (s.includes('WARN') || s.includes('PARTIAL') || s.includes('OFFLINE')) return 'warn';
+      return 'err';
+    }
+
+    async function ping(path, method = 'GET') {
+      try {
+        const r = await fetch(API + path, { method, cache: 'no-store' });
+        return r.status;
+      } catch (_e) {
+        return 'ERR';
+      }
+    }
+
+    async function refreshState() {
+      try {
+        const r = await fetch(API + '/live/state?_ts=' + Date.now(), { cache: 'no-store' });
+        const s = await r.json();
+        if (!s.ok) throw new Error(s.error || 'live/state failed');
+
+        document.getElementById('k-server').className = 'value ' + statusClass(s.health.fluxStatus);
+        document.getElementById('k-server').textContent = 'PORT ' + s.health.serverPort;
+        document.getElementById('k-uptime').textContent = 'uptime ' + s.health.uptimeSec + 's';
+
+        document.getElementById('k-flux').className = 'value ' + statusClass(s.health.fluxStatus);
+        document.getElementById('k-flux').textContent = (s.health.source || 'offline') + ' / ' + (s.health.fluxStatus || 'OFFLINE');
+        document.getElementById('k-age').textContent = 'age ' + (s.health.ageMs == null ? '--' : s.health.ageMs + 'ms');
+
+        document.getElementById('k-symbol').textContent = s.context.symbol || '--';
+        document.getElementById('k-price').textContent = 'price ' + (s.context.price ?? '--') + ' tf ' + (s.context.timeframe || '--');
+
+        document.getElementById('k-orch').className = 'value ' + (s.orchestration.enabled ? 'ok' : 'warn');
+        document.getElementById('k-orch').textContent = s.orchestration.enabled ? 'ENABLED' : 'DISABLED';
+        document.getElementById('k-timer').textContent = 'timer ' + s.orchestration.timer;
+
+        const endpoints = Object.keys(s.endpoints || {});
+        const tbody = document.querySelector('#endpoints-table tbody');
+        const httpStatuses = await Promise.all(endpoints.map((ep) => ping(ep, ep === '/orchestration/run-now' ? 'POST' : 'GET')));
+        tbody.innerHTML = endpoints.map((ep, i) => {
+          const declared = s.endpoints[ep] ? 'YES' : 'NO';
+          const code = httpStatuses[i];
+          const cls = (declared === 'YES' && Number(code) >= 200 && Number(code) < 300) ? 'ok' : 'err';
+          return `<tr><td>${ep}</td><td class="${declared === 'YES' ? 'ok' : 'err'}">${declared}</td><td class="${cls}">${code}</td></tr>`;
+        }).join('');
+
+        const audit = await fetch(API + '/audit/state?_ts=' + Date.now(), { cache: 'no-store' });
+        const a = await audit.json();
+        const conns = (a.audit && a.audit.connections) ? a.audit.connections : [];
+        const cbody = document.querySelector('#connections-table tbody');
+        cbody.innerHTML = conns.map((c) => {
+          const issues = Array.isArray(c.issues) ? c.issues.length : 0;
+          const cls = issues === 0 && String(c.status).toUpperCase() === 'OK' ? 'ok' : 'warn';
+          return `<tr><td>${c.from} → ${c.to}</td><td class="${cls}">${c.status}</td><td>${issues}</td></tr>`;
+        }).join('');
+      } catch (e) {
+        writeLog('STATE_ERR', e.message || e);
+      }
+    }
+
+    function connectStreams() {
+      if (streamEs) streamEs.close();
+      if (extEs) extEs.close();
+      if (agentEs) agentEs.close();
+
+      streamEs = new EventSource(API + '/stream');
+      streamEs.onmessage = (e) => writeLog('STREAM', e.data);
+      streamEs.onerror = () => writeLog('STREAM_ERR', 'deconnecte/retry');
+
+      extEs = new EventSource(API + '/extension/sync');
+      extEs.onmessage = (e) => writeLog('EXT_SYNC', e.data);
+      extEs.onerror = () => writeLog('EXT_SYNC_ERR', 'deconnecte/retry');
+
+      // Primary real-time Lia chat feed.
+      agentEs = new EventSource(API + '/agent-activity');
+      agentEs.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.type === 'initial-state' && Array.isArray(payload.logs)) {
+            payload.logs.slice(0, 40).reverse().forEach((entry) => appendChatItem(entry));
+            return;
+          }
+          if (payload.type === 'agent-chat' || payload.message || payload.action) {
+            appendChatItem(payload);
+            return;
+          }
+          if (payload.type === 'agent-activity') {
+            appendChatItem(payload.payload || payload);
+          }
+        } catch (_e) {
+          writeLog('AGENT_CHAT_PARSE_ERR', e.data);
+        }
+      };
+      agentEs.onerror = () => writeLog('AGENT_CHAT_ERR', 'deconnecte/retry');
+    }
+
+    async function loadAgentsList() {
+      const select = document.getElementById('chat-to');
+      try {
+        const r = await fetch(API + '/agents/list?_ts=' + Date.now(), { cache: 'no-store' });
+        const data = await r.json();
+        const names = (data && data.ok && Array.isArray(data.agents)) ? data.agents : [];
+        const options = names.length ? names : ['repair-agent', 'surveillance-agent', 'orchestrator', 'project-controller', 'design-agent'];
+        select.innerHTML = options.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+      } catch (_e) {
+        select.innerHTML = '<option value="repair-agent">repair-agent</option>';
+      }
+    }
+
+    async function sendChatMessage() {
+      const from = (document.getElementById('chat-from').value || 'human').trim() || 'human';
+      const to = (document.getElementById('chat-to').value || 'repair-agent').trim() || 'repair-agent';
+      const phase = (document.getElementById('chat-phase').value || 'en cours').trim();
+      const status = (document.getElementById('chat-status').value || 'action').trim();
+      const cause = (document.getElementById('chat-cause').value || '').trim();
+      const impact = (document.getElementById('chat-impact').value || '').trim();
+      const solution = (document.getElementById('chat-solution').value || '').trim();
+      const message = (document.getElementById('chat-message').value || '').trim();
+      if (!message) return;
+
+      try {
+        await fetch(API + '/agents/' + encodeURIComponent(to) + '/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from,
+            to,
+            message,
+            status,
+            phase,
+            cause,
+            impact,
+            solution
+          })
+        });
+        document.getElementById('chat-message').value = '';
+        writeLog('CHAT_SEND', from + ' -> ' + to + ' : ' + message);
+      } catch (e) {
+        writeLog('CHAT_SEND_ERR', e.message || e);
+      }
+    }
+
+    async function runDesignAnalysis() {
+      const page = (document.getElementById('design-page').value || 'live-ops.html').trim();
+      try {
+        const r = await fetch(API + '/agents/design-agent/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'human',
+            to: 'design-agent',
+            message: 'Lancer analyse design',
+            status: 'action',
+            phase: 'en cours',
+            cause: 'audit UX demande',
+            impact: 'qualite interface',
+            solution: 'proposer reorganisation sans suppression',
+            page
+          })
+        });
+        const json = await r.json();
+        writeLog('DESIGN', JSON.stringify(json.response || json));
+      } catch (e) {
+        writeLog('DESIGN_ERR', e.message || e);
+      }
+    }
+
+    async function runNow() {
+      const code = await ping('/orchestration/run-now', 'POST');
+      writeLog('ORCH_RUN', 'status ' + code);
+      refreshState();
+    }
+
+    document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+    document.getElementById('design-run').addEventListener('click', runDesignAnalysis);
+    document.getElementById('run-now').addEventListener('click', runNow);
+    document.getElementById('chat-message').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendChatMessage();
+    });
+
+    loadAgentsList();
+    connectStreams();
+    refreshState();
+    setInterval(refreshState, 3000);
+    setInterval(loadAgentsList, 15000);
+  </script>
+</body>
+</html>

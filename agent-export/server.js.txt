@@ -1,0 +1,100 @@
+﻿const express = require('express');
+const path = require('path');
+const fs = require('fs');
+
+const app = express();
+const PORT = 4000;
+const AGENT_PORT = 4001;
+
+app.use(express.json());
+
+// CORS
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
+// STATIC
+app.use(express.static(process.cwd()));
+
+// HEALTH
+app.get('/health', (req, res) => {
+  res.json({ ok: true, port: PORT });
+});
+
+// STUDIO
+app.get('/studio', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'studio', 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log('SERVEUR ACTIF → http://127.0.0.1:' + PORT);
+});
+
+
+// =======================
+// 🔥 AGENT SERVER (4001)
+// =======================
+
+const agent = express();
+agent.use(express.json());
+
+// LIST FILES
+agent.get('/files', (req, res) => {
+  const root = process.cwd();
+
+  function walk(dir) {
+    let results = [];
+    const list = fs.readdirSync(dir);
+
+    list.forEach(file => {
+      const filePath = path.join(dir, file);
+      const stat = fs.statSync(filePath);
+
+      if (stat && stat.isDirectory()) {
+        results = results.concat(walk(filePath));
+      } else {
+        results.push(filePath.replace(root + '\\', ''));
+      }
+    });
+
+    return results;
+  }
+
+  const files = walk(root);
+  res.json({ ok: true, root, files });
+});
+
+// READ FILE
+agent.post('/read', (req, res) => {
+  const { file } = req.body;
+
+  try {
+    const fullPath = path.join(process.cwd(), file);
+    const content = fs.readFileSync(fullPath, 'utf-8');
+
+    res.json({ ok: true, file, content });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+// WRITE FILE
+agent.post('/write', (req, res) => {
+  const { file, content } = req.body;
+
+  try {
+    const fullPath = path.join(process.cwd(), file);
+    fs.writeFileSync(fullPath, content, 'utf-8');
+
+    res.json({ ok: true, file });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+agent.listen(4001, () => {
+  console.log('AGENT ACTIF → http://127.0.0.1:4001');
+});

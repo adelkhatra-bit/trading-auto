@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <title>Diagnostic Extension - Trading Auto</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg1: #050d18;
+      --bg2: #091728;
+      --bg3: #0d2137;
+      --panel: rgba(10, 24, 40, 0.95);
+      --line: #2b4e74;
+      --text: #e7eef8;
+      --muted: #8ea5c0;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --btn: #0ea5e9;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 560px at 10% -20%, rgba(14, 165, 233, 0.18), transparent 58%),
+        radial-gradient(1100px 520px at 105% -18%, rgba(16, 185, 129, 0.16), transparent 58%),
+        linear-gradient(150deg, var(--bg1) 0%, var(--bg2) 55%, var(--bg3) 100%);
+      padding: 22px;
+    }
+
+    .menu-button {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      text-decoration: none;
+      color: #fff;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      border: 1px solid #3b82f6;
+      box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35);
+      z-index: 10;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding-top: 32px;
+    }
+
+    .head { margin-bottom: 14px; }
+    .head h1 {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: 0.3px;
+      color: #f8fbff;
+    }
+    .head p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 860px;
+    }
+
+    .summary {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 8px;
+    }
+    .sum-item {
+      border: 1px solid #274a70;
+      border-radius: 10px;
+      padding: 9px;
+      background: rgba(13, 30, 50, 0.82);
+    }
+    .sum-item .lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #7f9dbe;
+      margin-bottom: 5px;
+      font-weight: 800;
+    }
+    .sum-item .val {
+      font-size: 18px;
+      font-weight: 900;
+      color: #f3f8ff;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      min-height: 230px;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #9bc5ef;
+      font-weight: 900;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 900;
+      border: 1px solid #355d86;
+      background: rgba(16, 36, 58, 0.9);
+      color: #b7cde5;
+      white-space: nowrap;
+    }
+    .badge.ok { border-color: #16a34a; color: #86efac; background: rgba(22, 163, 74, 0.16); }
+    .badge.warn { border-color: #f59e0b; color: #fde68a; background: rgba(245, 158, 11, 0.18); }
+    .badge.bad { border-color: #ef4444; color: #fecaca; background: rgba(239, 68, 68, 0.2); }
+
+    .desc {
+      color: #9cb6d1;
+      font-size: 12px;
+      line-height: 1.45;
+      min-height: 34px;
+    }
+
+    .result {
+      border: 1px solid #284c72;
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(13, 30, 50, 0.82);
+      min-height: 100px;
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: #c9d8ea;
+      line-height: 1.45;
+    }
+    .result .line strong { color: #ecf3ff; }
+
+    button {
+      border-radius: 8px;
+      border: 1px solid #2f5c8c;
+      background: #112c48;
+      color: #e8f0fa;
+      padding: 8px 11px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      width: fit-content;
+    }
+
+    .btn-primary {
+      border-color: var(--btn);
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    }
+
+    @media (max-width: 980px) {
+      .summary { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<a href="/" class="menu-button">Retour Menu</a>
+
+<div class="container">
+  <div class="head">
+    <h1>Diagnostic Extension</h1>
+    <p>Validation claire du parsing symbole/timeframe/prix et du flux cache extension, avec un rendu orienté utilisateur.</p>
+  </div>
+
+  <div class="summary">
+    <div class="sum-item"><div class="lbl">État Global</div><div class="val" id="sum-global">--</div></div>
+    <div class="sum-item"><div class="lbl">Tests OK</div><div class="val" id="sum-ok">0</div></div>
+    <div class="sum-item"><div class="lbl">Attention</div><div class="val" id="sum-warn">0</div></div>
+    <div class="sum-item"><div class="lbl">Erreurs</div><div class="val" id="sum-bad">0</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-top">
+        <div class="card-title">Parsing Symbole</div>
+        <span class="badge" id="badge-1">EN ATTENTE</span>
+      </div>
+      <div class="desc">Vérifie que le symbole extrait depuis le titre TradingView est correctement normalisé.</div>
+      <div class="result" id="result1">
+        <div class="line"><strong>Ce que ça teste:</strong> extraction du symbole</div>
+        <div class="line"><strong>Résultat:</strong> non lancé</div>
+        <div class="line"><strong>Action recommandée:</strong> lancer le test</div>
+      </div>
+      <button class="btn-primary" onclick="testParse1()">Tester</button>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="card-title">Parsing Timeframe</div>
+        <span class="badge" id="badge-2">EN ATTENTE</span>
+      </div>
+      <div class="desc">Vérifie la lecture de l'unité de temps affichée dans le titre actif.</div>
+      <div class="result" id="result2">
+        <div class="line"><strong>Ce que ça teste:</strong> détection timeframe</div>
+        <div class="line"><strong>Résultat:</strong> non lancé</div>
+        <div class="line"><strong>Action recommandée:</strong> lancer le test</div>
+      </div>
+      <button class="btn-primary" onclick="testParse2()">Tester</button>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="card-title">Parsing Prix</div>
+        <span class="badge" id="badge-3">EN ATTENTE</span>
+      </div>
+      <div class="desc">Vérifie la récupération propre du prix affiché dans le titre TradingView.</div>
+      <div class="result" id="result3">
+        <div class="line"><strong>Ce que ça teste:</strong> extraction du prix</div>
+        <div class="line"><strong>Résultat:</strong> non lancé</div>
+        <div class="line"><strong>Action recommandée:</strong> lancer le test</div>
+      </div>
+      <button class="btn-primary" onclick="testParse3()">Tester</button>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <div class="card-title">Flux Cache Extension</div>
+        <span class="badge" id="badge-4">EN ATTENTE</span>
+      </div>
+      <div class="desc">Vérifie le cycle complet contenu → cache background → lecture popup.</div>
+      <div class="result" id="result4">
+        <div class="line"><strong>Ce que ça teste:</strong> continuité du flux extension</div>
+        <div class="line"><strong>Résultat:</strong> non lancé</div>
+        <div class="line"><strong>Action recommandée:</strong> lancer le test</div>
+      </div>
+      <button class="btn-primary" onclick="testBackgroundLogic()">Tester</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Copy exact logic from content.js
+
+function normalizeSymbol(raw) {
+  if (!raw) return null;
+  
+  let normalized = raw.toUpperCase().replace(/[\s\-_]/g, '');
+  
+  if (normalized.includes('/')) {
+    normalized = normalized.replace('/', '');
+  }
+  
+  const mappings = {
+    'GOLD': 'XAUUSD',
+    'SILVER': 'XAGUSD',
+    'XAU': 'XAUUSD',
+    'XAG': 'XAGUSD',
+    'BTC': 'BTCUSD',
+    'ETH': 'ETHUSD',
+    'EUR': 'EURUSD',
+    'GBP': 'GBPUSD',
+    'AUD': 'AUDUSD',
+    'CAD': 'USDCAD',
+    'CHF': 'USDCHF',
+    'NZD': 'NZDUSD'
+  };
+  
+  for (const [key, val] of Object.entries(mappings)) {
+    if (normalized.startsWith(key)) {
+      return val;
+    }
+  }
+  
+  return normalized || null;
+}
+
+function parseSymbolFromTitle() {
+  var title = document.title || '';
+  console.log('[test] Title:', JSON.stringify(title));
+  
+  if (!title || title === 'TradingView') return null;
+
+  var titlePatterns = [
+    /^([A-Z]{3,8}(?:[\/:\-][A-Z]{3,4})?)\s*[·,]/,
+    /([A-Z]{3,8}(?:[\/:\-][A-Z]{3,4})?)\s*·.*·\s*\d+/,
+    /\b(XAUUSD|EURUSD|GBPUSD|USDJPY|BTCUSD|ETHUSD|NAS100|US500|DE40|GOLD|BTC|ETH)\b/
+  ];
+  
+  for (var _p = 0; _p < titlePatterns.length; _p++) {
+    var _m = title.match(titlePatterns[_p]);
+    if (_m) {
+      var raw = _m[2] || _m[1];
+      var sym = normalizeSymbol(raw);
+      if (sym && sym.length >= 3) {
+        console.log('[test] Match pattern ' + _p + ':', raw, '→', sym);
+        return sym;
+      }
+    }
+  }
+  
+  console.warn('[test] No pattern matched');
+  return null;
+}
+
+function parseTFFromTitle() {
+  var title = document.title || '';
+  var m = title.match(/[·,]\s*([0-9]{1,2}[MHWD]|[0-9]+)\s*[·,]/i);
+  if (m && m[1]) return m[1].toUpperCase();
+  m = title.match(/·\s*([1-9]?[MHWD]1?)\s*·/i);
+  if (m && m[1]) return m[1].toUpperCase();
+  return 'H1';
+}
+
+function parsePriceFromTitle() {
+  var title = document.title || '';
+  var m = title.match(/[·,]\s*([0-9,]+\.?[0-9]*)\s*(?:—|$)/);
+  if (m && m[1]) {
+    var p = parseFloat(m[1].replace(/,/g, ''));
+    if (!isNaN(p) && p > 0 && p < 1000000) return p.toFixed(2);
+  }
+  return null;
+}
+
+function testParse1() {
+  let result = parseSymbolFromTitle();
+  let expected = 'XAUUSD';
+  let pass = result === expected;
+
+  document.getElementById('result1').innerHTML =
+    '<div class="line"><strong>Ce que ça teste:</strong> extraction du symbole</div>' +
+    '<div class="line"><strong>Résultat:</strong> ' + (pass ? 'OK' : 'ERREUR') + '</div>' +
+    '<div class="line"><strong>Pourquoi:</strong> valeur obtenue ' + JSON.stringify(result) + ' (attendu ' + JSON.stringify(expected) + ').</div>' +
+    '<div class="line"><strong>Action recommandée:</strong> ' + (pass ? 'continuer vers la synchronisation.' : 'vérifier le titre source TradingView.') + '</div>';
+  setBadgeAndSummary('badge-1', pass ? 'ok' : 'bad', pass ? 'OK' : 'ERREUR');
+}
+
+function testParse2() {
+  let result = parseTFFromTitle();
+  let expected = 'H1';
+  let pass = result === expected;
+
+  document.getElementById('result2').innerHTML =
+    '<div class="line"><strong>Ce que ça teste:</strong> détection timeframe</div>' +
+    '<div class="line"><strong>Résultat:</strong> ' + (pass ? 'OK' : 'ERREUR') + '</div>' +
+    '<div class="line"><strong>Pourquoi:</strong> valeur obtenue ' + JSON.stringify(result) + ' (attendu ' + JSON.stringify(expected) + ').</div>' +
+    '<div class="line"><strong>Action recommandée:</strong> ' + (pass ? 'continuer vers la vérification prix.' : 'vérifier le format du titre TradingView.') + '</div>';
+  setBadgeAndSummary('badge-2', pass ? 'ok' : 'bad', pass ? 'OK' : 'ERREUR');
+}
+
+function testParse3() {
+  let result = parsePriceFromTitle();
+  let expected = '2520.45';
+  let pass = result === expected;
+
+  document.getElementById('result3').innerHTML =
+    '<div class="line"><strong>Ce que ça teste:</strong> extraction du prix</div>' +
+    '<div class="line"><strong>Résultat:</strong> ' + (pass ? 'OK' : 'ERREUR') + '</div>' +
+    '<div class="line"><strong>Pourquoi:</strong> valeur obtenue ' + JSON.stringify(result) + ' (attendu ' + JSON.stringify(expected) + ').</div>' +
+    '<div class="line"><strong>Action recommandée:</strong> ' + (pass ? 'continuer vers le test de flux.' : 'valider le séparateur décimal du titre.') + '</div>';
+  setBadgeAndSummary('badge-3', pass ? 'ok' : 'bad', pass ? 'OK' : 'ERREUR');
+}
+
+function testBackgroundLogic() {
+  // Simulate: background receives symbolChanged message
+  let cachedSymbol = {
+    symbol: null,
+    timeframe: 'H1',
+    price: null,
+    timestamp: null
+  };
+  
+  // Step 1: Receive symbol
+  let incomingMessage = {
+    action: 'symbolChanged',
+    symbol: parseSymbolFromTitle(),
+    timeframe: parseTFFromTitle(),
+    price: parsePriceFromTitle()
+  };
+  
+  // Step 2: Background updates cache
+  cachedSymbol = {
+    symbol: incomingMessage.symbol,
+    timeframe: incomingMessage.timeframe || 'H1',
+    price: incomingMessage.price || null,
+    timestamp: new Date().toISOString()
+  };
+  
+  // Step 3: Popup reads cache
+  let popupRequest = { action: 'getCachedSymbol' };
+  let backgroundResponse = { ok: true, ...cachedSymbol };
+  
+  // Step 4: Popup displays
+  let symbolDisplayed = backgroundResponse.symbol;
+  
+  let pass = symbolDisplayed === 'XAUUSD';
+  document.getElementById('result4').innerHTML =
+    '<div class="line"><strong>Ce que ça teste:</strong> continuité du flux extension</div>' +
+    '<div class="line"><strong>Résultat:</strong> ' + (pass ? 'OK' : 'ERREUR') + '</div>' +
+    '<div class="line"><strong>Pourquoi:</strong> symbole final affiché ' + JSON.stringify(symbolDisplayed) + ' après passage par le cache.</div>' +
+    '<div class="line"><strong>Action recommandée:</strong> ' + (pass ? 'flux valide, prêt pour popup live.' : 'contrôler le passage message content/background.') + '</div>';
+  setBadgeAndSummary('badge-4', pass ? 'ok' : 'bad', pass ? 'OK' : 'ERREUR');
+}
+
+const statuses = { 'badge-1': 'pending', 'badge-2': 'pending', 'badge-3': 'pending', 'badge-4': 'pending' };
+
+function setBadgeAndSummary(id, tone, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'badge ' + (tone || '');
+  el.textContent = text;
+  statuses[id] = tone || 'pending';
+  recomputeSummary();
+}
+
+function recomputeSummary() {
+  const vals = Object.values(statuses);
+  const ok = vals.filter((v) => v === 'ok').length;
+  const warn = vals.filter((v) => v === 'warn').length;
+  const bad = vals.filter((v) => v === 'bad').length;
+
+  document.getElementById('sum-ok').textContent = String(ok);
+  document.getElementById('sum-warn').textContent = String(warn);
+  document.getElementById('sum-bad').textContent = String(bad);
+
+  const g = document.getElementById('sum-global');
+  if (!g) return;
+  if (bad > 0) {
+    g.textContent = 'ERREUR';
+    g.style.color = '#fecaca';
+  } else if (warn > 0) {
+    g.textContent = 'ATTENTION';
+    g.style.color = '#fde68a';
+  } else if (ok === 4) {
+    g.textContent = 'OK';
+    g.style.color = '#86efac';
+  } else {
+    g.textContent = 'EN ATTENTE';
+    g.style.color = '#f3f8ff';
+  }
+}
+
+// Auto-run on load
+window.addEventListener('load', () => {
+  console.log('Tests ready. Click buttons to run.');
+  recomputeSummary();
+});
+</script>
+
+</body>
+</html>

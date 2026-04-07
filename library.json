@@ -1,0 +1,286 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-04-03T10:45:00Z",
+  "description": "Central registry of all system modules, agents, routes, and endpoints",
+  
+  "modules": {
+    "server": {
+      "file": "server.js",
+      "lines": "~2800",
+      "role": "Main Express server, port 4000",
+      "status": "active",
+      "provides": ["HTTP routes", "SSE /stream", "MT5 bridge", "Orchestrator runner", "Workflow logging"]
+    },
+    "audit-logger": {
+      "file": "audit-logger.js",
+      "lines": "~280",
+      "role": "Central audit and logging system",
+      "status": "active",
+      "methods": ["logEvent()", "updateTask()", "completeTask()", "failTask()", "addError()", "logWorkflowStep()"],
+      "persistence": "audit.json"
+    },
+    "orchestrator": {
+      "file": "src/agents/orchestrator.js",
+      "lines": "~150",
+      "role": "Master agent coordinator (Promise.all pattern)",
+      "status": "active",
+      "agents": ["tradingCore", "tfConsensus", "fearIndex", "newsIntelligence"]
+    },
+    "market-store": {
+      "file": "store/market-store.js",
+      "lines": "~100",
+      "role": "In-memory market data cache",
+      "status": "active",
+      "stores": ["bySymbol", "analysisCache", "sseClients"]
+    }
+  },
+
+  "agents": {
+    "active": {
+      "tradingCore": {
+        "file": "src/agents/trading-core.js",
+        "role": "Technical structure analysis (RSI, EMA, ATR, BOS)",
+        "inputs": ["MT5 data"],
+        "outputs": ["direction", "score"],
+        "status": "active"
+      },
+      "tfConsensus": {
+        "file": "src/agents/tf-consensus.js",
+        "role": "Multi-timeframe alignment validation",
+        "inputs": ["Multi timeframe analysis"],
+        "outputs": ["consensus score"],
+        "status": "active"
+      },
+      "fearIndex": {
+        "file": "src/agents/fear-index.js",
+        "role": "Market fear/sentiment analysis",
+        "inputs": ["VIX, sentiment data"],
+        "outputs": ["fear level"],
+        "status": "active"
+      },
+      "newsIntelligence": {
+        "file": "src/agents/news-intelligence.js",
+        "role": "Economic calendar and news analysis",
+        "inputs": ["News feed, economic events"],
+        "outputs": ["news impact"],
+        "status": "active"
+      }
+    },
+    "to_create": {
+      "indicatorAgent": {
+        "file": "src/agents/indicator-agent.js",
+        "role": "Create and generate MT5 indicators",
+        "status": "pending_creation",
+        "phase": 6
+      },
+      "surveillanceAgent": {
+        "file": "src/agents/surveillance-agent.js",
+        "role": "Event-driven market surveillance",
+        "status": "pending_creation",
+        "phase": 3
+      }
+    },
+    "disabled": {
+      "continuousLoop": {
+        "file": "src/agents/continuous-loop.js",
+        "reason": "Causes CPU 100% spike",
+        "status": "disabled"
+      }
+    }
+  },
+
+  "routes": {
+    "system": [
+      {
+        "path": "GET /",
+        "returns": "Main menu (index.html)",
+        "file": "server.js:~34"
+      },
+      {
+        "path": "GET /audit",
+        "returns": "Audit dashboard",
+        "file": "server.js:~35"
+      },
+      {
+        "path": "GET /studio",
+        "returns": "Trading studio",
+        "file": "server.js:~36"
+      },
+      {
+        "path": "GET /agents-monitor",
+        "returns": "Agents monitoring dashboard",
+        "file": "server.js:~37"
+      }
+    ],
+    "mt5": [
+      {
+        "path": "GET /mt5/connection",
+        "returns": "MT5 connection status",
+        "file": "server.js"
+      },
+      {
+        "path": "GET /mt5/symbols",
+        "returns": "Available symbols",
+        "file": "server.js"
+      },
+      {
+        "path": "POST /mt5/trade",
+        "returns": "Send trade to MT5",
+        "file": "server.js"
+      }
+    ],
+    "analysis": [
+      {
+        "path": "GET /instant-trade-live",
+        "returns": "Live orchestrator analysis result",
+        "file": "server.js"
+      },
+      {
+        "path": "GET /state",
+        "returns": "Complete marketStore state",
+        "file": "server.js"
+      }
+    ],
+    "audit": [
+      {
+        "path": "GET /audit/state",
+        "returns": "Complete audit state",
+        "file": "server.js:~442"
+      },
+      {
+        "path": "GET /audit/events",
+        "returns": "Audit events",
+        "file": "server.js:~460"
+      },
+      {
+        "path": "GET /audit/log",
+        "returns": "Audit log entries",
+        "file": "server.js:~475"
+      }
+    ],
+    "workflow": [
+      {
+        "path": "GET /workflow/log",
+        "returns": "Workflow log (last N entries)",
+        "file": "server.js",
+        "status": "to_add_phase_5"
+      },
+      {
+        "path": "POST /workflow/log",
+        "returns": "Register workflow step",
+        "file": "server.js",
+        "status": "to_add_phase_5"
+      }
+    ],
+    "sse": [
+      {
+        "path": "GET /stream",
+        "type": "SSE",
+        "returns": "Server-sent events (15s heartbeat)",
+        "file": "server.js:~1029"
+      }
+    ]
+  },
+
+  "files_to_create": {
+    "phase1": {
+      "agent-bus.js": {
+        "lines": "~100",
+        "role": "Agent registry and messaging bus",
+        "methods": ["registerAgent()", "sendMessage()", "subscribe()"],
+        "reason": "AUCUN équivalent existe",
+        "status": "pending"
+      }
+    },
+    "phase2": {
+      "alert-manager.js": {
+        "lines": "~120",
+        "role": "Alert creation and filtering",
+        "methods": ["createAlert()", "shouldNotify()", "getAlerts()"],
+        "reason": "Distinct from audit-logger (UX vs technical)",
+        "status": "pending"
+      }
+    },
+    "phase3": {
+      "src/agents/surveillance-agent.js": {
+        "lines": "~50",
+        "role": "Event-driven surveillance (replaces disabled continuous-loop.js)",
+        "reason": "continuous-loop.js incompatible, need event-driven approach",
+        "status": "pending"
+      }
+    },
+    "phase6": {
+      "src/agents/indicator-agent.js": {
+        "lines": "~200",
+        "role": "MT5 indicator generation",
+        "reason": "Distinct from analysis agents (create vs analyze)",
+        "status": "pending"
+      }
+    }
+  },
+
+  "files_to_enrich": [
+    {
+      "file": "audit-logger.js",
+      "additions": "+20 lignes",
+      "feature": "getCallerLocation() for stack trace localization",
+      "phase": 4
+    },
+    {
+      "file": "src/agents/orchestrator.js",
+      "additions": "+5 lignes",
+      "feature": "Add indicatorAgent to Promise.all",
+      "phase": 7
+    },
+    {
+      "file": "server.js",
+      "additions": "+80 lignes",
+      "features": ["Workflow routes", "Agent bus integration", "SSE broadcast for workflow"],
+      "phase": 5
+    },
+    {
+      "file": "AGENTS_MONITOR.html",
+      "additions": "+350 lignes",
+      "feature": "6 onglets (Agents, Pipeline, Signaux, Alertes, Indicateurs, Workflow)",
+      "phase": 8
+    },
+    {
+      "file": "studio/index-simple.html",
+      "additions": "+100 lignes",
+      "feature": "Mes Préférences section (symbols, timeframe, risk level)",
+      "phase": 9
+    },
+    {
+      "file": "public/background.js",
+      "additions": "+50 lignes",
+      "feature": "SSE listener for alerts + chrome.notifications",
+      "phase": 10
+    }
+  ],
+
+  "workflow": {
+    "mandatory_7_steps": [
+      "1. ANALYSE (agent-memory verify existence)",
+      "2. COMPRÉHENSION (understand structure)",
+      "3. LOCALISATION (identify exact location)",
+      "4. RÉPARATION (generate fix)",
+      "5. TEST (agent-testeur validation)",
+      "6. VALIDATION (if important, request approval)",
+      "7. INTÉGRATION (only if 1-6 OK)"
+    ],
+    "blocking_points": [
+      "Step 1: No agent-memory check = BLOCKED",
+      "Step 5: No test-agent validation = BLOCKED",
+      "Step 5 FAIL: No integration until fixed",
+      "Step 7: Only if all previous OK"
+    ]
+  },
+
+  "system_constraints": {
+    "performance": "No auto-polling every 2s (SSE only)",
+    "stability": "Zero breaking changes (enrich, don't replace)",
+    "traceability": "workflow.json logs every step",
+    "testing": "No integration without test-agent approval",
+    "memory": "No duplicate concepts (agent-memory validates)"
+  }
+}

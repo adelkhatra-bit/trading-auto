@@ -1,0 +1,14 @@
+node_modules/
+*.log
+*.tmp
+.env
+.env.local
+SYSTEM_LOG.json
+agent-history.json
+audit.json
+store_test_v2/
+backup/
+*.bat.bak
+dist/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chart Rendering Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #3b82f6;
+        }
+        
+        .test-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .test-label {
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #94a3b8;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            background: #0f172a;
+            border: 1px solid #1e3a5f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 4px;
+        }
+        
+        .status-bar {
+            background: #0a0f1e;
+            border: 1px solid #1e3a5f;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .status-bar.success {
+            color: #4ade80;
+            border-color: #22c55e;
+        }
+        
+        .status-bar.error {
+            color: #ef4444;
+            border-color: #dc2626;
+        }
+        
+        canvas {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        /* 🔙 BOUTON RETOUR AU MENU */
+        .menu-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 9999;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            text-decoration: none;
+        }
+        .menu-button:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="menu-button">🏠 Retour au Menu</a>
+    <div class="container">
+        <h1>📊 Chart Rendering Test</h1>
+        
+        <div class="test-section">
+            <div class="test-label">Test 1: EURUSD Chart</div>
+            <div id="chart1" class="chart-container"></div>
+            <div id="status1" class="status-bar">Loading...</div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-label">Test 2: BTCUSD Chart</div>
+            <div id="chart2" class="chart-container"></div>
+            <div id="status2" class="status-bar">Loading...</div>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-label">Test 3: XAUUSD Chart</div>
+            <div id="chart3" class="chart-container"></div>
+            <div id="status3" class="status-bar">Loading...</div>
+        </div>
+    </div>
+    
+    <script>
+        // Base prices (from popup.js)
+        const basePrices = {
+            'EURUSD': 1.0870,
+            'BTCUSD': 68750,
+            'XAUUSD': 2375.25
+        };
+        
+        // Generate realistic OHLC data
+        function generateCandles(symbolCode, basePrice, count = 24) {
+            const candles = [];
+            let currentPrice = basePrice;
+            
+            for (let i = 0; i < count; i++) {
+                const volatility = (Math.random() - 0.5) * 0.02 * currentPrice;
+                const open = currentPrice;
+                const close = currentPrice + volatility;
+                const high = Math.max(open, close) * (1 + Math.random() * 0.005);
+                const low = Math.min(open, close) * (1 - Math.random() * 0.005);
+                
+                candles.push({
+                    time: new Date(Date.now() - (count - i) * 3600000).toISOString(),
+                    open: parseFloat(open.toFixed(5)),
+                    high: parseFloat(high.toFixed(5)),
+                    low: parseFloat(low.toFixed(5)),
+                    close: parseFloat(close.toFixed(5))
+                });
+                
+                currentPrice = close;
+            }
+            
+            return candles;
+        }
+        
+        // Render chart (from popup.js)
+        function renderChartFallback(container, rates, symbol, tf) {
+            if (!rates || rates.length === 0) {
+                container.innerHTML = '<p style="color:#999; padding:20px; text-align:center;">No chart data</p>';
+                return;
+            }
+            
+            // Create canvas element
+            var canvas = document.createElement('canvas');
+            canvas.width = 700;
+            canvas.height = 350;
+            canvas.style.background = '#0d1220';
+            canvas.style.border = '1px solid #1e3a5f';
+            container.innerHTML = '';
+            container.appendChild(canvas);
+            
+            var ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            // Calculate price range
+            var prices = rates.flatMap(r => [r.open, r.high, r.low, r.close]);
+            var minPrice = Math.min(...prices);
+            var maxPrice = Math.max(...prices);
+            var priceRange = maxPrice - minPrice;
+            
+            const padding = 40;
+            const chartWidth = canvas.width - padding * 2;
+            const chartHeight = canvas.height - padding * 2;
+            const candleWidth = chartWidth / rates.length * 0.8;
+            const spacing = chartWidth / rates.length;
+            
+            // Draw background
+            ctx.fillStyle = '#0d1220';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            ctx.strokeStyle = '#1e3a5f';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                const y = padding + (chartHeight / 10) * i;
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(canvas.width - padding, y);
+                ctx.stroke();
+            }
+            
+            // Draw Y-axis labels
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 10; i++) {
+                const price = maxPrice - (priceRange / 10) * i;
+                const y = padding + (chartHeight / 10) * i;
+                ctx.fillText(price.toFixed(2), padding - 10, y + 3);
+            }
+            
+            // Draw candles
+            rates.forEach(function(rate, idx) {
+                const x = padding + idx * spacing + spacing / 2;
+                const openY = padding + chartHeight - ((rate.open - minPrice) / priceRange) * chartHeight;
+                const closeY = padding + chartHeight - ((rate.close - minPrice) / priceRange) * chartHeight;
+                const highY = padding + chartHeight - ((rate.high - minPrice) / priceRange) * chartHeight;
+                const lowY = padding + chartHeight - ((rate.low - minPrice) / priceRange) * chartHeight;
+                
+                // Wick
+                ctx.strokeStyle = rate.close >= rate.open ? '#4ade80' : '#ef4444';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, highY);
+                ctx.lineTo(x, lowY);
+                ctx.stroke();
+                
+                // Body
+                ctx.fillStyle = rate.close >= rate.open ? '#4ade80' : '#ef4444';
+                const bodyTop = Math.min(openY, closeY);
+                const bodyHeight = Math.abs(closeY - openY) || 1;
+                ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+            });
+            
+            // Draw axes
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, canvas.height - padding);
+            ctx.lineTo(canvas.width - padding, canvas.height - padding);
+            ctx.stroke();
+            
+            // Title
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(symbol + ' ' + tf, padding + 10, padding - 10);
+            
+            console.log('[CHART] Canvas chart rendered: ' + symbol + ' (' + rates.length + ' candles)');
+        }
+        
+        // Test rendering
+        async function runTests() {
+            const tests = [
+                { id: 1, symbol: 'EURUSD', price: basePrices['EURUSD'] },
+                { id: 2, symbol: 'BTCUSD', price: basePrices['BTCUSD'] },
+                { id: 3, symbol: 'XAUUSD', price: basePrices['XAUUSD'] }
+            ];
+            
+            for (const test of tests) {
+                try {
+                    const candles = generateCandles(test.symbol, test.price);
+                    const container = document.getElementById(`chart${test.id}`);
+                    const status = document.getElementById(`status${test.id}`);
+                    
+                    renderChartFallback(container, candles, test.symbol, 'H1');
+                    
+                    status.className = 'status-bar success';
+                    status.innerHTML = `✅ Chart rendered: ${candles.length} candles | Price range: ${test.price.toFixed(4)} ±2%`;
+                    console.log(`✅ Test ${test.id}: ${test.symbol} PASS`);
+                } catch (e) {
+                    const status = document.getElementById(`status${test.id}`);
+                    status.className = 'status-bar error';
+                    status.innerHTML = `❌ Error: ${e.message}`;
+                    console.error(`❌ Test ${test.id}: ${e.message}`);
+                }
+            }
+        }
+        
+        // Run tests on load
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>

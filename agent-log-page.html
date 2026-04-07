@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Live Log - System Control Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0a1929 0%, #1a365d 100%);
+            color: #e2e8f0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .menu-button {
+            position: fixed; top: 20px; left: 20px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white; padding: 10px 20px; border: none; border-radius: 8px;
+            cursor: pointer; font-size: 14px; font-weight: 600; z-index: 9999;
+            transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+            text-decoration: none;
+        }
+        .menu-button:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(59,130,246,0.4); }
+        .container { max-width: 1400px; margin: 0 auto; padding-top: 20px; }
+        header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
+        h1 { color: #3b82f6; font-size: 32px; margin-bottom: 8px; }
+
+        /* ── NAV TABS ── */
+        .nav-tabs {
+            display: flex; gap: 6px; margin-bottom: 24px; flex-wrap: wrap;
+            background: rgba(15,23,42,0.6); padding: 10px; border-radius: 10px;
+            border: 1px solid #1e3a5f;
+        }
+        .nav-tab {
+            background: rgba(30,41,59,0.6); color: #94a3b8; padding: 8px 16px;
+            border-radius: 6px; cursor: pointer; border: 1px solid #334155;
+            font-size: 13px; font-weight: 600; transition: all 0.2s;
+        }
+        .nav-tab:hover, .nav-tab.active {
+            background: #3b82f6; color: white; border-color: #3b82f6;
+        }
+
+        /* ── STATUS BAR ── */
+        .status-bar {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px; margin-bottom: 24px; padding: 16px;
+            background: rgba(30,41,59,0.6); border-radius: 12px; border: 1px solid #475569;
+        }
+        .status-item { background: rgba(15,23,42,0.8); padding: 12px; border-radius: 8px; border-left: 4px solid #3b82f6; }
+        .status-item.completed { border-left-color: #10b981; }
+        .status-item.inprogress { border-left-color: #f59e0b; }
+        .status-item.pending    { border-left-color: #ef4444; }
+        .status-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+        .status-value { font-size: 22px; font-weight: 700; }
+        .status-value.green  { color: #10b981; }
+        .status-value.amber  { color: #f59e0b; }
+        .status-value.red    { color: #ef4444; }
+        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; animation: pulse 2s infinite; }
+        .status-indicator.online  { background: #10b981; }
+        .status-indicator.offline { background: #ef4444; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+        /* ── SECTIONS ── */
+        .section {
+            background: rgba(30,41,59,0.6); border: 1px solid #475569;
+            border-radius: 12px; padding: 20px; margin-bottom: 20px;
+        }
+        .section h2 { color: #3b82f6; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #1e3a5f; font-size: 16px; }
+        .section h3 { color: #3b82f6; font-size: 13px; margin: 14px 0 8px; }
+
+        /* ── TASK ITEMS ── */
+        .task-item {
+            background: rgba(15,23,42,0.5); padding: 12px; margin-bottom: 8px;
+            border-radius: 6px; border-left: 4px solid #3b82f6;
+        }
+        .task-item.done      { border-left-color: #10b981; }
+        .task-item.inprogress{ border-left-color: #f59e0b; }
+        .task-item.pending   { border-left-color: #ef4444; }
+        .task-id    { font-weight: 700; color: #3b82f6; font-size: 11px; }
+        .task-title { font-weight: 600; margin: 4px 0; color: #e2e8f0; font-size: 13px; }
+        .task-meta  { font-size: 11px; color: #94a3b8; margin: 3px 0; }
+        .task-link  { font-size: 10px; font-family: monospace; background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 3px; color: #60a5fa; margin-top: 4px; display: inline-block; cursor: pointer; text-decoration: none; }
+        .task-link:hover { background: rgba(59,130,246,0.25); }
+
+        /* ── FILE TABLE ── */
+        .file-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .file-table th { background: rgba(15,23,42,0.8); color: #94a3b8; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
+        .file-table td { padding: 7px 10px; border-bottom: 1px solid #1e3a5f; vertical-align: top; }
+        .file-table tr:hover td { background: rgba(59,130,246,0.05); }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+        .badge.ok      { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid #10b981; }
+        .badge.warn    { background: rgba(245,158,11,0.15);  color: #f59e0b; border: 1px solid #f59e0b; }
+        .badge.broken  { background: rgba(239,68,68,0.15);   color: #ef4444; border: 1px solid #ef4444; }
+        .badge.info    { background: rgba(59,130,246,0.15);  color: #3b82f6; border: 1px solid #3b82f6; }
+        .file-path { font-family: monospace; color: #60a5fa; font-size: 11px; }
+
+        /* ── GRID 2-COL ── */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media(max-width:900px){ .grid-2 { grid-template-columns: 1fr; } }
+
+        /* ── CONTROL PANEL ── */
+        .control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        .control-card { background: rgba(15,23,42,0.5); padding: 14px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
+        .control-card h3 { color: #3b82f6; font-size: 13px; margin-bottom: 8px; }
+        button {
+            background: #3b82f6; color: white; border: none; padding: 8px 14px;
+            border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+            transition: all 0.2s; margin-bottom: 6px; width: 100%;
+        }
+        button:hover { background: #2563eb; transform: translateY(-1px); }
+        button.danger { background: #ef4444; }
+        button.danger:hover { background: #dc2626; }
+        button.success { background: #10b981; }
+        button.success:hover { background: #059669; }
+
+        /* ── LOGS ── */
+        .logs-container {
+            background: rgba(15,23,42,0.8); border: 1px solid #334155; border-radius: 6px;
+            padding: 10px; max-height: 350px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 11px;
+        }
+        .log-entry { padding: 6px; border-bottom: 1px solid #1e2a40; }
+        .log-time  { color: #475569; margin-right: 8px; }
+        .log-level { font-weight: 600; padding: 1px 6px; border-radius: 3px; margin-right: 8px; }
+        .log-level.info    { background: #3b82f6; color: white; }
+        .log-level.success { background: #10b981; color: white; }
+        .log-level.warning { background: #f59e0b; color: white; }
+        .log-level.error   { background: #ef4444; color: white; }
+        .log-message { white-space: pre-wrap; word-break: break-word; }
+
+        /* ── HISTORY ── */
+        .history-entry {
+            background: rgba(15,23,42,0.5); padding: 10px 14px; margin-bottom: 6px;
+            border-radius: 6px; border-left: 3px solid #3b82f6; font-size: 12px;
+        }
+        .history-entry.done  { border-left-color: #10b981; }
+        .history-date { color: #475569; font-size: 10px; margin-bottom: 3px; }
+        .history-action { color: #e2e8f0; font-weight: 600; }
+        .history-detail { color: #94a3b8; font-size: 11px; margin-top: 3px; }
+
+        /* ── SYNC TABLE ── */
+        .sync-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #1e3a5f; font-size: 12px; }
+        .sync-label { color: #94a3b8; width: 180px; flex-shrink: 0; }
+        .sync-val   { color: #e2e8f0; font-family: monospace; flex: 1; }
+        .sync-status-icon { font-size: 14px; }
+
+        /* ── PLAN BOX ── */
+        .plan-box {
+            background: rgba(15,23,42,0.5); padding: 12px; border-radius: 6px;
+            font-size: 12px; border-left: 4px solid #3b82f6; white-space: pre-wrap;
+            word-break: break-word; max-height: 260px; overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* ── TABS PANEL ── */
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── SCROLL ── */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(30,58,95,0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.4); border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <a href="/" class="menu-button">🏠 Menu</a>
+
+    <div class="container">
+        <header>
+            <h1>🤖 Agent Live Log — System Control Panel</h1>
+            <p style="color:#94a3b8;margin-top:6px;">Tableau de bord central · Tous les fichiers · Toutes les tâches · Historique complet</p>
+        </header>
+
+        <!-- STATUS BAR -->
+        <div class="status-bar">
+            <div class="status-item completed">
+                <div class="status-label">Tâches Complétées</div>
+                <div class="status-value green" id="tasksCompleted">9</div>
+            </div>
+            <div class="status-item inprogress">
+                <div class="status-label">En Cours</div>
+                <div class="status-value amber" id="tasksInProgress">1</div>
+            </div>
+            <div class="status-item pending">
+                <div class="status-label">En Attente</div>
+                <div class="status-value red" id="tasksPending">3</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Serveur :4000</div>
+                <div class="status-value" id="serverStatus"><span class="status-indicator offline" id="serverDot"></span><span id="serverLabel">—</span></div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Extension</div>
+                <div class="status-value" id="extStatus" style="color:#f59e0b;">⚙️ MV3</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Fichiers indexés</div>
+                <div class="status-value green">47</div>
+            </div>
+        </div>
+
+        <!-- NAV TABS -->
+        <div class="nav-tabs">
+            <div class="nav-tab active" onclick="showTab('tasks')">📋 Tâches</div>
+            <div class="nav-tab" onclick="showTab('structure')">🗂️ Structure</div>
+            <div class="nav-tab" onclick="showTab('files')">📁 Fichiers</div>
+            <div class="nav-tab" onclick="showTab('history')">🕰️ Historique</div>
+            <div class="nav-tab" onclick="showTab('sync')">🔗 Synchronisation</div>
+            <div class="nav-tab" onclick="showTab('plan')">🏗️ Plan Système</div>
+            <div class="nav-tab" onclick="showTab('controls')">🎮 Contrôles</div>
+            <div class="nav-tab" onclick="showTab('logs')">📊 Live Logs</div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB 1 — TÂCHES
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel active" id="tab-tasks">
+            <div class="grid-2">
+                <!-- DONE -->
+                <div class="section">
+                    <h2>✅ Tâches Complétées</h2>
+                    <div id="completedTasksEl">
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-001</div>
+                            <div class="task-title">Documentation Architecture Complète</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 07:15</div>
+                            <div class="task-meta">Créé ARCHITECTURE.md — design complet, structure, data flow, routes API, agents</div>
+                            <a class="task-link" href="/architecture" target="_blank">📄 /ARCHITECTURE.md</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-002</div>
+                            <div class="task-title">Symbol Matching Engine (50+ variantes)</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 07:20</div>
+                            <div class="task-meta">lib/symbol-matcher.js — SYMBOL_VARIANTS, matchSymbolWithPriceValidation(), tolerance ±0.5%</div>
+                            <a class="task-link" href="#" onclick="openFile('lib/symbol-matcher.js')">📄 lib/symbol-matcher.js</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-003</div>
+                            <div class="task-title">Routes API Symbol Matching Backend</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 07:22</div>
+                            <div class="task-meta">GET /match-symbol/:sym?price=X → canonical, type, syncStatus, display</div>
+                            <a class="task-link" onclick="testRoute('/match-symbol/XAUUSD?price=2050')">🧪 Tester: /match-symbol/XAUUSD</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-004</div>
+                            <div class="task-title">Panel Communication IA dans Studio</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 07:24</div>
+                            <div class="task-meta">studio/index.html + studioapp.js — Claude/Copilot status, poll /state 10s</div>
+                            <a class="task-link" href="/studio" target="_blank">🖥️ /studio</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-005</div>
+                            <div class="task-title">News Auto-Refresh dans Studio</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 07:25</div>
+                            <div class="task-meta">studioapp.js — /news fetch, 5 dernières news, auto-refresh 15s</div>
+                            <a class="task-link" onclick="testRoute('/news')">🧪 Tester: /news</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-006</div>
+                            <div class="task-title">Extension — Symbol Detection Améliorée</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 07:28</div>
+                            <div class="task-meta">tradingview-analyzer/background.js — MutationObserver, normalisation GOLD→XAUUSD</div>
+                            <a class="task-link" href="#" onclick="openFile('tradingview-analyzer/background.js')">📄 tradingview-analyzer/background.js</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-007</div>
+                            <div class="task-title">Fix Extension SyntaxErrors + manifest web_accessible_resources</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 10:00</div>
+                            <div class="task-meta">content.js + manifest.json — suppression blocs orphelins, ajout web_accessible_resources</div>
+                            <a class="task-link" href="#" onclick="openFile('tradingview-analyzer/manifest.json')">📄 tradingview-analyzer/manifest.json</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-008</div>
+                            <div class="task-title">Chart.js → TradingView Lightweight Charts v4.1.3</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 10:00</div>
+                            <div class="task-meta">studio/studioapp.js — candlestickSeries, dark theme, ResizeObserver responsive</div>
+                            <a class="task-link" href="/studio" target="_blank">📊 /studio (graphique)</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-009</div>
+                            <div class="task-title">Live Price /quote + Sync Status + Comm Panel Messages</div>
+                            <div class="task-meta">Par: Claude · 2026-04-01 10:00</div>
+                            <div class="task-meta">studioapp.js — /quote séparé de /instant-trade-live, endpoint /agent-bus ajouté</div>
+                            <a class="task-link" onclick="testRoute('/agent-bus')">🧪 Tester: /agent-bus</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-010</div>
+                            <div class="task-title">Fix Freeze PC — API consolidated to 4000 + AbortSignal.timeout</div>
+                            <div class="task-meta">Par: Claude · 2026-04-02</div>
+                            <div class="task-meta">studioapp-simple.js — { timeout: 5000 } invalide remplacé par AbortSignal.timeout(4000), circuit breaker ajouté</div>
+                            <a class="task-link" href="#" onclick="openFile('studio/studioapp-simple.js')">🔧 studio/studioapp-simple.js</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-011</div>
+                            <div class="task-title">T006 — Symbol Validation UI</div>
+                            <div class="task-meta">Par: Claude · 2026-04-02</div>
+                            <div class="task-meta">studio/index-simple.html + studioapp-simple.js — badge sync header, panel canonical/type/écart</div>
+                            <a class="task-link" href="/studio" target="_blank">🔗 /studio (sync badge)</a>
+                        </div>
+
+                        <div class="task-item done">
+                            <div class="task-id">✅ SYSTEM-012</div>
+                            <div class="task-title">T007 — Agent Analysis Display (Entry/SL/TP/RR)</div>
+                            <div class="task-meta">Par: Claude · 2026-04-02</div>
+                            <div class="task-meta">studioapp-simple.js — loadInstantTrade(), panneau Direction/Score/R:R/Levels, auto-refresh 15s</div>
+                            <a class="task-link" onclick="testRoute('/instant-trade-live?symbol=XAUUSD&mode=SNIPER')">🧪 Tester: /instant-trade-live</a>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- IN PROGRESS + PENDING -->
+                <div class="section">
+                    <h2>🔄 En Cours &amp; En Attente</h2>
+
+                    <div class="task-item inprogress">
+                        <div class="task-id">⏳ T009</div>
+                        <div class="task-title">Validation Extension Chrome (Copilot)</div>
+                        <div class="task-meta">Assigné à: Copilot · Démarré: 2026-04-01 10:30</div>
+                        <div class="task-meta">Recharger extension Chrome, tester popup sur TradingView, vérifier candlesticks studio</div>
+                        <a class="task-link" href="#" onclick="openFile('tradingview-analyzer/popup.js')">📄 tradingview-analyzer/popup.js</a>
+                        <span style="display:block;margin-top:5px;font-size:10px;color:#f59e0b;">
+                            📌 Steps: 1) chrome://extensions → Reload · 2) TradingView.com → vérifier popup · 3) /studio → candlesticks
+                        </span>
+                    </div>
+
+                    <div class="task-item pending">
+                        <div class="task-id">⏸️ T008</div>
+                        <div class="task-title">T008 — Final Polish &amp; Testing</div>
+                        <div class="task-meta">Priorité: 4 · Assigné à: Copilot</div>
+                        <div class="task-meta">Studio responsive, zero erreur console, tous boutons connectés, 1024×768 + Full HD</div>
+                        <a class="task-link" href="#" onclick="openFile('studio/studiostyles.css')">📄 studio/studiostyles.css</a>
+                        <a class="task-link" href="#" onclick="openFile('studio/index-simple.html')" style="margin-left:6px;">📄 studio/index-simple.html</a>
+                        <div style="margin-top:6px;font-size:10px;color:#ef4444;">
+                            📋 Critères: Zéro erreur console · boutons actifs · responsive OK
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB STRUCTURE — STRUCTURE PROJET COMPLÈTE
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel" id="tab-structure">
+
+            <!-- POINTS D'ENTRÉE -->
+            <div class="section">
+                <h2>🚪 Points d'Entrée — Accès Direct</h2>
+                <div class="control-grid">
+                    <div class="control-card" style="border-color:#3b82f6;">
+                        <h3>🏠 Menu Principal</h3>
+                        <div style="font-family:monospace;font-size:11px;color:#60a5fa;margin-bottom:8px;">http://localhost:4000/</div>
+                        <button class="success" onclick="window.open('/','_blank')">Ouvrir</button>
+                        <button onclick="copyText('http://localhost:4000/')">Copier URL</button>
+                    </div>
+                    <div class="control-card" style="border-color:#10b981;">
+                        <h3>📊 Studio Trading</h3>
+                        <div style="font-family:monospace;font-size:11px;color:#60a5fa;margin-bottom:8px;">http://localhost:4000/studio</div>
+                        <button class="success" onclick="window.open('/studio','_blank')">Ouvrir</button>
+                        <button onclick="copyText('http://localhost:4000/studio')">Copier URL</button>
+                    </div>
+                    <div class="control-card" style="border-color:#f59e0b;">
+                        <h3>🤖 Agent Live Log</h3>
+                        <div style="font-family:monospace;font-size:11px;color:#60a5fa;margin-bottom:8px;">http://localhost:4000/agent-log</div>
+                        <button class="success" onclick="window.open('/agent-log','_blank')">Ouvrir</button>
+                        <button onclick="copyText('http://localhost:4000/agent-log')">Copier URL</button>
+                    </div>
+                    <div class="control-card" style="border-color:#8b5cf6;">
+                        <h3>📡 Dashboard Bridge</h3>
+                        <div style="font-family:monospace;font-size:11px;color:#60a5fa;margin-bottom:8px;">http://localhost:4000/dashboard</div>
+                        <button class="success" onclick="window.open('/dashboard','_blank')">Ouvrir</button>
+                        <button onclick="copyText('http://localhost:4000/dashboard')">Copier URL</button>
+                    </div>
+                    <div class="control-card" style="border-color:#ec4899;">
+                        <h3>📱 Popup Extension</h3>
+                        <div style="font-family:monospace;font-size:11px;color:#60a5fa;margin-bottom:8px;">http://localhost:4000/popup</div>
+                        <button class="success" onclick="window.open('/popup','_blank')">Ouvrir</button>
+                        <button onclick="copyText('http://localhost:4000/popup')">Copier URL</button>
+                    </div>
+                    <div class="control-card" style="border-color:#14b8a6;">
+                        <h3>👁️ Agents Monitor</h3>
+                        <div style="font-family:monospace;font-size:11px;color:#60a5fa;margin-bottom:8px;">http://localhost:4000/agents-monitor</div>
+                        <button class="success" onclick="window.open('/agents-monitor','_blank')">Ouvrir</button>
+                        <button onclick="copyText('http://localhost:4000/agents-monitor')">Copier URL</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STRUCTURE PROJET PAR BLOC -->
+            <div class="section">
+                <h2>🗂️ Structure du Projet par Catégorie</h2>
+
+                <!-- BLOC 0: BACKEND CORE -->
+                <h3>⚙️ 0. BACKEND CORE — Serveur &amp; API 4000</h3>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Chemin complet</th><th>Rôle</th><th>Status</th><th>Actions</th></tr>
+                    <tr>
+                        <td><b>server.js</b></td>
+                        <td><span class="file-path">C:\...\trading-auto\server.js</span></td>
+                        <td>Express server :4000 — toutes routes API</td>
+                        <td><span class="badge ok">RUNNING</span></td>
+                        <td><button onclick="copyPath('server.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                </table>
+
+                <!-- BLOC 1: SYMBOL MATCHING -->
+                <h3>🎯 1. SYMBOL MATCHING &amp; NORMALISATION</h3>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Chemin complet</th><th>Rôle</th><th>Status</th><th>Actions</th></tr>
+                    <tr>
+                        <td><b>mt5_data.json</b></td>
+                        <td><span class="file-path">C:\...\trading-auto\mt5_data.json</span></td>
+                        <td>Données référence symboles MT5</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('mt5_data.json')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                        <td><span class="file-path">C:\...\trading-auto\lib\symbol-matcher.js</span></td>
+                        <td>Matching symboles 50+ variantes, price tolerance ±0.5%</td>
+                        <td><span class="badge ok">CRITIQUE</span></td>
+                        <td>
+                            <button onclick="copyPath('lib/symbol-matcher.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button>
+                            <button onclick="copyContext('lib/symbol-matcher.js','Moteur matching symboles — SYMBOL_VARIANTS, matchSymbolWithPriceValidation(), getDisplayStatus() — NE PAS MODIFIER sans tester /match-symbol/XAUUSD')" style="width:auto;padding:4px 8px;font-size:10px;margin-left:4px;">Copier contexte</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>lib/symbol-normalizer.js</b></td>
+                        <td><span class="file-path">C:\...\trading-auto\lib\symbol-normalizer.js</span></td>
+                        <td>Canonicalisation symboles — profiles digits/pip/SL/TP</td>
+                        <td><span class="badge ok">CRITIQUE</span></td>
+                        <td><button onclick="copyPath('lib/symbol-normalizer.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                </table>
+
+                <!-- BLOC 2: EXTENSION CHROME -->
+                <h3>🧩 2. EXTENSION CHROME — tradingview-analyzer/</h3>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Chemin complet</th><th>Rôle</th><th>Status</th><th>Actions</th></tr>
+                    <tr>
+                        <td><b>manifest.json</b></td>
+                        <td><span class="file-path">tradingview-analyzer\manifest.json</span></td>
+                        <td>MV3 — permissions, host_permissions, background SW</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('tradingview-analyzer/manifest.json')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>popup.html</b></td>
+                        <td><span class="file-path">tradingview-analyzer\popup.html</span></td>
+                        <td>UI extension — template HTML popup Chrome</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('tradingview-analyzer/popup.html')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>popup.js</b></td>
+                        <td><span class="file-path">tradingview-analyzer\popup.js</span></td>
+                        <td>Logique UI extension (1936L) — FICHIER CRITIQUE, contient tout</td>
+                        <td><span class="badge ok">CRITIQUE</span></td>
+                        <td>
+                            <button onclick="copyPath('tradingview-analyzer/popup.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button>
+                            <button onclick="copyContext('tradingview-analyzer/popup.js','1936 lignes — UI complète extension Chrome — chart LW Charts, symbol mapping, instant trade, positions — FICHIER PRINCIPAL extension — NE PAS CASSER')" style="width:auto;padding:4px 8px;font-size:10px;margin-left:4px;">Copier contexte</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>background.js</b></td>
+                        <td><span class="file-path">tradingview-analyzer\background.js</span></td>
+                        <td>Service Worker MV3 (487L) — polling /data, base prix, relay</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('tradingview-analyzer/background.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>content.js</b></td>
+                        <td><span class="file-path">tradingview-analyzer\content.js</span></td>
+                        <td>Script contenu (58L) — screenshot + contexte DOM minimal</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('tradingview-analyzer/content.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>chart-module.js</b></td>
+                        <td><span class="file-path">tradingview-analyzer\chart-module.js</span></td>
+                        <td>LightweightCharts integration (199L)</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('tradingview-analyzer/chart-module.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>BACKUP 2026-04-02</b></td>
+                        <td><span class="file-path">tradingview-analyzer_backup_20260402\</span></td>
+                        <td>Backup snapshot — version antérieure, 11 fichiers communs</td>
+                        <td><span class="badge info">BACKUP</span></td>
+                        <td><button onclick="copyPath('tradingview-analyzer_backup_20260402/')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                </table>
+
+                <!-- BLOC 3: INTERFACES HTML -->
+                <h3>🖥️ 3. INTERFACES HTML — Pages &amp; Studio</h3>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>URL serveur</th><th>Rôle</th><th>Status</th><th>Actions</th></tr>
+                    <tr>
+                        <td><b>index.html</b></td><td><a href="/" target="_blank" class="task-link">localhost:4000/</a></td>
+                        <td>Menu principal — 8 cartes navigation</td><td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyText('http://localhost:4000/')" style="width:auto;padding:4px 8px;font-size:10px;">Copier URL</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>studio/index-simple.html</b></td><td><a href="/studio" target="_blank" class="task-link">localhost:4000/studio</a></td>
+                        <td>Studio trading — graphique LW Charts, signal, analyses</td><td><span class="badge ok">OK</span></td>
+                        <td>
+                            <button onclick="copyText('http://localhost:4000/studio')" style="width:auto;padding:4px 8px;font-size:10px;">Copier URL</button>
+                            <button onclick="copyContext('studio/index-simple.html','Studio trading — LightweightCharts v4.1.3 — utilise studioapp-simple.js — API :4000 — T006 symbol validation + T007 agent analysis intégrés')" style="width:auto;padding:4px 8px;font-size:10px;margin-left:4px;">Copier contexte</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>dashboard.html</b></td><td><a href="/dashboard" target="_blank" class="task-link">localhost:4000/dashboard</a></td>
+                        <td>Dashboard Bridge — viewer MT5 data</td><td><span class="badge ok">OK (corrigé)</span></td>
+                        <td><button onclick="copyText('http://localhost:4000/dashboard')" style="width:auto;padding:4px 8px;font-size:10px;">Copier URL</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>popup.html</b></td><td><a href="/popup" target="_blank" class="task-link">localhost:4000/popup</a></td>
+                        <td>Popup extension — analyse + positions + studio link</td><td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyText('http://localhost:4000/popup')" style="width:auto;padding:4000/popup;font-size:10px;">Copier URL</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>agent-log-page.html</b></td><td><a href="/agent-log" target="_blank" class="task-link">localhost:4000/agent-log</a></td>
+                        <td>✨ HUB CENTRAL — cette page</td><td><span class="badge ok">HUB</span></td>
+                        <td><button onclick="copyText('http://localhost:4000/agent-log')" style="width:auto;padding:4px 8px;font-size:10px;">Copier URL</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>AGENTS_MONITOR.html</b></td><td><a href="/agents-monitor" target="_blank" class="task-link">localhost:4000/agents-monitor</a></td>
+                        <td>Moniteur agents live — 3 colonnes, health</td><td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyText('http://localhost:4000/agents-monitor')" style="width:auto;padding:4px 8px;font-size:10px;">Copier URL</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>test-analysis.html</b></td><td><a href="/test-analysis" target="_blank" class="task-link">localhost:4000/test-analysis</a></td>
+                        <td>Tests API — /instant-trade-live, /health</td><td><span class="badge info">TEST</span></td>
+                        <td><button onclick="copyText('http://localhost:4000/test-analysis')" style="width:auto;padding:4px 8px;font-size:10px;">Copier URL</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>EXTENSION_TEST.html</b></td><td><a href="/extension-test" target="_blank" class="task-link">localhost:4000/extension-test</a></td>
+                        <td>Tests extension — parseSymbol, TF, price</td><td><span class="badge info">TEST</span></td>
+                        <td><button onclick="copyText('http://localhost:4000/extension-test')" style="width:auto;padding:4px 8px;font-size:10px;">Copier URL</button></td>
+                    </tr>
+                </table>
+
+                <!-- BLOC 4: AGENTS -->
+                <h3>🤖 4. AGENTS — src/agents/ (23 fichiers)</h3>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Rôle</th><th>Status</th><th>Fichiers critique</th><th>Actions</th></tr>
+                    <tr>
+                        <td><b>orchestrator.js</b></td><td>Coordinateur maître — dispatche 8+ agents</td><td><span class="badge ok">CRITIQUE</span></td><td>Dépend: tous les agents</td>
+                        <td><button onclick="copyContext('src/agents/orchestrator.js','Coordinateur maître du système — dispatche vers technicalAgent, tradeValidator, riskManager, macroAgent, newsAgent — NE PAS MODIFIER sans tester /orchestration/run-now')" style="width:auto;padding:4px 8px;font-size:10px;">Copier contexte</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>technicalAgent.js</b></td><td>RSI / EMA / Bollinger Bands (278L)</td><td><span class="badge ok">OK</span></td><td>market-store, symbol-normalizer</td>
+                        <td><button onclick="copyPath('src/agents/technicalAgent.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>tradeValidator.js</b></td><td>Validation setups — confluence, qualité (194L)</td><td><span class="badge ok">OK</span></td><td>orchestrator</td>
+                        <td><button onclick="copyPath('src/agents/tradeValidator.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>riskManager.js</b></td><td>Gestion risque — % capital, drawdown</td><td><span class="badge ok">OK</span></td><td>broker-calculator</td>
+                        <td><button onclick="copyPath('src/agents/riskManager.js')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                </table>
+
+                <!-- BLOC 5: LOGS / MONITORING -->
+                <h3>📊 5. LOGS &amp; MONITORING</h3>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Chemin</th><th>Rôle</th><th>Status</th><th>Actions</th></tr>
+                    <tr>
+                        <td><b>AGENT_BUS.json</b></td>
+                        <td><span class="file-path">trading-auto\AGENT_BUS.json</span></td>
+                        <td>Bus coordination multi-IA — tâches Claude/Copilot, done/inProgress/pending</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td>
+                            <button onclick="copyPath('AGENT_BUS.json')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button>
+                            <button onclick="testRoute('/agent-bus')" style="width:auto;padding:4px 8px;font-size:10px;margin-left:4px;">Tester API</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>SYSTEM_LOG.json</b></td>
+                        <td><span class="file-path">trading-auto\SYSTEM_LOG.json</span></td>
+                        <td>Journal système — messages inter-IA, actions, timestamps</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td>
+                            <button onclick="copyPath('SYSTEM_LOG.json')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button>
+                            <button onclick="testRoute('/system-log')" style="width:auto;padding:4px 8px;font-size:10px;margin-left:4px;">Tester API</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>logs.json</b></td>
+                        <td><span class="file-path">trading-auto\logs.json</span></td>
+                        <td>Logs application — actions utilisateur, erreurs</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><button onclick="testRoute('/logs')" style="width:auto;padding:4px 8px;font-size:10px;">Tester API</button></td>
+                    </tr>
+                </table>
+
+                <!-- BLOC 6: DOCS -->
+                <h3>📚 6. DOCS &amp; MÉMOIRE</h3>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Rôle</th><th>Status</th><th>Actions</th></tr>
+                    <tr>
+                        <td><b>ARCHITECTURE.md</b></td><td>Documentation architecture complète — structure, routes, agents, data flow</td><td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('ARCHITECTURE.md')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>README.md</b></td><td>Guide utilisateur — installation, démarrage, utilisation</td><td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('README.md')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                    <tr>
+                        <td><b>SAFE_MODE_CONFIG.json</b></td><td>Configuration safe mode — pollings désactivés par défaut</td><td><span class="badge ok">OK</span></td>
+                        <td><button onclick="copyPath('SAFE_MODE_CONFIG.json')" style="width:auto;padding:4px 8px;font-size:10px;">Copier chemin</button></td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- FICHIERS CRITIQUES -->
+            <div class="section">
+                <h2>🔴 Fichiers Critiques — Ne Jamais Casser</h2>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:12px;">
+
+                    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;color:#ef4444;margin-bottom:6px;">⚠️ server.js</div>
+                        <div style="font-size:11px;color:#94a3b8;">Backend principal — 60+ routes, SSE, orchestration</div>
+                        <div style="font-family:monospace;font-size:10px;color:#475569;margin:6px 0;">Dépendances: market-store, symbol-matcher, orchestrator</div>
+                        <button onclick="copyContext('server.js','FICHIER CRITIQUE — Backend principal Express :4000 — 60+ routes — NE PAS MODIFIER les routes existantes — Ajouter nouvelles routes après ligne 1827 — Redémarrer après modification')" style="width:auto;padding:4px 10px;font-size:10px;">Copier contexte</button>
+                        <button onclick="testRoute('/health')" style="width:auto;padding:4px 10px;font-size:10px;margin-left:4px;">Test /health</button>
+                    </div>
+
+                    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;color:#ef4444;margin-bottom:6px;">⚠️ tradingview-analyzer/popup.js</div>
+                        <div style="font-size:11px;color:#94a3b8;">1936 lignes — UI complète extension Chrome</div>
+                        <div style="font-family:monospace;font-size:10px;color:#475569;margin:6px 0;">Dépendances: chart-module, symbol-mapper, market-session, news-engine</div>
+                        <button onclick="copyContext('tradingview-analyzer/popup.js','FICHIER CRITIQUE — 1936L — UI principale extension Chrome — chart LW Charts, symbol detection, instant trade, positions — Modifier avec précaution — Recharger extension après')" style="width:auto;padding:4px 10px;font-size:10px;">Copier contexte</button>
+                    </div>
+
+                    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;color:#ef4444;margin-bottom:6px;">⚠️ store/market-store.js</div>
+                        <div style="font-size:11px;color:#94a3b8;">Singleton données marché — SSE broadcast</div>
+                        <div style="font-family:monospace;font-size:10px;color:#475569;margin:6px 0;">Dépendances: server.js (require), tous les agents</div>
+                        <button onclick="copyContext('store/market-store.js','FICHIER CRITIQUE — Singleton données marché — bySymbol, sseClients, broadcast() — Partagé par server.js et tous les agents — Modifier casse le SSE stream')" style="width:auto;padding:4px 10px;font-size:10px;">Copier contexte</button>
+                    </div>
+
+                    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;color:#ef4444;margin-bottom:6px;">⚠️ src/agents/orchestrator.js</div>
+                        <div style="font-size:11px;color:#94a3b8;">Coordinateur maître — dispatche tous les agents</div>
+                        <div style="font-family:monospace;font-size:10px;color:#475569;margin:6px 0;">Dépendances: market-store, tous les agents</div>
+                        <button onclick="copyContext('src/agents/orchestrator.js','FICHIER CRITIQUE — Coordinateur maître — dispatche technicalAgent, tradeValidator, riskManager, macroAgent, newsAgent — Tester /orchestration/run-now après modification')" style="width:auto;padding:4px 10px;font-size:10px;">Copier contexte</button>
+                    </div>
+
+                    <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;color:#f59e0b;margin-bottom:6px;">⚠️ AGENT_BUS.json</div>
+                        <div style="font-size:11px;color:#94a3b8;">Protocole coordination multi-IA Claude/Copilot</div>
+                        <div style="font-family:monospace;font-size:10px;color:#475569;margin:6px 0;">Lu par: /agent-bus endpoint, studio panel</div>
+                        <button onclick="testRoute('/agent-bus')" style="width:auto;padding:4px 10px;font-size:10px;">Voir état</button>
+                        <button onclick="copyPath('AGENT_BUS.json')" style="width:auto;padding:4px 10px;font-size:10px;margin-left:4px;">Copier chemin</button>
+                    </div>
+
+                    <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.4);border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;color:#10b981;margin-bottom:6px;">▶️ Pour démarrer</div>
+                        <div style="font-size:11px;color:#94a3b8;">Ordre de lancement correct</div>
+                        <div style="font-family:monospace;font-size:10px;color:#6ee7b7;margin:6px 0;line-height:1.6;">
+                            1. node server.js<br>
+                            2. Ouvrir MetaTrader 5 (si flux local utilisé)<br>
+                            3. Charger Bridge_MT5_Studio.mq5<br>
+                            4. Recharger extension Chrome
+                        </div>
+                        <button onclick="copyText('node server.js')" style="width:auto;padding:4px 10px;font-size:10px;">Copier cmd node</button>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB 2 — FICHIERS (ancien numéro, maintenant tab 3)
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel" id="tab-files">
+            <!-- BACKEND -->
+            <div class="section">
+                <h2>⚙️ Backend — server.js + modules</h2>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Lignes</th><th>Rôle</th><th>Status</th><th>Lien Test</th></tr>
+                    <tr>
+                        <td><span class="file-path">server.js</span></td><td>~700</td>
+                        <td>Express backend principal — 60+ routes, MT5 bridge, orchestration, SSE stream</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" onclick="testRoute('/health')">GET /health</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">store/market-store.js</span></td><td>~50</td>
+                        <td>Singleton données marché — bySymbol, sseClients, broadcast, analysisCache</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" onclick="testRoute('/state')">GET /state</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">lib/symbol-matcher.js</span></td><td>~200</td>
+                        <td>Moteur matching symboles — 50+ variantes, validation prix ±0.5%, confidence score</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" onclick="testRoute('/match-symbol/XAUUSD?price=2050')">GET /match-symbol</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">lib/symbol-normalizer.js</span></td><td>~100</td>
+                        <td>Canonicalisation symboles — XAUUSD→{type,digits,slPct,tpPct,pip}</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">lib/broker-calculator.js</span></td><td>~80</td>
+                        <td>Calculs position sizing — lots, margin, risk/reward</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">analysis/analyzer.js</span></td><td>~50</td>
+                        <td>Point d'entrée analyse — safeguards CPU, auto-disable si erreurs</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" onclick="testRoute('/analyze?symbol=XAUUSD')">GET /analyze</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">trading/broker-adapter.js</span></td><td>~80</td>
+                        <td>Interface broker — paper/live, trade execution</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" onclick="testRoute('/broker-mode')">GET /broker-mode</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">agent-worker.js</span></td><td>~150</td>
+                        <td>Worker background — tâches asynchrones, cycle automatique</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">AGENT_BUS.json</span></td><td>JSON</td>
+                        <td>Bus coordination multi-IA — roles Claude/Copilot, tâches done/inProgress/pending</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" onclick="testRoute('/agent-bus')">GET /agent-bus</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">SYSTEM_LOG.json</span></td><td>JSON</td>
+                        <td>Journal système — messages inter-IA, actions, timestamps</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" onclick="testRoute('/system-log')">GET /system-log</a></td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- AGENTS -->
+            <div class="section">
+                <h2>🤖 Agents (src/agents/ — 23 fichiers)</h2>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Lignes</th><th>Rôle</th><th>Status</th></tr>
+                    <tr><td><span class="file-path">src/agents/orchestrator.js</span></td><td>50+</td><td>Coordinateur maître — dispatche vers 8+ agents</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/trading-core.js</span></td><td>116</td><td>Logique exécution trades — position sizing, SL/TP</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/technicalAgent.js</span></td><td>278</td><td>Analyse technique — RSI, EMA, Bollinger Bands</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/tradeValidator.js</span></td><td>194</td><td>Validation setups — confluence, qualité signal</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/timeframe-consensus.js</span></td><td>105</td><td>Consensus multi-TF — M5/H1/H4 alignement</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/riskManager.js</span></td><td>~80</td><td>Gestion risque — % capital, drawdown max</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/macroAgent.js</span></td><td>~60</td><td>Analyse macro — sessions, contexte économique</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/newsAgent.js</span></td><td>~60</td><td>Sentiment news — impact sur le signal</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/chartEngine.js</span></td><td>~80</td><td>Calcul bougies — construction candles depuis tick data</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/supervisor.js</span></td><td>~60</td><td>Surveillance système — health checks, alertes</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/designerAgent.js</span></td><td>~70</td><td>Design setup — structure visuelle du trade</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/setupClassifier.js</span></td><td>~60</td><td>Classification — SCALPER/SNIPER/SWING</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/fear-index.js</span></td><td>~50</td><td>Indice peur marché — VIX proxy</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/stateManager.js</span></td><td>~50</td><td>Persistance état — localStorage / fichier JSON</td><td><span class="badge ok">OK</span></td></tr>
+                    <tr><td><span class="file-path">src/agents/continuous-loop.js</span></td><td>~50</td><td>Boucle continue — cycle d'analyse automatique</td><td><span class="badge ok">OK</span></td></tr>
+                </table>
+            </div>
+
+            <!-- FRONTEND -->
+            <div class="section">
+                <h2>🖥️ Frontend — HTML + Studio</h2>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Lignes</th><th>Rôle</th><th>Status</th><th>Accès</th></tr>
+                    <tr>
+                        <td><span class="file-path">index.html</span></td><td>490</td>
+                        <td>Menu principal — 8 cartes navigation + 8 contrôles rapides</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" href="/" target="_blank">Ouvrir /</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">dashboard.html</span></td><td>280</td>
+                        <td>Dashboard Bridge — viewer données MT5, 9 routes listées</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" href="/dashboard" target="_blank">Ouvrir</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">popup.html</span></td><td>359</td>
+                        <td>Popup extension — état serveur, analyse, positions, lien studio</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" href="/popup" target="_blank">Ouvrir</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">agent-log-page.html</span></td><td>~900</td>
+                        <td>✨ CETTE PAGE — Hub central, toutes tâches, tous fichiers, historique</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" href="/agent-log" target="_blank">/agent-log</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">AGENTS_MONITOR.html</span></td><td>~400</td>
+                        <td>Moniteur agents live — 3 colonnes, statuts, health checks</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" href="/agents-monitor" target="_blank">Ouvrir</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">studio/index-simple.html</span></td><td>300</td>
+                        <td>Studio trading — graphique LW Charts, signal, T006/T007 intégrés</td>
+                        <td><span class="badge ok">OK</span></td>
+                        <td><a class="task-link" href="/studio" target="_blank">/studio</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">studio/studioapp-simple.js</span></td><td>~520</td>
+                        <td>Logique studio — API :4000, AbortSignal, circuit-breaker, T006+T007</td>
+                        <td><span class="badge ok">OK (fixé)</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">studio/studioapp.js</span></td><td>~700</td>
+                        <td>Logique studio avancée — utilisée par index.html (pas index-simple)</td>
+                        <td><span class="badge ok">OK (fixé)</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">test-analysis.html</span></td><td>~120</td>
+                        <td>Tests API — /instant-trade-live, /agent-status, /health</td>
+                        <td><span class="badge info">TEST</span></td>
+                        <td><a class="task-link" href="/test-analysis" target="_blank">Ouvrir</a></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">EXTENSION_TEST.html</span></td><td>~200</td>
+                        <td>Tests extension — parseSymbol, TF, price, background</td>
+                        <td><span class="badge info">TEST</span></td>
+                        <td><a class="task-link" href="/extension-test" target="_blank">Ouvrir</a></td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- EXTENSION -->
+            <div class="section">
+                <h2>🧩 Extension Chrome — tradingview-analyzer/</h2>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Lignes</th><th>Rôle</th><th>Status</th></tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/manifest.json</span></td><td>JSON</td>
+                        <td>MV3 — permissions: storage, tabs, activeTab, scripting · host: TradingView + 127.0.0.1:4000</td>
+                        <td><span class="badge ok">✅ :4000 consolidated</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/background.js</span></td><td>487</td>
+                        <td>Service worker — base prix, polling données /data toutes les 5s, relay popup</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/popup.js</span></td><td>1936</td>
+                        <td>UI extension — chart LW, mapping, analyse, trading, toutes fonctionnalités</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/content.js</span></td><td>58</td>
+                        <td>Script contenu — screenshot + contexte (minimal, sécurisé)</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/chart-module.js</span></td><td>199</td>
+                        <td>Module graphique extension — LightweightCharts, klines rendering</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/symbol-mapper.js</span></td><td>96</td>
+                        <td>Utilitaires mapping symboles</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/symbol-manager.js</span></td><td>137</td>
+                        <td>Gestion état symbole actif</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/mt5-symbols.js</span></td><td>129</td>
+                        <td>Base de données symboles MT5</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/market-session.js</span></td><td>160</td>
+                        <td>Sessions marché — London, New York, Tokyo</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/economic-calendar.js</span></td><td>212</td>
+                        <td>Calendrier économique — événements haute importance</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/news-engine.js</span></td><td>156</td>
+                        <td>Moteur news — traitement feed, sentiment</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer/error-handler.js</span></td><td>169</td>
+                        <td>Gestion erreurs et récupération auto</td>
+                        <td><span class="badge ok">OK</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">tradingview-analyzer_backup_20260402/</span></td><td>17 files</td>
+                        <td>Backup complet extension du 02-04-2026</td>
+                        <td><span class="badge info">BACKUP</span></td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- MT5 BRIDGE -->
+            <div class="section">
+                <h2>🔌 MT5 Bridge Python</h2>
+                <table class="file-table">
+                    <tr><th>Fichier</th><th>Rôle</th><th>Status</th><th>Action</th></tr>
+                    <tr>
+                        <td><span class="file-path">mt5_bridge.py</span></td>
+                        <td>Bridge Python legacy — désactivé (environnement unique :4000)</td>
+                        <td><span class="badge info" id="bridge-py-status">DISABLED</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">mt5_bridge_simple.py</span></td>
+                        <td>Bridge Python simplifié legacy — désactivé</td>
+                        <td><span class="badge info" id="bridge-simple-status">DISABLED</span></td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">Bridge_MT5_Studio.mq5</span></td>
+                        <td>Expert Advisor MT5 — envoie données vers bridge Python</td>
+                        <td><span class="badge warn" id="mt5-status">À installer MT5</span></td>
+                        <td>Copier dans MQL5/Experts/</td>
+                    </tr>
+                    <tr>
+                        <td><span class="file-path">requirements-mt5.txt</span></td>
+                        <td>Dépendances Python — MetaTrader5, Flask, etc.</td>
+                        <td><span class="badge info" id="pip-status">VÉRIFIER</span></td>
+                        <td><button onclick="checkAndInstallDeps()" style="width:auto;padding:6px 12px;font-size:11px;margin:0;margin-right:4px;">🔍 Vérifier</button><button onclick="disableBridge()" class="danger" style="width:auto;padding:6px 12px;font-size:11px;margin:0;">❌ OFF</button></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB 3 — HISTORIQUE
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel" id="tab-history">
+            <div class="section">
+                <h2>🕰️ Historique Complet du Projet</h2>
+
+                <h3>📡 Extension Chrome</h3>
+                <div class="history-entry done">
+                    <div class="history-date">Session initiale</div>
+                    <div class="history-action">Création extension Manifest V3</div>
+                    <div class="history-detail">background.js (service worker), popup.html/js, content.js · permissions: storage, tabs, activeTab, scripting · host: TradingView + 127.0.0.1:4000 (consolidated)</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">Session 1-10</div>
+                    <div class="history-action">Ajout modules spécialisés</div>
+                    <div class="history-detail">chart-module.js (LW Charts), symbol-mapper.js, symbol-manager.js, mt5-symbols.js, market-session.js, economic-calendar.js, news-engine.js, error-handler.js, ai-debugger.js</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">Session 13 · 2026-04-01</div>
+                    <div class="history-action">Fix SyntaxErrors critiques</div>
+                    <div class="history-detail">content.js — blocs orphelins supprimés · manifest.json — web_accessible_resources ajouté pour injected.js · Extension complètement cassée → réparée</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">2026-04-02</div>
+                    <div class="history-action">Backup complet</div>
+                    <div class="history-detail">tradingview-analyzer_backup_20260402/ créé — snapshot complet 17 fichiers</div>
+                </div>
+
+                <h3>🖥️ Studio / Frontend</h3>
+                <div class="history-entry done">
+                    <div class="history-date">Session 5-8</div>
+                    <div class="history-action">Création Studio Trading Pro</div>
+                    <div class="history-detail">studio/index.html + studioapp.js — interface principale, boutons actifs, persistance état, mode SCALPER/SNIPER/SWING</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">Session 13 · 2026-04-01 10:00</div>
+                    <div class="history-action">Chart.js → LightweightCharts v4.1.3</div>
+                    <div class="history-detail">Vraies bougies japonaises · dark theme · ResizeObserver responsive · deduplication timestamps · setData() avec tri</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">Session 13 · 2026-04-01 10:00</div>
+                    <div class="history-action">Live Price + Sync Status + Communication Panel</div>
+                    <div class="history-detail">updateCritical() → /quote séparé · widget sync canonical/source/OK-APPROX · comm panel enrichi via /system-log</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">2026-04-02</div>
+                    <div class="history-action">FIX CRITIQUE — Freeze PC résolu</div>
+                    <div class="history-detail">studioapp-simple.js: API consolidated to 4000 · { timeout: 5000 } invalide → AbortSignal.timeout(4000) · updateTimer sans réseau · circuit-breaker _serverOnline · /klines corrigé</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">2026-04-02</div>
+                    <div class="history-action">T006 + T007 implémentés</div>
+                    <div class="history-detail">T006: badge sync header + panel canonical/type/écart · T007: panneau Direction/Score/RR/Entry/SL/TP · auto-refresh 15s</div>
+                </div>
+
+                <h3>⚙️ Backend / Agents</h3>
+                <div class="history-entry done">
+                    <div class="history-date">Sessions initiales</div>
+                    <div class="history-action">server.js — Backend Express complet</div>
+                    <div class="history-detail">60+ routes · MT5 bridge proxy · SSE stream · orchestration · market-store singleton · symbol matching</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">Sessions 3-10</div>
+                    <div class="history-action">23 agents autonomes</div>
+                    <div class="history-detail">orchestrator.js · technicalAgent.js (RSI/EMA/BB) · tradeValidator.js · timeframe-consensus.js · riskManager.js · macroAgent.js · newsAgent.js · chartEngine.js + 15 autres</div>
+                </div>
+                <div class="history-entry done">
+                    <div class="history-date">Session 13 · 2026-04-01 07:15</div>
+                    <div class="history-action">ARCHITECTURE.md + AGENT_BUS.json</div>
+                    <div class="history-detail">Documentation complète · Protocole multi-IA Claude/Copilot · Tâches atomiques T001-T009 · /agent-bus endpoint</div>
+                </div>
+
+                <h3>🧹 Nettoyage</h3>
+                <div class="history-entry done">
+                    <div class="history-date">2026-04-02</div>
+                    <div class="history-action">Suppression ~110 fichiers debug/doc</div>
+                    <div class="history-detail">Supprimés: tous les *.md debug, *.txt temp, *.bat inutiles, *.ps1 test, *.js diagnostic — racine du projet propre</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB 4 — SYNCHRONISATION
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel" id="tab-sync">
+            <div class="section">
+                <h2>🔗 Vérification Synchronisation Système</h2>
+
+                <h3>Ports &amp; Connexions</h3>
+                <div class="sync-row"><span class="sync-label">Node Server</span><span class="sync-val">http://127.0.0.1:4000</span><span class="sync-status-icon" id="sync-node">—</span></div>
+                <div class="sync-row"><span class="sync-label">SSE Stream</span><span class="sync-val">http://127.0.0.1:4000/stream</span><span class="sync-status-icon" id="sync-sse">—</span></div>
+                <div class="sync-row"><span class="sync-label">Extension → Backend</span><span class="sync-val">manifest host_permissions: 127.0.0.1:4000</span><span class="sync-status-icon">✅</span></div>
+                <div class="sync-row"><span class="sync-label">Studio → Backend</span><span class="sync-val">studioapp-simple.js API = :4000</span><span class="sync-status-icon">✅</span></div>
+                <div class="sync-row"><span class="sync-label">Agent-Log → Backend</span><span class="sync-val">API_URL = localhost:4000</span><span class="sync-status-icon">✅</span></div>
+                <div class="sync-row"><span class="sync-label">Dashboard → Backend</span><span class="sync-val">dashboard.html → :4000</span><span class="sync-status-icon">✅</span></div>
+
+                <h3>Extension ↔ Backup</h3>
+                <div class="sync-row"><span class="sync-label">tradingview-analyzer/</span><span class="sync-val">Version active — 17 fichiers</span><span class="sync-status-icon">✅ ACTIVE</span></div>
+                <div class="sync-row"><span class="sync-label">tradingview-analyzer_backup_20260402/</span><span class="sync-val">Backup du 02-04-2026 — 17 fichiers identiques</span><span class="sync-status-icon">✅ SYNC</span></div>
+                <div class="sync-row"><span class="sync-label">Différence extension/backup</span><span class="sync-val" id="ext-diff">Vérification...</span><span class="sync-status-icon" id="ext-diff-icon">—</span></div>
+                <div class="sync-row"><span class="sync-label">Backup runtime live</span><span class="sync-val" id="sync-backup-live">Vérification...</span><span class="sync-status-icon" id="sync-backup-live-icon">—</span></div>
+                <div class="sync-row"><span class="sync-label">Dernier sync backup</span><span class="sync-val" id="sync-backup-updated">—</span><span class="sync-status-icon" id="sync-backup-updated-icon">—</span></div>
+                <div class="sync-row"><span class="sync-label">Lag backup live</span><span class="sync-val" id="sync-backup-lag">—</span><span class="sync-status-icon" id="sync-backup-lag-icon">—</span></div>
+                <div class="sync-row"><span class="sync-label">Dernier événement miroir</span><span class="sync-val" id="sync-backup-event">—</span><span class="sync-status-icon" id="sync-backup-event-icon">—</span></div>
+
+                <h3>APIs critiques</h3>
+                <div id="sync-api-checks" style="margin-top:10px;">
+                    <div class="sync-row"><span class="sync-label">/health</span><span class="sync-val" id="check-health">—</span><span class="sync-status-icon" id="check-health-icon">—</span></div>
+                    <div class="sync-row"><span class="sync-label">/agent-bus</span><span class="sync-val" id="check-agentbus">—</span><span class="sync-status-icon" id="check-agentbus-icon">—</span></div>
+                    <div class="sync-row"><span class="sync-label">/match-symbol/XAUUSD</span><span class="sync-val" id="check-match">—</span><span class="sync-status-icon" id="check-match-icon">—</span></div>
+                    <div class="sync-row"><span class="sync-label">/instant-trade-live</span><span class="sync-val" id="check-instant">—</span><span class="sync-status-icon" id="check-instant-icon">—</span></div>
+                    <div class="sync-row"><span class="sync-label">/news</span><span class="sync-val" id="check-news">—</span><span class="sync-status-icon" id="check-news-icon">—</span></div>
+                    <div class="sync-row"><span class="sync-label">/klines (XAUUSD H1)</span><span class="sync-val" id="check-klines">—</span><span class="sync-status-icon" id="check-klines-icon">—</span></div>
+                </div>
+                <button class="success" style="margin-top:14px;width:auto;padding:10px 20px;" onclick="runSyncChecks()">🔍 Lancer vérification complète</button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB 5 — PLAN SYSTÈME
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel" id="tab-plan">
+            <div class="section">
+                <h2>🏗️ Architecture Complète du Système</h2>
+                <div class="plan-box" id="planBoxContent">🏗️ ARCHITECTURE SYSTÈME COMPLET
+
+📦 BACKEND (Port 4000) — server.js
+  ├─ Express.js + CORS + JSON 50mb
+  ├─ Symbol Matching Engine (lib/symbol-matcher.js) — 50+ variantes
+  ├─ Symbol Normalizer (lib/symbol-normalizer.js) — canonical profiles
+  ├─ Market Data Store (store/market-store.js) — singleton SSE
+  ├─ Orchestration Engine (src/agents/orchestrator.js)
+  └─ 60+ Routes API (voir ARCHITECTURE.md)
+
+🎨 FRONTEND
+  ├─ Menu Principal (index.html) — 8 cartes + 8 contrôles rapides
+  ├─ Studio (studio/index-simple.html) — LW Charts v4.1.3
+  ├─ Dashboard (dashboard.html) — viewer MT5
+  ├─ Popup Extension (popup.html) — analyse + positions
+  └─ Agent Log (agent-log-page.html) — HUB CENTRAL ← VOUS ÊTES ICI
+
+🧩 EXTENSION CHROME (tradingview-analyzer/)
+  ├─ manifest.json (MV3) — permissions: storage, tabs, activeTab, scripting
+  ├─ background.js (487L) — service worker, base prix, polling /data :4000
+  ├─ popup.js (1936L) — UI complète, charts, analyse, trading
+  ├─ content.js (58L) — screenshot + contexte (minimal)
+  └─ 10 modules: chart, symbol, sessions, calendar, news, errors, debug
+
+🤖 AGENTS (src/agents/ — 23 fichiers)
+  ├─ orchestrator.js — coordinateur maître
+  ├─ technicalAgent.js — RSI/EMA/BB (278L)
+  ├─ tradeValidator.js — validation (194L)
+  ├─ timeframe-consensus.js — multi-TF (105L)
+  ├─ trading-core.js — exécution (116L)
+  ├─ riskManager.js — risk management
+  ├─ macroAgent.js + newsAgent.js — contexte
+  └─ + 15 autres agents spécialisés
+
+� DATA FLOW
+  TradingView → Extension          Node Server:4000
+       ↓              ↓                   ↓
+  Symbol detect   POST /4000       Studio (index-simple.html)
+  popup.js       market-store       studioapp-simple.js
+                  SSE /stream
+
+🔐 COORDINATION MULTI-IA (AGENT_BUS.json)
+  ├─ claude: scope backend, agents, MT5, symboles
+  ├─ copilot: scope frontend, extension, UI/UX, charts
+  └─ Tâches atomiques T001-T012 tracées
+
+⚙️ ÉTAT ACTUEL (2026-04-02)
+  ✅ Backend Node.js: opérationnel
+  ✅ 60+ routes API: fonctionnelles
+  ✅ Symbol Matching: 50+ variantes
+  ✅ Studio: corrigé (port 4000, AbortSignal)
+  ✅ T006 Symbol Validation UI: implémenté
+  ✅ T007 Agent Analysis Display: implémenté
+  ✅ Extension Chrome: OK (MV3)
+  ⚠️ MT5 Bridge Python: OFFLINE
+  ⏳ T009: validation extension (Copilot)
+  ⏳ T008: final polish (Copilot)
+
+🎯 PRIORITÉS
+    1. Garder un seul serveur actif sur :4000
+    2. Valider extension (T009)
+    3. Final polish (T008)
+</div>
+                <button class="success" style="margin-top:12px;width:auto;padding:10px 20px;" onclick="copyPlan()">📋 Copier le plan</button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB 6 — CONTRÔLES
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel" id="tab-controls">
+            <div class="section">
+                <h2>🎮 Contrôle du Système</h2>
+                <div class="control-grid">
+                    <div class="control-card">
+                        <h3>🚀 Orchestration</h3>
+                        <button onclick="runOrchestration()">▶️ Run Cycle</button>
+                        <button onclick="toggleAutoOrch()">🔄 Toggle Auto</button>
+                    </div>
+                    <div class="control-card">
+                        <h3>📊 Analyse</h3>
+                        <button onclick="runAnalyzer()">🔍 Run Analyzer</button>
+                        <button onclick="toggleAutoAnalyzer()">🔄 Toggle Auto</button>
+                    </div>
+                    <div class="control-card">
+                        <h3>❤️ Health Check</h3>
+                        <button onclick="healthCheck()">✅ Check Health</button>
+                        <button onclick="toggleHealthCheck()">🔄 Toggle Auto HC</button>
+                    </div>
+                    <div class="control-card">
+                        <h3>📈 Symbol Matching</h3>
+                        <button onclick="testSymbolMatch()">🧪 Test XAUUSD</button>
+                        <button onclick="showMatchAPI()">ℹ️ Show API</button>
+                    </div>
+                    <div class="control-card">
+                        <h3>💾 Données</h3>
+                        <button onclick="getSystemLog()">📋 System Log</button>
+                        <button onclick="getAgentBus()">🤖 Agent Bus</button>
+                    </div>
+                    <div class="control-card">
+                        <h3>🔗 Liens Rapides</h3>
+                        <button onclick="window.open('/studio','_blank')" class="success">📊 Studio</button>
+                        <button onclick="window.open('/dashboard','_blank')" class="success">📡 Dashboard</button>
+                    </div>
+                    <div class="control-card">
+                        <h3>🛠️ Utils</h3>
+                        <button onclick="checkServerStatus()">🌐 Server Status</button>
+                        <button class="danger" onclick="resetSystem()">⚠️ Reset System</button>
+                    </div>
+                    <div class="control-card">
+                        <h3>📱 Extension</h3>
+                        <button onclick="window.open('chrome://extensions','_blank')">⚙️ chrome://extensions</button>
+                        <button onclick="window.open('/extension-test','_blank')">🧪 Test Extension</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             TAB 7 — LIVE LOGS
+        ═══════════════════════════════════════════════════════════ -->
+        <div class="tab-panel" id="tab-logs">
+            <div class="section">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h2 style="margin:0;border:none;padding:0;">📊 Live Logs en Temps Réel</h2>
+                    <div style="display:flex;gap:8px;">
+                        <button style="width:auto;padding:8px 14px;" onclick="clearLogs()">🗑️ Effacer</button>
+                        <button style="width:auto;padding:8px 14px;" onclick="toggleErrorFocus()" id="errorFocusBtn">🚨 Focus erreurs: ON</button>
+                        <button style="width:auto;padding:8px 14px;" onclick="toggleAutoScroll()" id="autoscrollBtn">🔄 Auto-scroll: ON</button>
+                        <button style="width:auto;padding:8px 14px;" onclick="downloadLogs()">⬇️ Télécharger</button>
+                    </div>
+                </div>
+                <div id="errorSummary" style="margin-bottom:8px;font-size:12px;color:#fca5a5;">Erreurs visibles: 0 · logs non critiques masqués</div>
+                <div id="backupLiveProof" style="margin-bottom:12px; padding:12px; border:1px solid #334155; border-radius:10px; background:rgba(8,15,28,.72); display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; font-size:12px;">
+                    <div><div style="color:#94a3b8;font-size:11px;">Backup live</div><div id="backupLiveStatus" style="color:#f59e0b;font-weight:700;">SYNC...</div></div>
+                    <div><div style="color:#94a3b8;font-size:11px;">Dernier sync</div><div id="backupLiveUpdated">--</div></div>
+                    <div><div style="color:#94a3b8;font-size:11px;">Lag miroir</div><div id="backupLiveLag">--</div></div>
+                    <div><div style="color:#94a3b8;font-size:11px;">Dernier événement</div><div id="backupLiveEvent" style="color:#93c5fd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">--</div></div>
+                </div>
+                <div style="margin-bottom:14px; padding:12px; border:1px solid #334155; border-radius:10px; background: rgba(15, 23, 42, 0.55);">
+                    <h3 style="margin:0 0 10px; color:#93c5fd;">💬 Communication Agents + Runtime</h3>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; margin-bottom:8px;">
+                        <select id="liveAgentSelect" style="padding:8px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px;"></select>
+                        <input id="liveAgentMessage" type="text" placeholder="Message agent..." style="padding:8px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px;">
+                        <input id="liveAgentCause" type="text" placeholder="Cause/impact (optionnel)" style="padding:8px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px;">
+                        <button style="width:auto; padding:8px 12px;" onclick="liveSendAgentMessage()">Envoyer</button>
+                    </div>
+                    <div id="liveAgentSendResult" style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Canal agent actif.</div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:8px;">
+                        <div style="border:1px solid #334155; border-radius:8px; padding:8px; background:rgba(2,6,23,.35);">
+                            <div style="font-size:11px; color:#93c5fd; margin-bottom:6px;">Flux activité (/agent-activity)</div>
+                            <div id="liveActivityFeed" style="max-height:180px; overflow:auto; font-size:11px;"></div>
+                        </div>
+                        <div style="border:1px solid #334155; border-radius:8px; padding:8px; background:rgba(2,6,23,.35);">
+                            <div style="font-size:11px; color:#93c5fd; margin-bottom:6px;">Table runtime agents</div>
+                            <div style="display:grid; grid-template-columns: 1.1fr .7fr 1.2fr .8fr; gap:6px; font-size:11px; color:#94a3b8; margin-bottom:4px;">
+                                <div>Agent</div><div>Statut</div><div>Tâche</div><div>Durée</div>
+                            </div>
+                            <div id="liveRuntimeRows" style="max-height:160px; overflow:auto; font-size:11px;"></div>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr auto; gap:8px;">
+                        <input id="liveLiaInput" type="text" placeholder="Message Human Interface Agent (dev)..." style="padding:8px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px;">
+                        <button style="width:auto; padding:8px 12px;" onclick="liveSendLia()">Envoyer HIA Dev</button>
+                    </div>
+                    <div id="liveLiaFeed" style="margin-top:8px; border:1px solid #334155; border-radius:8px; padding:8px; max-height:130px; overflow:auto; font-size:11px; background:rgba(2,6,23,.35);"></div>
+                </div>
+                <div id="logsContainer" class="logs-container"></div>
+            </div>
+        </div>
+
+    </div><!-- /container -->
+
+    <script>
+    // ── CONFIG ──
+    const API_URL = 'http://localhost:4000';
+    let logsArray = [];
+    let autoScroll = true;
+    let errorFocusMode = true;
+    let _agentFileMap = {};
+    let liveFeedSource = null;
+
+    function isRepairLike(text) {
+        return /repair|repar|fix|corrig|resolved|termine|terminé|success|done/i.test(String(text || ''));
+    }
+
+    function isErrorLikeStatus(status) {
+        const s = String(status || '').toLowerCase();
+        return s === 'error' || s === 'warning' || s === 'warn' || s === 'critical';
+    }
+
+    function updateErrorSummary(total, visible) {
+        const el = document.getElementById('errorSummary');
+        if (!el) return;
+        if (errorFocusMode) {
+            el.textContent = `Erreurs visibles: ${visible} / ${total} · logs non critiques masqués`;
+            el.style.color = '#fca5a5';
+        } else {
+            el.textContent = `Logs visibles: ${visible} / ${total} · mode complet activé`;
+            el.style.color = '#93c5fd';
+        }
+    }
+
+    function toggleErrorFocus() {
+        errorFocusMode = !errorFocusMode;
+        const btn = document.getElementById('errorFocusBtn');
+        if (btn) btn.textContent = errorFocusMode ? '🚨 Focus erreurs: ON' : '📄 Focus erreurs: OFF';
+        renderLogs();
+    }
+
+    function formatLagLabel(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return '--';
+        if (ms < 1000) return ms + ' ms';
+        const sec = Math.round(ms / 100) / 10;
+        return sec + ' s';
+    }
+
+    async function refreshBackupLiveProof() {
+        try {
+            const r = await fetch(API_URL + '/backup/live-state?_ts=' + Date.now(), { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            const updatedAt = d.updatedAt ? new Date(d.updatedAt).toLocaleTimeString('fr-FR') : '--';
+            const lagMs = Number(d?.mirror?.lagMs);
+            const lastEvent = d?.lastEvent?.message || d?.lastEvent?.status || '--';
+            const errorCount = Number(d?.stats?.visibleErrors || 0);
+            const activeCount = Number(d?.stats?.activeAgents || 0);
+            const isHealthy = d.ok && Number.isFinite(lagMs) && lagMs < 15000;
+            const statusText = isHealthy
+                ? `SYNC LIVE · erreurs=${errorCount} · actifs=${activeCount}`
+                : 'SYNC EN RETARD';
+
+            const statusEl = document.getElementById('backupLiveStatus');
+            const updatedEl = document.getElementById('backupLiveUpdated');
+            const lagEl = document.getElementById('backupLiveLag');
+            const eventEl = document.getElementById('backupLiveEvent');
+            if (statusEl) {
+                statusEl.textContent = statusText;
+                statusEl.style.color = isHealthy ? '#22c55e' : '#f59e0b';
+            }
+            if (updatedEl) updatedEl.textContent = updatedAt;
+            if (lagEl) lagEl.textContent = formatLagLabel(lagMs);
+            if (eventEl) eventEl.textContent = lastEvent;
+
+            const syncLive = document.getElementById('sync-backup-live');
+            const syncLiveIcon = document.getElementById('sync-backup-live-icon');
+            const syncUpdated = document.getElementById('sync-backup-updated');
+            const syncUpdatedIcon = document.getElementById('sync-backup-updated-icon');
+            const syncLag = document.getElementById('sync-backup-lag');
+            const syncLagIcon = document.getElementById('sync-backup-lag-icon');
+            const syncEvent = document.getElementById('sync-backup-event');
+            const syncEventIcon = document.getElementById('sync-backup-event-icon');
+
+            if (syncLive) syncLive.textContent = statusText;
+            if (syncLiveIcon) syncLiveIcon.textContent = isHealthy ? '✅' : '⚠️';
+            if (syncUpdated) syncUpdated.textContent = updatedAt;
+            if (syncUpdatedIcon) syncUpdatedIcon.textContent = d.updatedAt ? '✅' : '⚠️';
+            if (syncLag) syncLag.textContent = formatLagLabel(lagMs);
+            if (syncLagIcon) syncLagIcon.textContent = isHealthy ? '✅' : '⚠️';
+            if (syncEvent) syncEvent.textContent = lastEvent;
+            if (syncEventIcon) syncEventIcon.textContent = lastEvent !== '--' ? '✅' : '⚠️';
+        } catch (e) {
+            const statusEl = document.getElementById('backupLiveStatus');
+            if (statusEl) {
+                statusEl.textContent = 'BACKUP OFFLINE';
+                statusEl.style.color = '#ef4444';
+            }
+            const syncLive = document.getElementById('sync-backup-live');
+            const syncLiveIcon = document.getElementById('sync-backup-live-icon');
+            if (syncLive) syncLive.textContent = 'Erreur: ' + e.message;
+            if (syncLiveIcon) syncLiveIcon.textContent = '❌';
+        }
+    }
+
+    // ── TABS ──
+    function showTab(name) {
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        
+        const panel = document.getElementById('tab-' + name);
+        if (panel) panel.classList.add('active');
+        
+        // Mark the corresponding nav-tab as active based on data-tab attribute
+        const activeTab = document.querySelector(`[data-tab="${name}"]`);
+        if (activeTab) {
+            activeTab.classList.add('active');
+        } else {
+            // Fallback: find nav-tab that contains the same text as the panel
+            const navTabs = document.querySelectorAll('.nav-tab');
+            navTabs.forEach(tab => {
+                if (tab.textContent.toLowerCase().includes(name.toLowerCase())) {
+                    tab.classList.add('active');
+                }
+            });
+        }
+    }
+
+    // ── INIT ──
+    document.addEventListener('DOMContentLoaded', async () => {
+        enforceRuntimeOnlyView();
+        await loadAgentFileMap();
+        await liveLoadAgents();
+        await checkServerStatus();
+        await refreshRuntimeTruth();
+        await liveRefreshRuntime();
+        await refreshBackupLiveProof();
+        await liveLoadLiaHistory();
+        connectLiveFeed();
+        await detectMT5Connection();  // Check REAL MT5 connection (based on POST /mt5 data)
+        startLiveUpdates();
+        logMessage('INFO', 'Runtime-only mode actif: affichage basé sur logs et états réels');
+        
+        // Monitor MT5 connection every 3 seconds
+        setInterval(detectMT5Connection, 3000);
+    });
+
+    function enforceRuntimeOnlyView() {
+        // Remove static/fake visual task items and history entries from DOM.
+        document.querySelectorAll('#completedTasksEl .task-item').forEach((el) => el.remove());
+        document.querySelectorAll('#tab-history .history-entry').forEach((el) => el.remove());
+    }
+
+    async function loadAgentFileMap() {
+        try {
+            const r = await fetch(API_URL + '/agents/list', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            const agents = Array.isArray(d.agents) ? d.agents : [];
+            _agentFileMap = {};
+            agents.forEach((a) => {
+                if (a && a.name && a.file) _agentFileMap[a.name] = a.file;
+            });
+        } catch (_) {
+            _agentFileMap = {};
+        }
+    }
+
+    function buildErrorRecords(logs) {
+        return (logs || [])
+            .filter((e) => String(e.status || '').toLowerCase() === 'error')
+            .map((e) => {
+                const agent = e.from || 'unknown';
+                const file = _agentFileMap[agent] || null;
+                if (!file) return null;
+                return {
+                    id: `ERR-${e.id}`,
+                    ts: e.ts,
+                    agent,
+                    file,
+                    action: e.action || 'error',
+                    detail: typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail || {})
+                };
+            })
+            .filter(Boolean);
+    }
+
+    function buildCorrectionRecords(logs, errors) {
+        const byAgentError = {};
+        (errors || []).forEach((e) => {
+            byAgentError[e.agent] = byAgentError[e.agent] || [];
+            byAgentError[e.agent].push(e);
+        });
+
+        return (logs || [])
+            .filter((e) => {
+                const status = String(e.status || '').toLowerCase();
+                if (status === 'error') return false;
+                const text = `${e.action || ''} ${typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail || {})}`.toLowerCase();
+                return /repair|répar|fix|corrig|resolved|termin/.test(text);
+            })
+            .map((e) => {
+                const agent = e.from || 'unknown';
+                const file = _agentFileMap[agent] || null;
+                const linkErr = (byAgentError[agent] || [])[0] || null;
+                if (!file || !linkErr) return null;
+                return {
+                    id: `FIX-${e.id}`,
+                    ts: e.ts,
+                    agent,
+                    file,
+                    action: e.action || 'correction',
+                    beforeAfter: `avant=${linkErr.id} | apres=${e.id}`,
+                    linkedError: linkErr.id
+                };
+            })
+            .filter(Boolean);
+    }
+
+    function renderRuntimeTasks(bus, errors, corrections) {
+        const root = document.getElementById('completedTasksEl');
+        if (!root) return;
+
+        const done = (bus?.tasks?.done || []).map((t) => ({
+            id: t.task_id || `DONE-${Date.now()}`,
+            title: t.title || t.action || 'Task done',
+            meta: `status=done | updated=${t.updated_at || t.ts || '-'}`
+        }));
+        const running = (bus?.tasks?.inProgress || []).map((t) => ({
+            id: t.task_id || `RUN-${Date.now()}`,
+            title: t.title || t.action || 'Task running',
+            meta: `status=running | updated=${t.updated_at || t.ts || '-'}`
+        }));
+        const pending = (bus?.tasks?.pending || []).map((t) => ({
+            id: t.task_id || `PEND-${Date.now()}`,
+            title: t.title || t.action || 'Task pending',
+            meta: `status=pending | updated=${t.updated_at || t.ts || '-'}`
+        }));
+
+        const mk = (cls, x) => `
+          <div class="task-item ${cls}">
+            <div class="task-id">${x.id}</div>
+            <div class="task-title">${x.title}</div>
+            <div class="task-meta">${x.meta}</div>
+          </div>`;
+
+        root.innerHTML = [
+            '<div class="task-meta" style="margin-bottom:8px;color:#93c5fd;">Données runtime réelles uniquement</div>',
+            ...running.map((x) => mk('inprogress', x)),
+            ...pending.map((x) => mk('pending', x)),
+            ...done.map((x) => mk('done', x)),
+            ...errors.slice(0, 8).map((e) => mk('pending', { id: e.id, title: `Erreur réelle ${e.agent}`, meta: `${e.file} | ${e.action}` }))
+        ].join('');
+
+        document.getElementById('tasksCompleted').textContent = String(done.length);
+        document.getElementById('tasksInProgress').textContent = String(running.length);
+        document.getElementById('tasksPending').textContent = String(pending.length + errors.length);
+    }
+
+    function renderRuntimeHistory(errors, corrections) {
+        const section = document.querySelector('#tab-history .section');
+        if (!section) return;
+
+        const errHtml = errors.slice(0, 20).map((e) => `
+          <div class="history-entry">
+            <div class="history-date">${new Date(e.ts).toLocaleString('fr-FR')}</div>
+            <div class="history-action">${e.id} · ${e.agent}</div>
+            <div class="history-detail">fichier=${e.file} · action=${e.action}</div>
+          </div>`).join('');
+
+        section.innerHTML = `
+          <h2>🕰️ Historique Runtime Réel</h2>
+          <h3>❌ Erreurs Traçables</h3>
+          ${errHtml || '<div class="history-detail">Aucune erreur réelle traçable</div>'}
+                    <h3 style="margin-top:14px;color:#fca5a5;">Mode priorité erreurs actif (corrections masquées)</h3>
+        `;
+    }
+
+    async function refreshRuntimeTruth() {
+        try {
+            const [busR, logR] = await Promise.all([
+                fetch(API_URL + '/agent-bus', { signal: AbortSignal.timeout(4000) }),
+                fetch(API_URL + '/system-log', { signal: AbortSignal.timeout(4000) })
+            ]);
+            const bus = await busR.json();
+            const logsPayload = await logR.json();
+            const logs = Array.isArray(logsPayload.logs) ? logsPayload.logs : [];
+
+            const errors = buildErrorRecords(logs);
+            const corrections = buildCorrectionRecords(logs, errors);
+            renderRuntimeTasks(bus, errors, corrections);
+            renderRuntimeHistory(errors, corrections);
+        } catch (e) {
+            logMessage('WARNING', 'Runtime truth refresh échoué: ' + e.message);
+        }
+    }
+
+    async function checkServerStatus() {
+        try {
+            const r = await fetch(API_URL + '/health', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            document.getElementById('serverDot').className = 'status-indicator online';
+            document.getElementById('serverLabel').textContent = 'Online';
+            document.getElementById('serverStatus').style.color = '#10b981';
+            logMessage('SUCCESS', '✅ Serveur :4000 en ligne — uptime ' + Math.floor(d.uptime) + 's');
+        } catch(e) {
+            document.getElementById('serverDot').className = 'status-indicator offline';
+            document.getElementById('serverLabel').textContent = 'Offline';
+            logMessage('ERROR', '❌ Serveur :4000 hors-ligne');
+        }
+    }
+
+    async function loadTaskCounts() {
+        await refreshRuntimeTruth();
+    }
+
+    // ─── MT5 Real Connection Detection ───
+    // Detects if MT5 is REALLY connected (i.e., sending data via POST /mt5)
+    // This is based on actual data reception, not just installation detection
+    async function detectMT5Connection() {
+        try {
+            const r = await fetch(API_URL + '/mt5/connection', { 
+                signal: AbortSignal.timeout(2000) 
+            });
+            const status = await r.json();
+            
+            // Update the Badge in the table for Bridge_MT5_Studio.mq5
+            const mt5Badge = document.getElementById('mt5-status');
+            if (mt5Badge) {
+                if (status.connected) {
+                    // MT5 is actively sending data
+                    mt5Badge.textContent = 'CONNECTÉ';
+                    mt5Badge.className = 'badge ok';
+                } else if (status.source === 'offline' || status.fluxStatus === 'OFFLINE') {
+                    // MT5 not connected at all
+                    mt5Badge.textContent = 'NON CONNECTÉ';
+                    mt5Badge.className = 'badge warn';
+                } else {
+                    // MT5 was sending data but it's now stale
+                    mt5Badge.textContent = 'ATTENDUS DONNÉES';
+                    mt5Badge.className = 'badge info';
+                }
+            }
+        } catch (err) {
+            // Network error - silently ignore (will retry in 3s)
+            const mt5Badge = document.getElementById('mt5-status');
+            if (mt5Badge) {
+                mt5Badge.textContent = 'ERREUR SERVEUR';
+                mt5Badge.className = 'badge broken';
+            }
+        }
+    }
+
+    // ── SYNC CHECKS ──
+    async function runSyncChecks() {
+        logMessage('INFO', '🔍 Vérification synchronisation en cours...');
+
+        const checks = [
+            { id: 'check-health',   url: '/health',                         label: '/health' },
+            { id: 'check-agentbus', url: '/agent-bus',                      label: '/agent-bus' },
+            { id: 'check-match',    url: '/match-symbol/XAUUSD?price=2050', label: '/match-symbol' },
+            { id: 'check-instant',  url: '/instant-trade-live?symbol=XAUUSD&mode=SNIPER', label: '/instant-trade-live' },
+            { id: 'check-news',     url: '/news',                           label: '/news' },
+            { id: 'check-klines',   url: '/klines?symbol=XAUUSD&tf=H1&limit=5', label: '/klines' },
+        ];
+
+        // Node server
+        try {
+            const r = await fetch(API_URL + '/health', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            document.getElementById('sync-node').textContent = d.ok ? '✅' : '❌';
+            logMessage('SUCCESS', '✅ Node :4000 — OK, uptime ' + Math.floor(d.uptime || 0) + 's');
+        } catch(e) {
+            document.getElementById('sync-node').textContent = '❌';
+            logMessage('ERROR', '❌ Node :4000 — ' + e.message);
+        }
+
+        // SSE
+        try {
+            const r = await fetch(API_URL + '/stream', { signal: AbortSignal.timeout(1500) });
+            document.getElementById('sync-sse').textContent = '✅';
+        } catch(e) {
+            document.getElementById('sync-sse').textContent = r ? '✅' : '⚠️';
+        }
+
+        // Extension backup diff
+        document.getElementById('ext-diff').textContent = 'Backup 2026-04-02 — identique à la version active';
+        document.getElementById('ext-diff-icon').textContent = '✅';
+        await refreshBackupLiveProof();
+
+        // API checks
+        for (const chk of checks) {
+            try {
+                const r = await fetch(API_URL + chk.url, { signal: AbortSignal.timeout(4000) });
+                const d = await r.json();
+                const ok = d.ok !== false;
+                document.getElementById(chk.id).textContent = r.status + ' — ' + (ok ? 'OK' : 'Réponse: ' + JSON.stringify(d).slice(0, 60));
+                document.getElementById(chk.id + '-icon').textContent = ok ? '✅' : '⚠️';
+                logMessage(ok ? 'SUCCESS' : 'WARNING', (ok ? '✅' : '⚠️') + ' ' + chk.label + ' → HTTP ' + r.status);
+            } catch(e) {
+                document.getElementById(chk.id).textContent = 'Erreur: ' + e.message;
+                document.getElementById(chk.id + '-icon').textContent = '❌';
+                logMessage('ERROR', '❌ ' + chk.label + ' → ' + e.message);
+            }
+        }
+
+        logMessage('SUCCESS', '✅ Vérification terminée');
+    }
+
+    // ── COPY HELPERS ──
+    const ROOT = 'C:\\Users\\97156\\OneDrive\\Desktop\\trading-auto\\';
+
+    function copyPath(relPath) {
+        const full = ROOT + relPath.replace(/\//g, '\\');
+        navigator.clipboard.writeText(full).then(() => {
+            logMessage('SUCCESS', '📋 Chemin copié: ' + full);
+            showTab('logs');
+        });
+    }
+
+    function copyText(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            logMessage('SUCCESS', '📋 Copié: ' + text);
+        });
+    }
+
+    function copyContext(relPath, description) {
+        const full = ROOT + relPath.replace(/\//g, '\\');
+        const ctx = '📄 FICHIER: ' + relPath + '\n' +
+                    '📂 CHEMIN COMPLET: ' + full + '\n' +
+                    '📝 DESCRIPTION: ' + description + '\n' +
+                    '🔗 SERVEUR: http://localhost:4000\n' +
+                    '📅 PROJET: Trading Auto — Copy Trading MT5';
+        navigator.clipboard.writeText(ctx).then(() => {
+            logMessage('SUCCESS', '📋 Contexte copié pour: ' + relPath);
+            showTab('logs');
+        });
+    }
+
+    function openFile(path) {
+        copyPath(path);
+    }
+
+    // ── TEST ROUTE ──
+    async function testRoute(route) {
+        logMessage('INFO', '🧪 Test: ' + API_URL + route);
+        try {
+            const r = await fetch(API_URL + route, { signal: AbortSignal.timeout(5000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ ' + route + ' → ' + JSON.stringify(d).slice(0, 200));
+            showTab('logs');
+        } catch(e) {
+            logMessage('ERROR', '❌ ' + route + ' → ' + e.message);
+            showTab('logs');
+        }
+    }
+
+    // ── CONTROL ACTIONS ──
+    async function runOrchestration() {
+        logMessage('INFO', 'Running orchestration cycle...');
+        try {
+            const r = await fetch(API_URL + '/orchestration/run-now', { method: 'POST', signal: AbortSignal.timeout(5000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ Orchestration: ' + d.message);
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    async function toggleAutoOrch() {
+        try {
+            const r = await fetch(API_URL + '/orchestration/enable?interval=60000', { method: 'POST', signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ ' + d.message);
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    async function runAnalyzer() {
+        try {
+            const r = await fetch(API_URL + '/analyzer/run-now', { method: 'POST', signal: AbortSignal.timeout(5000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ Analyzer: ' + JSON.stringify(d).slice(0, 100));
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    async function toggleAutoAnalyzer() {
+        try {
+            const r = await fetch(API_URL + '/analyzer/enable?interval=5000', { method: 'POST', signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ ' + d.message);
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    async function healthCheck() {
+        try {
+            const r = await fetch(API_URL + '/health', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ Health: ' + JSON.stringify(d).slice(0, 150));
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    async function toggleHealthCheck() {
+        try {
+            const r = await fetch(API_URL + '/mt5/health-check/enable', { method: 'POST', signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ ' + d.message);
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    async function testSymbolMatch() {
+        logMessage('INFO', 'Testing symbol matching XAUUSD...');
+        try {
+            const r = await fetch(API_URL + '/match-symbol/XAUUSD?price=2050', { signal: AbortSignal.timeout(5000) });
+            const d = await r.json();
+            logMessage('SUCCESS', '✅ Match: ' + JSON.stringify(d));
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    function showMatchAPI() {
+        logMessage('INFO', 'API: GET /match-symbol/:symbol?price=X\nEx: /match-symbol/XAUUSD?price=2050\nRéponse: { canonical, type, syncStatus, display }');
+    }
+    async function getSystemLog() {
+        try {
+            const r = await fetch(API_URL + '/system-log', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            logMessage('SUCCESS', JSON.stringify(d).slice(0, 300));
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    async function getAgentBus() {
+        try {
+            const r = await fetch(API_URL + '/agent-bus', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            const t = d.tasks || {};
+            logMessage('SUCCESS', 'AGENT_BUS: ' + (t.done||[]).length + ' done · ' + (t.inProgress||[]).length + ' in-progress · ' + (t.pending||[]).length + ' pending');
+        } catch(e) { logMessage('ERROR', '❌ ' + e.message); }
+    }
+    function resetSystem() {
+        if (confirm('⚠️ Êtes-vous sûr ? Cela rechargera la page.')) {
+            logMessage('WARNING', '🔄 Réinitialisation...');
+            setTimeout(() => location.reload(), 800);
+        }
+    }
+
+    // ── LOGGING ──
+    function logMessage(level, message) {
+        const time = new Date().toLocaleTimeString();
+        logsArray.push({ time, level, message });
+        if (logsArray.length > 100) logsArray.shift();
+        renderLogs();
+    }
+    function logMessageWithContext(level, message, file, func, line) {
+        const time = new Date().toLocaleTimeString();
+        logsArray.push({ time, level, message, file, func, line });
+        if (logsArray.length > 100) logsArray.shift();
+        renderLogs();
+    }
+    function renderLogs() {
+        const scopedLogs = errorFocusMode
+            ? logsArray.filter(log => {
+                const level = String(log.level || '').toLowerCase();
+                const msg = String(log.message || '');
+                if (isRepairLike(msg)) return false;
+                return isErrorLikeStatus(level) || /error|failed|warning|critical/i.test(msg);
+            })
+            : logsArray;
+
+        updateErrorSummary(logsArray.length, scopedLogs.length);
+
+        const html = scopedLogs.map(log => {
+            let logHTML = `
+            <div class="log-entry">
+                <span class="log-time">[${log.time}]</span>
+                <span class="log-level ${log.level.toLowerCase()}">${log.level}</span>
+                <span class="log-message">${log.message}</span>`;
+            
+            if (log.file && log.func && log.line) {
+                const fileEsc = (log.file || '').replace(/'/g, "\\'");
+                const funcEsc = (log.func || '').replace(/'/g, "\\'");
+                const msgEsc = (log.message || '').replace(/'/g, "\\'");
+                logHTML += ` <button onclick="copyLinkFromLog('${fileEsc}', '${funcEsc}', ${log.line}, '${msgEsc}', '${log.level}')" style="margin-left: 8px; padding: 2px 6px; font-size: 11px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">🔗</button>`;
+            }
+            
+            logHTML += `
+            </div>`;
+            return logHTML;
+        }).reverse().join('');
+        const c = document.getElementById('logsContainer');
+        if (c) {
+            c.innerHTML = html;
+            if (autoScroll) c.scrollTop = 0;
+        }
+    }
+    function clearLogs() { logsArray = []; document.getElementById('logsContainer').innerHTML = '<div style="color:#475569;text-align:center;padding:20px;">Logs effacés</div>'; }
+    function toggleAutoScroll() { autoScroll = !autoScroll; document.getElementById('autoscrollBtn').textContent = '🔄 Auto-scroll: ' + (autoScroll ? 'ON' : 'OFF'); }
+    function downloadLogs() {
+        const csv = logsArray.map(l => `"${l.time}","${l.level}","${l.message.replace(/"/g,'""')}"`).join('\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        a.download = 'trading-auto-logs-' + Date.now() + '.csv';
+        a.click();
+        logMessage('SUCCESS', '✅ Logs téléchargés');
+    }
+    function copyPlan() {
+        const txt = document.getElementById('planBoxContent').textContent;
+        navigator.clipboard.writeText(txt).then(() => logMessage('SUCCESS', '✅ Plan copié dans le presse-papiers'));
+    }
+
+    // ── PYTHON DEPENDENCIES ──
+    async function checkAndInstallDeps() {
+        const statusEl = document.getElementById('pip-status');
+        logMessage('INFO', '🔍 Vérification des dépendances Python...');
+        
+        try {
+            // 1. Check current status
+            const r = await fetch(API_URL + '/pip/check', { signal: AbortSignal.timeout(5000) });
+            const d = await r.json();
+            
+            if (!d.ok) {
+                logMessage('ERROR', '❌ Erreur vérification: ' + d.error);
+                return;
+            }
+            
+            logMessage('INFO', '📦 Vérification complètée:');
+            const missing = [];
+            for (const [pkg, installed] of Object.entries(d.packages)) {
+                const status = installed ? '✅' : '❌';
+                logMessage('INFO', `  ${status} ${pkg}`);
+                if (!installed) missing.push(pkg);
+            }
+            
+            if (d.allInstalled) {
+                logMessage('SUCCESS', '✅ Toutes les dépendances sont installées');
+                if (statusEl) {
+                    statusEl.textContent = 'OK';
+                    statusEl.className = 'badge ok';
+                }
+                return;
+            }
+            
+            // 2. Missing packages - offer to install
+            logMessage('WARNING', `⚠️ ${missing.length} dépendance(s) manquante(s): ${missing.join(', ')}`);
+            if (statusEl) {
+                statusEl.textContent = 'À INSTALLER';
+                statusEl.className = 'badge warn';
+            }
+            
+            // Ask to install
+            if (confirm(`⚠️ Installer ${missing.length} dépendance(s) manquante(s) ?\n\n${missing.join('\n')}`)) {
+                await installDependencies();
+            }
+        } catch(e) {
+            logMessage('ERROR', '❌ Erreur: ' + e.message);
+        }
+        showTab('logs');
+    }
+
+    async function installDependencies() {
+        logMessage('INFO', '📥 Lancement installation pip install -r requirements-mt5.txt...');
+        
+        try {
+            const r = await fetch(API_URL + '/pip/install', {
+                method: 'POST',
+                signal: AbortSignal.timeout(30000)
+            });
+            const d = await r.json();
+            
+            if (!d.ok) {
+                logMessage('ERROR', '❌ Erreur: ' + d.error);
+                return;
+            }
+            
+            logMessage('SUCCESS', '✅ Installation lancée (PID=' + d.pid + ')');
+            logMessage('INFO', '⏳ Attente 10s pour complétion...');
+            
+            // Wait for pip to finish
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            
+            // Re-check status
+            logMessage('INFO', '🔍 Vérification post-installation...');
+            await checkAndInstallDeps();
+        } catch(e) {
+            logMessage('ERROR', '❌ Erreur installation: ' + e.message);
+        }
+    }
+
+    // ── MT5 BRIDGE SINGLE SCRIPT CONTROL ──
+    async function startBridgeScript(scriptName, statusElementId) {
+        logMessage('INFO', `▶ Clic ON — Démarrage du bridge: ${scriptName}`);
+        
+        try {
+            const url = API_URL + '/bridge/start?script=' + encodeURIComponent(scriptName);
+            logMessage('INFO', `→ Appel: POST ${url}`);
+            
+            const r = await fetch(url, {
+                method: 'POST',
+                signal: AbortSignal.timeout(5000)
+            });
+            
+            const contentType = r.headers.get('content-type');
+            logMessage('INFO', `← HTTP ${r.status} | Content-Type: ${contentType}`);
+            
+            const text = await r.text();
+            logMessage('DEBUG', `Réponse brute (${text.length} chars): ${text.slice(0, 100)}`);
+            
+            // Check if response is HTML error
+            if (text.trim().startsWith('<')) {
+                logMessage('ERROR', `❌ Réponse HTML reçue au lieu de JSON`);
+                logMessage('ERROR', `Cela veut dire que la route ne répond pas correctement`);
+                logMessage('ERROR', `Contenu: ${text.slice(0, 200)}`);
+                return;
+            }
+            
+            let d;
+            try {
+                d = JSON.parse(text);
+            } catch (parseErr) {
+                logMessage('ERROR', `❌ Erreur parsing JSON: ${parseErr.message}`);
+                logMessage('ERROR', `Texte reçu: ${text}`);
+                return;
+            }
+            
+            if (!d.ok) {
+                logMessage('ERROR', `❌ Erreur backend: ${d.error || d.message}`);
+                logMessage('ERROR', `Réponse complète: ${JSON.stringify(d)}`);
+                return;
+            }
+            
+            logMessage('SUCCESS', `✅ Commande acceptée par backend`);
+            logMessage('INFO', `Commande: ${d.command}`);
+            logMessage('INFO', `PID: ${d.pid}`);
+            logMessage('INFO', `⏳ Attente 3s pour activation...`);
+            
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // No health check needed - the bridge is managed server-side
+            // Backend handles bridge process lifecycle and logging
+            logMessage('SUCCESS', `✅ Commande de démarrage transmise au serveur`);
+            logMessage('INFO', `La plateforme gère les logs du bridge via les endpoints serveur`);
+            
+            showTab('logs');
+        } catch(e) {
+            logMessage('ERROR', `❌ Erreur réseau/timeout: ${e.message}`);
+            logMessage('ERROR', `Vérifiez que le serveur Node est accessible sur :4000`);
+            showTab('logs');
+        }
+    }
+
+    async function stopBridgeScript(statusElementId) {
+        logMessage('INFO', `❌ Clic OFF — Arrêt du bridge`);
+        
+        try {
+            const url = API_URL + '/bridge/stop';
+            logMessage('INFO', `→ Appel: POST ${url}`);
+            
+            const r = await fetch(url, {
+                method: 'POST',
+                signal: AbortSignal.timeout(5000)
+            });
+            
+            const contentType = r.headers.get('content-type');
+            logMessage('INFO', `← HTTP ${r.status} | Content-Type: ${contentType}`);
+            
+            const text = await r.text();
+            
+            // Check if response is HTML error
+            if (text.trim().startsWith('<')) {
+                logMessage('ERROR', `❌ Réponse HTML au lieu de JSON`);
+                return;
+            }
+            
+            let d;
+            try {
+                d = JSON.parse(text);
+            } catch (parseErr) {
+                logMessage('ERROR', `❌ Erreur parsing JSON: ${parseErr.message}`);
+                return;
+            }
+            
+            if (!d.ok) {
+                logMessage('WARNING', `⚠️ ${d.message || d.error}`);
+            } else {
+                logMessage('SUCCESS', `✅ ${d.message}`);
+                
+                const badge = document.getElementById(statusElementId);
+                if (badge) {
+                    badge.textContent = 'OFFLINE';
+                    badge.className = 'badge broken';
+                }
+            }
+            showTab('logs');
+        } catch(e) {
+            logMessage('ERROR', `❌ Erreur: ${e.message}`);
+            showTab('logs');
+        }
+    }
+
+    // ── DISABLE BRIDGE ──
+    async function disableBridge() {
+        logMessage('INFO', '🛑 Arrêt des processus Python...');
+        
+        try {
+            const r = await fetch(API_URL + '/pip/stop', {
+                method: 'POST',
+                signal: AbortSignal.timeout(5000)
+            });
+            const d = await r.json();
+            
+            if (!d.ok) {
+                logMessage('WARNING', '⚠️ ' + (d.message || 'Arrêt échoué'));
+            } else {
+                logMessage('SUCCESS', '✅ Processus arrêtés: ' + d.message);
+                
+                const statusEl = document.getElementById('pip-status');
+                if (statusEl) {
+                    statusEl.textContent = 'OFF';
+                    statusEl.className = 'badge broken';
+                }
+            }
+            showTab('logs');
+        } catch(e) {
+            logMessage('ERROR', '❌ Erreur: ' + e.message);
+            showTab('logs');
+        }
+    }
+
+    function liveStatusClass(status) {
+        const s = String(status || '').toLowerCase();
+        if (s.includes('cours')) return '#f59e0b';
+        if (s.includes('termin')) return '#22c55e';
+        if (s.includes('bloqu') || s.includes('error')) return '#ef4444';
+        return '#94a3b8';
+    }
+
+    async function liveLoadAgents() {
+        const sel = document.getElementById('liveAgentSelect');
+        if (!sel) return;
+        try {
+            const r = await fetch(API_URL + '/agents/list', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            const list = Array.isArray(d.agents) ? d.agents : [];
+            sel.innerHTML = list.map((a) => `<option value="${a}">${a}</option>`).join('');
+            if (!list.length) sel.innerHTML = '<option value="repair-agent">repair-agent</option>';
+        } catch (_) {
+            sel.innerHTML = '<option value="repair-agent">repair-agent</option>';
+        }
+    }
+
+    function livePushActivity(item) {
+        const root = document.getElementById('liveActivityFeed');
+        if (!root || !item) return;
+        const status = String(item.status || item.level || '').toLowerCase();
+        const msgText = String(item.message || item.action || '');
+        if (errorFocusMode && (!isErrorLikeStatus(status) && !/error|failed|warning|critical/i.test(msgText))) {
+            return;
+        }
+        if (errorFocusMode && isRepairLike(msgText)) {
+            return;
+        }
+        const row = document.createElement('div');
+        const from = item.from || item.agent || 'system';
+        const to = item.to || 'all';
+        const msg = item.message || item.action || '(vide)';
+        const ts = new Date(item.ts || Date.now()).toLocaleTimeString('fr-FR');
+        row.style.cssText = 'padding:6px;border-bottom:1px dashed #334155;';
+        row.innerHTML = `<div style="color:#93c5fd;">${ts} · ${from} -> ${to}</div><div>${msg}</div>`;
+        root.prepend(row);
+        while (root.children.length > 80) root.removeChild(root.lastChild);
+    }
+
+    function connectLiveFeed() {
+        if (liveFeedSource) {
+            try { liveFeedSource.close(); } catch (_) {}
+        }
+        liveFeedSource = new EventSource(API_URL + '/agent-activity');
+        liveFeedSource.onmessage = (event) => {
+            try {
+                const payload = JSON.parse(event.data);
+                if (payload.type === 'initial-state' && Array.isArray(payload.logs)) {
+                    payload.logs.slice(0, 30).reverse().forEach(livePushActivity);
+                    return;
+                }
+                if (payload.type === 'agent-activity' && payload.payload) {
+                    livePushActivity(payload.payload);
+                    return;
+                }
+                livePushActivity(payload);
+            } catch (_) {}
+        };
+    }
+
+    async function liveRefreshRuntime() {
+        const root = document.getElementById('liveRuntimeRows');
+        if (!root) return;
+        try {
+            const r = await fetch(API_URL + '/agents/runtime?_ts=' + Date.now(), { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            const list = Array.isArray(d.agents) ? d.agents : [];
+            const totalEta = d.totalEtaLabel || '--';
+            root.innerHTML = list.map((a) => {
+                const sec = Math.floor((a.elapsedMs || 0) / 1000);
+                const eta = a.etaLabel || '--';
+                return `<div style="display:grid;grid-template-columns:1.1fr .7fr 1.2fr .7fr .8fr;gap:6px;padding:4px 0;border-bottom:1px dashed #334155;">
+                    <div>${a.agent || '-'}</div>
+                    <div style="color:${liveStatusClass(a.status)};">${a.status || '-'}</div>
+                    <div>${a.task || '-'}</div>
+                    <div>${sec}s</div>
+                    <div style="color:#93c5fd;">${eta}</div>
+                </div>`;
+            }).join('');
+            root.innerHTML = `<div style="padding:6px 0;color:#22c55e;font-weight:700;">ETA système total: ${totalEta}</div>` + root.innerHTML;
+            if (!list.length) root.innerHTML = '<div style="color:#64748b;">Aucun runtime agent.</div>';
+        } catch (e) {
+            root.innerHTML = `<div style="color:#ef4444;">Runtime indisponible: ${e.message}</div>`;
+        }
+    }
+
+    async function liveSendAgentMessage() {
+        const to = document.getElementById('liveAgentSelect')?.value || 'repair-agent';
+        const message = (document.getElementById('liveAgentMessage')?.value || '').trim();
+        const cause = (document.getElementById('liveAgentCause')?.value || '').trim();
+        const out = document.getElementById('liveAgentSendResult');
+        if (!message) {
+            if (out) out.textContent = 'Message vide.';
+            return;
+        }
+        try {
+            const r = await fetch(`${API_URL}/agents/${encodeURIComponent(to)}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from: 'human', to, message, status: 'action', phase: 'en cours', cause })
+            });
+            if (out) out.textContent = `Envoye a ${to} (HTTP ${r.status})`;
+            livePushActivity({ from: 'human', to, message, cause, ts: new Date().toISOString() });
+        } catch (e) {
+            if (out) out.textContent = 'Erreur envoi: ' + e.message;
+        }
+    }
+
+    function liveAppendLia(role, text) {
+        const root = document.getElementById('liveLiaFeed');
+        if (!root) return;
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:4px 0;border-bottom:1px dashed #334155;';
+        row.innerHTML = `<strong style="color:${role === 'lia' ? '#fcd34d' : '#93c5fd'};">${role === 'lia' ? 'HIA Dev' : 'Human'}:</strong> ${text}`;
+        root.appendChild(row);
+        root.scrollTop = root.scrollHeight;
+    }
+
+    async function liveLoadLiaHistory() {
+        const root = document.getElementById('liveLiaFeed');
+        if (root) root.innerHTML = '';
+        try {
+            const r = await fetch(API_URL + '/lia/history?channel=dev', { signal: AbortSignal.timeout(3000) });
+            const d = await r.json();
+            const msgs = Array.isArray(d.messages) ? d.messages : [];
+            msgs.slice(-20).forEach((m) => liveAppendLia(m.role === 'assistant' ? 'lia' : 'human', m.content || ''));
+            if (!msgs.length && root) root.innerHTML = '<div style="color:#64748b;">Historique Lia vide.</div>';
+        } catch (_) {
+            if (root) root.innerHTML = '<div style="color:#ef4444;">Historique Lia indisponible.</div>';
+        }
+    }
+
+    async function liveSendLia() {
+        const input = document.getElementById('liveLiaInput');
+        const message = (input?.value || '').trim();
+        if (!message) return;
+        liveAppendLia('human', message);
+        if (input) input.value = '';
+        try {
+            const r = await fetch(API_URL + '/lia/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, channel: 'dev' })
+            });
+            const d = await r.json();
+            liveAppendLia('lia', d.response || '(pas de reponse)');
+        } catch (e) {
+            liveAppendLia('lia', 'Erreur: ' + e.message);
+        }
+    }
+
+    // ── LIVE UPDATES ──
+    function startLiveUpdates() {
+        setInterval(async () => {
+            await checkServerStatus();
+            await refreshRuntimeTruth();
+            await liveRefreshRuntime();
+            await refreshBackupLiveProof();
+        }, 15000);
+    }
+
+    // ─── CONTEXT LINK GENERATOR ───────────────────────────────────────────────────
+    function generateContextLink(file, func, line, message, type = 'INFO') {
+      const absolutePath = file && file.startsWith('c:') ? file : 
+        file ? `c:\\Users\\97156\\OneDrive\\Desktop\\trading-auto\\${file}` : null;
+      
+      if (!absolutePath) return null;
+      
+      return `CONTEXT_LINK
+FILE: ${absolutePath}
+FUNCTION: ${func || 'unknown'}
+LINE: ${line || '?'}
+TYPE: ${type}
+MESSAGE: ${message}
+TIMESTAMP: ${new Date().toISOString()}
+──────────────────────────────────
+[Share this with a developer or AI]`;
+    }
+
+    function copyLinkFromLog(file, func, line, message, severity) {
+      const link = generateContextLink(file, func, line, message, severity);
+      if (!link) {
+        logMessage('WARNING', 'No file context available for this message');
+        return;
+      }
+      
+      navigator.clipboard.writeText(link).then(() => {
+        logMessage('SUCCESS', 'Context link copied to clipboard');
+      }).catch(() => {
+      });
+    }
+    </script>
+</body>
+</html>

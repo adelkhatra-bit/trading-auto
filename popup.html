@@ -1,0 +1,348 @@
+﻿<!DOCTYPE html>
+<html lang='fr'>
+<head>
+<meta charset='UTF-8'>
+<title>Trading Auto</title>
+<style>
+/* styles.css — EXACT COPY FROM EXTENSION */
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:420px;font-family:'Segoe UI',sans-serif;background:#0a0f1e;color:#e2e8f0;font-size:12px;overflow:hidden}
+.app{display:flex;flex-direction:column;height:600px;overflow:hidden}
+.header{height:36px;background:#0f172a;border-bottom:1px solid #1e3a5f;padding:0 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hdr-left{display:flex;align-items:center;gap:5px}
+.dot{width:7px;height:7px;border-radius:50%;background:#334155;flex-shrink:0}
+.dot.ok{background:#10b981}.dot.err{background:#ef4444}.dot.warn{background:#f59e0b}
+.hdr-sym{font-size:14px;font-weight:700;color:#3b82f6;font-family:monospace}
+.hdr-tf{font-size:10px;color:#64748b;font-family:monospace}
+.hdr-price{font-size:11px;color:#10b981;font-family:monospace;margin-left:3px}
+.hdr-right{display:flex;align-items:center;gap:5px}
+.hdr-time{color:#475569;font-size:10px;font-family:monospace}
+.vol-pill{padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700}
+.vol-pill.HIGH{background:rgba(239,68,68,.2);color:#fca5a5}
+.vol-pill.MEDIUM{background:rgba(245,158,11,.2);color:#fde68a}
+.vol-pill.LOW{background:rgba(100,116,139,.15);color:#94a3b8}
+.tabs{height:32px;display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid #1e3a5f;flex-shrink:0}
+.tab{padding:0;background:transparent;border:none;border-bottom:2px solid transparent;color:#475569;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.3px;text-transform:uppercase;transition:color .15s,background .15s}
+.tab:hover{color:#93c5fd;background:rgba(59,130,246,.03)}
+.tab.active{color:#3b82f6;border-bottom-color:#3b82f6;background:rgba(59,130,246,.05)}
+.tab-content{display:none;height:474px;overflow-y:auto;overflow-x:hidden}
+.tab-content.active{display:block}
+#tab-chart.active{display:flex;flex-direction:column;overflow:hidden}
+.tab-content::-webkit-scrollbar{width:3px}
+.tab-content::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:2px}
+.actions{height:58px;border-top:1px solid #1e3a5f;padding:5px 10px 6px;flex-shrink:0;background:#0d1220;display:flex;flex-direction:column;justify-content:space-between;gap:4px}
+#sts{font-size:10px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;height:14px}
+#sts.ok{color:#86efac}#sts.err{color:#fca5a5}
+.act-btns{display:grid;grid-template-columns:36px 1fr 36px 36px 36px;gap:5px;align-items:center}
+.btn-a{display:flex;align-items:center;justify-content:center;gap:4px;border:1px solid #1e3a5f;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;padding:0 8px;height:32px;background:#0f1a2e;color:#94a3b8;transition:background .15s,border-color .15s,color .15s,transform .1s;white-space:nowrap}
+.btn-a:hover{background:#1e3a5f;color:#e2e8f0;border-color:#3b82f6}
+.btn-a:active{transform:scale(.96)}
+.btn-a:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-ana{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-color:#3b82f6;font-size:12px;letter-spacing:.3px;box-shadow:0 2px 8px rgba(37,99,235,.3)}
+.btn-ana:hover{background:linear-gradient(135deg,#1e40af,#1d4ed8);border-color:#60a5fa;box-shadow:0 3px 12px rgba(37,99,235,.45);transform:translateY(-1px)}
+.btn-ana:active{transform:scale(.97) translateY(0)}
+.btn-icon{font-size:14px;line-height:1}
+.section{padding:8px 12px;border-bottom:1px solid #0d1526}
+.sect-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#334155;margin-bottom:6px}
+.status-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.si{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px;background:#0d1526;border-radius:5px}
+.si-dot{width:8px;height:8px;border-radius:50%;background:#1e293b}
+.si-dot.ok{background:#10b981}.si-dot.err{background:#ef4444}.si-dot.warn{background:#f59e0b}
+.si-lbl{font-size:9px;color:#475569;text-transform:uppercase}
+.si-val{font-size:9px;color:#94a3b8;font-family:monospace;text-align:center}
+.row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #0a0f1e}
+.row:last-child{border:none}
+.r-lbl{color:#64748b;font-size:11px}
+.r-val{font-weight:600;font-family:monospace;font-size:11px}
+.r-val.blue{color:#3b82f6}.r-val.green{color:#10b981}.r-val.muted{color:#475569;font-size:10px}
+input[type=text]{background:#0f172a;border:1px solid #1e3a5f;border-radius:4px;color:#e2e8f0;padding:5px 7px;font-size:11px;flex:1;outline:none}
+input[type=text]:focus{border-color:#3b82f6}
+input[type=number]{background:#0f172a;border:1px solid #1e3a5f;border-radius:4px;color:#e2e8f0;padding:5px 7px;font-size:11px;outline:none}
+input[type=number]:focus{border-color:#3b82f6}
+.search-row{display:flex;gap:5px;margin-bottom:7px}
+.btn-sm{padding:5px 10px;border:1px solid #1e3a5f;border-radius:6px;background:#0f1a2e;color:#64748b;cursor:pointer;font-size:11px;white-space:nowrap;font-weight:700;transition:all .15s}
+.btn-sm:hover{background:#1e3a5f;color:#e2e8f0;border-color:#3b82f6}
+.btn-sm:active{transform:scale(.97)}
+.chart-bar{height:34px;display:flex;align-items:center;gap:5px;padding:0 10px;background:#0d1220;border-bottom:1px solid #1e3a5f;flex-shrink:0}
+#chart-sym-label{font-size:11px;font-weight:700;color:#3b82f6;font-family:monospace;flex:1;white-space:nowrap}
+.tf-scroll{display:flex;gap:3px;overflow-x:auto;flex:2}
+.tf-scroll::-webkit-scrollbar{height:0}
+.tf-btn{padding:2px 6px;border:1px solid #334155;border-radius:3px;background:transparent;color:#64748b;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.tf-btn.active{background:#1e3a5f;color:#93c5fd;border-color:#3b82f6}
+#chart-container{height:440px;width:100%;position:relative;background:#0a0f1e;overflow:hidden}
+#chart-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#475569;font-size:11px;text-align:center;line-height:1.6;pointer-events:none;z-index:10}
+.modes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px}
+.mb{padding:7px 4px;border-radius:8px;border:1px solid #1e3a5f;background:#0d1526;color:#475569;font-size:10px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:all .15s}
+.mb .mb-icon{font-size:14px;line-height:1}
+.mb .mb-lbl{font-size:9px;letter-spacing:.5px}
+.mb:hover{background:#1e293b;color:#cbd5e1;border-color:#334155}
+.mb.active{border-width:2px;background:rgba(59,130,246,.06)}
+.mb[data-m='SCALPER'].active{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.07)}
+.mb[data-m='SNIPER'].active{border-color:#7c3aed;color:#a78bfa;background:rgba(124,58,237,.07)}
+.mb[data-m='SWING'].active{border-color:#10b981;color:#6ee7b7;background:rgba(16,185,129,.07)}
+.no-signal{color:#334155;font-size:11px;text-align:center;padding:16px 0}
+textarea{width:100%;background:#0f172a;border:1px solid #1e3a5f;border-radius:4px;color:#e2e8f0;padding:6px;font-size:11px;resize:none;font-family:inherit;margin-top:4px}
+textarea:focus{outline:none;border-color:#3b82f6}
+textarea::placeholder{color:#334155}
+.ai-dbg-btn{width:100%;padding:6px;border:1px solid #7c3aed;border-radius:4px;background:rgba(124,58,237,.08);color:#a78bfa;font-size:10px;font-weight:700;cursor:pointer;margin-top:6px}
+.ai-dbg-btn:hover{background:rgba(124,58,237,.15)}
+</style>
+</head>
+<body>
+<div class='app'>
+
+
+<!-- ALERT BANNER FOR CRITICAL NEWS -->
+<div id='alert-banner' style='display:none; background:#ef4444; color:white; padding:10px; border-bottom:2px solid #dc2626; font-weight:bold; font-size:12px; text-align:center; cursor:pointer; position:sticky; top:0; z-index:1000;'>
+  🚨 <span id='alert-text'>News importante détectée</span>
+</div>
+
+<header class='header'>
+  <div class='hdr-left'>
+    <div class='dot' id='dot-srv'></div>
+    <div class='dot' id='dot-mt5'></div>
+    <div class='dot' id='dot-ext'></div>
+    <span class='hdr-sym' id='hdr-sym'>--</span>
+    <span class='hdr-tf' id='hdr-tf'></span>
+    <span class='hdr-price' id='hdr-price'></span>
+  </div>
+  <div class='hdr-right'>
+    <span class='hdr-time' id='hdr-time'>00:00:00</span>
+    <span class='vol-pill LOW' id='vol-pill'>LOW</span>
+  </div>
+</header>
+
+<div style='background:#0d1220; padding:8px 12px; border-bottom:1px solid #1e3a5f; display:flex; gap:8px; align-items:center; overflow-x:auto;'>
+  <label style='font-size:10px; color:#475569; min-width:70px;'>SYMBOL:</label>
+  <select id='symbol-select' style='flex:1; min-width:150px; background:#0f172a; border:1px solid #1e3a5f; color:#e2e8f0; padding:6px 8px; border-radius:3px; font-size:11px; max-height:400px;'>
+    <optgroup label='FOREX MAJORS'>
+      <option value='EURUSD'>European / EUR/USD</option>
+      <option value='GBPUSD'>British Pound / GBP/USD</option>
+      <option value='USDCAD'>Canadian Dollar / USD/CAD</option>
+      <option value='USDJPY'>Japanese Yen / USD/JPY</option>
+      <option value='AUDUSD'>Australian Dollar / AUD/USD</option>
+      <option value='NZDUSD'>New Zealand Dollar / NZD/USD</option>
+      <option value='USDCHF'>Swiss Franc / USD/CHF</option>
+      <option value='EURJPY'>EUR/JPY Cross</option>
+      <option value='GBPJPY'>GBP/JPY Cross</option>
+      <option value='EURGBP'>EUR/GBP Cross</option>
+      <option value='EURCHF'>EUR/CHF Cross</option>
+      <option value='AUDNZD'>AUD/NZD Cross</option>
+      <option value='AUDCAD'>AUD/CAD Cross</option>
+      <option value='AUDCHF'>AUD/CHF Cross</option>
+    </optgroup>
+    <optgroup label='COMMODITIES'>
+      <option value='XAUUSD'>⭐ GOLD (XAU/USD)</option>
+      <option value='XAGUSD'>Silver (XAG/USD)</option>
+      <option value='XPTUSD'>Platinum (XPT/USD)</option>
+      <option value='XPDUSD'>Palladium (XPD/USD)</option>
+      <option value='UKOUSD'>Oil Brent (UKO/USD)</option>
+      <option value='WTIUSD'>Oil WTI (WTI/USD)</option>
+      <option value='NATGAS'>Natural Gas</option>
+      <option value='COPPER'>Copper</option>
+    </optgroup>
+    <optgroup label='INDICES'>
+      <option value='US30'>Dow Jones 30 (US30)</option>
+      <option value='SPX500'>S&P 500 (SPX500)</option>
+      <option value='NAS100'>Nasdaq 100 (NAS100)</option>
+      <option value='UK100'>FTSE 100 (UK100)</option>
+      <option value='GER30'>DAX 30 (GER30)</option>
+      <option value='FRA40'>CAC 40 (FRA40)</option>
+      <option value='HK50'>Hang Seng (HK50)</option>
+      <option value='JP225'>Nikkei 225 (JP225)</option>
+      <option value='CN50'>Shanghai Composite (CN50)</option>
+      <option value='INDIA50'>SENSEX 50 (INDIA50)</option>
+    </optgroup>
+    <optgroup label='CRYPTOCURRENCIES'>
+      <option value='BTCUSD'>Bitcoin (BTC/USD)</option>
+      <option value='ETHUSD'>Ethereum (ETH/USD)</option>
+      <option value='LTCUSD'>Litecoin (LTC/USD)</option>
+      <option value='BCHUSD'>Bitcoin Cash (BCH/USD)</option>
+      <option value='RIPPLE'>Ripple (XRP)</option>
+      <option value='DOGEUSD'>Dogecoin (DOGE)</option>
+    </optgroup>
+  </select>
+  <button class='btn-sm' id='btn-debug-send' style='padding:4px 8px; background:#7c3aed; color:white; border-color:#7c3aed;'>🐛 Debug</button>
+</div>
+
+<div class='tabs'>
+  <button class='tab active' data-tab='context'>Actif</button>
+  <button class='tab' data-tab='chart'>Graphique</button>
+  <button class='tab' data-tab='market'>Marches</button>
+  <button class='tab' data-tab='news'>News</button>
+  <button class='tab' data-tab='signal'>Signal</button>
+  <button class='tab' data-tab='status'>Status</button>
+</div>
+
+<div class='tab-content active' id='tab-context'>
+  <div class='section'>
+    <div class='sect-title'>Statut</div>
+    <div class='status-grid'>
+      <div class='si'><div class='si-dot' id='si-srv'></div><div class='si-lbl'>Serveur</div><div class='si-val' id='sv-srv'>--</div></div>
+      <div class='si'><div class='si-dot' id='si-mt5'></div><div class='si-lbl'>MT5 Bridge</div><div class='si-val' id='sv-mt5'>--</div></div>
+      <div class='si'><div class='si-dot' id='si-det'></div><div class='si-lbl'>Source</div><div class='si-val' id='sv-det'>--</div></div>
+    </div>
+  </div>
+  <div class='section'>
+    <div class='sect-title'>Actif actuel</div>
+    <div class='row'><span class='r-lbl'>Symbole MT5</span><span class='r-val blue' id='ctx-sym'>--</span></div>
+    <div class='row'><span class='r-lbl'>Bid / Ask</span><span class='r-val green' id='ctx-price'>--</span></div>
+    <div class='row'><span class='r-lbl'>Spread</span><span class='r-val muted' id='ctx-spread'>--</span></div>
+    <div class='row'><span class='r-lbl'>Timeframe</span><span class='r-val' id='ctx-tf'>--</span></div>
+    <div class='row'><span class='r-lbl'>Type</span><span class='r-val muted' id='ctx-type'>--</span></div>
+    <div class='row'><span class='r-lbl'>Source TV</span><span class='r-val muted' id='ctx-tv'>--</span></div>
+  </div>
+  <div class='section'>
+    <div class='sect-title'>Recherche MT5</div>
+    <div class='search-row'>
+      <input type='text' id='map-query' placeholder='gold, XAUUSD, NAS100...' autocomplete='off' style='flex:1'>
+      <input type='number' id='map-price' placeholder='Prix' autocomplete='off' style='width:90px' step='0.01'>
+      <button class='btn-sm' id='btn-search-mt5'>Rechercher</button>
+    </div>
+    <div id='map-results'></div>
+    <div id='map-current'></div>
+  </div>
+  <div class='section'>
+    <button class='ai-dbg-btn' id='btn-ai-debug'>Diagnostiquer avec IA</button>
+    <div id='ai-dbg-result' class='ai-dbg-result' style='display:none'></div>
+  </div>
+</div>
+
+<div class='tab-content' id='tab-chart'>
+  <div class='chart-bar'>
+    <span id='chart-sym-label'>--</span>
+    <div class='tf-scroll' id='tf-scroll'>
+      <button class='tf-btn' data-tf='M1'>M1</button>
+      <button class='tf-btn' data-tf='M2'>M2</button>
+      <button class='tf-btn' data-tf='M3'>M3</button>
+      <button class='tf-btn' data-tf='M4'>M4</button>
+      <button class='tf-btn' data-tf='M5'>M5</button>
+      <button class='tf-btn' data-tf='M6'>M6</button>
+      <button class='tf-btn' data-tf='M10'>M10</button>
+      <button class='tf-btn' data-tf='M12'>M12</button>
+      <button class='tf-btn' data-tf='M15'>M15</button>
+      <button class='tf-btn' data-tf='M20'>M20</button>
+      <button class='tf-btn' data-tf='M30'>M30</button>
+      <button class='tf-btn active' data-tf='H1'>H1</button>
+      <button class='tf-btn' data-tf='H2'>H2</button>
+      <button class='tf-btn' data-tf='H3'>H3</button>
+      <button class='tf-btn' data-tf='H4'>H4</button>
+      <button class='tf-btn' data-tf='H6'>H6</button>
+      <button class='tf-btn' data-tf='H8'>H8</button>
+      <button class='tf-btn' data-tf='H12'>H12</button>
+      <button class='tf-btn' data-tf='D1'>D1</button>
+      <button class='tf-btn' data-tf='W1'>W1</button>
+      <button class='tf-btn' data-tf='MN1'>MN1</button>
+    </div>
+    <button class='btn-sm' id='btn-chart-refresh' style='padding:2px 6px'>&#x21bb;</button>
+  </div>
+  <div id='chart-container' style='width:100%; height:400px; background:#0f172a; border:1px solid #1e3a5f; display:flex; align-items:center; justify-content:center; overflow:hidden;'>
+    <div id='chart-msg' style='color:#94a3b8; font-size:12px; text-align:center;'>Selectionnez un actif dans l'onglet Actif<br>puis revenez ici</div>
+  </div>
+  <div style='background:#0d1220; padding:10px; border-top:1px solid #1e3a5f; display:flex; gap:6px; justify-content:center; flex-wrap:wrap; align-items:center;'>
+    <span style='font-size:11px; color:#94a3b8;'>📋 COPIE DE POSITIONS:</span>
+    <button class='btn-sm' id='btn-trade-buy' style='padding:6px 12px; background:#4ade80; color:white; border-color:#4ade80; font-weight:bold;'>📥 COPIER</button>
+    <button class='btn-sm' id='btn-trade-close' style='padding:6px 12px; background:#f59e0b; color:white; border-color:#f59e0b; font-weight:bold;'>⏹️ ARRÊTER</button>
+  </div>
+</div>
+
+<div class='tab-content' id='tab-market'>
+  <div class='section'><div class='sect-title'>Sessions actives</div><div id='sessions-list'></div><div id='overlap-banner'></div></div>
+  <div class='section'><div class='sect-title'>Prochaines ouvertures (8h)</div><div id='upcoming-list'></div></div>
+  <div class='section'><div class='sect-title'>Volatilite</div><div class='vol-box LOW' id='vol-box'>LOW</div></div>
+</div>
+
+<div class='tab-content' id='tab-news'>
+  <div class='section'><div class='sect-title'>Evenements economiques (24h)</div><div id='news-list'><div class='no-news'>Chargement...</div></div></div>
+</div>
+
+<div class='tab-content' id='tab-signal'>
+  <div class='section'>
+    <div class='sect-title'>Mode de trading</div>
+    <div class='modes'>
+      <button class='mb' data-m='SCALPER'>
+        <span class='mb-icon'>&#x26A1;</span>
+        <span class='mb-lbl'>SCALPER</span>
+      </button>
+      <button class='mb active' data-m='SNIPER'>
+        <span class='mb-icon'>&#x1F3AF;</span>
+        <span class='mb-lbl'>SNIPER</span>
+      </button>
+      <button class='mb' data-m='SWING'>
+        <span class='mb-icon'>&#x1F4C8;</span>
+        <span class='mb-lbl'>SWING</span>
+      </button>
+    </div>
+  </div>
+  <div id='signal-area' class='section'>
+    <div class='no-signal'>Cliquez Analyser</div>
+    <div id='screenshot-status' style='display:none;margin-top:12px;padding:8px;background:#1e3a5f;border-left:3px solid #2563eb;border-radius:3px;font-size:11px'></div>
+  </div>
+  <div class='section'><div class='sect-title'>Note</div><textarea id='user-note' rows='3' placeholder='Contexte, scenario...'></textarea></div>
+</div>
+
+<div class='tab-content' id='tab-status'>
+  <div class='section'>
+    <div style='display:flex; justify-content:space-between; align-items:center;'>
+      <div class='sect-title'>📊 Positions Ouvertes</div>
+      <button class='btn-sm' id='btn-close-all-pos' style='padding:4px 8px; background:#ef4444; color:white; border-color:#ef4444;'>Fermer Tout</button>
+    </div>
+    <div id='positions-list' style='min-height:60px;'></div>
+  </div>
+  <div class='section'>
+    <div style='display:flex; justify-content:space-between; align-items:center;'>
+      <div class='sect-title'>💡 Opportunités Détectées</div>
+      <button class='btn-sm' id='btn-exec-opp' style='padding:4px 8px; background:#10b981; color:white; border-color:#10b981;'>Exécuter</button>
+    </div>
+    <div id='opportunities-list' style='min-height:60px;'></div>
+  </div>
+  <div class='section'>
+    <div style='display:flex; justify-content:space-between; align-items:center;'>
+      <div class='sect-title'>🤖 Rapport Agents</div>
+      <button class='btn-sm' id='btn-agents-config' style='padding:4px 8px; background:#3b82f6; color:white; border-color:#3b82f6;'>Config</button>
+    </div>
+    <div id='agents-report' style='min-height:60px;'></div>
+  </div>
+  <div class='section'>
+    <div style='display:flex; justify-content:space-between; align-items:center;'>
+      <div class='sect-title'>📋 Logs Système</div>
+      <button class='btn-sm' id='btn-clear-logs' style='padding:4px 8px; background:#6b7280; color:white; border-color:#6b7280;'>Effacer</button>
+    </div>
+    <div id='logs-container' style='min-height:60px; max-height:200px; overflow-y:auto;'></div>
+  </div>
+</div>
+
+<div class='actions'>
+  <div id='sts'>Initialisation...</div>
+  <div class='act-btns'>
+    <button class='btn-a' id='btn-refresh' title='Rafraîchir les données'>
+      <span class='btn-icon'>&#x21ba;</span>
+    </button>
+    <button class='btn-a btn-ana' id='btn-analyze'>&#x1F50D;&nbsp;ANALYSER</button>
+    <button class='btn-a' id='btn-news-ctx' title='Contexte news'>
+      <span class='btn-icon'>&#x1F4F0;</span>
+    </button>
+    <button class='btn-a' id='btn-shoot' title='Screenshot TradingView'>
+      <span class='btn-icon'>&#x1F4F8;</span>
+    </button>
+    <button class='btn-a' id='btn-ai-dbg2' title='Diagnostic IA'>
+      <span style='font-size:9px;font-weight:800;letter-spacing:.5px'>AI</span>
+    </button>
+  </div>
+</div>
+
+<div id='modal-confirm' style='display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:2000; flex-direction:column; align-items:center; justify-content:center;'>
+  <div style='background:#0f172a; border:1px solid #1e3a5f; border-radius:8px; padding:20px; max-width:400px; color:#e2e8f0;'>
+    <div id='modal-title' style='font-size:18px; font-weight:bold; margin-bottom:15px;'>Confirmation</div>
+    <div id='modal-msg' style='font-size:14px; margin-bottom:20px; color:#cbd5e1;'></div>
+    <div style='display:flex; gap:10px; justify-content:flex-end;'>
+      <button id='modal-cancel' class='btn-sm' style='padding:6px 12px; background:#666; border-color:#666;'>Annuler</button>
+      <button id='modal-confirm-btn' class='btn-sm' style='padding:6px 12px; background:#10b981; border-color:#10b981;'>Confirmer</button>
+    </div>
+  </div>
+</div>
+
+</div>
+<script src='popup.js'></script>
+</body>
+</html>

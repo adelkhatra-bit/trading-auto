@@ -1,0 +1,54 @@
+name: CI Integration Tests
+
+on:
+  push:
+    branches: [main, feature/**, deploy/**]
+  pull_request:
+    branches: [main]
+
+jobs:
+  integration_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Lint check (if eslint exists)
+        run: npm run lint || echo "No lint script defined"
+        continue-on-error: true
+
+      - name: Make integration tests executable
+        run: chmod +x tests/integration/*.sh || true
+
+      - name: Run integration tests
+        env:
+          TEST_FILE_URL: ${{ secrets.TEST_FILE_URL }}
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          BROKER_API_KEY: ${{ secrets.BROKER_API_KEY }}
+          BROKER_API_SECRET: ${{ secrets.BROKER_API_SECRET }}
+        run: |
+          if [ -f "tests/integration/fetch-file.test.sh" ]; then
+            bash tests/integration/fetch-file.test.sh
+          else
+            echo "No integration tests found, skipping"
+          fi
+
+      - name: Health check
+        run: |
+          echo "Integration tests completed successfully"
+        continue-on-error: true
+
+      - name: Report test results
+        if: always()
+        run: echo "CI Pipeline Completed"

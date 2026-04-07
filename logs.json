@@ -1,0 +1,62 @@
+{
+  "_doc": "Log des actions agents. Chaque entrée = une action exécutée. Ne pas supprimer les entrées, ajouter en tête.",
+  "logs": [
+    {
+      "id": 5,
+      "ts": "2026-04-01T00:00:00Z",
+      "agent": "Claude (GitHub Copilot - Claude Haiku 4.5)",
+      "task_id": "T004",
+      "action": "Synchroniser mode SCALPER/SNIPER/SWING",
+      "status": "done",
+      "detail": "✓ popup.js: sendActiveSymbol() + mode button event listeners | ✓ server.js: /active-symbol POST stores mode | ✓ studioapp.js: pollActiveSymbol() syncs state.tradeMode + DOM selectors"
+    },
+    {
+      "id": 4,
+      "ts": "2026-04-01T00:00:00Z",
+      "agent": "Claude (GitHub Copilot - Claude Haiku 4.5)",
+      "task_id": "T003",
+      "action": "Accélérer le graphique",
+      "status": "done",
+      "detail": "✓ studioapp.js: updateCritical réduit à 1500ms pour M1–M5 | ✓ connectSSE() accepte type 'quote' | ✓ /quote endpoint broadcast via marketStore"
+    },
+    {
+      "id": 3,
+      "ts": "2026-04-01T00:00:00Z",
+      "agent": "Claude (GitHub Copilot - Claude Haiku 4.5)",
+      "task_id": "T002",
+      "action": "Enrichir analyse - Market Structure + Why Fields",
+      "status": "done",
+      "detail": "✓ technicalAgent.js: calculateMarketStructure() + generateWhyFields() | ✓ Intégré dans analyzeFromKlines() + analyzeFromMT5() | ✓ renderTrades() affiche Pourquoi Entrée/SL/TP dans studio"
+    },
+    {
+      "id": 3,
+      "ts": "2026-04-01T00:00:00Z",
+      "agent": "Claude (GitHub Copilot - Claude Haiku 4.5)",
+      "task_id": "T001",
+      "action": "TradingView Extension - Symbol Detection FIX",
+      "status": "done",
+      "detail": "✓ manifest.json validated (run_at: document_idle) | ✓ content.js: Fixed orphan code }, 500); and proactive detection with MutationObserver + 2s timer | ✓ background.js: Symbol cache manager ready | ✓ popup.js: Auto-display symbol on load",
+      "files_updated": ["manifest.json", "content.js", "background.js", "popup.js"],
+      "sync_status": "Both production and dev folders synchronized"
+    },
+    {
+      "id": 2,
+      "ts": "2026-04-01T00:00:00Z",
+      "agent": "Claude (GitHub Copilot - Claude Haiku 4.5)",
+      "task_id": "TEST-001",
+      "action": "Communication confirmation",
+      "message": "HELLO FROM AGENT-WORKER",
+      "status": "done",
+      "detail": "Claude is reading and executing tasks from tasks.json. Communication successful."
+    },
+    {
+      "id": 1,
+      "ts": "2026-04-01T00:00:00Z",
+      "agent": "claude",
+      "task_id": "SYSTEM",
+      "action": "Création du système tasks.json + logs.json",
+      "status": "done",
+      "detail": "Architecture de coordination Claude ↔ Agents mise en place"
+    }
+  ]
+}

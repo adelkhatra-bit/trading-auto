@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MT5 SSE Test</title>
+  <style>
+    body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+    #log { height: 400px; overflow-y: auto; border: 1px solid #0f0; padding: 10px; margin-bottom: 20px; }
+    .msg { margin: 5px 0; }
+    .ok { color: #0f0; }
+    .err { color: #f00; }
+    .data { color: #0ff; }
+  </style>
+</head>
+<body>
+  <h1>MT5 SSE Real-Time Test</h1>
+  <div id="log"></div>
+  <button onclick="connect()">Connect</button>
+  <button onclick="disconnect()">Disconnect</button>
+  
+  <script>
+    const API = 'http://127.0.0.1:4000';
+    let es = null;
+    const log = document.getElementById('log');
+    
+    function logMsg(text, className = '') {
+      const p = document.createElement('div');
+      p.className = 'msg ' + className;
+      p.textContent = new Date().toLocaleTimeString() + ' | ' + text;
+      log.appendChild(p);
+      log.scrollTop = log.scrollHeight;
+    }
+    
+    function connect() {
+      if (es) return;
+      logMsg('Connecting to SSE...', 'ok');
+      
+      es = new EventSource(API + '/extension/sync');
+      
+      es.onopen = () => {
+        logMsg('✓ SSE Connected', 'ok');
+      };
+      
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          logMsg(`[${data.type}] Received: ${JSON.stringify(data).substring(0, 100)}...`, 'data');
+        } catch (e) {
+          logMsg('Parse error: ' + e.message, 'err');
+        }
+      };
+      
+      es.onerror = () => {
+        logMsg('✗ Connection error', 'err');
+        disconnect();
+      };
+    }
+    
+    function disconnect() {
+      if (es) {
+        es.close();
+        es = null;
+        logMsg('Disconnected', '');
+      }
+    }
+    
+    // Auto-connect
+    window.addEventListener('load', connect);
+  </script>
+</body>
+</html>

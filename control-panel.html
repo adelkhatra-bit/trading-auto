@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Auto — System Control Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        .menu-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 9999;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            text-decoration: none;
+        }
+        .menu-button:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f1419 0%, #1a1e2e 100%);
+            color: #e2e8f0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 40px;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 32px;
+            color: #3b82f6;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .section {
+            background: rgba(30, 41, 59, 0.8);
+            border: 2px solid;
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .section:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .section.en-cours {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .section.en-attente {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.05);
+        }
+
+        .section.en-construction {
+            border-color: #f97316;
+            background: rgba(249, 115, 22, 0.05);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .section-icon {
+            font-size: 24px;
+        }
+
+        .section h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .section.en-cours h2 { color: #10b981; }
+        .section.en-attente h2 { color: #f59e0b; }
+        .section.en-construction h2 { color: #f97316; }
+
+        .items {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .item {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid;
+            padding: 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .item:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .section.en-cours .item { border-left-color: #10b981; }
+        .section.en-attente .item { border-left-color: #f59e0b; }
+        .section.en-construction .item { border-left-color: #f97316; }
+
+        .item-title {
+            font-weight: 600;
+            color: #f1f5f9;
+            margin-bottom: 6px;
+        }
+
+        .item-desc {
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .item-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            font-weight: 500;
+        }
+
+        .tag.module { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+        .tag.file { background: rgba(139, 92, 246, 0.2); color: #d8b4fe; }
+        .tag.endpoint { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+        .tag.status { background: rgba(14, 165, 233, 0.2); color: #7dd3fc; }
+
+        .summary {
+            grid-column: 1 / -1;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px dashed #475569;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .summary h3 {
+            color: #94a3b8;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .summary-box {
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .summary-box-title {
+            font-size: 11px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .summary-box-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #06b6d4;
+            font-family: 'Courier New', monospace;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 8px 16px rgba(107, 114, 128, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .summary {
+                grid-column: 1;
+            }
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="menu-button">← Menu</a>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <h1>⚙️ SYSTEM CONTROL PANEL</h1>
+            <p>Cartographie en temps réel — Trading Auto System</p>
+        </header>
+
+        <!-- MAIN GRID -->
+        <div class="grid">
+            
+            <!-- ════════════════════════════════════════════ EN COURS ════════════════════════════════════════════ -->
+            <div class="section en-cours">
+                <div class="section-header">
+                    <div class="section-icon">🟢</div>
+                    <h2>EN COURS</h2>
+                </div>
+                <div class="items">
+
+                    <!-- Server Core -->
+                    <div class="item">
+                        <div class="item-title">Server Core (Node.js)</div>
+                        <div class="item-desc">
+                            Serveur principal écoute port 4000. Reçoit ticks MT5, routage UI, gestion endpoints.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">server.js</span>
+                            <span class="tag endpoint">GET / POST /mt5</span>
+                            <span class="tag status">ACTIF</span>
+                        </div>
+                    </div>
+
+                    <!-- Studio Interface -->
+                    <div class="item">
+                        <div class="item-title">Studio UI (Principal)</div>
+                        <div class="item-desc">
+                            Interface graphique principale. Chart temps-réel, positions, sélection symbole, badge marché.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">studio/index-simple.html</span>
+                            <span class="tag file">studio/studioapp.js</span>
+                            <span class="tag endpoint">GET /studio</span>
+                            <span class="tag status">ACTIF</span>
+                        </div>
+                    </div>
+
+                    <!-- Market Hours Checker -->
+                    <div class="item">
+                        <div class="item-title">Market Hours Detector (P2)</div>
+                        <div class="item-desc">
+                            Détection 100% locale marché ouvert/fermé. Bloque ticks silencieusement si fermé. UTC hardcoded, aucune API externe.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag module">lib/market-hours-checker.js</span>
+                            <span class="tag endpoint">GET /mt5/market-status</span>
+                            <span class="tag status">LIVE</span>
+                        </div>
+                    </div>
+
+                    <!-- Candle Manager -->
+                    <div class="item">
+                        <div class="item-title">Candle Manager (OHLC)</div>
+                        <div class="item-desc">
+                            Agrégation candlesticks. Phase 1B validé (10/10 tests). Intégré POST /mt5.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag module">lib/candle-manager.js</span>
+                            <span class="tag status">COMPLET</span>
+                            <span class="tag status">PERSISTÉ</span>
+                        </div>
+                    </div>
+
+                    <!-- MT5 Bridge -->
+                    <div class="item">
+                        <div class="item-title">MT5 Bridge</div>
+                        <div class="item-desc">
+                            Récepteur ticks MetaTrader 5. Python bridge + MQ5 bridge + Node wrapper.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">mt5_bridge.py</span>
+                            <span class="tag file">Bridge_MT5_Studio.mq5</span>
+                            <span class="tag status">CONNECTÉ</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ════════════════════════════════════════════ EN ATTENTE ════════════════════════════════════════════ -->
+            <div class="section en-attente">
+                <div class="section-header">
+                    <div class="section-icon">⏸️</div>
+                    <h2>EN ATTENTE</h2>
+                </div>
+                <div class="items">
+
+                    <!-- Audit Dashboard -->
+                    <div class="item">
+                        <div class="item-title">Audit Dashboard</div>
+                        <div class="item-desc">
+                            Monitoring tâches & erreurs système. Prêt mais non-prioritaire. Standby.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">audit-dashboard.html</span>
+                            <span class="tag module">audit-logger.js</span>
+                            <span class="tag endpoint">GET /audit</span>
+                            <span class="tag status">PRÊT</span>
+                        </div>
+                    </div>
+
+                    <!-- Main Menu & Dashboard -->
+                    <div class="item">
+                        <div class="item-title">Main Menu & Dashboard Nav</div>
+                        <div class="item-desc">
+                            Navigation & stats globales. HTML prêt mais Studio est prioritaire.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">index.html</span>
+                            <span class="tag file">dashboard.html</span>
+                            <span class="tag endpoint">GET /</span>
+                            <span class="tag status">PRÊT</span>
+                        </div>
+                    </div>
+
+                    <!-- Browser Extension -->
+                    <div class="item">
+                        <div class="item-title">Chrome Extension</div>
+                        <div class="item-desc">
+                            Capture TradingView + analyse locale. Compilé, manifest prêt, non-déployé.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">public/manifest.json</span>
+                            <span class="tag file">popup.js, background.js</span>
+                            <span class="tag status">COMPILÉ</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ════════════════════════════════════════════ EN CONSTRUCTION ════════════════════════════════════════════ -->
+            <div class="section en-construction">
+                <div class="section-header">
+                    <div class="section-icon">🔨</div>
+                    <h2>EN CONSTRUCTION</h2>
+                </div>
+                <div class="items">
+
+                    <!-- Agents System -->
+                    <div class="item">
+                        <div class="item-title">Agents System</div>
+                        <div class="item-desc">
+                            Système communication agents. Partiellement implémenté, non-branché flux principal. Héritage ancien.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">agent.js, agent-bus.js</span>
+                            <span class="tag file">agent-worker.js</span>
+                            <span class="tag status">PARTIEL</span>
+                            <span class="tag status">INACTIF</span>
+                        </div>
+                    </div>
+
+                    <!-- Test Modules -->
+                    <div class="item">
+                        <div class="item-title">Experimental Test Pages</div>
+                        <div class="item-desc">
+                            Pages test dispersées au root. Non intégrées. Expérimentales.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">test-analysis.html</span>
+                            <span class="tag file">test-chart-visual.html</span>
+                            <span class="tag status">TEST</span>
+                        </div>
+                    </div>
+
+                    <!-- Legacy Data Stores -->
+                    <div class="item">
+                        <div class="item-title">Legacy Data Modules</div>
+                        <div class="item-desc">
+                            Répertoires store/, trading/, analysis/. Logique non-clarifiée, versions anciennes.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag file">store/, trading/, analysis/</span>
+                            <span class="tag status">À ARCHIVER</span>
+                        </div>
+                    </div>
+
+                    <!-- Symbol Matcher (Minimal) -->
+                    <div class="item">
+                        <div class="item-title">Symbol Matcher (Minimal)</div>
+                        <div class="item-desc">
+                            Mapping TradingView→MT5. Fonctionnel mais hardcodé. À étendre.
+                        </div>
+                        <div class="item-tags">
+                            <span class="tag module">lib/symbol-matcher.js</span>
+                            <span class="tag status">MINIMAL</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SUMMARY SECTION -->
+        <div class="summary">
+            <h3>📊 RÉSUMÉ SYSTÈME</h3>
+            <div class="summary-grid">
+                <div class="summary-box">
+                    <div class="summary-box-title">EN COURS</div>
+                    <div class="summary-box-value">5</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-box-title">EN ATTENTE</div>
+                    <div class="summary-box-value">3</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-box-title">EN CONSTRUCTION</div>
+                    <div class="summary-box-value">4</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-box-title">Port Serveur</div>
+                    <div class="summary-box-value">4000</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-box-title">Dernière Update</div>
+                    <div class="summary-box-value" id="last-update">--:--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NAVIGATION -->
+        <div class="nav-buttons">
+            <a href="/studio" class="btn">→ Studio (UI Principale)</a>
+            <a href="/" class="btn btn-secondary">→ Menu Principal</a>
+            <a href="/audit" class="btn btn-secondary">→ Audit Dashboard</a>
+            <a href="/health" class="btn btn-secondary">→ Health Check</a>
+        </div>
+
+    </div>
+
+    <script>
+        // Update timestamp
+        function updateTimestamp() {
+            const now = new Date();
+            const time = now.toLocaleTimeString('fr-FR', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('last-update').textContent = time;
+        }
+        
+        updateTimestamp();
+        setInterval(updateTimestamp, 1000);
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="/"]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                // Let browser handle navigation naturally
+            });
+        });
+    </script>
+</body>
+</html>

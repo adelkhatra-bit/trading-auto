@@ -1,0 +1,165 @@
+{
+  "indicators": {
+    "rsi": 48.5,
+    "atr": 0.0045,
+    "ma20": 1.0835,
+    "macd": {
+      "histogram": -0.0002,
+      "value": -0.0001,
+      "signal": 0.00008
+    }
+  },
+  "analysis": {
+    "confidence": "MEDIUM",
+    "direction": "SELL",
+    "tp": 1.0810,
+    "rr_ratio": 1.8,
+    "sl": 1.0875,
+    "score": 62,
+    "entry": 1.0850,
+    "why_entry": "RSI < 50 + Price < MA20 — Tendance baissière",
+    "market_structure": "BEARISH"
+  },
+  "positions": [
+    {
+      "symbol": "EURUSD",
+      "type": "SELL",
+      "entry": 1.0855,
+      "current": 1.0850,
+      "sl": 1.0875,
+      "tp": 1.0810,
+      "pnl": 0.0005,
+      "pnl_pct": 0.05,
+      "size": 1.0,
+      "status": "OPEN",
+      "opened_at": "2026-04-02T13:15:00Z"
+    }
+  ],
+  "opportunities": [
+    {
+      "symbol": "EURUSD",
+      "type": "DOWNTREND",
+      "level": 1.0820,
+      "direction": "DOWN",
+      "confidence": 70,
+      "description": "Tendance descente — support test imminent",
+      "technical": "Lower highs and lows forming"
+    }
+  ],
+  "agents": {
+    "count": 5,
+    "consensus": "SELL",
+    "confidence": 65,
+    "agents": [
+      {
+        "name": "Technical Agent",
+        "signal": "SELL",
+        "score": 68,
+        "reasoning": "Bearish divergence on RSI"
+      },
+      {
+        "name": "Macro Agent",
+        "signal": "SELL",
+        "score": 62,
+        "reasoning": "EUR weakness expected"
+      },
+      {
+        "name": "Sentiment Agent",
+        "signal": "HOLD",
+        "score": 58,
+        "reasoning": "Neutral sentiment on ECB"
+      },
+      {
+        "name": "Structure Agent",
+        "signal": "SELL",
+        "score": 70,
+        "reasoning": "Lower lows confirmed"
+      },
+      {
+        "name": "Flow Agent",
+        "signal": "SELL",
+        "score": 63,
+        "reasoning": "Selling pressure on rallies"
+      }
+    ]
+  },
+  "logs": [
+    {
+      "timestamp": "2026-04-02T16:35:00Z",
+      "level": "INFO",
+      "message": "EURUSD data loaded from MT5 Bridge",
+      "source": "loadMT5Data"
+    },
+    {
+      "timestamp": "2026-04-02T16:34:45Z",
+      "level": "INFO",
+      "message": "Analysis: SHORT signal (62%)",
+      "source": "analyze"
+    }
+  ],
+  "session": {
+    "london": {
+      "status": "open",
+      "closes_at": "17:30 UTC",
+      "opens_at": "09:00 UTC"
+    },
+    "newyork": {
+      "status": "open",
+      "closes_at": "21:00 UTC",
+      "opens_at": "14:30 UTC"
+    },
+    "sydney": {
+      "status": "closed",
+      "closes_at": "06:30 UTC",
+      "opens_at": "22:00 UTC"
+    },
+    "tokyo": {
+      "status": "closed",
+      "closes_at": "09:00 UTC",
+      "opens_at": "00:00 UTC"
+    }
+  },
+  "symbol": {
+    "timeframe": "H1",
+    "name": "EURUSD",
+    "ask": 1.0851,
+    "bid": 1.0849,
+    "volume": 8250000,
+    "price": 1.0850,
+    "spread": 0.0002
+  },
+  "state": {
+    "market_status": "open",
+    "active": true,
+    "timestamp": "2026-04-02T16:00:00Z"
+  },
+  "chart": {
+    "candles": [
+      {"time": "2026-04-02T16:00:00Z", "open": 1.0850, "high": 1.0855, "low": 1.0848, "close": 1.0852},
+      {"time": "2026-04-02T15:00:00Z", "open": 1.0848, "high": 1.0852, "low": 1.0845, "close": 1.0850},
+      {"time": "2026-04-02T14:00:00Z", "open": 1.0852, "high": 1.0858, "low": 1.0848, "close": 1.0848},
+      {"time": "2026-04-02T13:00:00Z", "open": 1.0855, "high": 1.0860, "low": 1.0852, "close": 1.0852},
+      {"time": "2026-04-02T12:00:00Z", "open": 1.0858, "high": 1.0862, "low": 1.0855, "close": 1.0855},
+      {"time": "2026-04-02T11:00:00Z", "open": 1.0862, "high": 1.0867, "low": 1.0858, "close": 1.0858},
+      {"time": "2026-04-02T10:00:00Z", "open": 1.0865, "high": 1.0870, "low": 1.0862, "close": 1.0862},
+      {"time": "2026-04-02T09:00:00Z", "open": 1.0868, "high": 1.0872, "low": 1.0865, "close": 1.0865},
+      {"time": "2026-04-02T08:00:00Z", "open": 1.0870, "high": 1.0875, "low": 1.0868, "close": 1.0868},
+      {"time": "2026-04-02T07:00:00Z", "open": 1.0872, "high": 1.0878, "low": 1.0870, "close": 1.0870},
+      {"time": "2026-04-02T06:00:00Z", "open": 1.0875, "high": 1.0880, "low": 1.0872, "close": 1.0872},
+      {"time": "2026-04-02T05:00:00Z", "open": 1.0878, "high": 1.0883, "low": 1.0875, "close": 1.0875},
+      {"time": "2026-04-02T04:00:00Z", "open": 1.0880, "high": 1.0885, "low": 1.0878, "close": 1.0878},
+      {"time": "2026-04-02T03:00:00Z", "open": 1.0882, "high": 1.0887, "low": 1.0880, "close": 1.0880},
+      {"time": "2026-04-02T02:00:00Z", "open": 1.0885, "high": 1.0890, "low": 1.0882, "close": 1.0882},
+      {"time": "2026-04-02T01:00:00Z", "open": 1.0888, "high": 1.0892, "low": 1.0885, "close": 1.0885},
+      {"time": "2026-04-02T00:00:00Z", "open": 1.0890, "high": 1.0895, "low": 1.0888, "close": 1.0888},
+      {"time": "2026-04-01T23:00:00Z", "open": 1.0892, "high": 1.0897, "low": 1.0890, "close": 1.0890},
+      {"time": "2026-04-01T22:00:00Z", "open": 1.0895, "high": 1.0900, "low": 1.0892, "close": 1.0892},
+      {"time": "2026-04-01T21:00:00Z", "open": 1.0897, "high": 1.0902, "low": 1.0895, "close": 1.0895},
+      {"time": "2026-04-01T20:00:00Z", "open": 1.0900, "high": 1.0905, "low": 1.0897, "close": 1.0897},
+      {"time": "2026-04-01T19:00:00Z", "open": 1.0902, "high": 1.0907, "low": 1.0900, "close": 1.0900},
+      {"time": "2026-04-01T18:00:00Z", "open": 1.0905, "high": 1.0910, "low": 1.0902, "close": 1.0902},
+      {"time": "2026-04-01T17:00:00Z", "open": 1.0908, "high": 1.0912, "low": 1.0905, "close": 1.0905}
+    ],
+    "timeframe": "H1"
+  }
+}

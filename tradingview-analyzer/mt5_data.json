@@ -1,0 +1,205 @@
+{
+  "indicators": {
+    "rsi": 52.3,
+    "atr": 8.5,
+    "ma20": 2372.5,
+    "macd": {
+      "histogram": 0.07,
+      "value": 0.45,
+      "signal": 0.38
+    }
+  },
+  "analysis": {
+    "confidence": "MEDIUM",
+    "direction": "LONG",
+    "tp": 2378.5,
+    "rr_ratio": 2.3,
+    "sl": 2373.2,
+    "score": 65,
+    "entry": 2375.3,
+    "why_entry": "RSI > 50 + Price > MA20 — Tendance haussière confirmée",
+    "market_structure": "BULLISH"
+  },
+  "positions": [
+    {
+      "symbol": "XAUUSD",
+      "type": "BUY",
+      "entry": 2373.5,
+      "current": 2375.3,
+      "sl": 2370.0,
+      "tp": 2380.0,
+      "pnl": 1.8,
+      "pnl_pct": 0.08,
+      "size": 0.5,
+      "status": "OPEN",
+      "opened_at": "2026-04-02T14:30:00Z"
+    },
+    {
+      "symbol": "EURUSD",
+      "type": "BUY",
+      "entry": 1.0845,
+      "current": 1.0850,
+      "sl": 1.0820,
+      "tp": 1.0885,
+      "pnl": 0.0005,
+      "pnl_pct": 0.05,
+      "size": 1.0,
+      "status": "OPEN",
+      "opened_at": "2026-04-02T13:15:00Z"
+    }
+  ],
+  "opportunities": [
+    {
+      "symbol": "XAUUSD",
+      "type": "BREAKOUT",
+      "level": 2380.0,
+      "direction": "UP",
+      "confidence": 75,
+      "description": "Résistance majeure 2380 — breakout potentiel",
+      "technical": "Price approaching key level with bullish structure"
+    },
+    {
+      "symbol": "EURUSD",
+      "type": "REVERSAL",
+      "level": 1.0820,
+      "direction": "UP",
+      "confidence": 65,
+      "description": "Support test à 1.0820 — Inversion probable",
+      "technical": "Double bottom pattern forming"
+    }
+  ],
+  "agents": {
+    "count": 5,
+    "consensus": "BUY",
+    "confidence": 68,
+    "agents": [
+      {
+        "name": "Technical Agent",
+        "signal": "BUY",
+        "score": 72,
+        "reasoning": "RSI oversold recovery + Bullish structure"
+      },
+      {
+        "name": "Macro Agent",
+        "signal": "BUY",
+        "score": 65,
+        "reasoning": "USD weakness supporting XAUUSD"
+      },
+      {
+        "name": "Sentiment Agent",
+        "signal": "HOLD",
+        "score": 60,
+        "reasoning": "Mixed sentiment on NFP expectations"
+      },
+      {
+        "name": "Structure Agent",
+        "signal": "BUY",
+        "score": 75,
+        "reasoning": "Higher lows, bullish trend confirmed"
+      },
+      {
+        "name": "Flow Agent",
+        "signal": "BUY",
+        "score": 65,
+        "reasoning": "Strong buying on dips pattern"
+      }
+    ]
+  },
+  "logs": [
+    {
+      "timestamp": "2026-04-02T16:35:00Z",
+      "level": "INFO",
+      "message": "Data refreshed from MT5 Bridge",
+      "source": "loadMT5Data"
+    },
+    {
+      "timestamp": "2026-04-02T16:34:45Z",
+      "level": "INFO",
+      "message": "Analysis updated: LONG signal (65%)",
+      "source": "analyze"
+    },
+    {
+      "timestamp": "2026-04-02T16:34:30Z",
+      "level": "SUCCESS",
+      "message": "XAUUSD position +1.8 PnL (+0.08%)",
+      "source": "displayPositions"
+    },
+    {
+      "timestamp": "2026-04-02T16:34:15Z",
+      "level": "INFO",
+      "message": "Sessions updated: London + NY OPEN",
+      "source": "renderSessions"
+    },
+    {
+      "timestamp": "2026-04-02T16:34:00Z",
+      "level": "ALERT",
+      "message": "Breakout opportunity detected at 2380.0",
+      "source": "displayOpportunities"
+    }
+  ],
+  "session": {
+    "london": {
+      "status": "open",
+      "closes_at": "17:30 UTC",
+      "opens_at": "09:00 UTC"
+    },
+    "newyork": {
+      "status": "open",
+      "closes_at": "21:00 UTC",
+      "opens_at": "14:30 UTC"
+    },
+    "sydney": {
+      "status": "closed",
+      "closes_at": "06:30 UTC",
+      "opens_at": "22:00 UTC"
+    },
+    "tokyo": {
+      "status": "closed",
+      "closes_at": "09:00 UTC",
+      "opens_at": "00:00 UTC"
+    }
+  },
+  "symbol": {
+    "timeframe": "H1",
+    "name": "XAUUSD",
+    "ask": 2375.4,
+    "bid": 2375.2,
+    "volume": 12500,
+    "price": 2375.3,
+    "spread": 0.2
+  },
+  "state": {
+    "market_status": "open",
+    "active": true,
+    "timestamp": "2026-04-02T16:00:00Z"
+  },
+  "chart": {
+    "candles": [
+      {"time": "2026-04-02T16:00:00Z", "open": 2374.8, "high": 2376.5, "low": 2374.5, "close": 2375.3},
+      {"time": "2026-04-02T15:00:00Z", "open": 2373.5, "high": 2375.5, "low": 2373.0, "close": 2375.0},
+      {"time": "2026-04-02T14:00:00Z", "open": 2371.2, "high": 2373.8, "low": 2370.5, "close": 2373.5},
+      {"time": "2026-04-02T13:00:00Z", "open": 2370.0, "high": 2372.5, "low": 2369.8, "close": 2371.2},
+      {"time": "2026-04-02T12:00:00Z", "open": 2369.2, "high": 2371.0, "low": 2368.5, "close": 2370.0},
+      {"time": "2026-04-02T11:00:00Z", "open": 2366.5, "high": 2369.8, "low": 2366.2, "close": 2369.2},
+      {"time": "2026-04-02T10:00:00Z", "open": 2365.8, "high": 2367.2, "low": 2365.5, "close": 2366.5},
+      {"time": "2026-04-02T09:00:00Z", "open": 2364.2, "high": 2366.0, "low": 2363.8, "close": 2365.8},
+      {"time": "2026-04-02T08:00:00Z", "open": 2362.5, "high": 2364.5, "low": 2362.0, "close": 2364.2},
+      {"time": "2026-04-02T07:00:00Z", "open": 2360.8, "high": 2362.8, "low": 2360.5, "close": 2362.5},
+      {"time": "2026-04-02T06:00:00Z", "open": 2359.2, "high": 2361.0, "low": 2359.0, "close": 2360.8},
+      {"time": "2026-04-02T05:00:00Z", "open": 2357.5, "high": 2359.5, "low": 2357.0, "close": 2359.2},
+      {"time": "2026-04-02T04:00:00Z", "open": 2356.8, "high": 2358.2, "low": 2356.5, "close": 2357.5},
+      {"time": "2026-04-02T03:00:00Z", "open": 2355.0, "high": 2357.0, "low": 2354.8, "close": 2356.8},
+      {"time": "2026-04-02T02:00:00Z", "open": 2353.5, "high": 2355.2, "low": 2353.0, "close": 2355.0},
+      {"time": "2026-04-02T01:00:00Z", "open": 2352.0, "high": 2353.8, "low": 2351.8, "close": 2353.5},
+      {"time": "2026-04-02T00:00:00Z", "open": 2350.5, "high": 2352.2, "low": 2350.0, "close": 2352.0},
+      {"time": "2026-04-01T23:00:00Z", "open": 2349.2, "high": 2351.0, "low": 2348.8, "close": 2350.5},
+      {"time": "2026-04-01T22:00:00Z", "open": 2347.8, "high": 2349.5, "low": 2347.5, "close": 2349.2},
+      {"time": "2026-04-01T21:00:00Z", "open": 2346.5, "high": 2348.0, "low": 2346.0, "close": 2347.8},
+      {"time": "2026-04-01T20:00:00Z", "open": 2345.0, "high": 2346.8, "low": 2344.8, "close": 2346.5},
+      {"time": "2026-04-01T19:00:00Z", "open": 2343.8, "high": 2345.2, "low": 2343.5, "close": 2345.0},
+      {"time": "2026-04-01T18:00:00Z", "open": 2342.5, "high": 2344.0, "low": 2342.2, "close": 2343.8},
+      {"time": "2026-04-01T17:00:00Z", "open": 2341.2, "high": 2342.8, "low": 2340.8, "close": 2342.5}
+    ],
+    "timeframe": "H1"
+  }
+}

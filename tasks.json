@@ -1,0 +1,107 @@
+{
+  "_doc": "Coordination Claude + Copilot. Claude dirige. Copilot execute.",
+  "_protocol": "pending -> in_progress -> done | error",
+  "_agents": {
+    "Claude": "Architecte. Ecrit les taches, code les modules critiques.",
+    "Copilot": "Executeur. Prend les taches pending, execute, marque done via API.",
+    "instructions_copilot": "Lis tasks.json. Prends la premiere tache pending assignee a copilot. Execute les steps. POST http://127.0.0.1:4000/tasks/update et /logs. Recommence. Autonomie 24/7."
+  },
+  "updated": "2026-04-01T19:33:50.122Z",
+  "tasks": [
+    {
+      "task_id": "TEST-001",
+      "status": "done",
+      "priority": 0,
+      "assigned_to": "agent-worker",
+      "instruction": "Communication test",
+      "result": "HELLO FROM AGENT-WORKER confirme",
+      "completed_at": "2026-04-01T00:00:00Z"
+    },
+    {
+      "task_id": "T001",
+      "status": "done",
+      "priority": 1,
+      "assigned_to": "claude",
+      "instruction": "Extension v2.0 -- popup multi-blocs, sessions, news engine",
+      "result": "Extension rebuilt: manifest v2.0.0, content.js title-only, background.js v2.0, popup 4 tabs, market-session.js, news-engine.js, styles.css, /market-news endpoint",
+      "completed_at": "2026-04-01T19:33:50.122Z"
+    },
+    {
+      "task_id": "T004",
+      "status": "pending",
+      "priority": 2,
+      "assigned_to": "copilot",
+      "instruction": "Synchroniser mode SCALPER/SNIPER/SWING popup -> studio",
+      "context": "server.js stocke activeSymbol.mode. popup.js envoie mode dans POST /active-symbol. studio/studioapp.js doit lire d.mode dans pollActiveSymbol() et mettre a jour le selecteur.",
+      "files": [
+        "studio/studioapp.js"
+      ],
+      "steps": [
+        "Dans studio/studioapp.js fonction pollActiveSymbol(): ajouter si d.mode present et different de state.tradeMode -> state.tradeMode = d.mode, mettre a jour selecteur #trade-mode-sel, appeler applyTradeModeStyle(), saveState()",
+        "POST http://127.0.0.1:4000/logs avec agent:copilot task_id:T004 action:MODE_SYNC_DONE status:ok",
+        "POST http://127.0.0.1:4000/tasks/update avec task_id:T004 status:done result:Mode sync implemented"
+      ],
+      "expected_result": "Changer SCALPER dans popup -> studio passe en SCALPER dans les 3s",
+      "created_at": "2026-04-01T19:33:50.122Z"
+    },
+    {
+      "task_id": "T005",
+      "status": "pending",
+      "priority": 3,
+      "assigned_to": "copilot",
+      "instruction": "Ajouter bloc news dans la sidebar studio depuis /market-news",
+      "context": "server.js a GET /market-news qui retourne les evenements ForexFactory High+Medium. Ajouter un panneau dans studio/index.html et le remplir.",
+      "files": [
+        "studio/index.html",
+        "studio/studioapp.js"
+      ],
+      "steps": [
+        "Dans studio/index.html: ajouter apres le panneau AGENTS LIVE LOG un div id=news-panel avec h3 'Evenements eco' et div id=news-items",
+        "Dans studioapp.js: creer fonction renderStudioNews() qui fetch /market-news et genere HTML par event (titre, pays, badge impact, heure)",
+        "Appeler renderStudioNews() dans initApp() et setInterval 60s",
+        "POST /tasks/update task_id:T005 status:done"
+      ],
+      "expected_result": "Sidebar studio affiche prochains evenements avec impact",
+      "created_at": "2026-04-01T19:33:50.122Z"
+    },
+    {
+      "task_id": "T006",
+      "status": "pending",
+      "priority": 4,
+      "assigned_to": "copilot",
+      "instruction": "Verifier que /instant-trade-live retourne why_entry, why_sl, market_structure",
+      "context": "popup.js v3.0 affiche ces champs si presents. Verifier et completer la reponse JSON du serveur.",
+      "files": [
+        "server.js",
+        "src/agents/technicalAgent.js"
+      ],
+      "steps": [
+        "GET http://127.0.0.1:4000/instant-trade-live?symbol=XAUUSD&mode=SNIPER et inspecter la reponse JSON",
+        "Si why_entry absent: dans server.js construire why_entry depuis les signaux RSI/EMA disponibles",
+        "Si market_structure absent: l'ajouter depuis calculateMarketStructure si disponible",
+        "POST /tasks/update task_id:T006 status:done"
+      ],
+      "expected_result": "Popup affiche Pourquoi: [raison] sous chaque signal",
+      "created_at": "2026-04-01T19:33:50.122Z"
+    },
+    {
+      "task_id": "T007",
+      "status": "pending",
+      "priority": 5,
+      "assigned_to": "copilot",
+      "instruction": "Ajouter interpretation post-news dans server.js",
+      "context": "Quand une news sort, le systeme doit pouvoir interpreter: surprise positive/negative -> direction probable. Ajouter POST /news-result.",
+      "files": [
+        "server.js"
+      ],
+      "steps": [
+        "Dans server.js ajouter POST /news-result qui accepte {title, country, impact, actual, forecast, previous, symbol}",
+        "Logique: si actual > forecast -> surprise haussiere -> USD haussier/baissier selon currency, confidence 70%",
+        "Retourner {ok:true, direction, why, confidence, scenarios:[bull,bear]}",
+        "POST /tasks/update task_id:T007 status:done"
+      ],
+      "expected_result": "POST /news-result retourne direction + why + confidence",
+      "created_at": "2026-04-01T19:33:50.122Z"
+    }
+  ]
+}

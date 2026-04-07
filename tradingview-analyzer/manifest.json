@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Trading Auto Analyzer",
+  "version": "2.0.0",
+  "description": "Détecte symbole/TF/prix depuis TradingView et envoie au backend trading",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.tradingview.com/*",
+    "http://127.0.0.1:4000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Trading Auto Analyzer"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.tradingview.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

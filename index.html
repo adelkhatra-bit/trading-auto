@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Auto — Menu Principal</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #0a1929 0%, #1a365d 100%);
+      color: #e2e8f0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+      animation: slideDown 0.6s ease-out;
+    }
+
+    header h1 {
+      font-size: 48px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      font-size: 16px;
+      color: #94a3b8;
+      margin-bottom: 5px;
+    }
+
+    .status-bar {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid #475569;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 40px;
+      font-size: 13px;
+      color: #cbd5e1;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      width: 100%;
+      margin-bottom: 40px;
+    }
+
+    .zone-title {
+      max-width: 1200px;
+      width: 100%;
+      margin: 10px 0 12px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #93c5fd;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+    }
+
+    .menu-card {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid #475569;
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    .menu-card:hover {
+      border-color: #3b82f6;
+      background: rgba(30, 41, 59, 0.95);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.2);
+    }
+
+    .menu-card-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .menu-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #f1f5f9;
+    }
+
+    .menu-card p {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      width: 100%;
+      text-align: center;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, #2563eb, #1e40af);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #10b981, #059669);
+    }
+
+    .btn-warning {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    .quick-links {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid #475569;
+      padding: 20px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .quick-links h2 {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #a78bfa;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #1e3a5f;
+    }
+
+    .quick-links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .quick-link {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid #334155;
+      padding: 10px 12px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      color: #cbd5e1;
+    }
+
+    .quick-link:hover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
+    }
+
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #475569;
+      font-size: 12px;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .server-check {
+      margin: 30px 0;
+      text-align: center;
+    }
+
+    .server-status {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    .server-status.online {
+      color: #10b981;
+    }
+
+    .server-status.offline {
+      color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🚀 Trading Auto Pro</h1>
+    <p>Menu Principal — Choisir une page</p>
+  </header>
+
+  <div class="status-bar">
+    <div class="status-item">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Vérification serveur...</span>
+    </div>
+    <div class="status-item" id="api-status-item" style="display:none;">
+      <span>API: <strong id="api-status">—</strong></span>
+    </div>
+  </div>
+
+  <div class="zone-title">A. Dashboard Trading (graphiques + positions)</div>
+  <div class="grid-container">
+    <div class="menu-card">
+      <span class="menu-card-icon">📊</span>
+      <h3>Dashboard</h3>
+      <p>Pilotage trading principal: vue marché, graphiques et exécution/position.</p>
+      <a href="dashboard.html" class="btn btn-primary">Ouvrir</a>
+    </div>
+
+    <div class="menu-card">
+      <span class="menu-card-icon">⚡</span>
+      <h3>Instant Trade Live</h3>
+      <p>Vérification rapide de prise de position (signal + SL/TP).</p>
+      <a href="javascript:instantTradeLive()" class="btn btn-success">Tester</a>
+    </div>
+  </div>
+
+  <div class="zone-title">B. Extension Chrome (miroir unique)</div>
+  <div class="grid-container">
+    <div class="menu-card">
+      <span class="menu-card-icon">📱</span>
+      <h3>Extension Popup</h3>
+      <p>Popup natif de l'extension Chrome (pas de page localhost).</p>
+      <button type="button" class="btn btn-primary" onclick="openNativeExtensionPopup()">Ouvrir (Natif)</button>
+    </div>
+  </div>
+
+  <div class="zone-title">C. Tests / Validation / Contrôle</div>
+  <div class="grid-container">
+    <div class="menu-card">
+      <span class="menu-card-icon">📈</span>
+      <h3>Test Analysis</h3>
+      <p>Validation analyse technique et cohérence des signaux.</p>
+      <a href="test-analysis.html" class="btn btn-primary">Ouvrir</a>
+    </div>
+
+    <div class="menu-card">
+      <span class="menu-card-icon">🔍</span>
+      <h3>Extension Test</h3>
+      <p>Tests ciblés de l'extension et contrôles de comportement.</p>
+      <a href="EXTENSION_TEST.html" class="btn btn-primary">Ouvrir</a>
+    </div>
+
+    <div class="menu-card">
+      <span class="menu-card-icon">📉</span>
+      <h3>Test Chart Visual</h3>
+      <p>Rendu graphique et vérification visuelle du flux trading.</p>
+      <a href="test-chart-visual.html" class="btn btn-primary">Ouvrir</a>
+    </div>
+  </div>
+
+  <div class="zone-title">D. Supervision / Audit / Contrôle Système</div>
+  <div class="grid-container">
+    <div class="menu-card">
+      <span class="menu-card-icon">👁️</span>
+      <h3>Agents Monitor</h3>
+      <p>Supervision technique intégrée dans Audit Dashboard.</p>
+      <a href="/agents-monitor" class="btn btn-primary">Ouvrir Monitor</a>
+    </div>
+
+    <div class="menu-card">
+      <span class="menu-card-icon">🤖</span>
+      <h3>Agent Live Log</h3>
+      <p>Flux temps réel des événements agents et historique opérationnel.</p>
+      <a href="/agent-live-log" class="btn btn-primary">Ouvrir Live Log</a>
+    </div>
+
+    <div class="menu-card">
+      <span class="menu-card-icon">🔧</span>
+      <h3>Audit Dashboard</h3>
+      <p>Audit global système: endpoints, incohérences, validation technique.</p>
+      <a href="/audit-dashboard" class="btn btn-primary">Ouvrir</a>
+    </div>
+  </div>
+
+  <div class="quick-links">
+    <h2>⚡ Contrôle Serveur (Mode SAFE)</h2>
+    <div class="quick-links-grid">
+      <a class="quick-link" onclick="runOrchestration()">▶️ Run Cycle</a>
+      <a class="quick-link" onclick="toggleOrchestration()">⏸️ Toggle Auto</a>
+      <a class="quick-link" onclick="checkHealth()">❤️ Health Check</a>
+      <a class="quick-link" onclick="viewSystemLog()">📋 System Log</a>
+      <a class="quick-link" onclick="checkMT5()">🔗 MT5 Status</a>
+      <a class="quick-link" onclick="viewOrchStatus()">🎯 Orch Status</a>
+      <a class="quick-link" href="/agents-monitor">💬 Agents Monitor</a>
+      <a class="quick-link" href="/agent-live-log">📝 Server Log</a>
+      <a class="quick-link" onclick="openCPUMonitor()">💻 Monitor CPU</a>
+    </div>
+  </div>
+
+  <footer>
+    <p>Trading Auto Pro — Mode SAFE activé | Tous les pollings désactivés par défaut</p>
+    <p style="margin-top: 10px; font-size: 11px; color: #334155;">
+      Pour réactiver les boucles: <code>POST /orchestration/enable?interval=60000</code>
+    </p>
+  </footer>
+
+  <script>
+    const API_URL = 'http://localhost:4000';
+
+    // ─── Vérifier la santé du serveur au chargement ───
+    async function checkServerHealth() {
+      try {
+        const response = await fetch(`${API_URL}/health`, { timeout: 2000 });
+        if (response.ok) {
+          document.getElementById('status-text').textContent = '✅ Serveur en ligne';
+          document.getElementById('status-dot').style.background = '#10b981';
+          
+          // Afficher l'API status
+          const data = await response.json();
+          document.getElementById('api-status-item').style.display = 'flex';
+          document.getElementById('api-status').textContent = data.mt5Status || 'offline';
+        } else {
+          throw new Error('Server error');
+        }
+      } catch (e) {
+        document.getElementById('status-text').textContent = '❌ Serveur hors ligne';
+        document.getElementById('status-dot').style.background = '#ef4444';
+      }
+    }
+
+    // ─── Actions rapides ───
+    async function runOrchestration() {
+      try {
+        const response = await fetch(`${API_URL}/orchestration/run-now`, { method: 'POST' });
+        const data = await response.json();
+        alert('✅ ' + data.message);
+      } catch (e) {
+        alert('❌ Erreur: ' + e.message);
+      }
+    }
+
+    async function toggleOrchestration() {
+      try {
+        const statusResponse = await fetch(`${API_URL}/orchestration-status`);
+        const status = await statusResponse.json();
+        const enabled = status.enabled;
+
+        const endpoint = enabled ? '/orchestration/disable' : '/orchestration/enable';
+        const method = 'POST';
+        const body = enabled ? undefined : JSON.stringify({ interval: 60000 });
+
+        const response = await fetch(`${API_URL}${endpoint}`, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body
+        });
+
+        const data = await response.json();
+        alert('✅ ' + data.message);
+      } catch (e) {
+        alert('❌ Erreur: ' + e.message);
+      }
+    }
+
+    async function checkHealth() {
+      try {
+        const response = await fetch(`${API_URL}/health`);
+        const data = await response.json();
+        alert(`✅ Serveur OK\n\nUptime: ${Math.round(data.uptime)}s\nPort: ${data.port}\nMT5: ${data.mt5Status || 'offline'}`);
+      } catch (e) {
+        alert('❌ Erreur: ' + e.message);
+      }
+    }
+
+    async function viewSystemLog() {
+      try {
+        const response = await fetch(`${API_URL}/system-log`);
+        const data = await response.json();
+        const logWindow = window.open('', 'SystemLog', 'width=800,height=600');
+        logWindow.document.write('<pre style="background:#0a0f1e; color:#e2e8f0; padding:20px; font-family:monospace; font-size:12px;">' + 
+          JSON.stringify(data, null, 2) + '</pre>');
+      } catch (e) {
+        alert('❌ Erreur: ' + e.message);
+      }
+    }
+
+    async function checkMT5() {
+      try {
+        const response = await fetch(`${API_URL}/mt5/status`);
+        const data = await response.json();
+        alert('MT5 Status:\n\n' + JSON.stringify(data, null, 2));
+      } catch (e) {
+        alert('❌ Erreur MT5: ' + e.message);
+      }
+    }
+
+    async function viewOrchStatus() {
+      try {
+        const response = await fetch(`${API_URL}/orchestration-status`);
+        const data = await response.json();
+        alert(`Orchestration Status:\n\nEnabled: ${data.enabled}\nTimer: ${data.timer}`);
+      } catch (e) {
+        alert('❌ Erreur: ' + e.message);
+      }
+    }
+
+    function openServerLog() {
+      window.location.href = '/audit#livelog';
+    }
+
+    function openCPUMonitor() {
+      alert('💻 Ouvre PowerShell:\nGet-Process node | Select-Object CPU, @{n="Mem(MB)";e={\"{0:N0}\" -f ($_.WorkingSet/1MB)}}');
+    }
+
+    async function instantTradeLive() {
+      try {
+        const symbol = prompt('Symbole (ex: XAUUSD, EURUSD):');
+        if (!symbol) return;
+
+        const response = await fetch(`${API_URL}/instant-trade-live?symbol=${symbol}`);
+        const data = await response.json();
+
+        if (data.ok) {
+          const trade = data.trade;
+          alert(`📊 SIGNAL ${trade.direction}\n\nEntry: ${trade.entry}\nSL: ${trade.sl}\nTP: ${trade.tp}\nRR: ${trade.rrRatio}`);
+        } else {
+          alert('❌ ' + data.error);
+        }
+      } catch (e) {
+        alert('❌ Erreur: ' + e.message);
+      }
+    }
+
+    // Vérifier la santé au chargement
+    checkServerHealth();
+    setInterval(checkServerHealth, 5000);
+  </script>
+    function openNativeExtensionPopup() {
+      alert('Popup natif extension: cliquez l\'icône "Trading Auto Analyzer" dans la barre Chrome. Le popup ne peut pas être ouvert en natif depuis une page web pour des raisons de sécurité navigateur.');
+    }
+
+</body>
+</html>

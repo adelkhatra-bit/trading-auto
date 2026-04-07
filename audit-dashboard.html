@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Auto — Audit Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0f1419;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 2px solid #0ea5e9;
+            padding: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            color: #0ea5e9;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .back-btn {
+            float: right;
+            margin-top: -4px;
+            background: rgba(14, 165, 233, 0.2);
+            border: 1px solid #0ea5e9;
+            color: #0ea5e9;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .back-btn:hover {
+            background: #0ea5e9;
+            color: #0f1419;
+        }
+
+        .liveops-btn {
+            float: right;
+            margin-top: -4px;
+            margin-right: 8px;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid #10b981;
+            color: #10b981;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .liveops-btn:hover {
+            background: #10b981;
+            color: #0f1419;
+        }
+
+        .header-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+            font-size: 12px;
+        }
+
+        .stat-card {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #10b981;
+            margin-top: 5px;
+        }
+
+        nav {
+            background: #1a1f2e;
+            border-bottom: 1px solid #334155;
+            padding: 0;
+            display: flex;
+            gap: 0;
+            overflow-x: auto;
+            flex-wrap: wrap;
+        }
+
+        nav button {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-family: inherit;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        nav button:hover {
+            background: rgba(14, 165, 233, 0.1);
+            color: #0ea5e9;
+        }
+
+        nav button.active {
+            border-bottom-color: #0ea5e9;
+            color: #0ea5e9;
+            background: rgba(14, 165, 233, 0.05);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .file-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+
+        .file-card:hover {
+            background: rgba(30, 41, 59, 0.8);
+            border-color: #0ea5e9;
+            box-shadow: 0 0 12px rgba(14, 165, 233, 0.2);
+        }
+
+        .file-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #0ea5e9;
+            font-size: 14px;
+        }
+
+        .file-path {
+            color: #64748b;
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-ok {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-partial {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .status-missing {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .status-offline {
+            background: rgba(107, 114, 128, 0.2);
+            color: #9ca3af;
+        }
+
+        .file-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 11px;
+        }
+
+        .meta-item {
+            color: #cbd5e1;
+        }
+
+        .meta-label {
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-size: 9px;
+            margin-bottom: 2px;
+        }
+
+        .issues-list {
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 2px solid #ef4444;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 2px;
+        }
+
+        .issue-item {
+            font-size: 11px;
+            color: #fca5a5;
+            margin-bottom: 5px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .issue-item:before {
+            content: "⚠";
+            flex-shrink: 0;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .btn {
+            background: rgba(14, 165, 233, 0.2);
+            border: 1px solid #0ea5e9;
+            color: #0ea5e9;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: #0ea5e9;
+            color: #0f1419;
+        }
+
+        .error-card {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .error-title {
+            color: #ef4444;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .error-detail {
+            font-size: 11px;
+            color: #fca5a5;
+            margin-bottom: 4px;
+        }
+
+        .endpoint-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 12px;
+        }
+
+        .endpoint-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 12px;
+        }
+
+        .endpoint-path {
+            color: #0ea5e9;
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .endpoint-method {
+            display: inline-block;
+            background: rgba(14, 165, 233, 0.2);
+            color: #0ea5e9;
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-size: 9px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .endpoint-status {
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        .task-card {
+            background: rgba(30, 41, 59, 0.5);
+            border-left: 3px solid #0ea5e9;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .task-progress {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 11px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(100, 116, 139, 0.3);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #10b981;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .breadcrumb {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 15px;
+        }
+
+        .breadcrumb a {
+            color: #0ea5e9;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .search-box {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 4px;
+            color: #e2e8f0;
+            font-family: inherit;
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #64748b;
+            font-size: 12px;
+            border-top: 1px solid #334155;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a class="back-btn" href="/">← Retour menu</a>
+        <a class="liveops-btn" href="/live">Live Ops</a>
+        <h1>🔧 Trading Auto — Audit Dashboard</h1>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">Observabilité complète du système</p>
+        <div class="header-stats">
+            <div class="stat-card">
+                <div class="stat-label">Fichiers</div>
+                <div class="stat-value" id="stat-files">40</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Agents</div>
+                <div class="stat-value" id="stat-agents">23</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Endpoints</div>
+                <div class="stat-value" id="stat-endpoints">68</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Erreurs critiques</div>
+                <div class="stat-value" id="stat-errors">5</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Tâches OK</div>
+                <div class="stat-value" id="stat-tasks">4/7</div>
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <button class="nav-tab active" data-tab="overview">📊 Vue d'ensemble</button>
+        <button class="nav-tab" data-tab="pilotage">🧭 Pilotage global</button>
+        <button class="nav-tab" data-tab="files">📁 Fichiers</button>
+        <button class="nav-tab" data-tab="agents">🤖 Agents</button>
+        <button class="nav-tab" data-tab="endpoints">🔗 Endpoints</button>
+        <button class="nav-tab" data-tab="connections">↔️ Connexions</button>
+        <button class="nav-tab" data-tab="errors">❌ Erreurs</button>
+        <button class="nav-tab" data-tab="tasks">📋 Tâches</button>
+    </nav>
+
+    <div class="container">
+        <!-- OVERVIEW TAB -->
+        <div id="overview" class="tab-content active">
+            <h2 style="margin-bottom: 20px; color: #0ea5e9;">État du Système</h2>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; padding: 15px; border-radius: 4px;">
+                    <div style="color: #10b981; font-weight: bold; margin-bottom: 10px;">✅ Backend</div>
+                    <div style="font-size: 12px; color: #cbd5e1;">
+                        Server Express port 4000<br>
+                        68 endpoints opérationnels<br>
+                        23 agents actifs<br>
+                        MarketStore singleton OK
+                    </div>
+                </div>
+                <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; padding: 15px; border-radius: 4px;">
+                    <div style="color: #f59e0b; font-weight: bold; margin-bottom: 10px;">⚠️ Frontend</div>
+                    <div style="font-size: 12px; color: #cbd5e1;">
+                        3 endpoints manquants<br>
+                        2 pages partiellement liées<br>
+                        Audit unifié recommandé<br>
+                        Dashboard besoin workarounds
+                    </div>
+                </div>
+                <div style="background: rgba(107, 114, 128, 0.1); border: 1px solid #9ca3af; padding: 15px; border-radius: 4px;">
+                    <div style="color: #9ca3af; font-weight: bold; margin-bottom: 10px;">🔌 Intégrations</div>
+                    <div style="font-size: 12px; color: #cbd5e1;">
+                        MT5 Bridge: Offline<br>
+                        TradingView Extension: OK<br>
+                        Chrome v3 Manifest: OK<br>
+                        Data Fallback: 4-tier
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin: 30px 0 15px; color: #0ea5e9;">Prochaines Actions</h3>
+            <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid #334155; padding: 15px; border-radius: 4px; font-size: 12px; line-height: 1.6; color: #cbd5e1;">
+                <strong>🔴 Haute Priorité:</strong>
+                <ul style="margin-left: 20px; margin-top: 5px;">
+                    <li>Implémenter POST /orchestration/run-now (index.html cascade)</li>
+                    <li>Implémenter GET /orchestration-status (toggle auto)</li>
+                    <li>Connecter MT5 EA ou TradingView</li>
+                </ul>
+                <strong style="margin-top: 10px; display: block;">🟡 Moyenne Priorité:</strong>
+                <ul style="margin-left: 20px; margin-top: 5px;">
+                    <li>Ajouter alias /data → /mt5/latest</li>
+                    <li>Ajouter alias /analysis → /instant-trade-live</li>
+                    <li>Intégrer API calendrier économique réelle</li>
+                </ul>
+            </div>
+
+            <h3 style="margin: 30px 0 15px; color: #0ea5e9;">Vision Globale Structurée (5 blocs)</h3>
+            <div id="system-vision-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px;"></div>
+        </div>
+
+        <!-- PILOTAGE TAB -->
+        <div id="pilotage" class="tab-content">
+            <h2 style="margin-bottom: 15px; color: #0ea5e9;">🧭 Pilotage global système</h2>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap:12px; margin-bottom:14px;">
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">✅ Tâches effectuées</div>
+                    <div id="pilotage-done" style="font-size:11px; line-height:1.5; color:#cbd5e1;"></div>
+                </div>
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">⏳ Tâches en cours + délais</div>
+                    <div id="pilotage-progress" style="font-size:11px; line-height:1.5; color:#cbd5e1;"></div>
+                </div>
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">📌 Tâches à venir</div>
+                    <div id="pilotage-next" style="font-size:11px; line-height:1.5; color:#cbd5e1;"></div>
+                </div>
+            </div>
+
+            <div class="file-card" style="margin:0 0 12px;">
+                <div class="file-name">🕘 Historique global du système (critique)</div>
+                <div id="pilotage-history" style="font-size:11px; line-height:1.5; color:#cbd5e1;"></div>
+            </div>
+
+            <div class="file-card" style="margin:0;">
+                <div class="file-name">💬 Dialogue humain ↔ agents (Lilya + agents)</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; margin:10px 0;">
+                    <select id="audit-agent-target" class="search-box" style="margin:0; max-width:none;"></select>
+                    <input id="audit-agent-message" class="search-box" style="margin:0; max-width:none;" type="text" placeholder="Message agent...">
+                    <input id="audit-agent-cause" class="search-box" style="margin:0; max-width:none;" type="text" placeholder="Contexte / cause">
+                    <button class="btn" onclick="auditSendAgentMessage()">Envoyer</button>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr auto auto; gap:8px; margin-bottom:10px;">
+                    <input id="audit-lia-message" class="search-box" style="margin:0; max-width:none;" type="text" placeholder="Message Lilya...">
+                    <button class="btn" onclick="auditSendLia()">Parler à Lilya</button>
+                    <button class="btn" onclick="auditGuideAck()">✅ Action faite</button>
+                </div>
+                <div id="audit-guide" style="font-size:11px; color:#93c5fd; margin-bottom:8px;">Guide intelligent en chargement...</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div style="border:1px solid #334155; border-radius:8px; padding:8px; background:rgba(15,23,42,0.35);">
+                        <div style="font-size:11px; color:#93c5fd; margin-bottom:6px;">Flux agents live</div>
+                        <div id="audit-agent-feed" style="max-height:160px; overflow:auto; font-size:11px;"></div>
+                    </div>
+                    <div style="border:1px solid #334155; border-radius:8px; padding:8px; background:rgba(15,23,42,0.35);">
+                        <div style="font-size:11px; color:#93c5fd; margin-bottom:6px;">Dialogue Lilya</div>
+                        <div id="audit-lia-feed" style="max-height:160px; overflow:auto; font-size:11px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FILES TAB -->
+        <div id="files" class="tab-content">
+            <h2 style="margin-bottom: 15px; color: #0ea5e9;">📁 Fichiers du Projet</h2>
+            <input type="text" class="search-box" id="search-files" placeholder="Chercher un fichier...">
+            <div id="files-list"></div>
+        </div>
+
+        <!-- AGENTS TAB -->
+        <div id="agents" class="tab-content">
+            <h2 style="margin-bottom: 15px; color: #0ea5e9;">🤖 Système d'Agents (23 total)</h2>
+            <input type="text" class="search-box" id="search-agents" placeholder="Chercher un agent...">
+            <div id="agents-list"></div>
+        </div>
+
+        <!-- ENDPOINTS TAB -->
+        <div id="endpoints" class="tab-content">
+            <h2 style="margin-bottom: 15px; color: #0ea5e9;">🔗 Endpoints API (68 total)</h2>
+            <input type="text" class="search-box" id="search-endpoints" placeholder="Chercher un endpoint...">
+            <div id="endpoints-list"></div>
+        </div>
+
+        <!-- CONNECTIONS TAB -->
+        <div id="connections" class="tab-content">
+            <h2 style="margin-bottom: 15px; color: #0ea5e9;">↔️ Connexions & Data Flow (7 total)</h2>
+            <div id="connections-list"></div>
+        </div>
+
+        <!-- ERRORS TAB -->
+        <div id="errors" class="tab-content">
+            <h2 style="margin-bottom: 15px; color: #ef4444;">❌ Erreurs Détectées (5 total)</h2>
+            <div id="errors-list"></div>
+        </div>
+
+        <!-- TASKS TAB -->
+        <div id="tasks" class="tab-content">
+            <h2 style="margin-bottom: 15px; color: #0ea5e9;">📋 État des Tâches (7 total)</h2>
+            <div id="tasks-list"></div>
+        </div>
+    </div>
+
+    <footer>
+        <strong>Audit Dashboard v1.0</strong> — Générée à partir de <code>audit.json</code><br>
+        🔄 Mise à jour manuelle — Synchronise audit.json avec le système réel
+    </footer>
+
+    <script>
+        let auditData = null;
+        let autoRefreshInterval = null;
+        let auditFeedSource = null;
+        let auditGuideState = null;
+        const AUTO_REFRESH_INTERVAL = 5000; // 5 secondes
+
+        // Load audit data from /audit/state (live sync)
+        async function loadAudit(isAutoRefresh = false) {
+            try {
+                // Essaie d'abord /audit/state (nouveau endpoint sync)
+                let response = await fetch('/audit/state');
+                if (!response.ok) {
+                  // Fallback sur /audit.json (ancien format)
+                  response = await fetch('/audit.json');
+                }
+                
+                const result = await response.json();
+                auditData = result.audit || result;
+                
+                if (!isAutoRefresh) renderTabs();
+                else updateTabsIncremental(); // Mise à jour intelligente
+                attachTabListeners();
+            } catch (e) {
+                console.error('❌ Erreur chargement audit:', e);
+                if (!isAutoRefresh) {
+                    document.querySelector('.container').innerHTML = `
+                        <div style="color: #ef4444; padding: 20px; background: rgba(239,68,68,0.1); border: 1px solid #ef4444; border-radius: 4px;">
+                            ❌ Erreur: Impossible de charger l'audit<br>
+                            Vérifie que le serveur est démarré et tourne sur http://127.0.0.1:4000
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Rendu initial de tous les onglets
+        function renderTabs() {
+            renderFiles();
+            renderAgents();
+            renderEndpoints();
+            renderConnections();
+            renderErrors();
+            renderTasks();
+            renderSystemVision();
+            renderPilotage();
+            updateTimestamp();
+            auditInitDialogue();
+        }
+
+        // Mise à jour incrémentale (pour auto-refresh)
+        function updateTabsIncremental() {
+            // Mise à jour rapide des sections critiques
+            renderErrors();  // Erreurs peuvent changer
+            renderTasks();   // Tâches changent souvent
+            renderSystemVision();
+            renderPilotage();
+            updateTimestamp();
+            auditRefreshGuide();
+        }
+
+        function etaForTask(t) {
+            const s = String(t.status || '').toLowerCase();
+            const c = Number(t.completeness || 0);
+            if (s.includes('ok') || s.includes('termin')) return 'Terminé';
+            if (s.includes('cours') || s.includes('progress')) return c >= 80 ? 'ETA: 24h' : c >= 40 ? 'ETA: 72h' : 'ETA: 7j';
+            if (s.includes('error') || s.includes('bloqu') || s.includes('fail')) return 'Bloqué (à débloquer)';
+            return 'ETA: 7-14j';
+        }
+
+        function renderPilotage() {
+            if (!auditData) return;
+            const tasks = Array.isArray(auditData.tasks) ? auditData.tasks : [];
+            const errors = Array.isArray(auditData.errors) ? auditData.errors : [];
+
+            const done = tasks.filter((t) => /ok|termin/i.test(String(t.status || '')));
+            const progress = tasks.filter((t) => /cours|progress|pending|attente/i.test(String(t.status || '')));
+            const failed = tasks.filter((t) => /error|fail|bloqu/i.test(String(t.status || '')));
+            const next = tasks.filter((t) => !done.includes(t) && !progress.includes(t) && !failed.includes(t));
+
+            document.getElementById('pilotage-done').innerHTML = done.length
+                ? done.slice(0, 14).map((t) => `• ${t.name} (${Number(t.completeness || 100)}%)`).join('<br>')
+                : '• Aucune tâche terminée remontée';
+
+            const mergedProgress = [...progress, ...failed];
+            document.getElementById('pilotage-progress').innerHTML = mergedProgress.length
+                ? mergedProgress.slice(0, 16).map((t) => `• ${t.name} — ${t.status} — ${etaForTask(t)}`).join('<br>')
+                : '• Aucun chantier en cours';
+
+            document.getElementById('pilotage-next').innerHTML = next.length
+                ? next.slice(0, 14).map((t) => `• ${t.name} — ${etaForTask(t)}`).join('<br>')
+                : '• Aucun backlog explicite (données audit)';
+
+            const critical = errors.filter((e) => /critical|high|error/i.test(String(e.severity || e.type || ''))).slice(0, 20);
+            document.getElementById('pilotage-history').innerHTML = critical.length
+                ? critical.map((e) => `• ${e.type || 'Erreur'} — ${e.description || '-'}${e.affectedFile ? ` [${e.affectedFile}]` : ''}`).join('<br>')
+                : '• Aucun événement critique récent';
+        }
+
+        function auditPushFeed(item) {
+            const root = document.getElementById('audit-agent-feed');
+            if (!root || !item) return;
+            const ts = new Date(item.ts || Date.now()).toLocaleTimeString('fr-FR');
+            const from = item.from || item.agent || 'system';
+            const to = item.to || 'all';
+            const msg = item.message || item.action || '(vide)';
+            const row = document.createElement('div');
+            row.style.cssText = 'padding:4px 0;border-bottom:1px dashed #334155;';
+            row.innerHTML = `<strong style="color:#93c5fd;">${ts} · ${from} -> ${to}</strong><br>${msg}`;
+            root.prepend(row);
+            while (root.children.length > 80) root.removeChild(root.lastChild);
+        }
+
+        function auditAppendLia(role, text) {
+            const root = document.getElementById('audit-lia-feed');
+            if (!root) return;
+            const row = document.createElement('div');
+            row.style.cssText = 'padding:4px 0;border-bottom:1px dashed #334155;';
+            row.innerHTML = `<strong style="color:${role === 'lia' ? '#fcd34d' : '#93c5fd'};">${role === 'lia' ? 'Lilya' : 'Human'}:</strong> ${text}`;
+            root.appendChild(row);
+            root.scrollTop = root.scrollHeight;
+        }
+
+        async function auditLoadTargets() {
+            const sel = document.getElementById('audit-agent-target');
+            if (!sel) return;
+            try {
+                const r = await fetch('/agents/list?_ts=' + Date.now(), { cache: 'no-store' });
+                const d = await r.json();
+                const list = Array.isArray(d.agents) ? d.agents : [];
+                sel.innerHTML = list.map((a) => `<option value="${a}">${a}</option>`).join('');
+                if (!list.length) sel.innerHTML = '<option value="repair-agent">repair-agent</option>';
+            } catch (_) {
+                sel.innerHTML = '<option value="repair-agent">repair-agent</option>';
+            }
+        }
+
+        function auditConnectFeed() {
+            if (auditFeedSource) {
+                try { auditFeedSource.close(); } catch (_) {}
+            }
+            auditFeedSource = new EventSource('/agent-activity');
+            auditFeedSource.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (payload.type === 'initial-state' && Array.isArray(payload.logs)) {
+                        payload.logs.slice(0, 30).reverse().forEach(auditPushFeed);
+                        return;
+                    }
+                    if (payload.type === 'agent-activity' && payload.payload) {
+                        auditPushFeed(payload.payload);
+                        return;
+                    }
+                    auditPushFeed(payload);
+                } catch (_) {}
+            };
+        }
+
+        async function auditSendAgentMessage() {
+            const to = document.getElementById('audit-agent-target')?.value || 'repair-agent';
+            const message = (document.getElementById('audit-agent-message')?.value || '').trim();
+            const cause = (document.getElementById('audit-agent-cause')?.value || '').trim();
+            if (!message) return;
+            try {
+                await fetch(`/agents/${encodeURIComponent(to)}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ from: 'human', to, message, status: 'action', phase: 'en cours', cause })
+                });
+                auditPushFeed({ from: 'human', to, message, cause, ts: new Date().toISOString() });
+                document.getElementById('audit-agent-message').value = '';
+            } catch (_) {}
+        }
+
+        async function auditSendLia() {
+            const input = document.getElementById('audit-lia-message');
+            const message = (input?.value || '').trim();
+            if (!message) return;
+            auditAppendLia('human', message);
+            if (input) input.value = '';
+            try {
+                const r = await fetch('/lia/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const d = await r.json();
+                auditAppendLia('lia', d.response || '(pas de réponse)');
+            } catch (e) {
+                auditAppendLia('lia', 'Erreur: ' + e.message);
+            }
+        }
+
+        async function auditLoadLiaHistory() {
+            const root = document.getElementById('audit-lia-feed');
+            if (!root) return;
+            root.innerHTML = '';
+            try {
+                const r = await fetch('/lia/history?_ts=' + Date.now(), { cache: 'no-store' });
+                const d = await r.json();
+                const msgs = Array.isArray(d.messages) ? d.messages : [];
+                msgs.slice(-20).forEach((m) => auditAppendLia(m.role === 'assistant' ? 'lia' : 'human', m.content || ''));
+                if (!msgs.length) root.innerHTML = '<div style="color:#64748b;">Historique Lilya vide.</div>';
+            } catch (_) {
+                root.innerHTML = '<div style="color:#ef4444;">Historique Lilya indisponible.</div>';
+            }
+        }
+
+        async function auditRefreshGuide() {
+            const el = document.getElementById('audit-guide');
+            if (!el) return;
+            try {
+                const domain = 'modules';
+                const r = await fetch(`/central-guide/state?domain=${domain}&_ts=${Date.now()}`, { cache: 'no-store' });
+                const d = await r.json();
+                auditGuideState = d;
+                if (!d.ok) {
+                    el.textContent = 'Guide indisponible.';
+                    return;
+                }
+                const n = d.nextAction;
+                if (n) {
+                    el.innerHTML = `<strong>Action prioritaire:</strong> ${n.action}<br><strong>Pourquoi:</strong> ${n.why || '-'}<br><strong>Validation:</strong> ${n.verify || '-'}`;
+                } else {
+                    el.innerHTML = '<strong>Guide intelligent:</strong> Toutes les vérifications sont OK.';
+                }
+            } catch (_) {
+                el.textContent = 'Guide indisponible (API).';
+            }
+        }
+
+        async function auditGuideAck() {
+            if (!auditGuideState?.nextAction) return;
+            try {
+                await fetch('/central-guide/ack', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain: auditGuideState.domain || 'modules', checkId: auditGuideState.nextAction.checkId })
+                });
+                await auditRefreshGuide();
+            } catch (_) {}
+        }
+
+        function auditInitDialogue() {
+            auditLoadTargets();
+            auditConnectFeed();
+            auditLoadLiaHistory();
+            auditRefreshGuide();
+        }
+
+        async function renderSystemVision() {
+            const root = document.getElementById('system-vision-grid');
+            if (!root || !auditData) return;
+
+            const files = Array.isArray(auditData.files) ? auditData.files : [];
+            const agents = Array.isArray(auditData.agents) ? auditData.agents : [];
+            const endpoints = Array.isArray(auditData.endpoints) ? auditData.endpoints : [];
+            const connections = Array.isArray(auditData.connections) ? auditData.connections : [];
+            const errors = Array.isArray(auditData.errors) ? auditData.errors : [];
+            const tasks = Array.isArray(auditData.tasks) ? auditData.tasks : [];
+
+            let runtimeAgents = [];
+            let systemLogs = [];
+            try {
+                const [rr, rl] = await Promise.all([
+                    fetch('/agents/runtime?_ts=' + Date.now(), { cache: 'no-store' }),
+                    fetch('/system-log?_ts=' + Date.now(), { cache: 'no-store' })
+                ]);
+                const runtime = await rr.json();
+                const logPayload = await rl.json();
+                runtimeAgents = Array.isArray(runtime.agents) ? runtime.agents : [];
+                systemLogs = Array.isArray(logPayload.logs) ? logPayload.logs : [];
+            } catch (_) {}
+
+            const runtimeRunning = runtimeAgents.filter((a) => String(a.status || '').toLowerCase().includes('cours')).length;
+            const endpointErrors = endpoints.filter((e) => String(e.status || '').toLowerCase() !== 'ok').length;
+            const connErrors = connections.filter((c) => String(c.status || '').toLowerCase() !== 'ok').length;
+            const criticalErrors = errors.filter((e) => /critical|high/i.test(String(e.severity || ''))).length;
+            const repairHints = errors.filter((e) => e.workaround).length;
+            const failedTasks = tasks.filter((t) => /error|fail|bloqu/i.test(String(t.status || ''))).length;
+            const historyCritical = systemLogs.filter((l) => /error|critical/i.test(String(l.status || l.level || ''))).slice(-8);
+            const inProgressTasks = tasks.filter((t) => /cours|progress|pending/i.test(String(t.status || ''))).length;
+            const devModules = files.filter((f) => /todo|partial|wip|missing/i.test(String(f.status || ''))).length;
+            const correlations = Math.min(errors.length, connections.length);
+
+            root.innerHTML = `
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">Bloc 1 · État global</div>
+                    <div class="file-meta">
+                        <div class="meta-item"><div class="meta-label">Backend</div>${auditData.systemStatus?.serverRunning ? 'OK' : 'ERREUR'}</div>
+                        <div class="meta-item"><div class="meta-label">Endpoints</div>${endpoints.length} total / ${endpointErrors} en alerte</div>
+                        <div class="meta-item"><div class="meta-label">Agents actifs</div>${agents.length} (runtime: ${runtimeRunning} en cours)</div>
+                        <div class="meta-item"><div class="meta-label">Connexions</div>${connections.length} / ${connErrors} en erreur</div>
+                    </div>
+                </div>
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">Bloc 2 · Erreurs & réparations</div>
+                    <div class="file-meta">
+                        <div class="meta-item"><div class="meta-label">Erreurs en cours</div>${errors.length}</div>
+                        <div class="meta-item"><div class="meta-label">Modules cassés</div>${criticalErrors}</div>
+                        <div class="meta-item"><div class="meta-label">Réparations proposées</div>${repairHints}</div>
+                        <div class="meta-item"><div class="meta-label">Échecs / impossibilités</div>${failedTasks}</div>
+                    </div>
+                </div>
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">Bloc 3 · Historique global</div>
+                    <div style="font-size:11px; color:#cbd5e1; line-height:1.5;">
+                        ${historyCritical.length ? historyCritical.map((l) => `<div>• ${(l.action || l.message || l.status || 'event')}</div>`).join('') : '<div>• Aucun événement critique récent</div>'}
+                    </div>
+                </div>
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">Bloc 4 · Système en construction</div>
+                    <div class="file-meta">
+                        <div class="meta-item"><div class="meta-label">Tâches en cours</div>${inProgressTasks}</div>
+                        <div class="meta-item"><div class="meta-label">Modules en dev</div>${devModules}</div>
+                        <div class="meta-item"><div class="meta-label">Pipelines actifs</div>${runtimeRunning}</div>
+                        <div class="meta-item"><div class="meta-label">Orchestration</div>${runtimeAgents.length ? 'active' : 'en attente'}</div>
+                    </div>
+                </div>
+                <div class="file-card" style="margin:0;">
+                    <div class="file-name">Bloc 5 · Analyse IA</div>
+                    <div style="font-size:11px; color:#cbd5e1; line-height:1.5;">
+                        <div>• Diagnostic auto: ${errors.length ? 'anomalies détectées' : 'stable'}</div>
+                        <div>• Suggestions: ${repairHints} workaround(s) disponibles</div>
+                        <div>• Liens erreurs-connexions: ${correlations}</div>
+                        <div>• Corrélation système: monitor/runtime + logs centralisés</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Affiche le timestamp de la dernière mise à jour
+        function updateTimestamp() {
+            let ts = document.querySelector('header p');
+            if (!ts) {
+                ts = document.createElement('p');
+                ts.style.cssText = 'color: #94a3b8; font-size: 12px; margin-top: 5px;';
+                document.querySelector('header').appendChild(ts);
+            }
+            ts.textContent = `Dernière mise à jour: ${new Date().toLocaleTimeString('fr-FR')} (auto-refresh actif)`;
+        }
+
+        // Render FILES tab
+        function renderFiles() {
+            const html = auditData.files.map(f => `
+                <div class="file-card">
+                    <div class="file-header">
+                        <div>
+                            <div class="file-name">${f.name}</div>
+                            <div class="file-path">${f.path}</div>
+                        </div>
+                        <span class="status-badge status-${f.status.toLowerCase().replace(' ', '-')}">${f.status}</span>
+                    </div>
+                    <div style="color: #cbd5e1; font-size: 12px; margin-bottom: 8px;">${f.description}</div>
+                    <div class="file-meta">
+                        ${f.type ? `<div class="meta-item"><span class="meta-label">Type</span>${f.type}</div>` : ''}
+                        ${f.critical ? `<div class="meta-item"><span class="meta-label">⚠️ CRITIQUE</span>Fichier essentiel</div>` : ''}
+                        ${f.route ? `<div class="meta-item"><span class="meta-label">Route</span>${f.route}</div>` : ''}
+                        ${f.lines ? `<div class="meta-item"><span class="meta-label">Lignes</span>${f.lines}</div>` : ''}
+                    </div>
+                    ${f.issues && f.issues.length > 0 ? `
+                        <div class="issues-list">
+                            ${f.issues.map(i => `<div class="issue-item">${i.description || i.endpoint || i}</div>`).join('')}
+                        </div>
+                    ` : ''}
+                    <div class="btn-group">
+                        <button class="btn" onclick="copyToClipboard('${f.path}')">📋 Copier chemin</button>
+                        <button class="btn" onclick="locateFile('${f.path}')">🎯 Localiser</button>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('files-list').innerHTML = html || '<p>Aucun fichier trouvé.</p>';
+        }
+
+        // Render AGENTS tab
+        function renderAgents() {
+            const html = auditData.agents.map(a => `
+                <div class="file-card">
+                    <div class="file-header">
+                        <div>
+                            <div class="file-name">${a.name}</div>
+                            <div class="file-path">${a.path}</div>
+                        </div>
+                        <span class="status-badge status-${a.status.toLowerCase()}">${a.status}</span>
+                    </div>
+                    <div style="color: #cbd5e1; font-size: 12px; margin-bottom: 8px;"><strong>Rôle:</strong> ${a.role}</div>
+                    ${a.features ? `<div style="color: #94a3b8; font-size: 11px;">✨ ${a.features.join(', ')}</div>` : ''}
+                    ${a.dependencies ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 5px;">Dépend de: ${a.dependencies.join(', ')}</div>` : ''}
+                    <div class="btn-group">
+                        <button class="btn" onclick="locateFile('${a.path}')">📍 Localiser</button>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('agents-list').innerHTML = html || '<p>Aucun agent trouvé.</p>';
+        }
+
+        // Render ENDPOINTS tab
+        function renderEndpoints() {
+            const html = auditData.endpoints.map(e => `
+                <div class="endpoint-card">
+                    <div style="margin-bottom: 10px;">
+                        <span class="endpoint-method">${e.method}</span>
+                        <span class="endpoint-path">${e.path}</span>
+                    </div>
+                    <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px;">${e.description}</div>
+                    <div style="display: flex; gap: 10px; align-items: center; font-size: 11px;">
+                        <span class="status-badge status-${e.status.toLowerCase().replace(' ', '-')}">${e.status}</span>
+                        ${e.file ? `<span style="color: #94a3b8;"><code>${e.file}</code></span>` : ''}
+                    </div>
+                    ${e.severity ? `<div style="color: #f59e0b; font-size: 10px; margin-top: 8px;">⚠️ ${e.severity.toUpperCase()}</div>` : ''}
+                    ${e.todo ? `<div style="color: #0ea5e9; font-size: 10px; margin-top: 5px;">📝 TODO: ${e.todo}</div>` : ''}
+                    ${e.workaround ? `<div style="color: #10b981; font-size: 10px; margin-top: 5px;">✓ Workaround: ${e.workaround}</div>` : ''}
+                </div>
+            `).join('');
+            document.getElementById('endpoints-list').innerHTML = html || '<p>Aucun endpoint trouvé.</p>';
+        }
+
+        // Render CONNECTIONS tab
+        function renderConnections() {
+            const html = auditData.connections.map(c => `
+                <div class="file-card">
+                    <div class="file-header">
+                        <div style="flex: 1;">
+                            <div style="color: #0ea5e9; font-weight: bold; margin-bottom: 5px;">
+                                ${c.from} → ${c.to}
+                            </div>
+                            <div style="color: #cbd5e1; font-size: 11px;">Type: ${c.type}</div>
+                        </div>
+                        <span class="status-badge status-${c.status.toLowerCase()}">${c.status}</span>
+                    </div>
+                    ${c.endpoint ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 8px;"><code>${c.endpoint}</code></div>` : ''}
+                    ${c.endpoints ? `<div style="color: #94a3b8; font-size: 11px; margin-top: 8px;">Endpoints: ${c.endpoints.join(', ')}</div>` : ''}
+                    ${c.issues && c.issues.length > 0 ? `
+                        <div class="issues-list" style="margin-top: 10px;">
+                            ${c.issues.map(i => `<div class="issue-item">${i.endpoint}: <strong>${i.status}</strong></div>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            document.getElementById('connections-list').innerHTML = html || '<p>Aucune connexion trouvée.</p>';
+        }
+
+        // Render ERRORS tab
+        function renderErrors() {
+            const html = auditData.errors.map(e => `
+                <div class="error-card">
+                    <div class="error-title">❌ ${e.type.toUpperCase()}</div>
+                    <div class="error-detail"><strong>Sévérité:</strong> ${e.severity || 'N/A'}</div>
+                    <div class="error-detail"><strong>Description:</strong> ${e.description}</div>
+                    ${e.affectedFile ? `<div class="error-detail"><strong>Fichier:</strong> <code>${e.affectedFile}</code></div>` : ''}
+                    ${e.affectedComponent ? `<div class="error-detail"><strong>Composant:</strong> ${e.affectedComponent}</div>` : ''}
+                    ${e.affectedCode ? `<div class="error-detail"><strong>Code:</strong> <code>${e.affectedCode}</code></div>` : ''}
+                    ${e.line ? `<div class="error-detail"><strong>Localisation:</strong> ${e.line}</div>` : ''}
+                    ${e.workaround ? `<div style="color: #10b981; font-size: 11px; margin-top: 8px;">✅ Workaround: ${e.workaround}</div>` : ''}
+                    ${e.detectedAt ? `<div style="color: #64748b; font-size: 10px; margin-top: 8px;">Détecté: ${new Date(e.detectedAt).toLocaleString('fr-FR')}</div>` : ''}
+                </div>
+            `).join('');
+            document.getElementById('errors-list').innerHTML = html || '<p>Aucune erreur trouvée.</p>';
+        }
+
+        // Render TASKS tab
+        function renderTasks() {
+            const html = auditData.tasks.map(t => `
+                <div class="task-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="color: #0ea5e9; font-weight: bold;">${t.name}</div>
+                        <span class="status-badge status-${t.status.toLowerCase().replace(' ', '-')}">${t.status}</span>
+                    </div>
+                    <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px;">
+                        ${t.files ? `<strong>Fichiers:</strong> ${t.files.join(', ')}<br>` : ''}
+                        ${t.agents ? `<strong>Agents:</strong> ${t.agents}<br>` : ''}
+                        ${t.features ? `<strong>Features:</strong> ${Array.isArray(t.features) ? t.features.join(', ') : t.features}<br>` : ''}
+                        ${t.endpoints ? `<strong>Endpoints:</strong> ${t.endpoints}<br>` : ''}
+                    </div>
+                    ${t.issues && t.issues.length > 0 ? `
+                        <div style="color: #f59e0b; font-size: 11px; margin-bottom: 8px;">
+                            ⚠️ Issues: ${t.issues.join(', ')}
+                        </div>
+                    ` : ''}
+                    <div class="task-progress">
+                        <span style="color: #94a3b8;">Complétude:</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${t.completeness || 0}%"></div>
+                        </div>
+                        <span>${t.completeness || 0}%</span>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('tasks-list').innerHTML = html || '<p>Aucune tâche trouvée.</p>';
+        }
+
+        // Tab navigation
+        function attachTabListeners() {
+            document.querySelectorAll('.nav-tab').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                    document.getElementById(tabName).classList.add('active');
+                    document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        }
+
+        // Utility functions
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => alert('✅ Copié: ' + text));
+        }
+
+        function locateFile(path) {
+            alert(`📍 Fichier: ${path}\n\nEmplacement: ${path}\n\nPour ouvrir le fichier, utilise:\nCtrl+P dans VS Code → ${path.replace('./', '')}`);
+        }
+
+        // Search functionality
+        ['files', 'agents', 'endpoints'].forEach(tab => {
+            const searchBox = document.getElementById(`search-${tab}`);
+            if (searchBox) {
+                searchBox.addEventListener('input', function() {
+                    const query = this.value.toLowerCase();
+                    const cards = document.querySelectorAll(`#${tab}-list .${tab === 'endpoints' ? 'endpoint-card' : 'file-card'}`);
+                    cards.forEach(card => {
+                        const text = card.textContent.toLowerCase();
+                        card.style.display = text.includes(query) ? 'block' : 'none';
+                    });
+                });
+            }
+        });
+
+        // Initialize on load
+        loadAudit();
+        
+        // Auto-refresh toutes les 5 secondes (mise à jour incrémentale)
+        autoRefreshInterval = setInterval(() => {
+            loadAudit(true); // isAutoRefresh = true
+        }, AUTO_REFRESH_INTERVAL);
+        
+        // Nettoyer l'interval au déchargement
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+        });
+    </script>
+</body>
+</html>

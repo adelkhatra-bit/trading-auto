@@ -1,0 +1,159 @@
+{
+  "indicators": {
+    "rsi": 55.8,
+    "atr": 0.0068,
+    "ma20": 1.3580,
+    "macd": {
+      "histogram": 0.00012,
+      "value": 0.00014,
+      "signal": 0.00002
+    }
+  },
+  "analysis": {
+    "confidence": "MEDIUM",
+    "direction": "BUY",
+    "tp": 1.3620,
+    "rr_ratio": 1.9,
+    "sl": 1.3550,
+    "score": 63,
+    "entry": 1.3585,
+    "why_entry": "RSI > 50 + Price > MA20 — Tendance haussière legère",
+    "market_structure": "BULLISH"
+  },
+  "positions": [
+    {
+      "symbol": "USDCAD",
+      "type": "BUY",
+      "entry": 1.3580,
+      "current": 1.3585,
+      "sl": 1.3550,
+      "tp": 1.3620,
+      "pnl": 0.0005,
+      "pnl_pct": 0.04,
+      "size": 1.0,
+      "status": "OPEN",
+      "opened_at": "2026-04-02T15:30:00Z"
+    }
+  ],
+  "opportunities": [
+    {
+      "symbol": "USDCAD",
+      "type": "BREAKOUT",
+      "level": 1.3600,
+      "direction": "UP",
+      "confidence": 62,
+      "description": "Résistance 1.3600 — Potential breakout haussier",
+      "technical": "Price testing key level with bullish momentum"
+    }
+  ],
+  "agents": {
+    "count": 5,
+    "consensus": "BUY",
+    "confidence": 64,
+    "agents": [
+      {
+        "name": "Technical Agent",
+        "signal": "BUY",
+        "score": 66,
+        "reasoning": "Bullish pin bar confirmed"
+      },
+      {
+        "name": "Macro Agent",
+        "signal": "BUY",
+        "score": 63,
+        "reasoning": "USD strength continues"
+      },
+      {
+        "name": "Sentiment Agent",
+        "signal": "HOLD",
+        "score": 60,
+        "reasoning": "Neutral sentiment on Fed"
+      },
+      {
+        "name": "Structure Agent",
+        "signal": "BUY",
+        "score": 67,
+        "reasoning": "Higher highs pattern active"
+      },
+      {
+        "name": "Flow Agent",
+        "signal": "BUY",
+        "score": 62,
+        "reasoning": "Buying pressure sustained"
+      }
+    ]
+  },
+  "logs": [
+    {
+      "timestamp": "2026-04-02T16:35:00Z",
+      "level": "INFO",
+      "message": "USDCAD data loaded",
+      "source": "loadMT5Data"
+    }
+  ],
+  "session": {
+    "london": {
+      "status": "open",
+      "closes_at": "17:30 UTC",
+      "opens_at": "09:00 UTC"
+    },
+    "newyork": {
+      "status": "open",
+      "closes_at": "21:00 UTC",
+      "opens_at": "14:30 UTC"
+    },
+    "sydney": {
+      "status": "closed",
+      "closes_at": "06:30 UTC",
+      "opens_at": "22:00 UTC"
+    },
+    "tokyo": {
+      "status": "closed",
+      "closes_at": "09:00 UTC",
+      "opens_at": "00:00 UTC"
+    }
+  },
+  "symbol": {
+    "timeframe": "H1",
+    "name": "USDCAD",
+    "ask": 1.3586,
+    "bid": 1.3584,
+    "volume": 6800000,
+    "price": 1.3585,
+    "spread": 0.0002
+  },
+  "state": {
+    "market_status": "open",
+    "active": true,
+    "timestamp": "2026-04-02T16:00:00Z"
+  },
+  "chart": {
+    "candles": [
+      {"time": "2026-04-02T16:00:00Z", "open": 1.3584, "high": 1.3588, "low": 1.3582, "close": 1.3586},
+      {"time": "2026-04-02T15:00:00Z", "open": 1.3582, "high": 1.3586, "low": 1.3580, "close": 1.3584},
+      {"time": "2026-04-02T14:00:00Z", "open": 1.3580, "high": 1.3585, "low": 1.3578, "close": 1.3582},
+      {"time": "2026-04-02T13:00:00Z", "open": 1.3578, "high": 1.3583, "low": 1.3576, "close": 1.3580},
+      {"time": "2026-04-02T12:00:00Z", "open": 1.3575, "high": 1.3581, "low": 1.3574, "close": 1.3578},
+      {"time": "2026-04-02T11:00:00Z", "open": 1.3572, "high": 1.3579, "low": 1.3571, "close": 1.3575},
+      {"time": "2026-04-02T10:00:00Z", "open": 1.3570, "high": 1.3576, "low": 1.3568, "close": 1.3572},
+      {"time": "2026-04-02T09:00:00Z", "open": 1.3568, "high": 1.3574, "low": 1.3566, "close": 1.3570},
+      {"time": "2026-04-02T08:00:00Z", "open": 1.3565, "high": 1.3572, "low": 1.3564, "close": 1.3568},
+      {"time": "2026-04-02T07:00:00Z", "open": 1.3563, "high": 1.3570, "low": 1.3562, "close": 1.3565},
+      {"time": "2026-04-02T06:00:00Z", "open": 1.3560, "high": 1.3568, "low": 1.3559, "close": 1.3563},
+      {"time": "2026-04-02T05:00:00Z", "open": 1.3558, "high": 1.3565, "low": 1.3556, "close": 1.3560},
+      {"time": "2026-04-02T04:00:00Z", "open": 1.3555, "high": 1.3563, "low": 1.3553, "close": 1.3558},
+      {"time": "2026-04-02T03:00:00Z", "open": 1.3553, "high": 1.3561, "low": 1.3551, "close": 1.3555},
+      {"time": "2026-04-02T02:00:00Z", "open": 1.3550, "high": 1.3558, "low": 1.3548, "close": 1.3553},
+      {"time": "2026-04-02T01:00:00Z", "open": 1.3548, "high": 1.3556, "low": 1.3546, "close": 1.3550},
+      {"time": "2026-04-02T00:00:00Z", "open": 1.3545, "high": 1.3553, "low": 1.3543, "close": 1.3548},
+      {"time": "2026-04-01T23:00:00Z", "open": 1.3543, "high": 1.3551, "low": 1.3541, "close": 1.3545},
+      {"time": "2026-04-01T22:00:00Z", "open": 1.3540, "high": 1.3548, "low": 1.3538, "close": 1.3543},
+      {"time": "2026-04-01T21:00:00Z", "open": 1.3538, "high": 1.3546, "low": 1.3536, "close": 1.3540},
+      {"time": "2026-04-01T20:00:00Z", "open": 1.3535, "high": 1.3543, "low": 1.3533, "close": 1.3538},
+      {"time": "2026-04-01T19:00:00Z", "open": 1.3533, "high": 1.3541, "low": 1.3531, "close": 1.3535},
+      {"time": "2026-04-01T18:00:00Z", "open": 1.3530, "high": 1.3538, "low": 1.3528, "close": 1.3533},
+      {"time": "2026-04-01T17:00:00Z", "open": 1.3528, "high": 1.3536, "low": 1.3526, "close": 1.3530}
+    ],
+    "timeframe": "H1"
+  }
+}
