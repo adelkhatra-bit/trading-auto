@@ -1,6 +1,0 @@
-Flask
-requests
-opencv-python
-numpy
-pillow
-pytesseract
