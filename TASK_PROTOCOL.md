@@ -47,3 +47,21 @@
 
 ## RÈGLE
 Si une étape n’est pas validée, ne pas passer à la suivante.
+
+## REPAIR EXECUTION LOCK
+
+Si un bug est déjà prouvé :
+- l’agent n’attend plus
+- l’agent ne demande plus
+- l’agent répare
+
+Il n’a plus le droit de dire :
+- "je commence"
+- "je vais analyser"
+- "je vais vérifier"
+
+Il doit directement produire :
+- correction
+- restart
+- preuve
+
