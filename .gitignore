@@ -12,3 +12,21 @@ backup/
 dist/
 .DS_Store
 Thumbs.db
+# Runtime / cache / parasites
+node_modules/
+backup/
+store_test_v2/
+studio/
+agent-export/
+*.log
+server-out.log
+server-err.log
+server_run.log
+server_startup.log
+server_startup_err.log
+tv-live-feed.log
+tvfeed_run.log
+tvfeed_err.log
+tradingview-cache.json
+store/extension-runtime-state.json
+store/*.runtime.json
