@@ -65,3 +65,17 @@ Il doit directement produire :
 - restart
 - preuve
 
+
+## FILE SCOPE ENFORCEMENT
+
+Quand un fichier est explicitement nommé par l’utilisateur :
+- ce fichier devient le scope exclusif
+- aucun autre fichier ne peut être lu, modifié ou proposé
+- sauf si l’utilisateur l’autorise explicitement
+
+Format obligatoire de réponse :
+- fichier autorisé :
+- fichier modifié :
+- autre fichier touché : OUI/NON
+- scope strict respecté : OUI/NON
+
