@@ -1,6 +1,20 @@
+// ─── EXPRESS INIT EN TÊTE ───────────────────────────────────────────────────
+'use strict';
+const express = require('express');
+const app = express();
+const path    = require('path');
+const fs      = require('fs');
+const os      = require('os');
+const { spawn, execSync } = require('child_process');
+const PORT    = 4000;
+if (!process.env.BROKER_MODE) process.env.BROKER_MODE = 'live';
+if (!process.env.SAFE_MODE) process.env.SAFE_MODE = '0';
+const SAFE_MODE = process.env.SAFE_MODE !== '0';
+
 // ─── TRADINGVIEW LIVE INGESTION ─────────────────────────────────────────────
 const tvDataStore = {};
 
+// Toutes les routes et middlewares doivent être après l'init express/app
 app.post('/tradingview/live', (req, res) => {
   try {
     const VALID_TIMEFRAMES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H2', 'H4', 'D1', 'W1'];
@@ -127,16 +141,7 @@ _portGuard.once('listening', () => {
 _portGuard.listen(4000, '127.0.0.1');
 // ─────────────────────────────────────────────────────────────────────────────
 
-const express = require('express');
-const path    = require('path');
-const fs      = require('fs');
-const os      = require('os');
-const { spawn, execSync } = require('child_process');
-const app     = express();
-const PORT    = 4000;  // Studio HTML - TRADING AUTO EXCLUSIVE
-if (!process.env.BROKER_MODE) process.env.BROKER_MODE = 'live';
-if (!process.env.SAFE_MODE) process.env.SAFE_MODE = '0';
-const SAFE_MODE = process.env.SAFE_MODE !== '0';
+// ...existing code...
 
 // ── TRADE JOURNAL ─────────────────────────────────────────────────────────────
 const JOURNAL_FILE = path.join(__dirname, 'store', 'trade-journal.json');
