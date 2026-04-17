@@ -198,45 +198,22 @@ async function analyzeTechnical(symbol, priceOrData) {
     return analyzeFromMT5(symbol, priceOrData);
   }
 
-  // Cas 2: prix numérique → récupérer klines Yahoo pour calculer les indicateurs
+  // Cas 2: prix numérique → bridge TV uniquement (Yahoo supprimé)
   const price = parseFloat(priceOrData);
   if (!price || isNaN(price)) {
     return { name: 'Technical Agent', symbol: symbol, score: 0, signal: 'HOLD', analysis: 'Prix manquant' };
   }
 
-  try {
-    const symNorm = symbol.replace('/', '').replace('-', '').toUpperCase();
-    const YAHOO_MAP = {
-      'EURUSD': 'EURUSD=X', 'GBPUSD': 'GBPUSD=X', 'USDJPY': 'JPY=X',
-      'USDCHF': 'CHF=X', 'AUDUSD': 'AUDUSD=X', 'USDCAD': 'CAD=X',
-      'XAUUSD': 'GC=F', 'XAGUSD': 'SI=F', 'BTCUSD': 'BTC-USD', 'ETHUSD': 'ETH-USD'
-    };
-    const ySym = YAHOO_MAP[symNorm] || (symNorm + '=X');
-
-    const resp = await fetch(
-      'https://query1.finance.yahoo.com/v8/finance/chart/' + ySym + '?interval=1h&range=5d',
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6000) }
-    );
-    if (!resp.ok) throw new Error('Yahoo HTTP ' + resp.status);
-    const json = await resp.json();
-    const result = json && json.chart && json.chart.result && json.chart.result[0];
-    if (!result || !result.timestamp) throw new Error('no data');
-    const q = result.indicators.quote[0];
-    const candles = result.timestamp
-      .map(function(t, i) { return { time: t * 1000, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] }; })
-      .filter(function(c) { return c.close != null; });
-    return analyzeFromKlines(symbol, candles, price);
-  } catch (_) {
-    return {
-      name: 'Technical Agent',
-      symbol: symbol,
-      price: price.toFixed(4),
-      source: 'price-only',
-      score: 50,
-      signal: 'HOLD',
-      analysis: 'Klines indisponibles — score neutre (connectez MT5)'
-    };
-  }
+  // Yahoo Finance supprimé — klines via bridge TV uniquement (/klines endpoint)
+  return {
+    name: 'Technical Agent',
+    symbol: symbol,
+    price: price.toFixed(4),
+    source: 'bridge-tv',
+    score: 50,
+    signal: 'HOLD',
+    analysis: 'Klines via bridge TV — score neutre en attente flux live'
+  };
 }
 
 async function analyzeMultiPair(pairs, priceMap) {
