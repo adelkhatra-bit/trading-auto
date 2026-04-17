@@ -3,8 +3,8 @@
  * 
  * Responsabilité:
  * - Gérer et valider TOUTES les sources de données
- * - Règle stricte: MT5 > TradingView > RIEN
- * - Interdire Yahoo Finance complètement
+ * - Règle stricte: TradingView bridge UNIQUEMENT
+ * - Yahoo Finance et MT5 : SUPPRIMÉS
  * - Synchroniser les sources
  * - Garantir l'intégrité des prix
  */

@@ -1,5 +1,5 @@
 // coordinator.js — Coordinateur d'agents avec données réelles
-// Récupère les prix live (MT5 priorité → Yahoo fallback) avant l'analyse
+// Récupère les prix live depuis le bridge TradingView uniquement
 // AUCUN Math.random()
 
 'use strict';
@@ -12,30 +12,7 @@ const riskManager    = require('./riskManager');
 
 const PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD', 'BTC/USD'];
 
-const YAHOO_MAP = {
-  'EUR/USD': 'EURUSD=X', 'GBP/USD': 'GBPUSD=X', 'USD/JPY': 'JPY=X',
-  'XAU/USD': 'GC=F',     'BTC/USD': 'BTC-USD'
-};
-
-// ─── Fetch prix Yahoo (référence uniquement quand MT5 offline) ────────────────
-
-async function fetchYahooPrice(ySym) {
-  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + ySym + '?interval=1m&range=1d';
-  const resp = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!resp.ok) throw new Error('Yahoo HTTP ' + resp.status);
-  const json = await resp.json();
-  const result = json && json.chart && json.chart.result && json.chart.result[0];
-  const closes = result && result.indicators && result.indicators.quote && result.indicators.quote[0].close;
-  if (!closes || !closes.length) throw new Error('no data');
-  const last = closes.filter(Boolean).pop();
-  if (!last) throw new Error('no close');
-  return last;
-}
-
-// ─── Construit la priceMap depuis le marketStore MT5 + Yahoo ─────────────────
+// ─── Construit la priceMap depuis le bridge TradingView ──────────────────────
 
 async function buildPriceMap() {
   const priceMap = {};
@@ -60,20 +37,8 @@ async function buildPriceMap() {
     }
   } catch (_) { /* market store non disponible */ }
 
-  // 2. Compléter les paires manquantes via Yahoo Finance
-  const missing = PAIRS.filter(function(p) { return !priceMap[p]; });
-  if (missing.length > 0) {
-    await Promise.allSettled(
-      missing.map(async function(pair) {
-        const ySym = YAHOO_MAP[pair];
-        if (!ySym) return;
-        try {
-          const price = await fetchYahooPrice(ySym);
-          priceMap[pair] = price; // prix numérique simple
-        } catch (_) { /* pas de prix pour ce pair */ }
-      })
-    );
-  }
+  // 2. Yahoo Finance supprimé — les paires manquantes restent vides (bridge TV requis)
+  // Aucune source externe autorisée. Si priceMap vide, le cycle attend le bridge TradingView.
 
   return priceMap;
 }
@@ -126,7 +91,7 @@ async function runAgentCycle(externalPriceMap, accountBalance, riskPercent) {
 
   // 6. Source des prix
   const dataSource = Object.values(priceMap).some(function(v) { return v && typeof v === 'object' && v.source === 'mt5-live'; })
-    ? 'mt5-live' : (Object.keys(priceMap).length > 0 ? 'yahoo-reference' : 'offline');
+    ? 'mt5-live' : (Object.keys(priceMap).length > 0 ? 'tradingview-bridge' : 'offline');
 
   return {
     timestamp: timestamp,
