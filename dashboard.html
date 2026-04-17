@@ -457,6 +457,12 @@
         <a class="btn-link" href="/audit">Audit Dashboard</a>
         <span style="margin-left:12px;font-size:13px;font-weight:700;letter-spacing:1px;">SERVEUR:&nbsp;<span id="sysStatus" style="color:#888;">--</span></span>
         <span id="marketSession" style="font-size:11px;padding:3px 8px;border-radius:4px;background:#1e293b;color:#64748b;margin-left:8px;font-weight:700;">--</span>
+        <div id="bridgeHealth" style="display:flex;gap:4px;align-items:center;padding:3px 8px;background:#0f172a;border-radius:4px;margin-left:12px">
+          <span id="bh-tv"  title="TradingView" style="width:7px;height:7px;border-radius:50%;background:#334155;transition:background 0.3s"></span>
+          <span id="bh-srv" title="Backend"     style="width:7px;height:7px;border-radius:50%;background:#334155;transition:background 0.3s"></span>
+          <span id="bh-sse" title="SSE"         style="width:7px;height:7px;border-radius:50%;background:#334155;transition:background 0.3s"></span>
+          <span id="bh-label" style="font-size:9px;color:#64748b;margin-left:3px">--</span>
+        </div>
       </div>
     </div>
 
@@ -1712,6 +1718,25 @@
         }
         return;
       }
+      if (msg.type === 'price-update') {
+        var sym = String(msg.symbol || '').toUpperCase();
+        var px  = Number(msg.price);
+        var tf  = String(msg.timeframe || '').toUpperCase();
+        if (sym && sym !== (state.symbol || '').toUpperCase()) {
+          state.symbol = sym;
+          const symbolSelect = document.getElementById('symbolSelect');
+          if (symbolSelect && Array.from(symbolSelect.options).some((o) => o.value === sym)) symbolSelect.value = sym;
+        }
+        if (Number.isFinite(px) && px > 1) {
+          setText('priceVal', typeof formatPrice === 'function' ? formatPrice(px) : String(px));
+        }
+        if (tf && ['M1','M5','M15','M30','H1','H4','D1','W1'].indexOf(tf) >= 0) {
+          state.timeframe = tf;
+          const timeframeSelect = document.getElementById('timeframeSelect');
+          if (timeframeSelect && Array.from(timeframeSelect.options).some((o) => o.value === tf)) timeframeSelect.value = tf;
+        }
+        return;
+      }
       const structuralSync = msg.type === 'initial-sync' || msg.type === 'active-symbol';
       if (!structuralSync) {
         if (msg.bridgeConfig) applyBridgeConfig(msg.bridgeConfig);
@@ -2039,8 +2064,41 @@
         body: JSON.stringify({ trigger: 'boot-manual' })
       }).catch(() => {});
       await refreshAll();
+      renderBridgeHealth();
+      setInterval(renderBridgeHealth, 5000);
       // SUPPRIMÉ : setInterval polling — la synchro se fait uniquement sur tick TradingView
     });
+
+    async function renderBridgeHealth() {
+      try {
+        const data = await fetchJson('/bridge/health');
+        const dot = (id, ok, warn) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.style.background = ok ? '#22c55e' : (warn ? '#f97316' : '#ef4444');
+          el.style.boxShadow = ok ? '0 0 4px #22c55e88' : 'none';
+        };
+        dot('bh-tv',  data.chain.tradingview.ok,  data.chain.tradingview.ageSeconds < 60);
+        dot('bh-srv', data.chain.backend.ok,       false);
+        dot('bh-sse', data.chain.sseClients.ok,    false);
+
+        const lbl = document.getElementById('bh-label');
+        if (lbl) {
+          if (!data.chain.tradingview.ok) {
+            lbl.style.color = '#ef4444';
+            lbl.textContent = 'TV HORS LIGNE';
+          } else {
+            lbl.style.color = '#22c55e';
+            lbl.textContent = (data.chain.tradingview.symbol || '--') + ' · ' + data.chain.tradingview.ageSeconds + 's';
+          }
+        }
+      } catch(_) {
+        ['bh-tv','bh-srv','bh-sse'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.background = '#ef4444';
+        });
+      }
+    }
   </script>
 
   <div id="newsTicker" style="position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid #1e293b;padding:4px 0;overflow:hidden;height:22px;z-index:100">

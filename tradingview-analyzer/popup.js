@@ -2630,6 +2630,37 @@ function renderBridgeOffState() {
   }
 }
 
+async function renderBridgeHealth() {
+  try {
+    const data = await fetchJson('/bridge/health');
+    const dot = (id, ok, warn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.background = ok ? '#22c55e' : (warn ? '#f97316' : '#ef4444');
+      el.style.boxShadow = ok ? '0 0 4px #22c55e88' : 'none';
+    };
+    dot('bh-tv',  data.chain.tradingview.ok,  data.chain.tradingview.ageSeconds < 60);
+    dot('bh-srv', data.chain.backend.ok,       false);
+    dot('bh-sse', data.chain.sseClients.ok,    false);
+
+    const lbl = document.getElementById('bh-label');
+    if (lbl) {
+      if (!data.chain.tradingview.ok) {
+        lbl.style.color = '#ef4444';
+        lbl.textContent = 'TV HORS LIGNE';
+      } else {
+        lbl.style.color = '#22c55e';
+        lbl.textContent = `${data.chain.tradingview.symbol || '--'} · ${data.chain.tradingview.ageSeconds}s`;
+      }
+    }
+  } catch(_) {
+    ['bh-tv','bh-srv','bh-sse'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.background = '#ef4444';
+    });
+  }
+}
+
 function formatNewsEvent(e) {
   // Étoiles
   var stars = Math.min(5, Math.max(0, Number(e.stars) || 0));
@@ -6139,40 +6170,26 @@ async function refreshAll() {
     if (_febEl) _febEl.style.display = 'none'; // masqué quand position active
     if (_eb && !_eb.disabled) { _eb.style.cssText = ''; _eb.textContent = '▶ ENTRER'; }
     // ── COACH STREAM GUARD — ne jamais lâcher le coach pendant un trade ──────
-    // Si le stream est tombé (null, CLOSED ou CONNECTING depuis trop longtemps), on reconnecte
     if (!coachSse || coachSse.readyState === EventSource.CLOSED) {
       connectCoachStream(state.symbol);
     }
-    // ── REVERSAL RISK CHECK — hiérarchie TF (M1=timing, M5=confirm, M15/H1=contexte) ──
-    // Lit state._lastBridgeData (live 2-3s). M1 seul → alerte vocale. M5+contexte → action.
     checkReversalRiskDuringPosition().catch(function(){});
-    // ── TRAIL SL PROGRESSIF — 30%→BE, 50%→30%, 70%→50%, 85%→70% — cooldown 60s ──
     trailStopLossDuringPosition().catch(function(){});
-    // ── H4 CONTEXT — vision large toutes les 5 min (potentiel restant, zones larges) ──
-    // H4 = gestion uniquement, jamais entrée. Vocal + log si changement significatif.
     checkH4ContextDuringPosition().catch(function(){});
-    // ── NEWS GUARD EN POSITION — protection avant news HIGH impact (toutes les 2 min) ──
-    // Profit → BE+. Neutre → SL réduit. Perte → vocal seul, pas de sortie panique.
     checkNewsImpactDuringPosition().catch(function(){});
-    // ── MONITEUR NEWS LIVE — breaking news + tweets pendant la position ────────
-    startLiveNewsMonitor(); // idempotent — ne redémarre pas si déjà actif
+    startLiveNewsMonitor();
   } else if (state.armed || _tsPhase === 'ARMED') {
-    // Armé — masquer la proposition setup (elle a été acceptée ou robot armé manuellement)
     _hideSetupProposal();
-    // S'assurer que le bouton affiche ANNULER (watchdog gère le banner)
-    if (_febEl) _febEl.style.display = 'none'; // masqué quand armé (armedBanner prend le relais)
+    if (_febEl) _febEl.style.display = 'none';
     if (_eb) { _eb.style.cssText = 'background:#d97706;color:#000;font-weight:700;font-size:11px;'; _eb.textContent = '🤖 LIA SURVEILLE — ANNULER'; }
-    if (!_entryWatchdog) {
-      // Watchdog arrêté (ex: reload page) — relancer si state dit ARMED
-      startEntryWatchdog();
-    }
+    if (!_entryWatchdog) { startEntryWatchdog(); }
   } else {
-    // Pas armé, pas de position — banner off, bouton normal
     renderArmedBanner('off', {}, {});
     if (_eb && !_eb.disabled && (_eb.textContent.includes('ANNULER') || _eb.textContent.includes('SURVEILLE'))) {
       _eb.style.cssText = ''; _eb.textContent = '▶ ENTRER';
     }
   }
+  renderBridgeHealth();
   } catch(_rfErr) { /* erreur silencieuse — ne pas casser l'UI */ }
   finally { _refreshInFlight = false; }
 }
@@ -9541,6 +9558,26 @@ function handleSync(msg) {
     // Bot-alive visual: show live data arriving
     showLiveFlux(msg);
     checkEntryProximityAndBeep(state.live || {});
+  } else if (msg.type === 'price-update') {
+    var tickSym = String(msg.symbol || '').toUpperCase();
+    var symbolMatch = !tickSym || tickSym === (state.symbol || '').toUpperCase();
+    if (symbolMatch) {
+      var newPrice = Number(msg.price);
+      if (Number.isFinite(newPrice) && newPrice > 1) { // guard > 1 pour éviter prix "1" du titre
+        state.price = newPrice;
+      }
+      var newTf = String(msg.timeframe || '').toUpperCase();
+      if (newTf && TFS.indexOf(newTf) >= 0) {
+        state.timeframe = newTf;
+        var tfSel = document.getElementById('tfSelect');
+        if (tfSel) tfSel.value = state.timeframe;
+      }
+      if (tickSym && tickSym !== (state.symbol || '').toUpperCase() && !state.userLocked) {
+        state.symbol = tickSym;
+      }
+      updateHeader();
+    }
+    if (typeof showLiveFlux === 'function') showLiveFlux(msg);
   }
 }
 
@@ -10804,24 +10841,19 @@ async function boot() {
   }, 10000); // check every 10s
 
   // ── INTERVALLES OPTIMISÉS ─────────────────────────────────────────────────
-  // SSE /extension/sync couvre les ticks prix en temps réel.
-  // Le polling est un filet de sécurité seulement — réduit pour éviter surcharge.
-  setInterval(refreshAll,          8000);   // refresh core (SSE couvre l'instantané)
-  setInterval(renderMultiTF,     90000);   // multi-TF: 90s (continuous scan + SSE couvrent le reste)
-  setInterval(refreshHealth,      15000);   // health: 10s→15s
-  setInterval(loadLiveSymbols,    30000);   // symbols: 15s→30s (très peu fréquent utile)
-  setInterval(loadJournalStats,   90000);   // journal: 60s→90s
-  setInterval(refreshServerStats, 60000);   // stats TP/SL/winrate depuis serveur
-  refreshServerStats();                     // au démarrage aussi
-  // Active session: poll léger seulement si SSE silencieux > 5s
+  setInterval(refreshAll,          8000);
+  setInterval(renderMultiTF,     90000);
+  setInterval(refreshHealth,      15000);
+  setInterval(loadLiveSymbols,    30000);
+  setInterval(loadJournalStats,   90000);
+  setInterval(refreshServerStats, 60000);
+  setInterval(renderBridgeHealth,  5000);
+  refreshServerStats();
   setInterval(function() {
     if (!state.agentSessionActive) return;
     var _sseAge = Date.now() - (state._lastSseAt || 0);
-    if (_sseAge > 5000) {
-      // SSE silencieux depuis > 5s → déclencher un poll de rattrapage
-      loadRealtimePack().catch(function(){});
-    }
-  }, 3000);   // vérifie toutes les 3s, poll seulement si SSE mort
+    if (_sseAge > 5000) { loadRealtimePack().catch(function(){}); }
+  }, 3000);
 }
 
 async function loadJournalStats() {

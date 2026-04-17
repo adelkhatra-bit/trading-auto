@@ -262,12 +262,15 @@ async function scrapAndSendTradingView() {
       if (_v != null) _parsedIndicators.macd = _v;
     }
     const livePayload = {
-      symbol: panelData.symbol,
-      timeframe: panelData.timeframe || systemState.activeTimeframe,
-      price: systemState.activePrice,
-      timestamp: new Date().toISOString(),
-      source: 'tradingview-extension',
-      indicators: Object.keys(_parsedIndicators).length ? _parsedIndicators : undefined
+      symbol:     panelData.symbol,
+      timeframe:  panelData.timeframe || systemState.activeTimeframe,
+      price:      systemState.activePrice,
+      timestamp:  new Date().toISOString(),
+      source:     'tradingview-extension',
+      indicators: panelData.indicators || (Object.keys(_parsedIndicators).length ? _parsedIndicators : {}),
+      legend:     panelData.legend     || {},
+      ask:        panelData.ask        || null,
+      bid:        panelData.bid        || null
     };
     const tvResp = await fetch(API + '/tradingview/live', {
       method: 'POST',

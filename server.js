@@ -43,12 +43,16 @@ app.post('/tradingview/live', (req, res) => {
     console.log('[BACKEND RECEIVED]', { symbol: normalizedSymbol, timeframe, price: parsedPrice, timestamp, source });
     // Stockage en RAM par symbole (clé normalisée, prix en float)
     tvDataStore[normalizedSymbol] = {
-      symbol:    normalizedSymbol,
-      timeframe: (timeframe || '').toUpperCase().trim() || null,
-      price:     parsedPrice,
-      timestamp: timestamp || new Date().toISOString(),
-      source:    source || 'tradingview',
-      updatedAt: Date.now()
+      symbol:     normalizedSymbol,
+      timeframe:  (timeframe||'').toUpperCase().trim() || null,
+      price:      parsedPrice,
+      ask:        req.body.ask  ? parseFloat(req.body.ask)  : null,
+      bid:        req.body.bid  ? parseFloat(req.body.bid)  : null,
+      indicators: req.body.indicators || {},
+      legend:     req.body.legend     || {},
+      timestamp:  req.body.timestamp || new Date().toISOString(),
+      source:     req.body.source || 'tradingview',
+      updatedAt:  Date.now()
     };
     console.log('[BACKEND STORED]', normalizedSymbol, '→', tvDataStore[normalizedSymbol]);
     console.log(`[TV LIVE] ${normalizedSymbol} price=${parsedPrice} tf=${timeframe} stored at ${new Date().toISOString()}`);
@@ -78,6 +82,10 @@ app.post('/tradingview/live', (req, res) => {
       }
     } catch (_) {}
 
+    // Émettre active-symbol pour propager symbole + TF + prix vers popup et dashboard
+    if (typeof emitResolvedActiveSymbol === 'function') {
+      emitResolvedActiveSymbol('tradingview-live');
+    }
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -221,7 +229,7 @@ app.use('/studio', express.static(path.join(__dirname, 'studio')));
 const marketHoursChecker = require('./lib/market-hours-checker'); // [P2] Market hours detection
 const agentBus = require('./agent-bus'); // [P3] Agent registry and messaging
 const alertManager = require('./alert-manager'); // [P2] Alert system
-const realDataSimulator = require('./lib/real-data-simulator'); // [ÉTAPE 1] Real multi-symbol data
+// [SIMULATEUR DÉSACTIVÉ] real-data-simulator supprimé — toutes les données proviennent de TradingView live (tvDataStore)
 let surveillanceAgent, marketStore, normalizeSymbol, orchestrator, auditLogger, indicatorAgent, repairAgent;
 let lastRealData = null; // Cache latest real data
 let candleManager = null; // [P1] CandleManager — instancié séparément pour isolation
@@ -2643,34 +2651,16 @@ app.post('/extension/command', async (req, res) => {
         }
         break;
         
-      // Get symbols
+      // SUPPRIMÉ: get-symbols — simulateur désactivé
       case 'get-symbols':
-        result.symbols = realDataSimulator.getAvailableSymbols();
+        result.ok = false;
+        result.error = 'SIMULATOR_DISABLED: get-symbols supprimé — utilisez /mt5/symbols pour les symboles réels';
         break;
-        
-      // Refresh data (simulator)
+
+      // SUPPRIMÉ: refresh-data — simulateur désactivé
       case 'refresh-data':
-        const data = realDataSimulator.getNextData();
-        const prof = normalizeSymbol(data.symbol);
-        marketStore.updateFromMT5({
-          symbol: data.symbol,
-          price: data.price,
-          bid: data.bid,
-          ask: data.ask,
-          volume: data.volume,
-          source: 'simulator'
-        }, prof.canonical);
-        
-        broadcastToExtension({
-          type: 'mt5-data',
-          symbol: prof.canonical,
-          price: data.price,
-          bid: data.bid,
-          ask: data.ask,
-          volume: data.volume,
-          source: 'simulator'
-        });
-        result.data = data;
+        result.ok = false;
+        result.error = 'SIMULATOR_DISABLED: refresh-data supprimé — les données proviennent exclusivement de TradingView live';
         break;
         
       default:
@@ -6527,75 +6517,11 @@ app.post('/repair', async (req, res) => {
   res.json({ ok: true, repair: result });
 });
 
-// ─── REAL DATA SIMULATOR ROUTES (ÉTAPE 1) ─────────────────────────────────────
-// GET /symbols — liste des symboles disponibles du simulateur
-app.get('/symbols', (_req, res) => {
-  try {
-    const symbols = realDataSimulator.getAvailableSymbols();
-    res.json({ ok: true, symbols, count: symbols.length, source: 'simulator' });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-// GET /data/refresh — récupère la prochaine donnée du simulateur (rotation symbole)
-app.get('/data/refresh', (_req, res) => {
-  try {
-    const data = realDataSimulator.getNextData();
-    if (!data) {
-      return res.status(500).json({ ok: false, error: 'Simulator returned no data' });
-    }
-    
-    const profile = normalizeSymbol(data.symbol);
-    const canonical = profile.canonical;
-    
-    // Update market store with simulator data
-    marketStore.updateFromMT5({
-      symbol: data.symbol,
-      price: data.price,
-      bid: data.bid,
-      ask: data.ask,
-      volume: data.volume,
-      source: 'simulator',
-      timestamp: data.timestamp,
-      rsi: data.rsi,
-      ma20: data.ma20,
-      macd: data.macd
-    }, canonical);
-    
-    // Update system status
-    marketStore.systemStatus = {
-      source: 'simulator',
-      fluxStatus: 'LIVE',
-      lastUpdate: new Date().toISOString()
-    };
-    
-    // Broadcast to SSE clients
-    marketStore.broadcast({
-      type: 'mt5-raw',
-      symbol: canonical,
-      price: data.price,
-      source: 'simulator'
-    });
-    
-    // Log for agents
-    pushLog('simulator', 'system',
-      `DATA_REFRESH · ${data.symbol} @ ${data.price.toFixed(5)}`,
-      'ok',
-      `Volume:${data.volume} RSI:${data.rsi || 'N/A'}`
-    );
-    
-    res.json({
-      ok: true,
-      data: data,
-      canonical: canonical,
-      source: 'simulator'
-    });
-  } catch (e) {
-    console.error('[DATA/REFRESH]', e.message);
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+// ─── SIMULATEUR SUPPRIMÉ ──────────────────────────────────────────────────────
+// Les routes /symbols et /data/refresh ont été supprimées.
+// Toutes les données de prix proviennent exclusivement de TradingView live (tvDataStore).
+// Utilisez /mt5/symbols pour la liste des symboles réels.
+// Utilisez /extension/data pour l'état courant TradingView live.
 
 // ─── START ────────────────────────────────────────────────────────────────────
   // ─── LIA — Intelligence Centrale (Ollama local) ───────────────────────────────
