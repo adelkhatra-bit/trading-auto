@@ -1,17 +1,4 @@
 ﻿// popup.js v4.1 — Trading Auto — Unified Color System
-// Auto-close stale popup when extension SW is reloaded
-(function() {
-  try {
-    var _port = chrome.runtime.connect({ name: 'popup-keepalive' });
-    var _portReady = false;
-    // Give SW 2s to start before treating disconnect as a real reload
-    setTimeout(function() { _portReady = true; }, 2000);
-    _port.onDisconnect.addListener(function() {
-      // Only close if top-level persistent popup — never close from inside an iframe overlay
-      if (_portReady && window === window.top) { try { window.close(); } catch(_) {} }
-    });
-  } catch(_) {}
-})();
 // COLOR SYSTEM (NON NEGOTIABLE):
 //   ORANGE  #f97316 = pending / signal incertain / "va se passer"
 //   VERT    #22c55e = confirmé LONG / achat / haussier / signal validé
@@ -898,8 +885,13 @@ function connectCoachStream(symbol) {
         // Effacer la position IMMÉDIATEMENT — sans attendre le prochain refresh
         state.tradeState = Object.assign({}, state.tradeState || {}, { entered: false, phase: 'EXITED', armed: false });
         state.armed = false;
+        stopEntryWatchdog();
         clearTradeLevelsExt();
         renderPositionPanel(null, state.price); // masque le panel tout de suite
+        // Reset propre → prêt pour nouveau cycle
+        setTimeout(function() {
+          setCoachText('🔄 Reset complet — Nouveau cycle prêt.\nAnalyse le marché et clique ANALYSER quand tu vois un setup.', '#94a3b8', 3, 15000);
+        }, 3000);
         setAgentSession(false, 'sl-hit');
       }
       if (d.event === 'tp-hit') {
@@ -920,8 +912,13 @@ function connectCoachStream(symbol) {
         // Effacer la position IMMÉDIATEMENT — sans attendre le prochain refresh
         state.tradeState = Object.assign({}, state.tradeState || {}, { entered: false, phase: 'EXITED', armed: false });
         state.armed = false;
+        stopEntryWatchdog();
         clearTradeLevelsExt();
         setTimeout(() => renderPositionPanel(null, state.price), 1300); // après l'animation flash
+        // Reset propre → prêt pour nouveau cycle
+        setTimeout(function() {
+          setCoachText('✅ Trade gagnant terminé — Nouveau cycle prêt.\nClique ANALYSER pour chercher le prochain setup.', '#22c55e', 3, 20000);
+        }, 4000);
         setAgentSession(false, 'tp-hit');
         // Annonce retournement — 1.5s après la fermeture
         setTimeout(() => {
@@ -1255,36 +1252,23 @@ function renderSignal(live) {
     || (live && live.coach && live.coach.agents && live.coach.agents.analysis)
     || {};
   const _srvHasRec = !!_srvRec.recommendation;
-  const _pineVerdict = String(
-    (live && live.signal && live.signal.verdict) ||
-    (coach.signal && coach.signal.verdict) ||
-    ''
-  ).toUpperCase();
   const rawRec = String(
     _srvRec.recommendation ||
-    _pineVerdict ||
+    (live && live.signal && live.signal.verdict) ||      // /coach/live: signal à la racine
+    (coach.signal && coach.signal.verdict) ||
     'ATTENTE'
   ).toUpperCase();
+  // Si server dit WAIT (conflit/filtre actif) → pas de fallback instantTrade
+  // Fallback instantTrade seulement si aucune recommendation serveur disponible
+  const rec = (_srvHasRec && rawRec === 'WAIT')
+    ? 'NEUTRE'  // server bloque → pas de PRE-ALERTE (même si instantTrade dit LONG)
+    : (rawRec === '' || rawRec === 'UNDEFINED')
+      ? String(it.direction || 'NEUTRE').toUpperCase()
+      : rawRec;
   // stateLabel — 3 niveaux: ATTENTE → PRE-ALERTE (signal en formation) → ENTRÉE VALIDÉE
   // canEnter: /coach/live a execution à la racine; /coach/realtime met execution dans coach
   const canEnter = (live && live.execution && live.execution.canEnter === true)
     || (coach.execution && coach.execution.canEnter === true);
-  // Quand canEnter=false ET agents.analysis contredit Pine → préférer Pine pour cohérence visuelle
-  // EXCEPTION: si la zone impose la direction (ZONE_ACHAT→BUY, ZONE_VENTE→SELL), le serveur a raison
-  const _unifiedZoneRS = String((live && live.unifiedPayload && live.unifiedPayload.zone) || (coach && coach.unifiedPayload && coach.unifiedPayload.zone) || '');
-  const _zoneEnforcedRS = (_unifiedZoneRS === 'ZONE_ACHAT' && (rawRec==='BUY'||rawRec==='LONG'))
-    || (_unifiedZoneRS === 'ZONE_VENTE' && (rawRec==='SELL'||rawRec==='SHORT'));
-  const _rsAgentPineDisagree = !_zoneEnforcedRS && _srvHasRec && _pineVerdict && rawRec !== 'WAIT' && _pineVerdict !== 'WAIT'
-    && (( (rawRec==='BUY'||rawRec==='LONG')   && (_pineVerdict==='SHORT'||_pineVerdict==='SELL') )
-     || ( (rawRec==='SELL'||rawRec==='SHORT') && (_pineVerdict==='LONG' ||_pineVerdict==='BUY')  ));
-  // Si server dit WAIT (conflit/filtre actif) → pas de fallback instantTrade
-  const rec = (_srvHasRec && rawRec === 'WAIT')
-    ? 'NEUTRE'
-    : (_rsAgentPineDisagree && !canEnter)
-      ? _pineVerdict    // Pine consensus prime sur agents structurel quand pas entrable
-      : (rawRec === '' || rawRec === 'UNDEFINED')
-        ? String(it.direction || 'NEUTRE').toUpperCase()
-        : rawRec;
   const isDirectional = rec === 'LONG' || rec === 'BUY' || rec === 'SHORT' || rec === 'SELL';
   const _isArmed = !!(state && state.armed);
   const stateLabel = canEnter
@@ -1382,16 +1366,6 @@ function renderBadges(health) {
       bb.className = 'bdg ' + (mt5 ? 'ok' : (health && health.ok ? 'warn' : 'bad'));
     }
   }
-  // dot-srv : serveur connecté → vert / erreur → rouge
-  var _dSrv = document.getElementById('dot-srv');
-  if (_dSrv) {
-    _dSrv.className = 'dot ' + (health && health.ok ? 'ok' : (health ? 'warn' : 'bad'));
-  }
-  // dot-ext : si bridge récent (<15s) → vert, sinon stale→warn, offline→bad
-  var _dExt = document.getElementById('dot-ext');
-  if (_dExt && !state._bridgeLastAt) {
-    _dExt.className = 'dot ' + (health && health.ok ? 'warn' : 'bad');
-  }
   if (health && health.activeContext) {
     if (!state.price && health.activeContext.price) {
       state.price = health.activeContext.price;
@@ -1431,35 +1405,16 @@ function renderTFCardsFromBridge(bd, currentPrice) {
     if (!at) return false; // jamais reçu → on ne sait pas, ne pas bloquer
     return (_now - at) > (_staleMs[tf] || 20*60000);
   }
-  // Dériver direction depuis RSI quand Pine n'a pas confirmé via webhook (_ltXUpdatedAt=null)
-  // Source unique: bridge TV — RSI≥55=ACHAT, RSI≤45=VENTE, sinon NEUTRE
-  function _lecFromRsi(rsi) {
-    var r = Number(rsi || 0);
-    if (r <= 0 || r > 100) return '';
-    if (r >= 55) return 'ACHAT';
-    if (r <= 45) return 'VENTE';
-    return 'NEUTRE';
-  }
-  function _bridgeLec(ltField, ltTimestamp, rsiVal) {
-    // Si Pine a confirmé la direction via webhook → utiliser telle quelle
-    if (ltTimestamp) return String(ltField || '').toUpperCase();
-    // Sinon → recalculer depuis RSI live (bridge TV pur, pas de données Yahoo stales)
-    return _lecFromRsi(rsiVal) || String(ltField || '').toUpperCase();
-  }
   var _tfMap = [
-    { tf: 'M1',  lecture: _bridgeLec(bd.lectureTech1, bd._lt1UpdatedAt, bd.rsiTf1), rsi: Number(bd.rsiTf1 || 0), score: Number(bd.scoreTech1 || 0), stale: _isTfStale('M1') },
-    { tf: 'M5',  lecture: _bridgeLec(bd.lectureTech2, bd._lt2UpdatedAt, bd.rsiTf2), rsi: Number(bd.rsiTf2 || 0), score: Number(bd.scoreTech2 || 0), stale: _isTfStale('M5') },
-    { tf: 'M15', lecture: _bridgeLec(bd.lectureTech3, bd._lt3UpdatedAt, bd.rsiTf3), rsi: Number(bd.rsiTf3 || 0), score: Number(bd.scoreTech3 || 0), stale: _isTfStale('M15') },
-    { tf: 'H1',  lecture: _bridgeLec(bd.lectureTech4, bd._lt4UpdatedAt, bd.rsiTf4), rsi: Number(bd.rsiTf4 || 0), score: Number(bd.scoreTech4 || 0), stale: _isTfStale('H1') }
+    { tf: 'M1',  lecture: String(bd.lectureTech1 || '').toUpperCase(), rsi: Number(bd.rsiTf1 || 0), score: Number(bd.scoreTech1 || 0), stale: _isTfStale('M1') },
+    { tf: 'M5',  lecture: String(bd.lectureTech2 || '').toUpperCase(), rsi: Number(bd.rsiTf2 || 0), score: Number(bd.scoreTech2 || 0), stale: _isTfStale('M5') },
+    { tf: 'M15', lecture: String(bd.lectureTech3 || '').toUpperCase(), rsi: Number(bd.rsiTf3 || 0), score: Number(bd.scoreTech3 || 0), stale: _isTfStale('M15') },
+    { tf: 'H1',  lecture: String(bd.lectureTech4 || '').toUpperCase(), rsi: Number(bd.rsiTf4 || 0), score: Number(bd.scoreTech4 || 0), stale: _isTfStale('H1') }
   ];
 
-  // Zone globale depuis bridge — UNIQUEMENT les flags inTop/inBot (prix dans la zone)
-  // zoneLiqHaute/Basse = zone existe au-dessus/dessous, PAS que le prix y est
-  var _inTop = bd.inTop === true;
-  var _inBot = bd.inBot === true;
-  // Zones de liquidité séparées (pour affichage cible, pas pour zone courante)
-  var _liqZoneHaute = bd.zoneLiqHaute === true;
-  var _liqZoneBasse = bd.zoneLiqBasse === true;
+  // Zone globale depuis bridge (blocs UNIQUEMENT — lignes orange exclues)
+  var _inTop = bd.inTop === true || bd.zoneLiqHaute === true;
+  var _inBot = bd.inBot === true || bd.zoneLiqBasse === true;
   var _liqH  = Number(bd.liqHigh || 0);
   var _liqL  = Number(bd.liqLow  || 0);
 
@@ -1510,25 +1465,24 @@ function renderTFCardsFromBridge(bd, currentPrice) {
     if (item.stale) {
       _zoneTxt = ''; // stale → pas d'indicateur de zone (direction inconnue)
     } else if (item.tf === 'M1') {
-      // Zone indicator M1 — source unique: inTop/inBot du bridge Pine (pas la direction)
-      // inTop=true = prix EN zone haute (SHORT valide) | inBot=true = prix EN zone basse (LONG valide)
-      if (_inTop && _isVente)        _zoneTxt = ' 🔴 HAUT'; // zone haute + SHORT = setup optimal
-      else if (_inBot && _isAchat)   _zoneTxt = ' 🟢 BAS';  // zone basse + LONG = setup optimal
-      else if (_inTop)               _zoneTxt = ' 🔴 HAUT'; // zone haute (direction peut varier)
-      else if (_inBot)               _zoneTxt = ' 🟢 BAS';  // zone basse (direction peut varier)
-      else if (_isVente || _isAchat) _zoneTxt = ' ⚠ MID';   // direction sans zone = MILIEU
-      else                           _zoneTxt = '';
+      // Zone indicator M1 — critique pour règle SNIPER/SCALPING
+      if (_isVente) {
+        _zoneTxt = ' 🔴 HAUT'; // zone haute = excès vendeur ✅ pour SHORT
+      } else if (_isAchat) {
+        _zoneTxt = ' 🟢 BAS';  // zone basse = excès acheteur ✅ pour LONG
+      } else {
+        _zoneTxt = ' ⚠ MID';   // milieu = INTERDIT entrée
+      }
     } else if (item.tf === 'M5' || item.tf === 'M15' || item.tf === 'H1') {
-      // Zone dérivée du RSI par TF uniquement (inTop/inBot = zone M1, pas applicable ici)
-      var _tfIsHigh = (_rsi > 0 && _rsi > 65);
-      var _tfIsLow  = (_rsi > 0 && _rsi < 35);
-      // Score TF: afficher pourcentage si disponible, sinon dériver du RSI
-      var _scPct = _sc > 0 ? Math.round(_sc) : null;
-      if (_scPct != null)              _zoneTxt = ' ' + _scPct + '% zone-' + (_scPct >= 55 ? 'H' : _scPct <= 45 ? 'B' : 'M');
-      else if (_tfIsHigh && _isVente)  _zoneTxt = ' zone-H';
-      else if (_tfIsLow && _isAchat)   _zoneTxt = ' zone-B';
-      else if (_tfIsHigh)              _zoneTxt = ' ↑haut';
-      else if (_tfIsLow)               _zoneTxt = ' ↓bas';
+      // Zone dérivée du RSI par TF — indépendant du TF où tourne le bridge Pine
+      // RSI > 65 → prix en zone haute sur ce TF | RSI < 35 → prix en zone basse
+      // Combiné avec inTop/inBot global Pine comme confirmation supplémentaire
+      var _tfIsHigh = (_rsi > 0 && _rsi > 65) || _inTop;
+      var _tfIsLow  = (_rsi > 0 && _rsi < 35) || _inBot;
+      if (_tfIsHigh && _isVente)   _zoneTxt = ' zone-H';
+      else if (_tfIsLow && _isAchat) _zoneTxt = ' zone-B';
+      else if (_tfIsHigh)           _zoneTxt = ' ↑haut';  // RSI haut, direction neutre ou opposée
+      else if (_tfIsLow)            _zoneTxt = ' ↓bas';   // RSI bas, direction neutre ou opposée
     }
     // Indicateur d'âge — montre depuis quand la donnée a été reçue (clôture barre Pine Script)
     // Ex: "3min" → barre fermée il y a 3 min, données de cette clôture
@@ -1570,10 +1524,11 @@ function renderTFCardsFromBridge(bd, currentPrice) {
                     : 'rgba(100,116,139,0.06)';
         _cardBorder = _dir === 'LONG' ? COL_LONG : _dir === 'SHORT' ? COL_SHORT : '#475569';
       } else {
-        // M1/M5/M15 — zone-aware depuis inTop/inBot bridge uniquement
+        // M1/M5/M15 — zone-aware
+        // Pour M1: zone dérivée de la lecture (VENTE=zone haute, ACHAT=zone basse)
         var _isM1 = item.tf === 'M1';
-        var _cardInTop = _inTop;  // UNIQUEMENT inTop Pine — pas de déduction depuis direction
-        var _cardInBot = _inBot;  // UNIQUEMENT inBot Pine — pas de déduction depuis direction
+        var _cardInTop = _inTop || (_isM1 && _dir === 'SHORT');
+        var _cardInBot = _inBot || (_isM1 && _dir === 'LONG');
         var _shortInZone = _dir === 'SHORT' && _cardInTop;
         var _longInZone  = _dir === 'LONG'  && _cardInBot;
         if (_shortInZone) {
@@ -1602,27 +1557,16 @@ function renderTFCardsFromBridge(bd, currentPrice) {
     if (card) { card.style.background = _cardBg; card.style.borderColor = _cardBorder; }
   });
 
-  // Mettre à jour consensus zone — source unique: inTop/inBot Pine (pas la direction M1)
-  // VENTE ne signifie pas zone haute — inTop=true le confirme
+  // Mettre à jour consensus zone (M1 zone check résumé)
   var _m1Item = _tfMap[0];
   var _m1Lec  = _m1Item.lecture;
-  var _m1DirVente = _m1Lec.includes('VENTE');
-  var _m1DirAchat = _m1Lec.includes('ACHAT');
-  // Zone confirmée = inTop/inBot Pine + direction alignée
-  var _m1Haut = _inTop;   // prix EN zone haute (Pine)
-  var _m1Bas  = _inBot;   // prix EN zone basse (Pine)
-  var _m1Mid  = !_m1Haut && !_m1Bas;
+  var _m1Haut = _m1Lec.includes('VENTE');
+  var _m1Bas  = _m1Lec.includes('ACHAT');
+  var _m1Mid  = !_m1Haut && !_m1Bas && _m1Lec.length > 0;
   var _msgEl  = $('multiTFMessage');
-  if (_msgEl) {
-    var _zoneMsg, _zonCol;
-    if (_m1Haut && _m1DirVente)       { _zoneMsg = '🔴 M1 ZONE HAUTE + SHORT — setup optimal'; _zonCol = COL_SHORT; }
-    else if (_m1Bas && _m1DirAchat)   { _zoneMsg = '🟢 M1 ZONE BASSE + LONG — setup optimal'; _zonCol = COL_LONG; }
-    else if (_m1Haut && _m1DirAchat)  { _zoneMsg = '⚠ M1 zone haute MAIS direction LONG — attendre'; _zonCol = '#f97316'; }
-    else if (_m1Bas && _m1DirVente)   { _zoneMsg = '⚠ M1 zone basse MAIS direction SHORT — attendre'; _zonCol = '#f97316'; }
-    else if (_m1Haut)                 { _zoneMsg = 'M1 zone HAUTE — direction en attente'; _zonCol = COL_SHORT; }
-    else if (_m1Bas)                  { _zoneMsg = 'M1 zone BASSE — direction en attente'; _zonCol = COL_LONG; }
-    else if (_m1DirVente || _m1DirAchat) { _zoneMsg = '⚠ M1 au MILIEU — zone non confirmée, entrée interdite'; _zonCol = '#f97316'; }
-    else                              { _zoneMsg = '⚠ M1 sans données — zone inconnue'; _zonCol = '#64748b'; }
+  if (_msgEl && _m1Lec) {
+    var _zoneMsg = _m1Haut ? 'M1 zone HAUTE — SHORT favorable' : _m1Bas ? 'M1 zone BASSE — LONG favorable' : '⚠ M1 au MILIEU — entrée interdite';
+    var _zonCol  = _m1Haut ? COL_SHORT : _m1Bas ? COL_LONG : '#f97316';
     _msgEl.style.display = 'block';
     _msgEl.textContent   = _zoneMsg;
     _msgEl.style.color   = _zonCol;
@@ -1638,10 +1582,35 @@ function renderTFCardsFromBridge(bd, currentPrice) {
 
   // Cache le bridge payload pour utilisation offline (renderMultiTF position mode)
   state._lastBridgeData = bd;
-  state._bridgeLastAt   = Date.now();
-  // dot-ext : bridge TV actif → vert
-  var _dExt = document.getElementById('dot-ext');
-  if (_dExt) { _dExt.className = 'dot ok'; }
+  state._lastBridgeDataAt = Date.now();
+
+  // ── BRIDGE INTELLIGENCE ROW — montre les signaux clés du bridge en temps réel ──
+  // Zone, rejets (bullRej/bearRej), macro dominance, anticipation Pine → ce que l'agent voit
+  (function _updateBridgeIntelRow() {
+    var _bir = $('bridgeIntelRow');
+    if (!_bir) return;
+    var _zone  = bd.inBot === true ? 'ZONE_BASSE' : bd.inTop === true ? 'ZONE_HAUTE' : 'HORS_ZONE';
+    var _zoneC = bd.inBot === true ? COL_LONG : bd.inTop === true ? COL_SHORT : '#64748b';
+    var _bRej  = bd.bullRej === true ? '<span style="color:#22c55e">▲REJ</span>' : '';
+    var _brRej = bd.bearRej === true ? '<span style="color:#ef4444">▼REJ</span>' : '';
+    var _mB    = Number(bd.macroBull || 0);
+    var _mBr   = Number(bd.macroBear || 0);
+    var _macroStr = (_mB > 0 || _mBr > 0)
+      ? (' DOM:' + (_mB > _mBr ? '<span style="color:#22c55e">BULL ' + Math.round(_mB) + '%</span>' : '<span style="color:#ef4444">BEAR ' + Math.round(_mBr) + '%</span>'))
+      : '';
+    var _ant   = String(bd.anticipationTexte || '').toUpperCase().replace(/_/g,' ');
+    var _antStr = _ant && _ant !== 'RAS' && _ant.length > 1
+      ? ' ANT:<span style="color:#f97316">' + _ant + '</span>'
+      : '';
+    var _midStr = bd.inPremium === true ? ' <span style="color:#ef4444">PREMIUM</span>'
+                : bd.inDiscount === true ? ' <span style="color:#22c55e">DISCOUNT</span>'
+                : '';
+    _bir.style.display = 'block';
+    _bir.style.borderLeftColor = _zoneC;
+    _bir.innerHTML = 'BRIDGE → <span style="color:' + _zoneC + ';font-weight:700">' + _zone + '</span>'
+      + (_bRej || _brRej ? ' | ' + [_bRej, _brRej].filter(Boolean).join(' ') : '')
+      + _macroStr + _antStr + _midStr;
+  })();
 }
 
 // ─── MULTI-TF ─────────────────────────────────────────────────────────────────
@@ -1885,10 +1854,9 @@ async function renderMultiTF() {
   // ── INJECTION LECTURE BRIDGE (Pine) — priorité sur recommendation agent ──
   // lecture_m5/m15/h1 = direction textuelle directe du script Pine (plus fiable)
   // rsi_m1/m5/m15/h1  = RSI réel par TF depuis robotV12
-  // Guard: skip si renderTFCardsFromBridge (Pass 1 SSE) vient de tourner dans les 3s
-  // Évite le clignotement du au double-rendu API vs SSE
-  var _bridgeAge = state._bridgeLastAt ? (Date.now() - state._bridgeLastAt) : 99999;
-  if (state.symbol === _renderSym && _bridgeAge > 3000) {
+  // On écrase seulement les cartes M5/M15/H1 quand lecture disponible et non vide.
+  // Guard: utiliser uniquement si symbole toujours correct
+  if (state.symbol === _renderSym) {
     var _ls = (state.live && state.live.coach && state.live.coach.signal && state.live.coach.signal.stats) || {};
     var _lecM1  = String(_ls.lecture_m1  || '').toUpperCase();
     var _lecM5  = String(_ls.lecture_m5  || '').toUpperCase();
@@ -2171,25 +2139,11 @@ function renderDecision(live) {
   // rec = direction affichée — source unique serveur déterministe
   // Si server dit WAIT → rec=NEUTRE (pas de couleur directionnelle sur le bouton)
   var _srvRecRaw = String(_srvAnalysis.recommendation || '').toUpperCase();
-  var _pineVerdictRaw = String(
-    (live && live.signal && live.signal.verdict) ||
-    (live && live.coach && live.coach.signal && live.coach.signal.verdict) ||
-    ''
-  ).toUpperCase();
-  // Quand canEnter=false ET conflit détecté ET agents.analysis contredit Pine → préférer Pine
-  // EXCEPTION: si zone impose la direction (ZONE_ACHAT→BUY, ZONE_VENTE→SELL) → serveur a raison
-  var _unifiedZoneEP = String((live && live.unifiedPayload && live.unifiedPayload.zone) || '');
-  var _zoneEnforcedEP = (_unifiedZoneEP === 'ZONE_ACHAT' && (_srvRecRaw === 'BUY' || _srvRecRaw === 'LONG'))
-    || (_unifiedZoneEP === 'ZONE_VENTE' && (_srvRecRaw === 'SELL' || _srvRecRaw === 'SHORT'));
-  var _agentPineDisagree = !_zoneEnforcedEP && _srvRecRaw && _pineVerdictRaw && _srvRecRaw !== 'WAIT' && _pineVerdictRaw !== 'WAIT'
-    && ((_srvRecRaw === 'BUY' && (_pineVerdictRaw === 'SHORT' || _pineVerdictRaw === 'SELL'))
-     || (_srvRecRaw === 'SELL' && (_pineVerdictRaw === 'LONG' || _pineVerdictRaw === 'BUY'))
-     || (_srvRecRaw === 'LONG' && (_pineVerdictRaw === 'SHORT' || _pineVerdictRaw === 'SELL'))
-     || (_srvRecRaw === 'SHORT' && (_pineVerdictRaw === 'LONG' || _pineVerdictRaw === 'BUY')));
-  var rec = (_srvRecRaw && _srvRecRaw !== 'WAIT' && !(_agentPineDisagree && !canEnter))
+  var rec = (_srvRecRaw && _srvRecRaw !== 'WAIT')
     ? _srvRecRaw
     : String(
-        _pineVerdictRaw ||
+        (live && live.signal && live.signal.verdict) ||           // /coach/live: signal à la racine
+        (live && live.coach && live.coach.signal && live.coach.signal.verdict) ||
         (live && live.instantTrade && live.instantTrade.direction) ||
         'NEUTRE'
       ).toUpperCase();
@@ -2676,6 +2630,37 @@ function renderBridgeOffState() {
   }
 }
 
+async function renderBridgeHealth() {
+  try {
+    const data = await fetchJson('/bridge/health');
+    const dot = (id, ok, warn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.background = ok ? '#22c55e' : (warn ? '#f97316' : '#ef4444');
+      el.style.boxShadow = ok ? '0 0 4px #22c55e88' : 'none';
+    };
+    dot('bh-tv',  data.chain.tradingview.ok,  data.chain.tradingview.ageSeconds < 60);
+    dot('bh-srv', data.chain.backend.ok,       false);
+    dot('bh-sse', data.chain.sseClients.ok,    false);
+
+    const lbl = document.getElementById('bh-label');
+    if (lbl) {
+      if (!data.chain.tradingview.ok) {
+        lbl.style.color = '#ef4444';
+        lbl.textContent = 'TV HORS LIGNE';
+      } else {
+        lbl.style.color = '#22c55e';
+        lbl.textContent = `${data.chain.tradingview.symbol || '--'} · ${data.chain.tradingview.ageSeconds}s`;
+      }
+    }
+  } catch(_) {
+    ['bh-tv','bh-srv','bh-sse'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.background = '#ef4444';
+    });
+  }
+}
+
 function formatNewsEvent(e) {
   // Étoiles
   var stars = Math.min(5, Math.max(0, Number(e.stars) || 0));
@@ -2744,6 +2729,11 @@ function formatNewsEvent(e) {
   '</div>';
 }
 
+// ── ANTI-SPAM NEWS — re-fetch max toutes les 5min, re-render uniquement si contenu change ──
+var _newsFetchLastAt  = 0;
+var _newsFetchCache   = { events: [], headlines: [] };
+var _newsRenderHash   = '';
+
 async function renderNews(live) {
   var root = $('newsList');
   if (!root) return;
@@ -2754,9 +2744,11 @@ async function renderNews(live) {
   var events = Array.isArray(newsAgent.upcomingEvents) ? newsAgent.upcomingEvents : [];
   var headlines = [];
 
-  // Appeler /news?symbol= pour obtenir events + headlines unifiés
+  // Appeler /news?symbol= pour obtenir events + headlines — MAX UNE FOIS PAR 5 MIN
+  var _nowNews = Date.now();
   var hasNewFormat = events.length > 0 && events[0] && (events[0].stars != null || events[0].bias != null);
-  if (!hasNewFormat) {
+  if (!hasNewFormat && (_nowNews - _newsFetchLastAt > 300000)) {
+    _newsFetchLastAt = _nowNews;
     try {
       var data = await fetchJson('/news?symbol=' + encodeURIComponent(state.symbol));
       // /news peut retourner events dans data.events OU data.news (selon la version serveur)
@@ -2779,10 +2771,23 @@ async function renderNews(live) {
         }
       } catch (_cal) {}
     }
+
+    // Mettre en cache pour les prochains 5 min
+    _newsFetchCache = { events: events.slice(), headlines: headlines.slice() };
+  } else if (!hasNewFormat) {
+    // Utiliser le cache — pas de re-fetch
+    events   = _newsFetchCache.events.slice();
+    headlines = _newsFetchCache.headlines.slice();
   }
 
   // Stocker pour le calcul du biais global
   state.newsEvents = events;
+
+  // ANTI-DOUBLON RENDER — ne re-rendre que si le contenu a changé
+  var _newHash = (events.slice(0,5).map(function(e){ return e.title||e.event||''; }).join('|'))
+               + '|' + (headlines.slice(0,3).map(function(h){ return h.title||''; }).join('|'));
+  if (_newHash === _newsRenderHash) return; // rien de nouveau → skip le render complet
+  _newsRenderHash = _newHash;
 
   // ALERT: NEWS_HIGH — event avec impact fort dans les 30 prochaines minutes
   events.forEach(function(ev) {
@@ -3132,40 +3137,27 @@ function renderArmedBanner(mode, exec, sig) {
   var text, bg, border, color;
 
   if (mode === 'entering') {
-    text   = '⚡ SIGNAL VALIDÉ — EXÉCUTION IMMINENTE';
+    text   = isShort ? '▼ ça va descendre — j\'entre maintenant' : '▲ ça va monter — j\'entre maintenant';
     bg     = isShort ? 'rgba(239,68,68,0.25)' : 'rgba(34,197,94,0.25)';
     border = isShort ? '#ef4444' : '#22c55e';
     color  = isShort ? '#ef4444' : '#22c55e';
 
   } else if (mode === 'imminent') {
-    // canEnter=true mais watchdog n'a pas encore déclenché
-    var _dir = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '';
-    text   = '🟢 SIGNAL ' + (_dir ? _dir + ' ' : '') + 'DÉTECTÉ — EN VALIDATION FINALE';
+    var _confImm = conf > 0 ? ' (' + Math.round(conf) + '%)' : '';
+    text   = isShort
+      ? '▼ ça va descendre — je vais entrer bientôt' + _confImm
+      : '▲ ça va monter — je vais entrer bientôt' + _confImm;
     bg     = isShort ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)';
     border = isShort ? '#ef4444' : '#22c55e';
     color  = isShort ? '#ef4444' : '#22c55e';
 
   } else if (mode === 'approaching') {
-    // Conditions proches (conf > 50) mais pas encore prêtes
-    // RÈGLE: ne jamais afficher "Entrée validée" ici — c'est faux, l'entrée N'EST PAS encore faite
     var _confStr = conf > 0 ? ' (' + Math.round(conf) + '%)' : '';
-    var _rawReason = (exec && exec.reason) ? exec.reason : '';
-    // Si le serveur dit "validée" mais qu'on est en approaching → c'est que SL/TP absents ou direction floue
-    // Dans ce cas, afficher la vraie raison du blocage au lieu du message contradictoire
-    var _approachReason;
-    if (_rawReason.toLowerCase().includes('valid') || _rawReason.toLowerCase().includes('entrée')) {
-      // canEnter=true côté serveur mais watchdog bloqué — identifier pourquoi
-      var _slOk = exec && Number(exec.sl) > 0;
-      var _tpOk = exec && Number(exec.tp) > 0;
-      if (!_slOk || !_tpOk) {
-        _approachReason = '\nNiveaux SL/TP en cours de chargement — patiente';
-      } else {
-        _approachReason = '\nConfirmation finale en cours — signal presque prêt';
-      }
-    } else {
-      _approachReason = _rawReason ? '\n' + _rawReason.split('—')[0].trim() : '';
-    }
-    text   = '⏳ SIGNAL EN APPROCHE' + _confStr + _approachReason;
+    text   = isShort
+      ? '▼ ça va descendre — je prépare l\'entrée' + _confStr
+      : isLong
+        ? '▲ ça va monter — je prépare l\'entrée' + _confStr
+        : '⏳ retournement en cours — conditions en approche' + _confStr;
     bg     = 'rgba(234,179,8,0.15)';
     border = '#d97706';
     color  = '#fbbf24';
@@ -3199,26 +3191,19 @@ function renderArmedBanner(mode, exec, sig) {
     var _wSrvBlock = (!_wSrvExec.canEnter && _wSrvExec.reason)
       ? '⛔ ' + _wSrvExec.reason.split('|')[0].trim().substring(0, 90)
       : '';
-    // Données bridge brutes pour l'état réel
+    // Données bridge brutes pour contexte zone
     var _wBd = state._lastBridgeData;
-    var _wBridgeLine = '';
+    var _wZoneTxt = '';
     if (_wBd) {
-      var _wZoneStr = _wBd.inBot === true ? 'Zone BASSE' : _wBd.inTop === true ? 'Zone HAUTE' : 'Hors zone';
-      var _wDirStr = [
-        _wBd.lectureTech1 ? 'M1:' + String(_wBd.lectureTech1).replace('ACHAT_FORT','A+').replace('ACHAT','A').replace('VENTE_FORTE','V+').replace('VENTE','V').replace('NEUTRE','N') : '',
-        _wBd.lectureTech2 ? 'M5:' + String(_wBd.lectureTech2).replace('ACHAT_FORT','A+').replace('ACHAT','A').replace('VENTE_FORTE','V+').replace('VENTE','V').replace('NEUTRE','N') : '',
-        _wBd.lectureTech3 ? 'M15:' + String(_wBd.lectureTech3).replace('ACHAT_FORT','A+').replace('ACHAT','A').replace('VENTE_FORTE','V+').replace('VENTE','V').replace('NEUTRE','N') : '',
-        _wBd.lectureTech4 ? 'H1:' + String(_wBd.lectureTech4).replace('ACHAT_FORT','A+').replace('ACHAT','A').replace('VENTE_FORTE','V+').replace('VENTE','V').replace('NEUTRE','N') : ''
-      ].filter(Boolean).join(' ');
-      _wBridgeLine = _wZoneStr + (_wDirStr ? ' | ' + _wDirStr : '');
+      _wZoneTxt = _wBd.inBot === true
+        ? 'Je surveille la zone basse — signal haussier en formation'
+        : _wBd.inTop === true
+          ? 'Je surveille la zone haute — signal baissier en formation'
+          : 'Hors zone — j\'attends que le prix arrive en zone';
     }
-    var _wParts = ['👁 EN ATTENTE — Robot armé, surveillance active'];
-    if (_wBridgeLine) _wParts.push(_wBridgeLine);
-    if (_wTfLine) _wParts.push(_wTfLine);
-    if (_wSetup)  _wParts.push(_wSetup);
-    if (_wLevels) _wParts.push(_wLevels);
-    if (_wSrvBlock) _wParts.push(_wSrvBlock);
-    else _wParts.push('J\'entre automatiquement quand toutes les conditions sont réunies.');
+    var _wParts = ['je surveille — j\'entre automatiquement quand c\'est bon'];
+    if (_wZoneTxt) _wParts.push(_wZoneTxt);
+    if (_wLevels)  _wParts.push(_wLevels);
     text   = _wParts.join('\n');
     bg     = 'rgba(59,130,246,0.12)';
     border = '#3b82f6';
@@ -3440,10 +3425,10 @@ function renderFutureEntryBanner(exec, sig, isEntered, rec) {
     color  = '#94a3b8';
 
   } else if (canEnter) {
-    // LIVE confirmé par le serveur — toutes conditions validées, entrée exécutable maintenant
-    var _dir = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '';
-    var _liveQual = _qualLabel ? ' [' + _qualLabel + ']' : '';
-    text   = '📡 SIGNAL LIVE' + (_dir ? ' — ' + _dir : '') + _liveQual + '\nConditions réunies — armer le robot pour exécution auto';
+    var _confLive = _confDisplay > 0 ? ' (' + _confDisplay + '%)' : '';
+    text   = isShort
+      ? '▼ ça va descendre — appuie sur ENTRER pour que j\'entre' + _confLive
+      : '▲ ça va monter — appuie sur ENTRER pour que j\'entre' + _confLive;
     bg     = isShort ? 'rgba(239,68,68,0.20)' : 'rgba(34,197,94,0.20)';
     border = isShort ? '#ef4444' : '#22c55e';
     color  = isShort ? '#fca5a5' : '#86efac';
@@ -3464,43 +3449,27 @@ function renderFutureEntryBanner(exec, sig, isEntered, rec) {
     color  = '#fde047';
 
   } else if (_tradeStatus === 'WAIT') {
-    // WAIT : setup trop loin du prix — non exécutable
-    var _dirW = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '';
-    text   = '🚫 SETUP NON EXÉCUTABLE' + (_dirW ? ' — ' + _dirW : '') + '\nPrix trop loin de la zone d\'entrée — attendre alignement';
+    text   = isShort
+      ? '▼ signal baissier — j\'attends que le prix arrive en zone (' + _confDisplay + '%)'
+      : '▲ signal haussier — j\'attends que le prix arrive en zone (' + _confDisplay + '%)';
     bg     = 'rgba(100,116,139,0.15)';
     border = '#475569';
     color  = '#94a3b8';
 
   } else if (_tradeStatus === 'CONDITIONAL') {
-    // CONDITIONAL : setup en attente d'un retour en zone
-    var _dirC = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '';
-    var _condQual = _qualLabel ? ' [' + _qualLabel + ']' : '';
-    text   = '⏳ SETUP CONDITIONNEL' + (_dirC ? ' — ' + _dirC : '') + _condQual + ' (' + _confDisplay + '%)\nEntrée non exécutable immédiatement — attendre retour en zone';
+    text   = isShort
+      ? '▼ ça va descendre — j\'attends le retour en zone (' + _confDisplay + '%)'
+      : '▲ ça va monter — j\'attends le retour en zone (' + _confDisplay + '%)';
     bg     = 'rgba(234,179,8,0.12)';
     border = '#d97706';
     color  = '#fde047';
 
   } else {
-    // LIVE côté serveur mais canEnter pas encore vrai — afficher la raison exacte du blocage
-    var _dirAv = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '';
-    var _approachQual = _qualLabel ? ' [' + _qualLabel + ']' : '';
-    var _blockReasonRaw = (exec && exec.reason)
-      || (state.live && state.live.tradeReasoning && state.live.tradeReasoning.management && state.live.tradeReasoning.management.nextAction)
-      || 'Conditions en cours de validation';
-    // Ne jamais afficher "Entrée validée" dans un banner "EN APPROCHE" — c'est contradictoire
-    // Si le serveur dit "validée" ici c'est que SL/TP manquent encore côté watchdog
-    var _blockReason;
-    if (_blockReasonRaw.toLowerCase().includes('valid') || _blockReasonRaw.toLowerCase().includes('entrée')) {
-      var _slReady = exec && Number(exec.sl) > 0;
-      var _tpReady = exec && Number(exec.tp) > 0;
-      _blockReason = (!_slReady || !_tpReady)
-        ? 'SL/TP en cours de chargement — confirmation dans quelques secondes'
-        : 'Confirmation finale en cours — signal presque prêt';
-    } else {
-      _blockReason = _blockReasonRaw;
-    }
-    if (_blockReason.length > 90) _blockReason = _blockReason.substring(0, 87) + '…';
-    text   = '⏳ SETUP EN APPROCHE' + (_dirAv ? ' — ' + _dirAv : '') + _approachQual + ' (' + _confDisplay + '%)\n' + _blockReason;
+    text   = isShort
+      ? '▼ retournement baissier en cours (' + _confDisplay + '%) — je valide les dernières conditions'
+      : isLong
+        ? '▲ retournement haussier en cours (' + _confDisplay + '%) — je valide les dernières conditions'
+        : '⏳ signal en cours de formation (' + _confDisplay + '%)';
     bg     = 'rgba(59,130,246,0.16)';
     border = '#3b82f6';
     color  = '#bfdbfe';
@@ -3553,11 +3522,11 @@ function renderFutureEntryBanner(exec, sig, isEntered, rec) {
         var _rr = (_hasSl && _hasTp && Math.abs(_tpPel - _entryPel) > 0 && Math.abs(_slPel - _entryPel) > 0)
                   ? (Math.abs(_tpPel - _entryPel) / Math.abs(_slPel - _entryPel)).toFixed(1)
                   : null;
-        var _line = _pelPrefix + _pelDir + '  Zone ~' + _fmtPel(_entryPel);
-        if (_hasSl) _line += '  SL ' + _fmtPel(_slPel);
-        if (_hasTp) _line += '  TP ' + _fmtPel(_tpPel);
-        if (_rr)    _line += '  (R:R ' + _rr + ')';
-        pelEl.textContent = _line;
+        var _lineDir = _pelPrefix + _pelDir;
+        var _lineEntry = 'Entrée   ' + _fmtPel(_entryPel);
+        var _lineSl  = _hasSl ? 'SL         ' + _fmtPel(_slPel) : '';
+        var _lineTp  = _hasTp ? 'TP         ' + _fmtPel(_tpPel) + (_rr ? '   (R:R ' + _rr + ')' : '') : '';
+        pelEl.textContent = [_lineDir, _lineEntry, _lineSl, _lineTp].filter(Boolean).join('\n');
       } else {
         pelEl.textContent = _pelPrefix + _pelDir + '  — niveaux en cours de calcul';
       }
@@ -3692,7 +3661,29 @@ function renderBiasBanner(live, newsEvents) {
   var _gNeedle = document.getElementById('gaugeNeedle');
   var _gLabel  = document.getElementById('gaugeLabel');
   if (_gNeedle || _gLabel) {
-    if (state._lastSnapshots && state._lastSnapshots.length > 0) {
+    // Priorité 1: bridge live (temps réel, <15s) → jauge la plus précise possible
+    var _bdGauge   = state._lastBridgeData;
+    var _bdGaugeMs = state._lastBridgeDataAt ? (Date.now() - state._lastBridgeDataAt) : Infinity;
+    if (_bdGauge && _bdGaugeMs < 15000) {
+      function _lecToRec(lec) {
+        var l = String(lec || '').toUpperCase();
+        return l.includes('ACHAT') ? 'LONG' : l.includes('VENTE') ? 'SELL' : 'WAIT';
+      }
+      var _bridgeSnaps = [
+        { tf: 'M1',  rec: _lecToRec(_bdGauge.lectureTech1), strength: Number(_bdGauge.scoreTech1 || 50), directional: !String(_bdGauge.lectureTech1 || '').toUpperCase().includes('NEUTRE') },
+        { tf: 'M5',  rec: _lecToRec(_bdGauge.lectureTech2), strength: Number(_bdGauge.scoreTech2 || 50), directional: !String(_bdGauge.lectureTech2 || '').toUpperCase().includes('NEUTRE') },
+        { tf: 'M15', rec: _lecToRec(_bdGauge.lectureTech3), strength: Number(_bdGauge.scoreTech3 || 50), directional: !String(_bdGauge.lectureTech3 || '').toUpperCase().includes('NEUTRE') },
+        { tf: 'H1',  rec: _lecToRec(_bdGauge.lectureTech4), strength: Number(_bdGauge.scoreTech4 || 50), directional: !String(_bdGauge.lectureTech4 || '').toUpperCase().includes('NEUTRE') }
+      ];
+      var _gPulse = computeGaugePulse(_bridgeSnaps);
+      if (_gNeedle) _gNeedle.style.left = _gPulse.needlePos + '%';
+      if (_gLabel) {
+        var _gTxt = _gPulse.stateLabel ? _gPulse.label + ' \u00b7 ' + _gPulse.stateLabel : _gPulse.label + ' \u00b7 LIVE';
+        _gLabel.textContent = _gTxt;
+        _gLabel.style.color = _gPulse.color;
+      }
+    } else if (state._lastSnapshots && state._lastSnapshots.length > 0) {
+      // Priorité 2: snapshots ANALYSER
       var _gPulse = computeGaugePulse(state._lastSnapshots);
       if (_gNeedle) _gNeedle.style.left = _gPulse.needlePos + '%';
       if (_gLabel) {
@@ -3838,30 +3829,15 @@ async function loadRealtimePack() {
   var _apiStats = live && live.coach && live.coach.signal && live.coach.signal.stats;
   if (_apiStats) {
     // Reconstruire un bridgeData depuis les stats API pour réutiliser renderTFCardsFromBridge
-    // Préserver les champs bridge (inTop/inBot/zoneLiq/bullRej/etc.) depuis le dernier payload SSE
-    var _prevApiBd = state._lastBridgeData || {};
     var _apiBd = {
       lectureTech1: _apiStats.lecture_m1  || '', lectureTech2: _apiStats.lecture_m5  || '',
       lectureTech3: _apiStats.lecture_m15 || '', lectureTech4: _apiStats.lecture_h1  || '',
       rsiTf1: _apiStats.rsi_m1  || 0, rsiTf2: _apiStats.rsi_m5  || 0,
       rsiTf3: _apiStats.rsi_m15 || 0, rsiTf4: _apiStats.rsi_h1  || 0,
-      scoreTech1: _apiStats.score_m1  || _prevApiBd.scoreTech1  || 0,
-      scoreTech2: _apiStats.score_m5  || _prevApiBd.scoreTech2  || 0,
-      scoreTech3: _apiStats.score_m15 || _prevApiBd.scoreTech3  || 0,
-      scoreTech4: _apiStats.score_h1  || _prevApiBd.scoreTech4  || 0,
-      // inTop/inBot viennent du bridge Pine — pas de l'API stats → toujours préserver
-      inTop: _apiStats.inTop != null ? _apiStats.inTop : _prevApiBd.inTop,
-      inBot: _apiStats.inBot != null ? _apiStats.inBot : _prevApiBd.inBot,
-      zoneLiqHaute: _prevApiBd.zoneLiqHaute,
-      zoneLiqBasse:  _prevApiBd.zoneLiqBasse,
-      liqHigh: _apiStats.liqHigh || _prevApiBd.liqHigh || 0,
-      liqLow:  _apiStats.liqLow  || _prevApiBd.liqLow  || 0,
-      macroBull: _prevApiBd.macroBull || 0, macroBear: _prevApiBd.macroBear || 0,
-      bullRej: _prevApiBd.bullRej, bearRej: _prevApiBd.bearRej,
-      anticipationTexte: _prevApiBd.anticipationTexte || '',
-      anticipationForce: _prevApiBd.anticipationForce || 0,
-      verdict: _prevApiBd.verdict || '', signalBridge: _prevApiBd.signalBridge || '',
-      rangeHigh: _prevApiBd.rangeHigh || 0, rangeLow: _prevApiBd.rangeLow || 0,
+      scoreTech1: _apiStats.score_m1  || 0, scoreTech2: _apiStats.score_m5  || 0,
+      scoreTech3: _apiStats.score_m15 || 0, scoreTech4: _apiStats.score_h1  || 0,
+      inTop: _apiStats.inTop || false, inBot: _apiStats.inBot || false,
+      liqHigh: _apiStats.liqHigh || 0, liqLow: _apiStats.liqLow || 0
     };
     // Utiliser uniquement si au moins une lecture non vide (données bridge réelles)
     var _hasAnyLec = _apiBd.lectureTech1 || _apiBd.lectureTech2 || _apiBd.lectureTech3 || _apiBd.lectureTech4;
@@ -6194,40 +6170,26 @@ async function refreshAll() {
     if (_febEl) _febEl.style.display = 'none'; // masqué quand position active
     if (_eb && !_eb.disabled) { _eb.style.cssText = ''; _eb.textContent = '▶ ENTRER'; }
     // ── COACH STREAM GUARD — ne jamais lâcher le coach pendant un trade ──────
-    // Si le stream est tombé (null, CLOSED ou CONNECTING depuis trop longtemps), on reconnecte
     if (!coachSse || coachSse.readyState === EventSource.CLOSED) {
       connectCoachStream(state.symbol);
     }
-    // ── REVERSAL RISK CHECK — hiérarchie TF (M1=timing, M5=confirm, M15/H1=contexte) ──
-    // Lit state._lastBridgeData (live 2-3s). M1 seul → alerte vocale. M5+contexte → action.
     checkReversalRiskDuringPosition().catch(function(){});
-    // ── TRAIL SL PROGRESSIF — 30%→BE, 50%→30%, 70%→50%, 85%→70% — cooldown 60s ──
     trailStopLossDuringPosition().catch(function(){});
-    // ── H4 CONTEXT — vision large toutes les 5 min (potentiel restant, zones larges) ──
-    // H4 = gestion uniquement, jamais entrée. Vocal + log si changement significatif.
     checkH4ContextDuringPosition().catch(function(){});
-    // ── NEWS GUARD EN POSITION — protection avant news HIGH impact (toutes les 2 min) ──
-    // Profit → BE+. Neutre → SL réduit. Perte → vocal seul, pas de sortie panique.
     checkNewsImpactDuringPosition().catch(function(){});
-    // ── MONITEUR NEWS LIVE — breaking news + tweets pendant la position ────────
-    startLiveNewsMonitor(); // idempotent — ne redémarre pas si déjà actif
+    startLiveNewsMonitor();
   } else if (state.armed || _tsPhase === 'ARMED') {
-    // Armé — masquer la proposition setup (elle a été acceptée ou robot armé manuellement)
     _hideSetupProposal();
-    // S'assurer que le bouton affiche ANNULER (watchdog gère le banner)
-    if (_febEl) _febEl.style.display = 'none'; // masqué quand armé (armedBanner prend le relais)
+    if (_febEl) _febEl.style.display = 'none';
     if (_eb) { _eb.style.cssText = 'background:#d97706;color:#000;font-weight:700;font-size:11px;'; _eb.textContent = '🤖 LIA SURVEILLE — ANNULER'; }
-    if (!_entryWatchdog) {
-      // Watchdog arrêté (ex: reload page) — relancer si state dit ARMED
-      startEntryWatchdog();
-    }
+    if (!_entryWatchdog) { startEntryWatchdog(); }
   } else {
-    // Pas armé, pas de position — banner off, bouton normal
     renderArmedBanner('off', {}, {});
     if (_eb && !_eb.disabled && (_eb.textContent.includes('ANNULER') || _eb.textContent.includes('SURVEILLE'))) {
       _eb.style.cssText = ''; _eb.textContent = '▶ ENTRER';
     }
   }
+  renderBridgeHealth();
   } catch(_rfErr) { /* erreur silencieuse — ne pas casser l'UI */ }
   finally { _refreshInFlight = false; }
 }
@@ -6523,9 +6485,7 @@ function startContinuousScan() {
     var _sc4       = Number(_bd.scoreTech4 || 0);
     var _score     = Math.round(_sc3 || _sc4 || 0);
     var _antTxt    = String(_bd.anticipationTexte || '').toUpperCase();
-    var _isBosVoc  = _antTxt.includes('RET_') || _antTxt.includes('PRE_ALERTE');
-    var _isSniperSwVoc = _mode === 'SNIPER' && (_bullRej || _bearRej);
-    var _thresh    = (_mode === 'SCALP' || _mode === 'SCALPER') ? 60 : _isBosVoc ? 62 : _isSniperSwVoc ? 65 : 70;
+    var _thresh    = _mode === 'SCALP' || _mode === 'SCALPER' ? 60 : 70;
 
     // ── Drapeaux logiques ──────────────────────────────────────────────────
     var _isZone      = _inTop || _inBot || _liqH || _liqB;
@@ -7382,19 +7342,43 @@ var _wdLastM1CandleId = 0; // floor(Date.now()/60000) — change à chaque clôt
 // Anti-spam vocal — parle uniquement quand la condition bloquante change
 var _wdLastBlockingKey = ''; // ex: 'ZONE', 'M5', 'M1', 'PULSION', 'OK'
 
+// ── FRÉQUENCE DYNAMIQUE WATCHDOG ──────────────────────────────────────────────
+// Normal (hors zone): 3000ms | Proche zone (<1%): 1500ms | Zone active: 800ms
+// Le watchdog accélère dès que le prix approche d'un niveau clé → pas de tick raté
+function _getWatchdogInterval() {
+  var _bd = state._lastBridgeData;
+  if (!_bd) return 3000;
+  // Zone active → priorité maximale
+  if (_bd.inTop === true || _bd.inBot === true) return 800;
+  // Calcul proximité depuis liqHigh/liqLow (niveaux Pine)
+  var _px  = Number(state.price || 0);
+  var _lH  = Number(_bd.liqHigh || 0);
+  var _lL  = Number(_bd.liqLow  || 0);
+  if (_px > 0) {
+    var _distH = _lH > 0 ? Math.abs(_px - _lH) / _px : 1;
+    var _distL = _lL > 0 ? Math.abs(_px - _lL) / _px : 1;
+    var _minDist = Math.min(_distH, _distL);
+    if (_minDist < 0.002) return 1000; // < 0.2% de la zone → accélère
+    if (_minDist < 0.005) return 1500; // < 0.5% → semi-rapide
+  }
+  return 3000; // loin → rythme normal
+}
+
 function startEntryWatchdog() {
   stopEntryWatchdog();
   _entryWatchdogAttempts = 0;
+  var _wdStartedAt = Date.now(); // repère temporel — expiry basé sur durée réelle (pas nb ticks)
   startLiveNewsMonitor(); // démarre le moniteur news live dès l'armement
   // ── SURVEILLANCE VOCALE — coach parle en continu pendant l'armement ───────
-  // Sans ça : le watchdog tourne mais le robot est muet → l'utilisateur ne sait pas ce qui se passe
-  // Fréquence : 2min pre-entrée (SCALP/SNIPER/SWING hérite du _buildContinuousScanVocal)
   if (!_continuousScanActive) startContinuousScan();
-  _entryWatchdog = setInterval(async function() {
+
+  // ── BOUCLE DYNAMIQUE — setTimeout récursif pour fréquence adaptative ──────
+  var _wdStep = async function() {
+    if (!_entryWatchdog) return; // watchdog arrêté → sort
     _entryWatchdogAttempts++;
-    // Désarmer automatiquement si la position est déjà entrée ou si trop long
+    // Désarmer automatiquement si la position est déjà entrée ou si trop long (10 min réels)
     if (state.tradeState && state.tradeState.entered) { stopEntryWatchdog(); return; }
-    if (_entryWatchdogAttempts > _WATCHDOG_MAX_ATTEMPTS) {
+    if (Date.now() - _wdStartedAt > 10 * 60 * 1000) {
       stopEntryWatchdog();
       disarmRobot('Temps dépassé (10 min). Arme désactivée.');
       return;
@@ -7559,6 +7543,9 @@ function startEntryWatchdog() {
       // FIX: _sniperBridgeOk était utilisé comme bypass du serveur → entrées sans validation complète.
       // Désormais: toujours attendre canEnter=true du serveur, pour TOUS les modes (SNIPER inclus).
       var _sniperBridgeOk = _userModeIsSniper && _m5Conf && _m1Timing && _zoneOk && _pulsionOk && _ctxOk;
+      // SNIPER bypass: si zone + pulsion + M5 confirmés, le conflit TF n'est plus bloquant.
+      // Signal fort 90+/100 en zone basse avec rejet = entrée SNIPER autorisée même si H1 diverge.
+      var _conflictBlocking = _wdConflict && !(_userModeIsSniper && _m5Conf && _zoneOk && _pulsionOk);
       // ── GARDE ZONE — _zoneOk devient bloquant quand le bridge a des données zone ─
       // Si bridge fournit inTop/inBot (non-null) → la zone DOIT être correcte avant d'entrer.
       // Si bridge n'a pas de données zone → le serveur a déjà validé via RSI fallback → on lui fait confiance.
@@ -7852,20 +7839,20 @@ function startEntryWatchdog() {
       // ── ÉTAT WATCHDOG — label dynamique pour bannière + vocal ───────────────
       var _wdStateLabel = '';
 
-      if (_wdConflict) {
+      if (_conflictBlocking) {
         _wdMode = 'watching'; _wdBridgeConfirmCount = 0;
-        _wdStateLabel = 'CONFLIT TF : Signaux contradictoires';
+        _wdStateLabel = 'Signal présent — j\'attends que les indicateurs s\'alignent';
         var _conflMsg = [
-          '⚠️ CONFLIT INDICATEURS\n' + _tfStatusLine + '\nSignaux contradictoires — je refuse d\'entrer en conflit. J\'attends la résolution.',
-          '⚠️ CONFLIT — entrée suspendue\n' + _tfStatusLine + '\nQuand les TF divergent, je n\'agis pas. Je rescanne toutes les 3s.',
-          '⚠️ INDICATEURS EN CONFLIT\n' + _tfStatusLine + '\nJ\'ai besoin d\'un consensus clair avant d\'entrer. Patience.'
+          'je surveille — ' + _dirLabel + ' possible mais les indicateurs divergent encore\n' + _tfStatusLine + '\nDès que c\'est aligné, j\'entre.',
+          'retournement ' + _dirLabel + ' en formation — j\'attends la confirmation\n' + _tfStatusLine + '\nJe rescanne toutes les 3s.',
+          'signal ' + _dirLabel + ' détecté — pas encore aligné sur tous les TF\n' + _tfStatusLine + '\nJe surveille et j\'entre dès que c\'est propre.'
         ][_wdCyc];
         setCoachText(_conflMsg, '#f97316', 5, 6000);
         if (_wdShouldSpeak) {
           _wdLastSpeakAt = _wdNowMs; _wdLastSpeakState = _wdStateNow;
-          speak(['Conflit détecté. Les indicateurs divergent. Je reste en attente jusqu\'à résolution.',
-                 'Des signaux contradictoires sont présents sur les timeframes. Je n\'agis jamais en conflit.',
-                 'Signal incohérent. Dès que les TF convergent vers la même direction, je réactive la surveillance.'][_wdTotalSpeaks++ % 3]);
+          speak(['Signal ' + (_isLong ? 'haussier' : 'baissier') + ' présent mais les indicateurs ne sont pas encore tous alignés. J\'attends la convergence avant d\'entrer.',
+                 'Retournement ' + (_isLong ? 'haussier' : 'baissier') + ' en formation. Je surveille. Dès que c\'est propre, j\'entre.',
+                 'Je vois un signal ' + (_isLong ? 'long' : 'short') + ' mais je ne rentre pas tant que ce n\'est pas confirmé.'][_wdTotalSpeaks++ % 3]);
         }
 
       } else if (!_bd) {
@@ -8176,7 +8163,7 @@ function startEntryWatchdog() {
         Object.assign({}, exec, { reason: _wdStateLabel }),
         Object.assign({}, sig, { confidence: _wdRealConf }));
 
-      if (_canEnterFinal && !_wdConflict && _effectiveSl > 0 && _effectiveTp > 0 && _effectiveDirOk) {
+      if (_canEnterFinal && !_conflictBlocking && _effectiveSl > 0 && _effectiveTp > 0 && _effectiveDirOk) {
         // ═══════════════════════════════════════════════════════════════════════
         // ENTRÉE PROTÉGÉE — gardes obligatoires (A→I)
         // Variables calculées en haut du tick — pas de double-lecture bridge
@@ -8472,20 +8459,28 @@ function startEntryWatchdog() {
         // Pause 2.5s — laisse l'utilisateur entendre l'annonce complète avant entrée
         await new Promise(function(r){ setTimeout(r, 2500); });
         await _executeAutoEntry(cr);
-      } else if (_wdConflict && exec.canEnter === true) {
-        // Signal canEnter=true mais conflit détecté côté client → avertir, ne pas entrer
-        setCoachText('⚠️ Conflit détecté — entrée bloquée malgré canEnter. Attendre résolution.', '#f97316', 5, 8000);
+      } else if (_conflictBlocking && exec.canEnter === true) {
+        setCoachText('ça va ' + (_isLong ? 'monter' : 'descendre') + ' — j\'attends l\'alignement final avant d\'entrer', '#f97316', 5, 8000);
       }
       // Mémoriser le blocage de ce tick — évite répétition vocale sur même blocage
       if (typeof _wdBlockingKey !== 'undefined') _wdLastBlockingKey = _wdBlockingKey;
     } catch(_) {
       // Ignorer les erreurs réseau passagères — le watchdog continue
     }
-  }, 3000);
+    // Planifier le prochain tick avec fréquence adaptée à la proximité de zone
+    // Guard: si stopEntryWatchdog() a été appelé pendant l'await → _entryWatchdog = null → sortir
+    if (_entryWatchdog !== null) {
+      var _nextDelay = _getWatchdogInterval();
+      _entryWatchdog = setTimeout(_wdStep, _nextDelay);
+    }
+  };
+
+  // Premier tick dans 3s (laisser l'initialisation 8s se dérouler normalement)
+  _entryWatchdog = setTimeout(_wdStep, 3000);
 }
 
 function stopEntryWatchdog() {
-  if (_entryWatchdog) { clearInterval(_entryWatchdog); _entryWatchdog = null; }
+  if (_entryWatchdog) { clearTimeout(_entryWatchdog); _entryWatchdog = null; }
 }
 
 async function disarmRobot(reason) {
@@ -8843,7 +8838,7 @@ async function sendTradeAction(action) {
     if (_armCtx.entry > 0) _armSpeak += 'Zone cible: ' + _armCtx.fmt(_armCtx.entry) + '. ';
     if (_armCtx.sl > 0)    _armSpeak += 'Stop: ' + _armCtx.fmt(_armCtx.sl) + '. ';
     if (_armCtx.tp > 0)    _armSpeak += 'Objectif: ' + _armCtx.fmt(_armCtx.tp) + '. ';
-    _armSpeak += 'Je surveille les conditions toutes les 3 secondes et j\'entre seul quand c\'est propre. Tu n\'as rien à faire.';
+    _armSpeak += 'Je surveille les conditions en continu — rythme adapté à la proximité de zone. J\'entre seul quand c\'est propre. Tu n\'as rien à faire.';
     speak(_armSpeak);
     var _armCurPx = state.price > 0 ? state.price : 0;
     var _armTargetPx = _armCtx.entry > 0 ? _armCtx.entry : 0;
@@ -8854,7 +8849,7 @@ async function sendTradeAction(action) {
       '🤖 ÉTAPE 1/3 — ROBOT ARMÉ, VÉRIFICATION EN COURS\n' + _armPxLine
       + (_armCtx.sl > 0 ? ' | SL: ' + _armCtx.fmt(_armCtx.sl) : '')
       + (_armCtx.tp > 0 ? ' | TP: ' + _armCtx.fmt(_armCtx.tp) : '')
-      + '\nLIA vérifie les conditions toutes les 3 secondes.\nTu n\'as rien à faire — le robot entre seul.',
+      + '\nSurveillance continue — accélère près de la zone (≤1s). Tu n\'as rien à faire.',
       '#d97706', 5, 30000
     );
     // Informer le serveur du mode ARMED
@@ -9567,6 +9562,26 @@ function handleSync(msg) {
     // Bot-alive visual: show live data arriving
     showLiveFlux(msg);
     checkEntryProximityAndBeep(state.live || {});
+  } else if (msg.type === 'price-update') {
+    var tickSym = String(msg.symbol || '').toUpperCase();
+    var symbolMatch = !tickSym || tickSym === (state.symbol || '').toUpperCase();
+    if (symbolMatch) {
+      var newPrice = Number(msg.price);
+      if (Number.isFinite(newPrice) && newPrice > 1) { // guard > 1 pour éviter prix "1" du titre
+        state.price = newPrice;
+      }
+      var newTf = String(msg.timeframe || '').toUpperCase();
+      if (newTf && TFS.indexOf(newTf) >= 0) {
+        state.timeframe = newTf;
+        var tfSel = document.getElementById('tfSelect');
+        if (tfSel) tfSel.value = state.timeframe;
+      }
+      if (tickSym && tickSym !== (state.symbol || '').toUpperCase() && !state.userLocked) {
+        state.symbol = tickSym;
+      }
+      updateHeader();
+    }
+    if (typeof showLiveFlux === 'function') showLiveFlux(msg);
   }
 }
 
@@ -9653,12 +9668,10 @@ function connectSSE() {
 }
 
 // ─── PERSISTENT WINDOW ───────────────────────────────────────────────────────
-// Delegate to background so it can check for an existing window before creating one
 function openWindow() {
   try {
-    chrome.runtime.sendMessage({ type: 'OPEN_PERSISTENT_POPUP' }, function() {
-      void chrome.runtime.lastError;
-    });
+    var url = chrome.runtime.getURL('popup.html?persistent=1');
+    chrome.windows.create({ url: url, type: 'popup', width: 460, height: 820, focused: true });
     window.close();
   } catch (_) {
     window.open(window.location.href + '?persistent=1', '_blank', 'width=460,height=820');
@@ -10440,6 +10453,21 @@ function bindAll() {
         } else {
           setAnalyserState(b, 'wait');
         }
+        // ── AUTO-ARM — ANALYSER = armer le robot immédiatement ──────────────
+        // Cliquer ANALYSER = "je suis prêt à prendre une position"
+        // Appelle sendTradeAction('ENTER') = même flux que cliquer ENTRER manuellement :
+        //   → unmute, speak "Robot armé...", startEntryWatchdog, ARM serveur
+        // Pas d'ARM si déjà en position, déjà armé, ou setup non directionnel
+        var _isDirectional = winRec.includes('BUY') || winRec.includes('LONG')
+                          || winRec.includes('SELL') || winRec.includes('SHORT');
+        var _alreadyEntered = !!(state.tradeState && state.tradeState.entered);
+        if (_isDirectional && !_alreadyEntered && !state.armed) {
+          try {
+            state._wdInitSpoken = false; // reset pour que le watchdog parle dès la première itération
+            await sendTradeAction('ENTER'); // déclenche le flow ARM complet (vocal + watchdog + serveur)
+          } catch (_armErr) {}
+        }
+
         // ── VERDICT FINAL — annonce vocale riche avec synthèse complète ──────
         var voiceText = '';
         var _winTf  = (mtf && mtf.winner && mtf.winner.tf) ? mtf.winner.tf : state.timeframe;
@@ -10548,7 +10576,8 @@ function bindAll() {
         // Montre Entry/SL/TP directement sans attendre la prochaine mise à jour SSE
         var _sbFeb = document.getElementById('futureEntryBanner');
         var _sbPel = document.getElementById('preEntryLevels');
-        if (_sbFeb && _sbPel && mtf && mtf.winner && mtf.winner.directional && !state.armed && !(state.tradeState && state.tradeState.entered)) {
+        // Banner affiché si setup directionnel et pas en position — toujours visible après ANALYSER
+        if (_sbFeb && _sbPel && mtf && mtf.winner && mtf.winner.directional && !_alreadyEntered) {
           var _sbW   = mtf.winner;
           var _sbRec = String(_sbW.rec || '').toUpperCase();
           var _sbIsL = _sbRec.includes('BUY') || _sbRec.includes('LONG');
@@ -10560,16 +10589,17 @@ function bindAll() {
           var _sbTp  = _winTp  > 0 ? _fmtV(_winTp)  : '--';
           var _sbStr = _sbW.strength ? ' — ' + _sbW.strength + '%' : '';
           // Mode + TF explanation
-          var _sbModeTF = {
-            SCALPER: 'Timing rapide', SNIPER: 'Entrée précise', SWING: 'Vision large', AUTO: 'Analyse complète'
-          }[String(state.tradeMode||'AUTO').toUpperCase()] || '';
-          // Show futureEntryBanner
+          var _sbModeLabel = {
+            SCALPER: 'Scalp rapide', SNIPER: 'Sniper précis', SWING: 'Swing large', AUTO: 'Analyse complète'
+          }[String(state.tradeMode||'AUTO').toUpperCase()] || 'Analyse complète';
+          // Show futureEntryBanner — texte = ARMÉ automatiquement
           _sbFeb.style.display = 'block';
           _sbFeb.style.background = _sbBg;
           _sbFeb.style.borderColor = _sbCol;
           _sbFeb.style.color = _sbCol;
           var _sbArrow = _sbIsL ? '▲' : '▼';
-          _sbFeb.textContent = _sbArrow + ' SIGNAL ' + _sbDir + _sbStr + ' — ' + _sbW.tf + ' [Mode ' + (state.tradeMode||'AUTO') + ' — ' + _sbModeTF + ']\nAppuie sur ENTRER si tu es disponible pour cette position';
+          _sbFeb.textContent = _sbArrow + ' ROBOT ARMÉ — ' + _sbDir + _sbStr + ' | ' + _sbW.tf + ' | Mode ' + _sbModeLabel
+            + '\nEn surveillance — entrée automatique dès que les conditions sont réunies';
           _sbFeb.style.whiteSpace = 'pre-line';
           // Show preEntryLevels with Entry/SL/TP
           _sbPel.style.display = 'block';
@@ -10584,44 +10614,6 @@ function bindAll() {
           _sbPel.style.whiteSpace = 'pre-line';
           // Cache winner for watchdog auto-entry
           state._mtfWinner = _sbW;
-        }
-
-        // ── AUTO-ARM — ANALYSER arme automatiquement si setup directionnel trouvé ──
-        // Conditions: setup trouvé + pas déjà armé + pas déjà en position + direction nette
-        var _aaDir = (winRec.includes('BUY') || winRec.includes('LONG')) ? 'LONG'
-                   : (winRec.includes('SELL') || winRec.includes('SHORT')) ? 'SHORT' : null;
-        if (_aaDir && !state.armed && !(state.tradeState && state.tradeState.entered) && mtf && mtf.winner && mtf.winner.directional) {
-          var _aaW = mtf.winner;
-          state.armed = true;
-          state._armedAt = Date.now();
-          state._mtfWinner = _aaW;
-          state._lockedSetupType = state._lastDetectedSetupType || null;
-          var _aaValidTfs = ['M5', 'M15', 'H1', 'H4'];
-          var _aaRawTf = (_aaW.tf && _aaValidTfs.indexOf(_aaW.tf) >= 0) ? _aaW.tf : (state._analysisLockedTf || 'M15');
-          state._lockedWdTf = _aaValidTfs.indexOf(_aaRawTf) >= 0 ? _aaRawTf : 'M15';
-          _wdLastM1CandleId = 0;
-          var _aaEntBtn = document.querySelector('[data-action="ENTER"]');
-          if (_aaEntBtn) { _aaEntBtn.disabled = false; _aaEntBtn.style.cssText = 'background:#d97706;color:#000;font-weight:700;font-size:11px;'; _aaEntBtn.textContent = '🤖 LIA SURVEILLE — ANNULER'; }
-          var _aaSpk = 'Setup ' + _aaDir + ' validé. Robot armé automatiquement sur ' + state._lockedWdTf + '. ';
-          if (_winEnt > 0) _aaSpk += 'Zone cible: ' + _fmtV(_winEnt) + '. ';
-          if (_winSl  > 0) _aaSpk += 'Stop: ' + _fmtV(_winSl) + '. ';
-          if (_winTp  > 0) _aaSpk += 'Objectif: ' + _fmtV(_winTp) + '. ';
-          _aaSpk += 'Je surveille et j\'entre seul. Tu n\'as rien à faire.';
-          speak(_aaSpk);
-          setCoachText('🤖 ARMEMENT AUTO — SETUP ' + _aaDir + ' VALIDÉ\nTF: ' + state._lockedWdTf
-            + (_winEnt > 0 ? '  |  Zone: ' + _fmtV(_winEnt) : '')
-            + (_winSl  > 0 ? '  |  SL: '   + _fmtV(_winSl)  : '')
-            + (_winTp  > 0 ? '  |  TP: '   + _fmtV(_winTp)  : '')
-            + '\nEntrée automatique dès confirmation des conditions.', '#d97706', 5, 30000);
-          try {
-            var _aaResp = await fetchJson('/coach/trade-action', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ symbol: state.symbol, timeframe: state._lockedWdTf, mode: state.tradeMode, action: 'ARM' }) });
-            if (_aaResp && _aaResp.state) state.tradeState = _aaResp.state;
-          } catch(_) {}
-          var _aaExec = (state.live && state.live.execution) || {};
-          var _aaSig  = (state.live && state.live.coach && state.live.coach.signal) || {};
-          renderArmedBanner('watching', _aaExec, _aaSig);
-          startEntryWatchdog();
         }
 
         // analysisText already set by analyzeAllTimeframesAndPickSetup; only fallback if still blank
@@ -10853,24 +10845,19 @@ async function boot() {
   }, 10000); // check every 10s
 
   // ── INTERVALLES OPTIMISÉS ─────────────────────────────────────────────────
-  // SSE /extension/sync couvre les ticks prix en temps réel.
-  // Le polling est un filet de sécurité seulement — réduit pour éviter surcharge.
-  setInterval(refreshAll,          8000);   // refresh core (SSE couvre l'instantané)
-  setInterval(renderMultiTF,     90000);   // multi-TF: 90s (continuous scan + SSE couvrent le reste)
-  setInterval(refreshHealth,      15000);   // health: 10s→15s
-  setInterval(loadLiveSymbols,    30000);   // symbols: 15s→30s (très peu fréquent utile)
-  setInterval(loadJournalStats,   90000);   // journal: 60s→90s
-  setInterval(refreshServerStats, 60000);   // stats TP/SL/winrate depuis serveur
-  refreshServerStats();                     // au démarrage aussi
-  // Active session: poll léger seulement si SSE silencieux > 5s
+  setInterval(refreshAll,          8000);
+  setInterval(renderMultiTF,     90000);
+  setInterval(refreshHealth,      15000);
+  setInterval(loadLiveSymbols,    30000);
+  setInterval(loadJournalStats,   90000);
+  setInterval(refreshServerStats, 60000);
+  setInterval(renderBridgeHealth,  5000);
+  refreshServerStats();
   setInterval(function() {
     if (!state.agentSessionActive) return;
     var _sseAge = Date.now() - (state._lastSseAt || 0);
-    if (_sseAge > 5000) {
-      // SSE silencieux depuis > 5s → déclencher un poll de rattrapage
-      loadRealtimePack().catch(function(){});
-    }
-  }, 3000);   // vérifie toutes les 3s, poll seulement si SSE mort
+    if (_sseAge > 5000) { loadRealtimePack().catch(function(){}); }
+  }, 3000);
 }
 
 async function loadJournalStats() {

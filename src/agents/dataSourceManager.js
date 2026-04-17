@@ -16,23 +16,11 @@ const SOURCES = {
   NONE: 'none'          // Aucune donnée live
 };
 
-// Données simulées pour MT5 (en production: connecter API MT5)
-const mt5PriceCache = {
-  'EURUSD': { bid: 1.0856, ask: 1.0858, time: Date.now() },
-  'GBPUSD': { bid: 1.2734, ask: 1.2736, time: Date.now() },
-  'USDJPY': { bid: 149.450, ask: 149.460, time: Date.now() },
-  'GOLD': { bid: 2318.50, ask: 2319.50, time: Date.now() },
-  'SILVER': { bid: 28.450, ask: 28.480, time: Date.now() },
-  'BTCUSD': { bid: 62150, ask: 62200, time: Date.now() },
-  'ETHUSD': { bid: 3215, ask: 3220, time: Date.now() }
-};
-
-// TradingView fallback simulation
-const tvPriceCache = {
-  'EURUSD': { price: 1.0855, source: 'tradingview', time: Date.now() },
-  'GBPUSD': { price: 1.2733, source: 'tradingview', time: Date.now() },
-  'USDJPY': { price: 149.445, source: 'tradingview', time: Date.now() }
-};
+// PRIX HARDCODÉS SUPPRIMÉS — plus aucun cache simulé.
+// Ce fichier n'est pas importé dans server.js (qui utilise directement tvDataStore + marketStore).
+// Conservé pour compatibilité avec supervisor.js / syncManager.js dans src/agents/.
+const mt5PriceCache = {}; // vide — pas de données simulées
+const tvPriceCache = {};  // vide — pas de données simulées
 
 /**
  * Normalize symbole (EURUSD → EUR/USD)
@@ -110,78 +98,29 @@ async function getPrice(symbol, source = 'auto') {
 
 /**
  * MT5 - Source prioritaire
+ * NOTE: Ce fichier n'est pas importé dans server.js.
+ * Dans server.js, les prix MT5 viennent de marketStore.getLatestForSymbol() (startMT5Polling).
  */
 async function getPriceFromMT5(symbol) {
-  try {
-    // En production, connecter ici l'API MT5
-    // Pour l'instant: simulation avec cache
-    const cached = mt5PriceCache[symbol] || mt5PriceCache[symbol.replace('/', '')];
-    
-    if (!cached) {
-      return {
-        valid: false,
-        error: `MT5: symbole non disponible (${symbol})`,
-        source: SOURCES.MT5
-      };
-    }
-
-    // Simuler légère variation
-    const spread = 0.0002;
-    const bid = cached.bid + (Math.random() - 0.5) * spread;
-    const ask = cached.ask + (Math.random() - 0.5) * spread;
-
-    return {
-      valid: true,
-      symbol,
-      bid: parseFloat(bid.toFixed(5)),
-      ask: parseFloat(ask.toFixed(5)),
-      price: (bid + ask) / 2,
-      source: SOURCES.MT5,
-      timestamp: Date.now(),
-      freshness: 'live' // Mise à jour temps réel
-    };
-  } catch (err) {
-    console.error('[DataSourceManager] MT5 error:', err.message);
-    return {
-      valid: false,
-      error: `MT5 error: ${err.message}`,
-      source: SOURCES.MT5
-    };
-  }
+  // mt5PriceCache est vide — plus de simulation hardcodée.
+  return {
+    valid: false,
+    error: `MT5: aucune donnée disponible pour ${symbol} — connecter le polling MT5 réel`,
+    source: SOURCES.MT5
+  };
 }
 
 /**
  * TradingView - Fallback uniquement
+ * NOTE: Dans server.js, les prix TradingView viennent de tvDataStore via getLatestTradingviewRuntime().
  */
 async function getPriceFromTradingView(symbol) {
-  try {
-    // En production: appel à l'API TradingView
-    const cached = tvPriceCache[symbol];
-    
-    if (!cached) {
-      return {
-        valid: false,
-        error: `TradingView: symbole non disponible (${symbol})`,
-        source: SOURCES.TRADINGVIEW
-      };
-    }
-
-    return {
-      valid: true,
-      symbol,
-      price: cached.price,
-      source: SOURCES.TRADINGVIEW,
-      timestamp: Date.now(),
-      freshness: 'delayed' // Données décalées
-    };
-  } catch (err) {
-    console.error('[DataSourceManager] TradingView error:', err.message);
-    return {
-      valid: false,
-      error: `TradingView error: ${err.message}`,
-      source: SOURCES.TRADINGVIEW
-    };
-  }
+  // tvPriceCache est vide — plus de simulation hardcodée.
+  return {
+    valid: false,
+    error: `TradingView: aucune donnée disponible pour ${symbol} — en attente flux live tvDataStore`,
+    source: SOURCES.TRADINGVIEW
+  };
 }
 
 /**
