@@ -700,21 +700,13 @@ function validateTrade(trade, currentPrice) {
 }
 
 // ─── Real price fetching ──────────────────────────────────────────────────────
-// Yahoo Finance UNIQUEMENT pour les klines (historique), JAMAIS pour décisions live
+// Bridge TradingView uniquement — Yahoo Finance SUPPRIMÉ
 
 const priceCache = {}; // { XAUUSD: { price, ts } }
 
 async function fetchYahooPrice(yahooSym) {
-  const cached = priceCache[yahooSym];
-  if (cached && Date.now() - cached.ts < 60000) return cached.price; // 1min cache
-  const url  = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=1d`;
-  const resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) });
-  if (!resp.ok) throw new Error('Yahoo ' + resp.status);
-  const d    = await resp.json();
-  const price = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-  if (!price) throw new Error('no price from Yahoo for ' + yahooSym);
-  priceCache[yahooSym] = { price, ts: Date.now() };
-  return price;
+  // SUPPRIMÉ — bridge TradingView uniquement. Aucun appel Yahoo Finance autorisé.
+  throw new Error('Yahoo Finance supprimé — bridge TV uniquement. Utiliser tvDataStore[symbol].price.');
 }
 
 function toYahooSym(canonical) {
@@ -2811,16 +2803,8 @@ app.get('/latest/:symbol', async (req, res) => {
   const data    = marketStore.getLatestForSymbol(profile.canonical);
   if (data) return res.json({ ok: true, symbol: profile.canonical, ...data });
 
-  // Pas de données MT5/TV → fallback Yahoo (référence uniquement, jamais signal)
-  try {
-    const ysSym = toYahooSym(profile.canonical);
-    if (!ysSym) return res.status(404).json({ ok: false, error: 'Aucune donnée pour ' + profile.canonical });
-    console.warn(`[FALLBACK YAHOO] /latest/${profile.canonical} — tvDataStore absent, fallback Yahoo Finance`);
-    const price = await fetchYahooPrice(ysSym);
-    res.json({ ok: true, symbol: profile.canonical, price, source: 'yahoo-reference', note: 'Prix de référence uniquement — connectez MT5' });
-  } catch {
-    res.status(404).json({ ok: false, error: 'Aucune donnée pour ' + profile.canonical });
-  }
+  // Pas de données bridge TV disponibles
+  res.status(404).json({ ok: false, error: 'Aucune donnée pour ' + profile.canonical + ' — bridge TradingView requis' });
 });
 
 // ─── TOGGLE MODE ──────────────────────────────────────────────────────────────
@@ -2852,14 +2836,7 @@ async function handleAnalyze(req, res) {
       let price = null;
       if (tvEntry && tvAge < 30000 && parseFloat(tvEntry.price) > 0) {
         price = parseFloat(tvEntry.price);
-      } else {
-        // 2. Fallback Yahoo Finance si tvDataStore absent ou > 30s
-        const ySym = toYahooSym(profile.canonical);
-        if (ySym) {
-          console.warn(`[FALLBACK YAHOO] /analyze ${profile.canonical} — tvDataStore ${tvEntry ? 'trop ancien (' + Math.round(tvAge / 1000) + 's)' : 'absent'}, fallback Yahoo Finance`);
-          price = await fetchYahooPrice(ySym);
-        }
-      }
+      } // bridge TV uniquement — pas de fallback externe
       if (!price) return null;
       const direction = 'LONG';
       const levels    = calcTradeLevels(price, direction, profile, 'H1', null);
@@ -2945,47 +2922,23 @@ app.post('/agent-screen', async (req, res) => {
   res.json({ ok: true, trade, symbol: sym, screenshotProcessed: !!screenshot });
 });
 
-// ─── KLINES (Yahoo Finance — données historiques uniquement) ─────────────────
-// Yahoo supporte: 1m 2m 5m 15m 30m 60m 90m 1h 1d 5d 1wk 1mo 3mo
-// Les TFs non supportés sont mappés au plus proche disponible
-const TF_YAHOO = {
-  'M1':'1m',  'M2':'2m',  'M3':'5m',  'M5':'5m',
-  'M10':'15m','M15':'15m','M30':'30m','M45':'30m',
-  'H1':'60m', 'H2':'60m', 'H3':'60m', 'H4':'60m',
-  'D1':'1d',  'W1':'5d'
-};
-const TF_RANGE = {
-  'M1':'1d',  'M2':'1d',  'M3':'5d',  'M5':'5d',
-  'M10':'5d', 'M15':'5d', 'M30':'5d', 'M45':'5d',
-  'H1':'5d',  'H2':'5d',  'H3':'5d',  'H4':'5d',
-  'D1':'1mo', 'W1':'3mo'
-};
-
-app.get('/klines', async (req, res) => {
-  const sym   = req.query.symbol || 'EUR/USD';
-  const tf    = (req.query.tf || 'H1').toUpperCase();
+// ─── KLINES — source bridge TV uniquement ────────────────────────────────────
+// Yahoo Finance supprimé — toutes les données proviennent du bridge TradingView.
+app.get('/klines', (req, res) => {
+  const sym   = String(req.query.symbol || '').toUpperCase().replace('/', '').replace('-', '');
   const limit = Math.min(parseInt(req.query.limit) || 80, 200);
-
-  const ySym = toYahooSym(normalizeSymbol(sym.replace('/','').replace('-','')).canonical);
-  if (!ySym) return res.status(400).json({ ok: false, error: 'Symbole non supporté: ' + sym });
-
-  try {
-    const url  = `https://query1.finance.yahoo.com/v8/finance/chart/${ySym}?interval=${TF_YAHOO[tf]||'1h'}&range=${TF_RANGE[tf]||'5d'}`;
-    const resp = await fetch(url, { headers:{'User-Agent':'Mozilla/5.0'}, signal: AbortSignal.timeout(6000) });
-    if (!resp.ok) throw new Error('Yahoo HTTP ' + resp.status);
-    const json   = await resp.json();
-    const result = json?.chart?.result?.[0];
-    if (!result?.timestamp) throw new Error('no data');
-    const q       = result.indicators.quote[0];
-    const candles = result.timestamp
-      .map((t, i) => ({ time: t*1000, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume?.[i]||0 }))
-      .filter(c => c.open != null && c.close != null)
-      .slice(-limit);
-    if (candles.length < 3) throw new Error('too few candles');
-    return res.json({ ok: true, candles, source: 'yahoo-historical', symbol: ySym, note: 'Données historiques Yahoo Finance' });
-  } catch (err) {
-    return res.status(503).json({ ok: false, error: 'Données historiques indisponibles: ' + err.message });
+  const canonical = normalizeSymbol(sym)?.canonical || sym;
+  const tvEntry = tvDataStore[canonical] || tvDataStore[sym] || null;
+  const history = tvEntry?._priceHistory || [];
+  if (!history.length) {
+    return res.json({ ok: true, candles: [], source: 'bridge-tv', note: 'Historique bridge TV vide — en attente de ticks Pine Script' });
   }
+  const candles = history.slice(-limit).map((tick, i, arr) => {
+    const prev = arr[i - 1];
+    const p = Number(tick.price || 0);
+    return { time: tick.time || tick.t || Date.now(), open: prev ? Number(prev.price) : p, high: p, low: p, close: p, volume: 0 };
+  });
+  res.json({ ok: true, candles, source: 'bridge-tv', symbol: canonical });
 });
 
 // ─── CALENDAR ────────────────────────────────────────────────────────────────
@@ -3048,17 +3001,12 @@ app.get('/quote', async (req, res) => {
     return res.json({ ok: true, symbol: sym, price: live.latestPayload.price, source: live.latestPayload.source || 'mt5' });
   }
 
-  try {
-    const ySym  = toYahooSym(sym);
-    if (!ySym) throw new Error('non supporté');
-    console.warn(`[FALLBACK YAHOO] /quote ${sym} — marketStore absent, fallback Yahoo Finance`);
-    const price = await fetchYahooPrice(ySym);
-    // MODIFIÉ: Broadcast le price pour SSE real-time
-    marketStore.broadcast({ type: 'quote', symbol: sym, price: price, source: 'yahoo-reference' });
-    res.json({ ok: true, symbol: sym, price, source: 'yahoo-reference' });
-  } catch (e) {
-    res.status(404).json({ ok: false, error: 'Prix indisponible pour ' + rawSym });
+  // Pas de données bridge TV — bridge requis
+  const tvLive = tvDataStore[sym] || tvDataStore[rawSym.replace('/', '').toUpperCase()] || null;
+  if (tvLive?.price) {
+    return res.json({ ok: true, symbol: sym, price: tvLive.price, source: 'tradingview' });
   }
+  res.status(404).json({ ok: false, error: 'Prix indisponible pour ' + rawSym + ' — bridge TradingView requis' });
 });
 
 // ─── BUTTON LOG ──────────────────────────────────────────────────────────────
@@ -4673,15 +4621,9 @@ async function runOrchestrationCycle() {
         `BOUCLE ${sym} — prix TradingView (${(tvAge / 1000).toFixed(1)}s)`,
         'ok', `source:TradingView · price:${price}`);
     } else {
-      // Fallback Yahoo Finance si tvDataStore absent ou trop ancien
-      const yahoSym = toYahooSym(sym);
-      if (!yahoSym) return;
-      console.warn(`[FALLBACK YAHOO] runOrchestrationCycle ${sym} — tvDataStore ${tvLive ? 'trop ancien (' + Math.round(tvAge / 1000) + 's)' : 'absent'}, fallback Yahoo Finance`);
-      price = await fetchYahooPrice(yahoSym);
-      if (!price || price <= 0) {
-        pushLog('orchestrator', 'system', `BOUCLE ${sym} — prix indisponible`, 'warn', 'source:offline');
-        return;
-      }
+      // Bridge TV absent ou trop ancien — attendre le prochain tick
+      pushLog('orchestrator', 'system', `BOUCLE ${sym} — bridge TV absent ou > 30s`, 'warn', 'source:offline');
+      return;
     }
 
     pushLog('orchestrator', 'technicalAgent',
@@ -8720,8 +8662,8 @@ app.post('/repair', async (req, res) => {
   app.listen(PORT, '0.0.0.0', () => {
   const _startTs = new Date().toISOString();
   console.log(`\n✅ Trading Auto Server — http://127.0.0.1:${PORT}`);
-  console.log(`📡 Sources: TradingView (maître prix) → Yahoo Finance ([FALLBACK YAHOO] si TV absent/> 30s) · MT5 (klines historiques)`);
-  console.log(`📐 RÈGLE: tvDataStore[symbol].price = référence absolue. Yahoo = fallback loggué uniquement.`);
+  console.log(`📡 Source UNIQUE: Bridge TradingView — Yahoo Finance et MT5 SUPPRIMÉS`);
+  console.log(`📐 RÈGLE: tvDataStore[symbol].price = référence absolue. Aucune source externe.`);
   console.log(`⚠️  Aucun Math.random() — toutes les données sont réelles`);
   console.log(`[BASELINE] PID=${process.pid} | PORT=${PORT} | STARTED=${_startTs} | INSTANCES=1`);
   console.log(`[BASELINE] Clean start — single instance confirmed\n`);
