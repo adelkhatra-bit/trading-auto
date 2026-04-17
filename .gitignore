@@ -30,3 +30,4 @@ tvfeed_err.log
 tradingview-cache.json
 store/extension-runtime-state.json
 store/*.runtime.json
+store/extension-runtime-state.json
