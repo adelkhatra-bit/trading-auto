@@ -1,6 +1,27 @@
-﻿// background.js v3.0 — Service Worker (MT5 Source of Truth - Architecture Complète)
+// background.js v3.2 — Service Worker (Architecture Complète - Clean)
 // Centralise toute logique: parle au backend, cache l'état, distribue aux content/popup
 'use strict';
+
+// ── DÉDUPLICATION PRIX + TIMEFRAME ───────────────────────────────────────────
+// Évite de poster des prix identiques chaque seconde au serveur.
+// MAIS : si le timeframe change, on force un envoi immédiat même si le prix est identique.
+const _tvLiveDedup = {};
+function shouldPostLive(symbol, price, timeframe) {
+  const key = String(symbol || '').toUpperCase();
+  const tf  = String(timeframe || '').toUpperCase();
+  const now = Date.now();
+  const last = _tvLiveDedup[key];
+  if (!last) { _tvLiveDedup[key] = { price, sentAt: now, tf }; return true; }
+  const delta   = Math.abs(price - last.price) / Math.max(Math.abs(last.price), 1);
+  const age     = now - last.sentAt;
+  const tfChanged = tf && last.tf && tf !== last.tf; // TF changé → envoi forcé
+  // Seuil aligné avec content.js: >0.001% OU >500ms OU TF changé
+  if (tfChanged || delta > 0.00001 || age > 500) {
+    _tvLiveDedup[key] = { price, sentAt: now, tf };
+    return true;
+  }
+  return false;
+}
 
 const API = 'http://127.0.0.1:4000';  // TRADING AUTO EXCLUSIVE
 const POLL_INTERVAL = 1500;  // Poll resserré pour limiter le drift backend/extension
@@ -27,6 +48,7 @@ let systemState = {
 
 const PERSISTENT_POPUP_URL = chrome.runtime.getURL('popup.html?persistent=1');
 let persistentPopupWindowId = null;
+let _onClickedBusy = false; // Mutex: empêche double-clic / exécutions parallèles
 
 async function hydratePersistentState() {
   try {
@@ -133,15 +155,44 @@ async function findTradingViewTab() {
   return candidate;
 }
 
+// ── RE-INJECT CONTENT SCRIPT si contexte invalide ────────────────────────
+// Quand le content script est mort (extension rechargée, contexte invalide),
+// on réinjecte automatiquement pour rétablir le flux live.
+async function reInjectContentScript(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js']
+    });
+    console.log('[BG] Content script ré-injecté dans tab', tabId);
+  } catch (e) {
+    console.log('[BG] Réinjection impossible:', e.message);
+  }
+}
+
 // ── SCRAP REAL TRADINGVIEW PANEL AND SEND TO SERVER ─────────────────────
 async function scrapAndSendTradingView() {
   try {
     const tab = await findTradingViewTab();
     if (!tab || typeof tab.id !== 'number') return;
 
-    const response = await chrome.tabs.sendMessage(tab.id, { type: 'SCRAP_PANEL' });
+    let response;
+    try {
+      response = await chrome.tabs.sendMessage(tab.id, { type: 'SCRAP_PANEL' });
+    } catch (e) {
+      // Content script mort ou contexte invalide → réinjection
+      if (e && e.message && (e.message.includes('Receiving end does not exist') || e.message.includes('context invalidated'))) {
+        console.warn('[BG] Content script absent — réinjection en cours...');
+        await reInjectContentScript(tab.id);
+      }
+      return;
+    }
     if (!response || !response.ok || !response.data) {
-      console.log('[BG] Scrap failed:', response);
+      // Réponse "context_dead" = content script détruit, réinjection
+      if (response && response.error === 'context_dead') {
+        console.warn('[BG] Content script contexte mort — réinjection...');
+        await reInjectContentScript(tab.id);
+      }
       return;
     }
 
@@ -152,6 +203,7 @@ async function scrapAndSendTradingView() {
     }
 
     rememberTradingViewTab(tab);
+    _lastSuccessfulScrap = Date.now(); // Watchdog: marquer bridge actif
     console.log('[BG] Panel scraped:', panelData.symbol, panelData.panelText);
 
     systemState.activeSymbol = panelData.symbol;
@@ -187,15 +239,36 @@ async function scrapAndSendTradingView() {
       return;
     }
 
-    // Correction : push live vers /tradingview/live (backend réel)
+    // Correction : push live vers /tradingview/live (backend réel) — déduplication
+    if (!shouldPostLive(panelData.symbol, systemState.activePrice, panelData.timeframe || systemState.activeTimeframe)) return;
+    // Parser les indicateurs depuis panelText — source: bridge TV uniquement
+    const _pt = panelData.panelText || {};
+    const _parsedIndicators = {};
+    // Helper parse numérique sécurisé
+    function _pNum(str, min, max) {
+      if (!str) return null;
+      const m = String(str).replace(/\u2212/g, '-').match(/(-?[0-9]+\.?[0-9]*)/);
+      if (!m) return null;
+      const v = parseFloat(m[1]);
+      if (!Number.isFinite(v)) return null;
+      if (min != null && v < min) return null;
+      if (max != null && v > max) return null;
+      return v;
+    }
+    const _rsi = _pNum(_pt.rsi, 0.1, 100);       if (_rsi  != null) _parsedIndicators.rsi  = _rsi;
+    // MACD: peut être négatif
+    if (_pt.macd) {
+      const _v = _pNum(_pt.macd, null, null);
+      if (_v != null) _parsedIndicators.macd = _v;
+    }
     const livePayload = {
       symbol: panelData.symbol,
       timeframe: panelData.timeframe || systemState.activeTimeframe,
       price: systemState.activePrice,
       timestamp: new Date().toISOString(),
-      source: 'tradingview-extension'
+      source: 'tradingview-extension',
+      indicators: Object.keys(_parsedIndicators).length ? _parsedIndicators : undefined
     };
-    console.log('[TV PUSH] Envoi TradingView → backend:', livePayload);
     const tvResp = await fetch(API + '/tradingview/live', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -283,6 +356,27 @@ async function broadcastStateChange(message) {
 chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
   (async () => {
     try {
+      // ─── TV_POST_LIVE — prix live depuis content.js ───────────────
+      // Content.js envoie TV_POST_LIVE à chaque tick de prix TradingView.
+      // On POST immédiatement vers /tradingview/live avec déduplication.
+      if (msg && msg.type === 'TV_POST_LIVE' && msg.payload) {
+        const payload = msg.payload;
+        const px = parseFloat(payload.price);
+        // Mise à jour immédiate de systemState pour sync popup symbole+TF
+        if (payload.symbol) systemState.activeSymbol = String(payload.symbol).toUpperCase();
+        if (payload.timeframe) systemState.activeTimeframe = String(payload.timeframe).toUpperCase();
+        if (Number.isFinite(px) && px > 0) systemState.activePrice = px;
+        if (payload.symbol && Number.isFinite(px) && px > 0 && shouldPostLive(payload.symbol, px, payload.timeframe)) {
+          fetch('http://127.0.0.1:4000/tradingview/live', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(e => { console.log('[BG→SERVER][ERROR]', e.message); });
+        }
+        sendResponse({ ok: true });
+        return;
+      }
+
       // ─── GET SYSTEM STATE ─────────────────────────────────────────
       if (msg.type === 'GET_STATE') {
         sendResponse({ ok: true, state: systemState });
@@ -536,10 +630,58 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
 });
 
 // ── TAB MANAGEMENT ────────────────────────────────────────────────────────
-chrome.action.onClicked.addListener(() => {
-  openPersistentPopupWindow().catch((err) => {
-    console.log('[BG] Persistent popup open error:', err.message);
-  });
+// RÈGLE : 1 clic = 1 seule source d'affichage.
+//   1. TradingView actif + overlay OK  → overlay seul (ferme popup si ouvert)
+//   2. TradingView actif + overlay KO  → fenêtre persistante (fallback propre)
+//   3. Hors TradingView               → fenêtre persistante
+//   Mutex _onClickedBusy : double-clic ignoré jusqu'à fin du traitement
+chrome.action.onClicked.addListener(async () => {
+  if (_onClickedBusy) return; // double-clic → ignoré
+  _onClickedBusy = true;
+  try {
+    const tvTab = await findTradingViewTab();
+
+    if (tvTab && typeof tvTab.id === 'number') {
+      // ── CAS 1 : onglet TradingView trouvé ────────────────────────────────
+      let toggled = false;
+
+      // Essai 1 — content script vivant → toggle direct
+      try {
+        const resp = await chrome.tabs.sendMessage(tvTab.id, { type: 'TOGGLE_PANEL' });
+        toggled = !!(resp && resp.ok);
+      } catch (_) { toggled = false; }
+
+      // Essai 2 — content script mort → réinjecter + retenter
+      if (!toggled) {
+        await reInjectContentScript(tvTab.id);
+        await new Promise(r => setTimeout(r, 500));
+        try {
+          const resp2 = await chrome.tabs.sendMessage(tvTab.id, { type: 'TOGGLE_PANEL' });
+          toggled = !!(resp2 && resp2.ok);
+        } catch (_2) { toggled = false; }
+      }
+
+      if (toggled) {
+        // Overlay activé → fermer la fenêtre persistante si ouverte (évite doublon)
+        if (persistentPopupWindowId !== null) {
+          try { await chrome.windows.remove(persistentPopupWindowId); } catch (_) {}
+          persistentPopupWindowId = null;
+        }
+        return; // overlay seul → terminé
+      }
+
+      // Overlay impossible (contenu TV non disponible) → fallback fenêtre persistante
+      console.log('[BG] Overlay KO — fallback fenêtre persistante');
+    }
+
+    // ── CAS 2 & 3 : ouvrir fenêtre persistante ───────────────────────────
+    await openPersistentPopupWindow();
+  } catch (err) {
+    console.log('[BG] Toggle panel error:', err.message);
+    openPersistentPopupWindow().catch(() => {});
+  } finally {
+    _onClickedBusy = false;
+  }
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
@@ -577,18 +719,128 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   }
 });
 
-// ── START POLLING ────────────────────────────────────────────────────────
-function startPolling() {
-  console.log('[BG] v3.0 polling started');
-  pollBackendState();  // Initial
-  setInterval(pollBackendState, POLL_INTERVAL);
-  
-  // NEW: Scrap real TradingView panel and send to server
-  console.log('[BG] Real TradingView panel scraper started');
-  scrapAndSendTradingView(); // Initial
-  setInterval(scrapAndSendTradingView, SCRAPE_INTERVAL);
+// ── INJECTION INITIALE — réinstalle content.js dans tous les tabs TV ouverts ──
+// Critique : quand l'extension est rechargée, les content scripts existants deviennent
+// orphelins (contexte invalidé). On réinjecte le nouveau content.js immédiatement
+// pour rétablir le flux live sans que l'utilisateur ait besoin de recharger TV.
+async function injectContentScriptInAllTvTabs() {
+  try {
+    const tabs = await chrome.tabs.query({ url: 'https://*.tradingview.com/*' });
+    for (const tab of tabs) {
+      if (!tab.id || tab.id < 0) continue;
+      try {
+        // Test si content script répond — s'il répond OK, pas besoin de réinjecter
+        const pong = await Promise.race([
+          chrome.tabs.sendMessage(tab.id, { type: 'PING' }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 500))
+        ]);
+        if (pong && pong.ok) {
+          console.log('[BG] Content script actif dans tab', tab.id, '— pas de réinjection nécessaire');
+          continue;
+        }
+      } catch (_) {
+        // Pas de réponse ou contexte mort → réinjecter
+      }
+      await reInjectContentScript(tab.id);
+    }
+  } catch (e) {
+    console.log('[BG] injectContentScriptInAllTvTabs error:', e.message);
+  }
 }
 
+// ── AUTO-RECONNECT WATCHDOG — rétablit le bridge sans intervention de l'utilisateur ──
+// Problème: si le scrape n'envoie pas de prix depuis >35s, le bridge est "coupé".
+// Solution: toutes les 30s, vérifier si un tab TV est ouvert et le contenu script actif.
+//           Si le script est mort → réinjecter. Si pas de tab → ouvrir TradingView.
+let _lastSuccessfulScrap = Date.now();
+let _watchdogRunning = false;
+
+async function watchdogReconnect() {
+  if (_watchdogRunning) return;
+  _watchdogRunning = true;
+  try {
+    const staleMs = Date.now() - _lastSuccessfulScrap;
+    if (staleMs < 35000) { _watchdogRunning = false; return; } // bridge OK
+    console.warn('[WATCHDOG] Bridge coupé depuis', Math.round(staleMs/1000) + 's — tentative reconnexion');
+    // 1. Chercher tab TradingView ouvert
+    const tvTabs = await chrome.tabs.query({ url: 'https://*.tradingview.com/*' });
+    if (tvTabs.length === 0) {
+      // Aucun tab TV → ouvrir TradingView dans un nouvel onglet
+      console.log('[WATCHDOG] Aucun tab TradingView — ouverture automatique');
+      chrome.tabs.create({ url: 'https://www.tradingview.com/chart/', active: false });
+      _watchdogRunning = false; return;
+    }
+    // 2. Tab trouvé — vérifier si content script actif
+    for (const tab of tvTabs) {
+      if (!tab.id || tab.id < 0) continue;
+      try {
+        const pong = await Promise.race([
+          chrome.tabs.sendMessage(tab.id, { type: 'PING' }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('to')), 800))
+        ]);
+        if (pong && pong.ok) {
+          // Content script OK — forcer un scrap immédiat
+          console.log('[WATCHDOG] Content script actif — forçage scrap');
+          scrapAndSendTradingView().catch(() => {});
+          _watchdogRunning = false; return;
+        }
+      } catch (_) {}
+      // Content script mort → réinjecter
+      console.warn('[WATCHDOG] Réinjection content.js dans tab', tab.id);
+      await reInjectContentScript(tab.id);
+    }
+  } catch (e) {
+    console.warn('[WATCHDOG] Erreur:', e.message);
+  }
+  _watchdogRunning = false;
+}
+
+// ── START POLLING ────────────────────────────────────────────────────────
+function startPolling() {
+  console.log('[BG] v3.2 polling started');
+
+  injectContentScriptInAllTvTabs().catch(() => {});
+
+  // Exécution immédiate au démarrage
+  pollBackendState();
+  scrapAndSendTradingView();
+
+  // setInterval pour les cycles intra-seconde (tant que le SW est vivant)
+  setInterval(pollBackendState, POLL_INTERVAL);
+  setInterval(scrapAndSendTradingView, SCRAPE_INTERVAL);
+
+  // ── ALARMS MV3 — persistent même si le service worker est tué par Chrome ──
+  // setInterval meurt quand Chrome tue le SW après inactivité.
+  // chrome.alarms survit et réveille le SW automatiquement.
+  // ALARM 'scrape-tv': force un scrape TradingView toutes les 1 minute (min Chrome = 1min)
+  chrome.alarms.create('scrape-tv',   { periodInMinutes: 1 });
+  // ALARM 'watchdog':  lance le watchdog toutes les 1 minute
+  chrome.alarms.create('watchdog',    { periodInMinutes: 1 });
+  // ALARM 'poll-backend': fallback si setInterval est mort
+  chrome.alarms.create('poll-backend',{ periodInMinutes: 1 });
+}
+
+// ── ALARM LISTENER — réveille le service worker et exécute les tâches ─────
+chrome.alarms.onAlarm.addListener(function(alarm) {
+  if (alarm.name === 'scrape-tv') {
+    // Réinjecter si nécessaire + scraper — garantit que le prix est à jour
+    scrapAndSendTradingView().catch(() => {});
+    // Si le scrap n'a rien envoyé depuis 60s+, réinjecter content.js
+    const _ageMs = Date.now() - _lastSuccessfulScrap;
+    if (_ageMs > 60000) {
+      findTradingViewTab().then(tab => {
+        if (tab && tab.id) reInjectContentScript(tab.id).catch(() => {});
+      }).catch(() => {});
+    }
+  }
+  if (alarm.name === 'watchdog') {
+    watchdogReconnect().catch(() => {});
+  }
+  if (alarm.name === 'poll-backend') {
+    pollBackendState().catch(() => {});
+  }
+});
+
 // ── INIT ──────────────────────────────────────────────────────────────────
-console.log('[BG] v3.0 init — Complete MT5 Architecture');
+console.log('[BG] v3.2 init — Complete MT5 Architecture + Alarms');
 hydratePersistentState().finally(startPolling);
