@@ -3,6 +3,8 @@
 Prix gratuits Kraken (BTC = XBTUSD, Gold = PAXGUSD), signaux envoyés sur Telegram.
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
 import json, os, time, urllib.request, urllib.parse, datetime
+from zoneinfo import ZoneInfo
+PARIS = ZoneInfo("Europe/Paris")
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 ETAT_FICHIER = os.environ.get("STATE_FILE", "state.json")
@@ -284,6 +286,61 @@ def maj_jauge(m, r, cle, chats):
         except Exception as ex:
             print("jauge", ex)
 
+# ───────── Annonces économiques et ouvertures de marché ─────────
+def calendrier(etat, maintenant):
+    """Calendrier gratuit (Forex Factory), rafraîchi toutes les heures. Annonces à fort impact USD (BTC et Gold y réagissent)."""
+    cache = etat.setdefault("cal", {})
+    if maintenant - cache.get("t", 0) > 3600:
+        try:
+            brut = http_json("https://nfs.faireconomy.media/ff_calendar_thisweek.json")
+            cache["ev"] = [dict(titre=x["title"], pays=x["country"], t=int(datetime.datetime.fromisoformat(x["date"]).timestamp()),
+                                prev=x.get("forecast", ""), avant=x.get("previous", ""))
+                           for x in brut if x.get("impact") == "High" and x.get("country") in ("USD",)]
+            cache["t"] = maintenant
+        except Exception as ex:
+            print("calendrier", ex)
+    return cache.get("ev", [])
+
+def heure(ts):
+    return datetime.datetime.fromtimestamp(ts, PARIS).strftime("%H:%M")
+
+def annonces_et_sessions(etat, maintenant, derniers):
+    """Messages : programme du jour, annonce dans 30 min, ouvertures Londres / New York (avec alerte compression)."""
+    out = []; vus = etat.setdefault("vus", [])
+    jour = datetime.datetime.fromtimestamp(maintenant, PARIS)
+    ev = calendrier(etat, maintenant)
+    cle_j = jour.strftime("%Y-%m-%d")
+    # Programme du jour (une fois, après 7 h à Paris)
+    if jour.hour >= 7 and f"prog{cle_j}" not in vus:
+        vus.append(f"prog{cle_j}")
+        aujourdhui = [e for e in ev if datetime.datetime.fromtimestamp(e["t"], PARIS).date() == jour.date()]
+        if aujourdhui:
+            out.append("📅 Annonces importantes aujourd'hui (heure de Paris) :\n" + "\n".join(
+                f"• {heure(e['t'])} {e['titre']} (prévu {e['prev'] or '?'}, avant {e['avant'] or '?'})" for e in aujourdhui)
+                + "\n→ Pas de nouvelle entrée 15 min avant et après. Volatilité forte possible.")
+        elif jour.weekday() < 5:
+            out.append("📅 Aucune annonce majeure US aujourd'hui.")
+    # Rappel 30 min avant chaque annonce
+    for e in ev:
+        if 0 <= e["t"] - maintenant <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
+            vus.append(f"ev{e['t']}{e['titre']}")
+            out.append(f"⚠️ Annonce {e['titre']} à {heure(e['t'])} (dans {round((e['t'] - maintenant) / 60)} min).\nNe rentre pas maintenant, attends 15 min après l'annonce.")
+    # Ouvertures de marché (jours de semaine)
+    if jour.weekday() < 5:
+        for nom, zone, h, mn in (("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
+            loc = datetime.datetime.now(ZoneInfo(zone)).replace(hour=h, minute=mn, second=0, microsecond=0)
+            t_ouv = int(loc.timestamp())
+            if 0 <= t_ouv - maintenant <= 15 * 60 and f"ouv{nom}{cle_j}" not in vus:
+                vus.append(f"ouv{nom}{cle_j}")
+                comp = [m for m, r in derniers.items() if sum(r["sqzs"][4:10]) >= 3]
+                out.append(f"🔔 Ouverture de {nom} à {heure(t_ouv)} (dans {round((t_ouv - maintenant) / 60)} min). Volatilité forte attendue."
+                           + (f"\n⚡ {', '.join(comp)} comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction." if comp else ""))
+    del vus[:-200]
+    return out
+
+def annonce_proche(etat, maintenant):
+    return any(abs(e["t"] - maintenant) <= 15 * 60 for e in etat.get("cal", {}).get("ev", []))
+
 # ───────── Agent : suit le trade du début à la fin ─────────
 def fmt_trade(m, tr):
     sens = "▲ LONG (achat)" if tr["d"] == 1 else "▼ SHORT (vente)"
@@ -353,6 +410,11 @@ def agent(m, r, cle, ferme):
             cle["prep"] = True
             pl = plan_entree(r, d, p)
             out.append(f"⏳ {m} : prépare-toi, repli en cours.\n{'Achat' if d == 1 else 'Vente'} probable vers {px(p)} • stop ≈ {px(pl['sl'])} • TP1 ≈ {px(pl['tp1'])}")
+        if surcharge and reprise and r.get("annonce"):
+            out.append(f"⏸ {m} : setup d'entrée, mais annonce économique dans moins de 15 min. On ne rentre pas.") if not cle.get("pause") else None
+            cle["pause"] = True
+            return out
+        cle["pause"] = False
         if surcharge and reprise:
             pl = plan_entree(r, d, p)
             if pl["rr"] >= 1.5:
@@ -447,12 +509,14 @@ def main():
                     demandes.append(cid)
 
     envois, derniers = [], {}
+    calendrier(etat, int(time.time()))
     for nom_marche, pair in MARCHES.items():
         try:
             r = analyser(pair)
         except Exception as ex:
             print(nom_marche, "erreur", ex); continue
         cle = etat.setdefault(nom_marche, {})
+        r["annonce"] = annonce_proche(etat, int(time.time()))
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
         derniers[nom_marche] = r
@@ -461,6 +525,10 @@ def main():
             telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r))
         print(texte_etat(nom_marche, r), "\n")
 
+    try:
+        envois += annonces_et_sessions(etat, int(time.time()), derniers)
+    except Exception as ex:
+        print("annonces", ex)
     if TOKEN:
         for t in envois:
             texte, clavier = (t if isinstance(t, tuple) else (t, None))
