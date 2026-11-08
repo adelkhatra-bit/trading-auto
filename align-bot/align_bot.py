@@ -273,6 +273,10 @@ CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "✅ Je
                       "resize_keyboard": True, "is_persistent": True})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "💎 Devenir VIP"}]],
                                "resize_keyboard": True, "is_persistent": True})
+AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
+                 "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
+                 "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
+MINI_AVERT = "ℹ️ Ma position perso • pas un conseil • risque de perte"
 OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet offert aux visiteurs tous les X jours
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
@@ -318,7 +322,7 @@ def traiter(etat, chats, updates):
                     off.append(mk); chats.add(mk)
                     if mk in etat.get("prospects", []):
                         etat["prospects"].remove(mk)
-                    _envoi_sur(mk, text="🎁 Accès VIP offert !\n✅ Tu reçois maintenant toutes les positions\n⬇️ Utilise les boutons en bas", reply_markup=CLAVIER)
+                    _envoi_sur(mk, text="🎁 Accès VIP offert !\n✅ Tu reçois maintenant toutes mes positions\n⬇️ Utilise les boutons en bas\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
                     _envoi_sur(qui, text=f"✅ Accès VIP offert à {etat.get('noms', {}).get(mk, mk)}",
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "⛔ Retirer l'accès", "callback_data": f"retirer:{mk}"}]]}))
                 elif choix == "retirer" and mk in off:
@@ -360,7 +364,7 @@ def traiter(etat, chats, updates):
             etat["prospects"].remove(cid)
         if cid not in chats:
             chats.add(cid)
-            telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Signaux BTC et Gold ici.\nUtilise les boutons en bas.", reply_markup=CLAVIER)
+            telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.\n⬇️ Utilise les boutons en bas.\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
         txt = msg.get("text", "").lower().replace("é", "e")
         if "analyse" in txt or "etat" in txt:
             demandes.append(cid)
@@ -406,7 +410,7 @@ def refuser(etat, cid):
                           "🎁 Tu reçois GRATUITEMENT :\n• les alertes news 📰\n• les ouvertures de marché 🔔\n• 1 signal complet offert de temps en temps\n\n"
                           "🔒 Les autres positions arrivent MASQUÉES.\n"
                           "🔓 Pour tout voir (entrée, stop, TP, coaching Oui / Non, bouton Analyse) : abonne-toi avec le bouton ci-dessous, "
-                          "puis reviens ici et tape /start."), **kw)
+                          "puis reviens ici et tape /start.\n\n" + AVERTISSEMENT), **kw)
 
 def masquer(texte):
     """Cache tous les prix (entrée, stop, TP) pour les visiteurs non abonnés."""
@@ -586,13 +590,13 @@ def fmt_trade(m, tr, p=None):
         pts.append((p, "👉", "PRIX ACTUEL"))
     echelle = "\n".join(f"{ic} {px(v)}  {nom}" for v, ic, nom in sorted(pts, key=lambda z: -z[0]))
     return (f"{tete}\n"
-            f"⏱ Mets ton graphique en 15 minutes\n\n"
+            f"⏱ Graphique 15 minutes\n\n"
             f"{echelle}\n\n"
-            f"🟨 Entre entre {px(za)} et {px(zb)}\n"
+            f"🟨 Zone d'entrée {px(za)} – {px(zb)}\n"
             f"🛑 Stop {px(tr['sl'])} ({bougie})\n"
             f"💰 TP1 {px(tr['tp1'])} → sécurise, stop à l'entrée\n"
             f"🏁 TP2 {px(tr['tp2'])}\n\n"
-            f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})")
+            f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
 
 def zone_txt(pos):
     return "tout en HAUT" if pos >= 0.85 else "en haut" if pos >= 0.65 else "tout en BAS" if pos <= 0.15 else "en bas" if pos <= 0.35 else "au milieu"
@@ -695,14 +699,14 @@ def coach(etat, m, r, cle):
     dirs = r["dirs"]
     if (dirs[9] == -d or (dirs[4] == -d and dirs[7] == -d)) and "annule" not in vu and tr["statut"] == "entree":
         vu.append("annule")
-        msgs.append(f"❌❌ PLAN ANNULÉ — {m}\n{'⬇️' if d == 1 else '⬆️'} Les unités de temps se retournent\n✂️ Coupe ta position maintenant")
+        msgs.append(f"❌❌ PLAN ANNULÉ — {m}\n{'⬇️' if d == 1 else '⬆️'} Les unités de temps se retournent\n✂️ Je coupe ma position")
     # Annonce économique pendant la position
     for ev in etat.get("cal", {}).get("ev", []):
         reste = ev["t"] - time.time()
         if 0 <= reste <= 30 * 60 and f"news{ev['t']}" not in vu:
             vu.append(f"news{ev['t']}")
             msgs.append(f"📰⚠️ NEWS dans {round(reste / 60)} min — {m}\n"
-                        + (f"🔒 Mets ton stop à l'entrée {px(e)}" if prog > 0.2 else "✂️ Le trade n'avance pas : mieux vaut couper avant la news"))
+                        + (f"🔒 Je mets mon stop à l'entrée {px(e)}" if prog > 0.2 else "✂️ Le trade n'avance pas : je coupe avant la news"))
     for c in dedans:
         for t in msgs:
             _envoi_sur(c, text=t, reply_markup=CLAVIER)
@@ -738,8 +742,8 @@ def agent(m, r, cle, ferme):
                            f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
-                out.append(f"🔔 PRÉPARE-TOI — {m} {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
-                           f"⏳ N'entre PAS encore : j'attends que le prix vienne dans la zone 🟨\n\n"
+                out.append(f"🔔 JE PRÉPARE UNE POSITION — {m} {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
+                           f"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨\n\n"
                            f"{fmt_trade(m, o, p)}\n\n"
                            f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}")
         if bloque or o["rr"] < 1.5:
@@ -752,7 +756,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append(f"🟡🟡 BIENTÔT — {m} approche de la zone 🟨\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Prépare ton ordre {'ACHAT 🟩' if d == 1 else 'VENTE 🟥'}, stop {px(o['sl'])}\n⏳ N'entre pas avant mon signal 🟢")
+            out.append(f"🟡🟡 BIENTÔT — {m} approche de la zone 🟨\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Je prépare mon ordre {'ACHAT 🟩' if d == 1 else 'VENTE 🟥'}, stop {px(o['sl'])}\n⏳ J'attends le signal 🟢")
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
@@ -775,7 +779,7 @@ def agent(m, r, cle, ferme):
             if surcharge:
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
-                out.append((f"🟢🟢🟢 ENTRE MAINTENANT — {m} 🟢🟢🟢\n✅ Prix dans la zone 🟨\n✅ RSI {'trop bas (rebond)' if d == 1 else 'trop haut (baisse)'} sur {', '.join(['5m'] + [u + 'm' for u in petites])}\n✅ Confirmé en 1h\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n✅ Prix dans la zone 🟨\n✅ RSI {'trop bas (rebond)' if d == 1 else 'trop haut (baisse)'} sur {', '.join(['5m'] + [u + 'm' for u in petites])}\n✅ Confirmé en 1h\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
@@ -918,7 +922,7 @@ def main():
                     if "403" in str(ex) and cid not in proprio(etat):
                         chats.discard(cid)   # l'abonné a bloqué le bot
             # Visiteurs non abonnés : teaser (positions masquées + bouton de paiement)
-            envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("PRÉPARE-TOI", "ENTRE MAINTENANT")))
+            envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("JE PRÉPARE", "J'ENTRE MAINTENANT")))
         for nom_marche in MARCHES:
             if nom_marche in derniers:
                 maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
