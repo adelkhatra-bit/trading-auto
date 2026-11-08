@@ -269,7 +269,8 @@ def telegram(methode, **params):
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "📈 Mes résultats"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}]],
+CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "📈 Mes résultats"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
+                                   [{"text": "🧩 Indicateur TradingView"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "💎 Devenir VIP"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
@@ -293,17 +294,18 @@ REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
           "📰 Je t'envoie les news : pas de trade juste avant ni juste après\n"
           "🤖 Appuie sur ✅ Je suis rentré : ton coach IA te suit jusqu'au TP\n"
           "📈 Tes gains et tes pertes sont calculés tout seuls\n"
+          "🧩 L'indicateur TradingView : bouton 🧩 en bas\n"
           "━━━━━━━━━━━━\n"
           "🤝 Partage à tes amis : https://t.me/align_mtf_adel_bot")
 
 def epingler(etat, cid):
     """Envoie les règles et les épingle en haut de la conversation (une seule fois par conversation)."""
-    if cid in etat.setdefault("epingles_v2", []):
+    if cid in etat.setdefault("epingles_v3", []):
         return
     try:
         res = telegram("sendMessage", chat_id=cid, text=REGLES, disable_notification="true")
         telegram("pinChatMessage", chat_id=cid, message_id=res["result"]["message_id"], disable_notification="true")
-        etat["epingles_v2"].append(cid)
+        etat["epingles_v3"].append(cid)
     except Exception as ex:
         print("epingler", cid, ex)
 
@@ -315,11 +317,13 @@ def message_partage(etat):
     txt = ("🤝 Tu aimes ALIGN Signaux ?\n"
            "📤 Partage-le à tes amis, fais-les en profiter\n"
            f"👉 {lien}\n"
-           "💎 Accès VIP symbolique : ≈ 10 € / mois")
+           "🎁 Positions gratuites\n🧩 Indicateur TradingView ≈ 10 € / mois")
     url = "https://t.me/share/url?" + urllib.parse.urlencode({"url": lien, "text": "📈 Signaux BTC + Gold en direct, simples et clairs 👇"})
     return txt, json.dumps({"inline_keyboard": [[{"text": "📤 Partager à un ami", "url": url}]]})
 
 OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet offert aux visiteurs tous les X jours
+POSITIONS_GRATUITES = os.environ.get("POSITIONS_GRATUITES", "1") == "1"   # positions gratuites pour tous, on vend l'indicateur
+LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script TradingView « invite-only » (à remplir après publication)
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
 
@@ -418,6 +422,22 @@ def traiter(etat, chats, updates):
         if cb:
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
+            if choix in ("tvoffre", "tvok") and qui in proprio(etat):
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="OK")
+                except Exception:
+                    pass
+                if choix == "tvoffre":
+                    etat.setdefault("indic_offert", []).append(mk)
+                    _envoi_sur(mk, text="🎁 L'indicateur t'est offert !\n👉 Appuie sur 🧩 Indicateur TradingView", reply_markup=CLAVIER)
+                    _envoi_sur(qui, text="✅ Indicateur offert. J'attends son pseudo TradingView.")
+                else:
+                    etat.setdefault("indic", {}).setdefault(mk, {})["ok"] = True
+                    _envoi_sur(mk, reply_markup=CLAVIER, text=(
+                        "✅ Accès indicateur ouvert !\n📍 TradingView → Indicateurs → Sur invitation\n🧩 ALIGN MTF PRO\n"
+                        + (f"🔗 {LIEN_INDICATEUR}\n" if LIEN_INDICATEUR else "") + "⏱ Mets-toi en vue 15 minutes"))
+                    _envoi_sur(qui, text="👍 Abonné prévenu.")
+                continue
             if choix in ("offrir", "retirer") and qui in proprio(etat):
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="OK")
@@ -474,6 +494,15 @@ def traiter(etat, chats, updates):
             chats.add(cid)
             telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.\n⬇️ Utilise les boutons en bas.\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
         txt = msg.get("text", "").lower().replace("é", "e")
+        if cid in etat.get("attente_tv", []) and msg.get("text") and not any(k in txt for k in ("analyse", "resultat", "rentre", "sorti", "indicateur")):
+            recevoir_pseudo(etat, cid, msg["text"])
+            continue
+        if "indicateur" in txt:
+            fr = msg.get("from", {})
+            nom = (fr.get("first_name", "") + (" @" + fr["username"] if fr.get("username") else "")).strip() or cid
+            etat.setdefault("noms", {})[cid] = nom
+            menu_indicateur(etat, cid, nom)
+            continue
         if "analyse" in txt or "etat" in txt:
             demandes.append(cid)
         elif "rentre" in txt or txt.strip() == "oui":
@@ -482,7 +511,7 @@ def traiter(etat, chats, updates):
             repondre(etat, cid, False)
         elif "resultat" in txt:
             _envoi_sur(cid, text=texte_resultats(etat, cid), reply_markup=CLAVIER)
-        elif cid not in proprio(etat):
+        elif cid not in proprio(etat) and not txt.startswith("/start"):
             _envoi_sur(cid, text="⌨️ Utilise les boutons en bas 👇", reply_markup=CLAVIER)
     return demandes
 def proprio(etat):
@@ -499,7 +528,54 @@ def membre(etat, user_id):
         print("membre", ex); return False
 
 def autorise(etat, cid, user_id):
+    if POSITIONS_GRATUITES:
+        return True
     return cid in proprio(etat) or cid in etat.get("offerts", []) or membre(etat, user_id)
+
+def a_indicateur(etat, cid):
+    """L'abonné a droit à l'indicateur : abonné payant à la chaîne, ou offert par le propriétaire."""
+    return cid in proprio(etat) or cid in etat.get("indic_offert", []) or membre(etat, int(cid))
+
+def bouton_indicateur(etat):
+    lien = etat.get("lien")
+    return json.dumps({"inline_keyboard": [[{"text": "🧩 Obtenir l'indicateur (≈ 10 € / mois)", "url": lien}]]}) if lien else None
+
+def menu_indicateur(etat, cid, user):
+    """Bouton 🧩 Indicateur : présentation, ou demande du pseudo TradingView si l'abonné y a droit."""
+    info = etat.setdefault("indic", {}).get(cid, {})
+    if a_indicateur(etat, cid):
+        if info.get("ok"):
+            _envoi_sur(cid, reply_markup=CLAVIER, text=(
+                "🧩 Indicateur ALIGN MTF PRO\n✅ Ton accès est actif\n"
+                f"👤 Pseudo   {info.get('tv', '?')}\n"
+                "📍 TradingView → Indicateurs → Sur invitation\n" + (f"🔗 {LIEN_INDICATEUR}" if LIEN_INDICATEUR else "")))
+            return
+        etat.setdefault("attente_tv", [])
+        if cid not in etat["attente_tv"]:
+            etat["attente_tv"].append(cid)
+        _envoi_sur(cid, reply_markup=json.dumps({"force_reply": True, "input_field_placeholder": "Ton pseudo TradingView"}), text=(
+            "🧩 Indicateur ALIGN MTF PRO\n✅ Tu y as droit\n✍️ Écris ton pseudo TradingView\n(exemple : adel_khatra)"))
+        return
+    kw = {"reply_markup": bouton_indicateur(etat)} if etat.get("lien") else {}
+    _envoi_sur(cid, text=(
+        "🧩 Indicateur ALIGN MTF PRO — TradingView\n━━━━━━━━━━━━\n"
+        "📊 Alignement des 11 unités de temps\n🟨 Zone d'entrée + Fibonacci\n🛑 Stop derrière la mèche\n"
+        "💰 TP sur les grosses unités de temps\n⚡ Surcharge RSI + explosions\n━━━━━━━━━━━━\n"
+        "🎁 Les positions restent gratuites ici\n💎 Indicateur ≈ 10 € / mois\n"
+        "👉 Après paiement, reviens appuyer sur 🧩"), **kw)
+    for p in proprio(etat):
+        _envoi_sur(p, text=f"🧩 {user} s'intéresse à l'indicateur",
+                   reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'indicateur", "callback_data": f"tvoffre:{cid}"}]]}))
+
+def recevoir_pseudo(etat, cid, pseudo):
+    pseudo = pseudo.strip().lstrip("@")[:40]
+    etat["attente_tv"].remove(cid)
+    etat.setdefault("indic", {})[cid] = {"tv": pseudo, "ok": False}
+    _envoi_sur(cid, text=f"👌 Pseudo reçu   {pseudo}\n⏳ Ton accès arrive très vite\n🔔 Je te préviens", reply_markup=CLAVIER)
+    for p in proprio(etat):
+        _envoi_sur(p, text=(f"🧩 Accès indicateur à donner\n👤 {etat.get('noms', {}).get(cid, cid)}\n📛 Pseudo TradingView   {pseudo}\n"
+                            "👉 TradingView → ton script → Gérer l'accès → ajoute ce pseudo"),
+                   reply_markup=json.dumps({"inline_keyboard": [[{"text": "✅ C'est fait, accès donné", "callback_data": f"tvok:{cid}"}]]}))
 
 def bouton_payer(etat):
     lien = etat.get("lien")
@@ -984,18 +1060,20 @@ def main():
         chats.add(os.environ["TELEGRAM_CHAT_ID"].strip())
     if "proprio" not in etat:           # les téléphones déjà inscrits = le propriétaire (accès gratuit et permanent)
         etat["proprio"] = sorted(chats)
+    if POSITIONS_GRATUITES and etat.get("prospects"):
+        chats |= set(etat["prospects"]); etat["prospects"] = []
 
     # Messages reçus et boutons
     debut = time.time()
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 3:
+        if etat.get("clavier") != 4:
             for cid in chats:
-                _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • 📈 Mes résultats • ✅ Je suis rentré • 🚪 Je suis sorti", reply_markup=CLAVIER)
+                _envoi_sur(cid, text="🆕 Nouveau bouton : 🧩 Indicateur TradingView", reply_markup=CLAVIER)
             for cid in etat.get("prospects", []):
                 _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 3
+            etat["clavier"] = 4
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
@@ -1013,7 +1091,13 @@ def main():
         # Toutes les heures : on retire les abonnés qui n'ont pas renouvelé
         if etat.get("canal") and time.time() - etat.get("purge", 0) > 3600:
             etat["purge"] = time.time()
-            for cid in [c for c in chats if c not in proprio(etat) and c not in etat.get("offerts", [])]:
+            for cid, info in list(etat.get("indic", {}).items()):
+                if info.get("ok") and not a_indicateur(etat, cid):
+                    info["ok"] = False
+                    _envoi_sur(cid, text="⏸ Ton abonnement indicateur n'est plus actif.", reply_markup=bouton_indicateur(etat))
+                    for p in proprio(etat):
+                        _envoi_sur(p, text=f"⛔ Retire l'accès TradingView de   {info.get('tv')}\n(abonnement non renouvelé)")
+            for cid in [c for c in chats if c not in proprio(etat) and c not in etat.get("offerts", []) and not POSITIONS_GRATUITES]:
                 if not membre(etat, int(cid)):
                     chats.discard(cid)
                     try:
