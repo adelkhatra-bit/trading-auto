@@ -2,7 +2,7 @@
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
 Prix gratuits Kraken (BTC = XBTUSD, Gold = PAXGUSD), signaux envoyés sur Telegram.
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
-import json, os, time, urllib.request, urllib.parse, datetime
+import json, os, time, urllib.request, urllib.error, urllib.parse, datetime
 from zoneinfo import ZoneInfo
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -15,9 +15,18 @@ POIDS = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
 
 # ───────── Données ─────────
 def http_json(url, data=None):
-    req = urllib.request.Request(url, data=data, headers={"User-Agent": "align-bot"})
-    with urllib.request.urlopen(req, timeout=70) as r:
-        return json.loads(r.read().decode())
+    """Appel HTTP avec 3 essais en cas de coupure réseau (ex. « Connection reset by peer »)."""
+    for essai in range(3):
+        try:
+            req = urllib.request.Request(url, data=data, headers={"User-Agent": "align-bot"})
+            with urllib.request.urlopen(req, timeout=70) as r:
+                return json.loads(r.read().decode())
+        except urllib.error.HTTPError:
+            raise                      # vraie réponse d'erreur de l'API : inutile de réessayer
+        except Exception:
+            if essai == 2:
+                raise
+            time.sleep(2 * (essai + 1))
 
 def kraken(pair, interval):
     j = http_json(f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}")
@@ -707,6 +716,15 @@ def main():
                 etat["bot"] = telegram("getMe")["result"]["username"]
             except Exception as ex:
                 print("getMe", ex)
+        # Chaîne VIP connectée mais lien d'abonnement pas encore créé : on réessaie à chaque lancement
+        if etat.get("canal") and not etat.get("lien"):
+            try:
+                etat["lien"] = telegram("createChatSubscriptionInviteLink", chat_id=etat["canal"], name="Abonnement VIP",
+                                        subscription_period=2592000, subscription_price=PRIX_STARS)["result"]["invite_link"]
+                for p in proprio(etat):
+                    telegram("sendMessage", chat_id=p, text=f"💳 Lien d'abonnement VIP créé ({PRIX_STARS} ⭐ / mois, ≈ 10 €) :\n{etat['lien']}\n\n👉 C'est ce lien que tu partages pour vendre l'accès.")
+            except Exception as ex:
+                print("lien abonnement", ex)
         # Toutes les heures : on retire les abonnés qui n'ont pas renouvelé
         if etat.get("canal") and time.time() - etat.get("purge", 0) > 3600:
             etat["purge"] = time.time()
