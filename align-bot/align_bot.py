@@ -232,19 +232,37 @@ def texte_plan(nom_marche, r, p, d):
             f"TP1 : {px(p['tp1'])} ({p['n1']})\nTP2 : {px(p['tp2'])} ({p['n2']})\n"
             f"Stop : {px(p['sl'])}\nGain/risque ≈ {p['rr']:.1f}")
 
-def texte_etat(nom_marche, r):
-    d = r["dirPlan"]
-    lignes = [f"📊 {nom_marche} — prix {px(r['prix'])}",
-              "UT 1·2·5·10·15·30·45·1h·2h·4h·D",
-              barre(r),
-              f"Sens probable : {'HAUSSE' if r['sens'] == 1 else 'BAISSE' if r['sens'] == -1 else 'INDÉCIS'} ({r['pctH']}% hausse)",
-              f"{r['bull']} UT hausse • {r['bear']} baisse • {r['comp']} comprimées • RSI surachat {r['rsiOB']} / survente {r['rsiOS']}"]
-    if r["retHaut"]: lignes.append("Retournement HAUSSIER en préparation")
-    if r["retBas"]: lignes.append("Retournement BAISSIER en préparation")
+def texte_etat(nom_marche, r, cle=None, vip=True):
+    """Analyse lisible : une seule information par ligne + radar de la prochaine position."""
+    fl = lambda d: "⬆️ hausse" if d == 1 else "⬇️ baisse" if d == -1 else "➖ neutre"
+    d15, d1h, d4h = r["dirs"][4], r["dirs"][7], r["dirs"][9]
+    maj = 1 if [d15, d1h, d4h].count(1) >= 2 else -1 if [d15, d1h, d4h].count(-1) >= 2 else 0
+    n_ok = [d15, d1h, d4h].count(maj) if maj else 0
     al = r["confirme"]
-    lignes.append(f"Alignement 15m/1h/4h : {'▲ HAUSSE' if al == 1 else '▼ BAISSE' if al == -1 else 'NON — pas de trade'} • RSI 5m {r['r5'][-1]:.0f}")
-    lignes.append(f"Zone Daily : {zone_txt(r['posD'])} • Zone Weekly : {zone_txt(r['posW'])}")
-    return "\n".join(lignes)
+    l = [f"📊 {nom_marche}   {px(r['prix'])}",
+         "━━━━━━━━━━━━",
+         f"15 min   {fl(d15)}",
+         f"1 h        {fl(d1h)}",
+         f"4 h        {fl(d4h)}",
+         "━━━━━━━━━━━━",
+         f"🧭 Alignement   {n_ok}/3 {'✅' if al else '⏳'}",
+         f"🎯 Sens   {'⬆️ HAUSSE' if r['sens'] == 1 else '⬇️ BAISSE' if r['sens'] == -1 else '➖ INDÉCIS'}",
+         f"💥 RSI 5 min   {r['r5'][-1]:.0f}",
+         f"📍 Daily   {zone_txt(r['posD'])}",
+         f"📍 Weekly   {zone_txt(r['posW'])}"]
+    if r["retHaut"] or r["retBas"]:
+        l.append(f"🔄 Retournement {'⬆️' if r['retHaut'] else '⬇️'} en préparation")
+    l.append("━━━━━━━━━━━━")
+    o = (cle or {}).get("trade") or (cle or {}).get("ordre")
+    if (cle or {}).get("trade"):
+        l.append(f"🟢 Position en cours   {'⬆️ ACHAT' if o['d'] == 1 else '⬇️ VENTE'}")
+    elif al and o:
+        zone = f"{px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🔒🔒🔒"
+        l.append(f"🔜 Prochaine position   {'⬆️ ACHAT' if al == 1 else '⬇️ VENTE'}")
+        l.append(f"🟨 Zone   {zone}")
+    l.append(f"📡 Radar   {barre_pct(100 * n_ok / 3, 6)}")
+    l.append("✅ Position possible" if al else f"⏳ Attendre l'alignement ({3 - n_ok} UT à confirmer)")
+    return "\n".join(l)
 
 def telegram(methode, **params):
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
@@ -259,10 +277,10 @@ OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet off
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
 
-def envoyer_analyse(cid):
+def envoyer_analyse(cid, etat=None):
     for nom_marche, pair in MARCHES.items():
         try:
-            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, analyser(pair)), reply_markup=CLAVIER)
+            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, analyser(pair), (etat or {}).get(nom_marche)), reply_markup=CLAVIER)
         except Exception as ex:
             print("analyse", ex)
 
@@ -288,9 +306,27 @@ def traiter(etat, chats, updates):
             continue
         cb = u.get("callback_query")
         if cb:
-            if not autorise(etat, str(cb["message"]["chat"]["id"]), cb["from"]["id"]):
-                continue
             choix, _, mk = cb.get("data", "").partition(":")
+            qui = str(cb["message"]["chat"]["id"])
+            if choix in ("offrir", "retirer") and qui in proprio(etat):
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="OK")
+                except Exception:
+                    pass
+                off = etat.setdefault("offerts", [])
+                if choix == "offrir" and mk not in off:
+                    off.append(mk); chats.add(mk)
+                    if mk in etat.get("prospects", []):
+                        etat["prospects"].remove(mk)
+                    _envoi_sur(mk, text="🎁 Accès VIP offert !\n✅ Tu reçois maintenant toutes les positions\n⬇️ Utilise les boutons en bas", reply_markup=CLAVIER)
+                    _envoi_sur(qui, text=f"✅ Accès VIP offert à {etat.get('noms', {}).get(mk, mk)}",
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "⛔ Retirer l'accès", "callback_data": f"retirer:{mk}"}]]}))
+                elif choix == "retirer" and mk in off:
+                    off.remove(mk); chats.discard(mk)
+                    _envoi_sur(qui, text=f"⛔ Accès retiré à {etat.get('noms', {}).get(mk, mk)}")
+                continue
+            if not autorise(etat, qui, cb["from"]["id"]):
+                continue
             try:
                 telegram("answerCallbackQuery", callback_query_id=cb["id"])
             except Exception:
@@ -309,6 +345,12 @@ def traiter(etat, chats, updates):
             if cid not in etat.setdefault("prospects", []):
                 etat["prospects"].append(cid)       # visiteur : signaux masqués en direct + 1 signal offert de temps en temps
                 refuser(etat, cid)
+                fr = msg.get("from", {})
+                nom = (fr.get("first_name", "") + (" @" + fr["username"] if fr.get("username") else "")).strip() or cid
+                etat.setdefault("noms", {})[cid] = nom
+                for p in proprio(etat):    # le propriétaire peut offrir l'accès en 1 clic
+                    _envoi_sur(p, text=f"👤 Nouveau visiteur : {nom}",
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'accès VIP", "callback_data": f"offrir:{cid}"}]]}))
             elif "analyse" in txtv:
                 analyse_visiteur(etat, cid)
             else:
@@ -341,7 +383,7 @@ def membre(etat, user_id):
         print("membre", ex); return False
 
 def autorise(etat, cid, user_id):
-    return cid in proprio(etat) or membre(etat, user_id)
+    return cid in proprio(etat) or cid in etat.get("offerts", []) or membre(etat, user_id)
 
 def bouton_payer(etat):
     lien = etat.get("lien")
@@ -351,7 +393,7 @@ def analyse_visiteur(etat, cid):
     """Analyse gratuite pour les visiteurs : tendance visible, plan de trade réservé VIP."""
     for nom_marche, pair in MARCHES.items():
         try:
-            _envoi_sur(cid, text=texte_etat(nom_marche, analyser(pair)), reply_markup=CLAVIER_VISITEUR)
+            _envoi_sur(cid, text=texte_etat(nom_marche, analyser(pair), etat.get(nom_marche), vip=False), reply_markup=CLAVIER_VISITEUR)
         except Exception as ex:
             print("analyse visiteur", ex)
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
@@ -826,7 +868,7 @@ def main():
         # Toutes les heures : on retire les abonnés qui n'ont pas renouvelé
         if etat.get("canal") and time.time() - etat.get("purge", 0) > 3600:
             etat["purge"] = time.time()
-            for cid in [c for c in chats if c not in proprio(etat)]:
+            for cid in [c for c in chats if c not in proprio(etat) and c not in etat.get("offerts", [])]:
                 if not membre(etat, int(cid)):
                     chats.discard(cid)
                     try:
@@ -851,7 +893,7 @@ def main():
         derniers[nom_marche] = r
         cle["vu"] = r["t"]
         for cid in demandes:
-            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r), reply_markup=CLAVIER)
+            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r, cle), reply_markup=CLAVIER)
         print(texte_etat(nom_marche, r), "\n")
 
     try:
@@ -890,7 +932,7 @@ def main():
         except Exception as ex:
             print("ecoute", ex); break
         for cid in traiter(etat, chats, maj):
-            envoyer_analyse(cid)
+            envoyer_analyse(cid, etat)
     etat["chats"] = sorted(chats)
     json.dump(etat, open(ETAT_FICHIER, "w"))
 
