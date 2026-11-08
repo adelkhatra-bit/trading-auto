@@ -361,7 +361,18 @@ def noter(etat, cid, m, pos, sortie, motif):
         + f"📊 {pct:+.2f} %\n"
         + ("🎉 Bravo !" if pts > 0 else "💪 On repart au prochain")))
 
+def texte_bilan(etat):
+    b = etat.get("bilan")
+    if not b or not (b["tp"] + b["sl"]):
+        return "🤖 Bilan du bot   en cours de construction"
+    n = b["tp"] + b["sl"]
+    return (f"🤖 Bilan du bot\n✅ TP   {b['tp']}\n❌ SL   {b['sl']}\n"
+            f"🎯 Réussite   {round(100 * b['tp'] / n)} %\n💰 Total   {b['pct']:+.2f} %")
+
 def texte_resultats(etat, cid):
+    return _texte_resultats(etat, cid) + "\n━━━━━━━━━━━━\n" + texte_bilan(etat)
+
+def _texte_resultats(etat, cid):
     st = etat.get("stats", {}).get(cid)
     if not st:
         return "📈 Mes résultats\n━━━━━━━━━━━━\nAucun trade clôturé pour l'instant.\n👉 Appuie sur ✅ Je suis rentré quand tu prends une position."
@@ -993,7 +1004,14 @@ def agent(m, r, cle, ferme):
             if surcharge:
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n✅ Prix dans la zone 🟨\n✅ RSI {'trop bas (rebond)' if d == 1 else 'trop haut (baisse)'} sur {', '.join(['5m'] + [u + 'm' for u in petites])}\n✅ Confirmé en 1h\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                niveau = "Fibonacci" not in o["src"] or "+" in o["src"]   # confluence avec un niveau 15m / 1h / 4h ou l'EMA
+                checks = [("15 min • 1 h • 4 h alignées", True), ("Daily / Weekly favorables", True),
+                          ("Zone Fibonacci 50 – 78,6 %", True), ("Niveau 15m / 1h / 4h ou EMA", niveau),
+                          (f"RSI en surcharge ({', '.join(['5m'] + [u + 'm' for u in petites])})", True), ("Confirmé en 1 h", True),
+                          ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= 1.5)]
+                score = sum(ok for _, ok in checks)
+                liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
@@ -1122,6 +1140,11 @@ def main():
             if cle.get("fin"):
                 trf, sortie, motif = cle.pop("fin")
                 cloturer_abonnes(etat, nom_marche, trf, sortie, motif)
+                # Bilan du bot (toutes ses positions, que des abonnés soient rentrés ou non)
+                bil = etat.setdefault("bilan", {"tp": 0, "sl": 0, "pct": 0.0})
+                gain = trf["d"] * (sortie - trf["e"]) / trf["e"] * 100
+                bil["tp" if gain > 0 else "sl"] += 1
+                bil["pct"] += gain
         derniers[nom_marche] = r
         cle["vu"] = r["t"]
         for cid in demandes:
