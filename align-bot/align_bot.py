@@ -244,6 +244,7 @@ def telegram(methode, **params):
 # ───────── Boutons et jauge ─────────
 CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "✅ Je suis rentré"}, {"text": "❌ Non"}]],
                       "resize_keyboard": True, "is_persistent": True})
+PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
 
 def envoyer_analyse(cid):
@@ -256,11 +257,11 @@ def envoyer_analyse(cid):
 def repondre(etat, cid, oui, mk=None):
     """Oui / Non sur le trade en attente de réponse (ou sur le marché du bouton cliqué)."""
     cands = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
-    cands = [m for m in cands if etat[m]["trade"].get("moi") is None] or cands
+    cands = [m for m in cands if cid not in etat[m]["trade"].get("qui", {})] or cands
     if not cands:
         telegram("sendMessage", chat_id=cid, text="Aucun trade en cours pour le moment. Je te préviens dès qu'il y a une entrée.", reply_markup=CLAVIER)
         return
-    m = cands[0]; etat[m]["trade"]["moi"] = oui
+    m = cands[0]; etat[m]["trade"].setdefault("qui", {})[cid] = oui
     telegram("sendMessage", chat_id=cid, reply_markup=CLAVIER,
              text=(f"👊 OK, on est dedans ensemble sur {m}. Je te coache jusqu'au TP." if oui else f"👌 OK, pas de position sur {m}. J'attends le prochain setup."))
 
@@ -269,8 +270,14 @@ def traiter(etat, chats, updates):
     demandes = []
     for u in updates:
         etat["offset"] = u["update_id"] + 1
+        mcm = u.get("my_chat_member")
+        if mcm and mcm["chat"].get("type") in ("channel", "supergroup"):
+            connecter_canal(etat, mcm)
+            continue
         cb = u.get("callback_query")
         if cb:
+            if not autorise(etat, str(cb["message"]["chat"]["id"]), cb["from"]["id"]):
+                continue
             choix, _, mk = cb.get("data", "").partition(":")
             try:
                 telegram("answerCallbackQuery", callback_query_id=cb["id"])
@@ -281,6 +288,11 @@ def traiter(etat, chats, updates):
         msg = u.get("message") or {}
         cid = str(msg.get("chat", {}).get("id", ""))
         if not cid:
+            continue
+        if msg.get("chat", {}).get("type") != "private":
+            continue
+        if not autorise(etat, cid, msg.get("from", {}).get("id")):
+            refuser(etat, cid); chats.discard(cid)
             continue
         if cid not in chats:
             chats.add(cid)
@@ -293,6 +305,58 @@ def traiter(etat, chats, updates):
         elif "non" in txt:
             repondre(etat, cid, False)
     return demandes
+def proprio(etat):
+    return set(etat.get("proprio", []))
+
+def membre(etat, user_id):
+    """Abonné à jour = membre de la chaîne VIP (Telegram retire automatiquement ceux qui ne paient plus)."""
+    if not etat.get("canal") or not user_id:
+        return False
+    try:
+        st = telegram("getChatMember", chat_id=etat["canal"], user_id=user_id)["result"]["status"]
+        return st in ("member", "administrator", "creator")
+    except Exception as ex:
+        print("membre", ex); return False
+
+def autorise(etat, cid, user_id):
+    return cid in proprio(etat) or membre(etat, user_id)
+
+def refuser(etat, cid):
+    lien = etat.get("lien")
+    _envoi_sur(cid, text=("🔒 Les signaux ALIGN sont réservés aux abonnés VIP.\n"
+             + (f"Abonnement mensuel : {lien}\nUne fois abonné, reviens ici et appuie sur /start." if lien else "Ouverture des abonnements très bientôt.")))
+
+def _envoi_sur(cid, **kw):
+    try:
+        telegram("sendMessage", chat_id=cid, **kw)
+    except Exception as ex:
+        print("envoi", cid, ex)
+
+def connecter_canal(etat, mcm):
+    """Le bot vient d'être ajouté (ou retiré) comme administrateur d'une chaîne : il la prend comme chaîne VIP."""
+    chat, st = mcm["chat"], mcm["new_chat_member"]["status"]
+    cid = str(chat["id"])
+    if st == "administrator":
+        etat["canal"] = cid; etat["canal_nom"] = chat.get("title", "")
+        texte = f"✅ Bot connecté à la chaîne « {etat['canal_nom']} ». Les signaux y seront publiés automatiquement."
+        try:
+            if chat.get("type") == "channel" and not etat.get("lien"):
+                res = telegram("createChatSubscriptionInviteLink", chat_id=cid, name="Abonnement VIP",
+                               subscription_period=2592000, subscription_price=PRIX_STARS)["result"]
+                etat["lien"] = res["invite_link"]
+            if etat.get("lien"):
+                texte += f"\n💳 Lien d'abonnement ({PRIX_STARS} ⭐ / mois) : {etat['lien']}\nC'est ce lien que tu partages pour vendre l'accès."
+        except Exception as ex:
+            texte += f"\n⚠️ Lien d'abonnement non créé automatiquement ({ex}). Crée-le dans la chaîne : Liens d'invitation → Abonnement mensuel."
+        for p in proprio(etat):
+            telegram("sendMessage", chat_id=p, text=texte)
+    elif etat.get("canal") == cid and st in ("left", "kicked", "member"):
+        etat.pop("canal", None)
+
+def destinataires(etat, chats):
+    """Téléphones qui reçoivent les signaux + la chaîne VIP."""
+    return list(chats) + ([etat["canal"]] if etat.get("canal") else [])
+
 def boutons(m):
     return json.dumps({"inline_keyboard": [[{"text": "✅ Je suis rentré", "callback_data": f"in:{m}"},
                                             {"text": "❌ Non", "callback_data": f"out:{m}"}]]})
@@ -301,10 +365,10 @@ def barre_pct(pct, n=10):
     pct = max(0, min(100, pct)); plein = round(pct / 100 * n)
     return "▓" * plein + "░" * (n - plein) + f" {pct:.0f}%"
 
-def jauge(m, r, cle):
+def jauge(m, r, cle, cid=None, canal=False):
     """Texte de la jauge (un seul message mis à jour toutes les 5 min), ou None."""
     tr = cle.get("trade"); p = r["m1"][-1]["c"]; d = r["confirme"]
-    if tr and tr.get("moi"):
+    if tr and (canal or tr.get("qui", {}).get(cid)):
         e, t1, t2 = tr["e"], tr["tp1"], tr["tp2"]; cible = t2 if tr["statut"] == "tp1" else t1
         pct = 100 * tr["d"] * (p - e) / max(abs(cible - e), 1e-9)
         vit = abs(r["m1"][-1]["c"] - r["m1"][-31]["c"]) / 30 if len(r["m1"]) > 31 else 0   # vitesse moyenne / minute
@@ -320,9 +384,9 @@ def jauge(m, r, cle):
                 + (f" • arrivée ≈ {reste:.0f} min" if reste and reste < 300 else ""))
     return None
 
-def maj_jauge(m, r, cle, chats):
-    txt = jauge(m, r, cle)
-    for cid in chats:
+def maj_jauge(m, r, cle, chats, canal=None):
+    for cid in list(chats) + ([canal] if canal else []):
+        txt = jauge(m, r, cle, cid, cid == canal)
         mid = cle.get("jauge", {}).get(cid)
         try:
             if txt and mid:
@@ -555,8 +619,6 @@ def agent(m, r, cle, ferme):
     touche_t2 = (hi >= t2) if d == 1 else (lo <= t2)
     progres = d * (p - e) / max(abs(t1 - e), 1e-9)
 
-    if tr.get("moi") is False:
-        cle.pop("trade"); cle["aligne"] = 0; return out
     if tr["statut"] == "entree":
         if touche_sl:
             out.append(f"❌ {m} : stop {px(sl)} touché. On coupe, prochain setup bientôt.")
@@ -568,13 +630,15 @@ def agent(m, r, cle, ferme):
         if progres < 0.25:
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
                 tr["encore"] += 1
-                if tr.get("moi") is None:
+                if True:
                     out.append((f"👍 {m} : tu peux encore rentrer ({px(p)}). Stop {px(sl)} • TP1 {px(t1)}\n\nTu es rentré ?", boutons(m)))
         elif not tr.get("tard"):
             tr["tard"] = True
-            if tr.get("moi") is None:
+            if not any(tr.get("qui", {}).values()):
                 out.append(f"⛔ {m} : trop tard pour rentrer. On attend le prochain setup.")
                 cle.pop("trade"); cle["aligne"] = 0
+            else:
+                out.append(f"⛔ {m} : trop tard pour rentrer maintenant. Ceux qui sont dedans : on continue vers le TP1 {px(t1)}.")
         return out
 
     if tr["statut"] == "tp1":
@@ -601,6 +665,8 @@ def main():
     chats = set(etat.get("chats", []))
     if os.environ.get("TELEGRAM_CHAT_ID"):
         chats.add(os.environ["TELEGRAM_CHAT_ID"].strip())
+    if "proprio" not in etat:           # les téléphones déjà inscrits = le propriétaire (accès gratuit et permanent)
+        etat["proprio"] = sorted(chats)
 
     # Messages reçus et boutons
     debut = time.time()
@@ -611,6 +677,22 @@ def main():
             for cid in chats:
                 telegram("sendMessage", chat_id=cid, text="🆕 Boutons activés : 📊 Analyse • ✅ Je suis rentré • ❌ Non", reply_markup=CLAVIER)
             etat["clavier"] = 1
+        if not etat.get("bot"):
+            try:
+                etat["bot"] = telegram("getMe")["result"]["username"]
+            except Exception as ex:
+                print("getMe", ex)
+        # Toutes les heures : on retire les abonnés qui n'ont pas renouvelé
+        if etat.get("canal") and time.time() - etat.get("purge", 0) > 3600:
+            etat["purge"] = time.time()
+            for cid in [c for c in chats if c not in proprio(etat)]:
+                if not membre(etat, int(cid)):
+                    chats.discard(cid)
+                    try:
+                        telegram("sendMessage", chat_id=cid, text="⏸ Ton abonnement VIP n'est plus actif. Les signaux sont en pause."
+                                 + (f"\nRenouveler : {etat['lien']}" if etat.get("lien") else ""))
+                    except Exception:
+                        pass
 
     envois, derniers = [], {}
     calendrier(etat, int(time.time()))
@@ -636,14 +718,23 @@ def main():
     if TOKEN:
         for t in envois:
             texte, clavier = (t if isinstance(t, tuple) else (t, None))
-            for cid in chats:
-                if clavier:
-                    telegram("sendMessage", chat_id=cid, text=texte, reply_markup=clavier)
-                else:
-                    telegram("sendMessage", chat_id=cid, text=texte)
+            for cid in destinataires(etat, chats):
+                try:
+                    if cid == etat.get("canal"):
+                        # Chaîne VIP : texte seul, le coaching Oui / Non se fait en privé avec le bot
+                        txt = texte.replace("\n\nTu es rentré ?", "") + (f"\n\n👉 Coaching perso : @{etat['bot']}" if clavier and etat.get("bot") else "")
+                        telegram("sendMessage", chat_id=cid, text=txt)
+                    elif clavier:
+                        telegram("sendMessage", chat_id=cid, text=texte, reply_markup=clavier)
+                    else:
+                        telegram("sendMessage", chat_id=cid, text=texte)
+                except Exception as ex:
+                    print("envoi", cid, ex)
+                    if "403" in str(ex) and cid not in proprio(etat):
+                        chats.discard(cid)   # l'abonné a bloqué le bot
         for nom_marche in MARCHES:
             if nom_marche in derniers:
-                maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats)
+                maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
     print(f"{len(envois)} signal(s) envoyé(s) à {len(chats)} téléphone(s)")
     json.dump(dict(etat, chats=sorted(chats)), open(ETAT_FICHIER, "w"))
     # Écoute en continu jusqu'au prochain lancement : réponses presque immédiates aux boutons
