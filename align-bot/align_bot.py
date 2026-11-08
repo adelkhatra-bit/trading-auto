@@ -290,16 +290,20 @@ REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
           "7️⃣ ⚖️ Petit risque : 1 à 2 % du compte maximum par position\n"
           "8️⃣ ⚠️ Le trading peut faire perdre tout le capital\n"
           "━━━━━━━━━━━━\n"
+          "📰 Je t'envoie les news : pas de trade juste avant ni juste après\n"
+          "🤖 Appuie sur ✅ Je suis rentré : ton coach IA te suit jusqu'au TP\n"
+          "📈 Tes gains et tes pertes sont calculés tout seuls\n"
+          "━━━━━━━━━━━━\n"
           "🤝 Partage à tes amis : https://t.me/align_mtf_adel_bot")
 
 def epingler(etat, cid):
     """Envoie les règles et les épingle en haut de la conversation (une seule fois par conversation)."""
-    if cid in etat.setdefault("epingles", []):
+    if cid in etat.setdefault("epingles_v2", []):
         return
     try:
         res = telegram("sendMessage", chat_id=cid, text=REGLES, disable_notification="true")
         telegram("pinChatMessage", chat_id=cid, message_id=res["result"]["message_id"], disable_notification="true")
-        etat["epingles"].append(cid)
+        etat["epingles_v2"].append(cid)
     except Exception as ex:
         print("epingler", cid, ex)
 
@@ -376,7 +380,9 @@ def repondre(etat, cid, oui, mk=None):
         _envoi_sur(cid, reply_markup=CLAVIER, text=(
             f"👊 C'est noté, on est dedans sur {m} {'⬆️ ACHAT' if tr['d'] == 1 else '⬇️ VENTE'}\n"
             f"📌 Ton entrée figée   {px(e)}\n🛑 Ton stop   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n"
-            f"🤖 Je calcule ton résultat automatiquement"))
+            f"🤖 Ton coach IA te suit jusqu'au TP\n"
+            f"📰 Je te préviens si une news arrive\n"
+            f"📈 Ton résultat est calculé tout seul"))
         return
     ouverts = [m for m in trades if isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict) and not etat[m]["trade"]["qui"][cid].get("fini")]
     if not ouverts:
@@ -800,6 +806,27 @@ def coach(etat, m, r, cle):
     if perte >= 0.6 and "danger" not in vu:
         vu.append("danger")
         msgs.append(f"⚠️ {m} : le prix revient contre nous\n🛑 Garde ton stop {px(tr['sl'])}, ne le déplace pas")
+    # Petites perturbations pendant le trade (messages rassurants, 1 fois toutes les 30-45 min max)
+    tps = tr.setdefault("coach_t", {})
+    def libre(cle_m, minutes):
+        if time.time() - tps.get(cle_m, 0) >= minutes * 60:
+            tps[cle_m] = time.time(); return True
+        return False
+    r5 = r["r5"][-1]
+    surcharge5 = (r5 >= 65) if d == -1 else (r5 <= 35)
+    grandes_ok = r["dirs"][7] == d and r["dirs"][9] == d
+    if 0.25 <= perte < 0.6 and grandes_ok and libre("perturb", 30):
+        msgs.append(f"😌 {m} : petite perturbation, c'est normal\n"
+                    + (f"⚡ Surcharge RSI en 5 min ({r5:.0f})\n" if surcharge5 else "")
+                    + f"✅ 1 h et 4 h toujours {'⬆️' if d == 1 else '⬇️'}\n"
+                    f"{fleche} Le marché devrait reprendre vers le TP\n🛑 Stop {px(tr['sl'])} en place, on ne touche à rien")
+    if 0 < prog < 0.7:
+        a = r["atr"]
+        obstacle = [(v, n) for v, n in r["niveaux"] if n in ("15m", "1h", "4h") and abs(v - p) <= 0.3 * a and d * (cible - v) > 0]
+        if obstacle and libre("mur", 45):
+            v, n = obstacle[0]
+            msgs.append(f"🧱 {m} : le prix teste {'une résistance' if d == 1 else 'un support'} {n} ({px(v)})\n"
+                        f"⏸ Patience, c'est une pause normale\n{fleche} S'il casse, direction le TP 🎯")
     # Plan annulé : la 4h se retourne, ou la 15m ET la 1h passent contre nous
     dirs = r["dirs"]
     if (dirs[9] == -d or (dirs[4] == -d and dirs[7] == -d)) and "annule" not in vu and tr["statut"] == "entree":
