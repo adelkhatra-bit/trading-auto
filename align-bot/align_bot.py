@@ -277,6 +277,18 @@ AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
 MINI_AVERT = "ℹ️ Ma position perso • pas un conseil • risque de perte"
+PARTAGE_JOURS = int(os.environ.get("PARTAGE_JOURS", "3"))  # rappel « partage à tes amis » tous les X jours
+
+def message_partage(etat):
+    """Invitation à partager le bot (texte court + bouton de partage Telegram)."""
+    lien = f"https://t.me/{etat.get('bot') or 'align_mtf_adel_bot'}"
+    txt = ("🤝 Tu aimes ALIGN Signaux ?\n"
+           "📤 Partage-le à tes amis, fais-les en profiter\n"
+           f"👉 {lien}\n"
+           "💎 Accès VIP symbolique : ≈ 10 € / mois")
+    url = "https://t.me/share/url?" + urllib.parse.urlencode({"url": lien, "text": "📈 Signaux BTC + Gold en direct, simples et clairs 👇"})
+    return txt, json.dumps({"inline_keyboard": [[{"text": "📤 Partager à un ami", "url": url}]]})
+
 OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet offert aux visiteurs tous les X jours
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
@@ -902,6 +914,13 @@ def main():
 
     try:
         envois += annonces_et_sessions(etat, int(time.time()), derniers)
+        # Rappel de partage (jamais la nuit) : abonnés, visiteurs et chaîne VIP
+        h = datetime.datetime.now(PARIS).hour
+        if TOKEN and 11 <= h <= 20 and time.time() - etat.get("partage_t", 0) >= PARTAGE_JOURS * 86400:
+            etat["partage_t"] = time.time()
+            txt, kb = message_partage(etat)
+            for cid in set(destinataires(etat, chats)) | set(etat.get("prospects", [])):
+                _envoi_sur(cid, text=txt, reply_markup=kb)
     except Exception as ex:
         print("annonces", ex)
     if TOKEN:
