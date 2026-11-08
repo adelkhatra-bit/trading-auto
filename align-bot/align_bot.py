@@ -310,16 +310,17 @@ REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
           "📈 Tes gains et tes pertes sont calculés tout seuls\n"
           "🧩 L'indicateur TradingView : bouton 🧩 en bas\n"
           "━━━━━━━━━━━━\n"
-          "🤝 Partage à tes amis : https://t.me/align_mtf_adel_bot")
+          "🤝 Partage à tes amis :\n"
+          "👉 https://t.me/align_mtf_adel_bot")
 
 def epingler(etat, cid):
     """Envoie les règles et les épingle en haut de la conversation (une seule fois par conversation)."""
-    if cid in etat.setdefault("epingles_v3", []):
+    if cid in etat.setdefault("epingles_v4", []):
         return
     try:
         res = telegram("sendMessage", chat_id=cid, text=REGLES, disable_notification="true")
         telegram("pinChatMessage", chat_id=cid, message_id=res["result"]["message_id"], disable_notification="true")
-        etat["epingles_v3"].append(cid)
+        etat["epingles_v4"].append(cid)
     except Exception as ex:
         print("epingler", cid, ex)
 
@@ -982,7 +983,11 @@ def agent(m, r, cle, ferme):
             else:
                 cle["ordre"] = o
                 out.append(f"🔔 JE PRÉPARE UNE POSITION — {m} {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
-                           f"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨\n\n"
+                           f"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨\n"
+                           f"👀 Mets-toi en vue 15 minutes\n"
+                           f"🕯 Repère {'le dernier creux (mèche du bas)' if d == 1 else 'le dernier sommet (mèche du haut)'}\n"
+                           f"🟨 L'entrée sera à peu près {'au-dessus de ce creux' if d == 1 else 'sous ce sommet'}\n"
+                           f"🚦 Attends mon feu vert 🟢\n\n"
                            f"{fmt_trade(m, o, p)}\n\n"
                            f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}")
         if bloque or o["rr"] < 1.5:
