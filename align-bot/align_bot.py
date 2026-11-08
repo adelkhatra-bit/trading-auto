@@ -251,8 +251,11 @@ def telegram(methode, **params):
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "✅ Je suis rentré"}, {"text": "❌ Non"}]],
+CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}]],
                       "resize_keyboard": True, "is_persistent": True})
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "💎 Devenir VIP"}]],
+                               "resize_keyboard": True, "is_persistent": True})
+OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet offert aux visiteurs tous les X jours
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
 
@@ -302,9 +305,14 @@ def traiter(etat, chats, updates):
             continue
         if not autorise(etat, cid, msg.get("from", {}).get("id")):
             chats.discard(cid)
+            txtv = msg.get("text", "").lower()
             if cid not in etat.setdefault("prospects", []):
-                etat["prospects"].append(cid)       # visiteur : reçoit les signaux masqués + 1 signal offert par jour
-            refuser(etat, cid)
+                etat["prospects"].append(cid)       # visiteur : signaux masqués en direct + 1 signal offert de temps en temps
+                refuser(etat, cid)
+            elif "analyse" in txtv:
+                analyse_visiteur(etat, cid)
+            else:
+                refuser(etat, cid)
             continue
         if cid in etat.get("prospects", []):
             etat["prospects"].remove(cid)
@@ -316,7 +324,7 @@ def traiter(etat, chats, updates):
             demandes.append(cid)
         elif "rentre" in txt or txt.strip() == "oui":
             repondre(etat, cid, True)
-        elif "non" in txt:
+        elif "sorti" in txt or "non" in txt:
             repondre(etat, cid, False)
     return demandes
 def proprio(etat):
@@ -339,7 +347,18 @@ def bouton_payer(etat):
     lien = etat.get("lien")
     return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (≈ 10 € / mois)", "url": lien}]]}) if lien else None
 
+def analyse_visiteur(etat, cid):
+    """Analyse gratuite pour les visiteurs : tendance visible, plan de trade réservé VIP."""
+    for nom_marche, pair in MARCHES.items():
+        try:
+            _envoi_sur(cid, text=texte_etat(nom_marche, analyser(pair)), reply_markup=CLAVIER_VISITEUR)
+        except Exception as ex:
+            print("analyse visiteur", ex)
+    kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
+    _envoi_sur(cid, text="🔒 Entrée, stop, TP et coaching en direct : réservés aux VIP 💎", **kw)
+
 def refuser(etat, cid):
+    _envoi_sur(cid, text="👋 ALIGN Signaux — BTC + Gold\n⬆️⬇️ Les positions arrivent ici en direct", reply_markup=CLAVIER_VISITEUR)
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
     _envoi_sur(cid, text=("👋 Bienvenue sur ALIGN Signaux (BTC + Gold)\n\n"
                           "🎁 Tu reçois GRATUITEMENT :\n• les alertes news 📰\n• les ouvertures de marché 🔔\n• 1 signal complet offert de temps en temps\n\n"
@@ -353,11 +372,10 @@ def masquer(texte):
 
 def envoyer_prospects(etat, texte, signal):
     """Visiteurs : news en clair, positions masquées, sauf 1 signal offert par jour."""
-    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
-    offert = signal and etat.get("offert") != jour
+    offert = signal and time.time() - etat.get("offert_t", 0) >= OFFERT_JOURS * 86400
     if offert:
-        etat["offert"] = jour
-        txt = "🎁 SIGNAL OFFERT (1 par jour)\n\n" + texte.replace("\n\nTu es rentré ?", "") + "\n\n🔓 Tous les signaux + coaching en direct : bouton ci-dessous"
+        etat["offert_t"] = time.time()
+        txt = "🎁🎁 SIGNAL OFFERT — pour te montrer que ça marche\n\n" + texte.replace("\n\nTu es rentré ?", "") + "\n\n🔓 Tous les signaux + coaching en direct : bouton ci-dessous"
     elif signal:
         txt = masquer(texte) + "\n\n🔒 Position masquée — réservée aux abonnés VIP"
     else:
@@ -785,10 +803,12 @@ def main():
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 1:
+        if etat.get("clavier") != 2:
             for cid in chats:
-                telegram("sendMessage", chat_id=cid, text="🆕 Boutons activés : 📊 Analyse • ✅ Je suis rentré • ❌ Non", reply_markup=CLAVIER)
-            etat["clavier"] = 1
+                _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • ✅ Je suis rentré • 🚪 Je suis sorti", reply_markup=CLAVIER)
+            for cid in etat.get("prospects", []):
+                _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
+            etat["clavier"] = 2
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
