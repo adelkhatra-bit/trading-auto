@@ -26,11 +26,6 @@ jobs:
           path: align-bot/state.json
           key: align-etat-${{ github.run_id }}
           restore-keys: align-etat-
-      - name: Vérifier le bot Telegram
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: |
-          python3 -c "import os,json,urllib.request as u; t=os.environ['TELEGRAM_TOKEN'].strip(); r=json.load(u.urlopen('https://api.telegram.org/bot'+t+'/getMe')); w=json.load(u.urlopen('https://api.telegram.org/bot'+t+'/getWebhookInfo')); print('BOT =', r['result']['username'], '| webhook =', w['result'].get('url') or 'aucun')" || echo 'CLE INVALIDE'
       - name: Analyse BTC + Gold et envoi Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
