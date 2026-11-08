@@ -277,6 +277,32 @@ AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
 MINI_AVERT = "ℹ️ Ma position perso • pas un conseil • risque de perte"
+REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
+          "━━━━━━━━━━━━\n"
+          "1️⃣ Ce sont MES positions perso, ma vision du marché\n"
+          "❗ Pas un conseil en investissement\n"
+          "2️⃣ Les prix changent selon la plateforme (FTMO, Topstep, broker…)\n"
+          "👉 Suis les mèches et les %, pas le prix exact\n"
+          "3️⃣ ⏱ Mets-toi en vue 15 minutes\n"
+          "4️⃣ 🛑 Toujours un stop, derrière la mèche indiquée\n"
+          "5️⃣ 📰 Pas de trade 15 min avant et après une news\n"
+          "6️⃣ 💰 TP1 touché → stop à l'entrée\n"
+          "7️⃣ ⚖️ Petit risque : 1 à 2 % du compte maximum par position\n"
+          "8️⃣ ⚠️ Le trading peut faire perdre tout le capital\n"
+          "━━━━━━━━━━━━\n"
+          "🤝 Partage à tes amis : https://t.me/align_mtf_adel_bot")
+
+def epingler(etat, cid):
+    """Envoie les règles et les épingle en haut de la conversation (une seule fois par conversation)."""
+    if cid in etat.setdefault("epingles", []):
+        return
+    try:
+        res = telegram("sendMessage", chat_id=cid, text=REGLES, disable_notification="true")
+        telegram("pinChatMessage", chat_id=cid, message_id=res["result"]["message_id"], disable_notification="true")
+        etat["epingles"].append(cid)
+    except Exception as ex:
+        print("epingler", cid, ex)
+
 PARTAGE_JOURS = int(os.environ.get("PARTAGE_JOURS", "3"))  # rappel « partage à tes amis » tous les X jours
 
 def message_partage(etat):
@@ -426,6 +452,7 @@ def refuser(etat, cid):
 
 def masquer(texte):
     """Cache tous les prix (entrée, stop, TP) pour les visiteurs non abonnés."""
+    texte = re.sub(r"[+-]\d+,\d+ %", "🔒 %", texte)
     return re.sub(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", "🔒🔒🔒", texte).replace("\n\nTu es rentré ?", "")
 
 def envoyer_prospects(etat, texte, signal):
@@ -601,13 +628,16 @@ def fmt_trade(m, tr, p=None):
     if p is not None:
         pts.append((p, "👉", "PRIX ACTUEL"))
     echelle = "\n".join(f"{ic} {px(v)}  {nom}" for v, ic, nom in sorted(pts, key=lambda z: -z[0]))
+    pct = lambda v: f"{(v - tr['e']) / tr['e'] * 100:+.2f} %".replace(".", ",")
+    meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
     return (f"{tete}\n"
-            f"⏱ Graphique 15 minutes\n\n"
-            f"{echelle}\n\n"
-            f"🟨 Zone d'entrée {px(za)} – {px(zb)}\n"
-            f"🛑 Stop {px(tr['sl'])} ({bougie})\n"
-            f"💰 TP1 {px(tr['tp1'])} → sécurise, stop à l'entrée\n"
-            f"🏁 TP2 {px(tr['tp2'])}\n\n"
+            f"⏱ Vue 15 minutes\n\n"
+            f"📍 Prix de référence (Kraken) :\n{echelle}\n\n"
+            f"📐 Sur TA plateforme (les prix peuvent être différents) :\n"
+            f"🟨 Entrée : {'repli' if d == 1 else 'rebond'} vers la moitié du dernier mouvement\n"
+            f"🛑 Stop : juste {'sous' if d == 1 else 'au-dessus de'} {meche} ({pct(tr['sl'])})\n"
+            f"💰 TP1 : {tr['n1']} ({pct(tr['tp1'])}) → stop à l'entrée\n"
+            f"🏁 TP2 : {tr['n2']} ({pct(tr['tp2'])})\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
 
 def zone_txt(pos):
@@ -914,6 +944,9 @@ def main():
 
     try:
         envois += annonces_et_sessions(etat, int(time.time()), derniers)
+        if TOKEN:
+            for cid in set(destinataires(etat, chats)) | set(etat.get("prospects", [])):
+                epingler(etat, cid)
         # Rappel de partage (jamais la nuit) : abonnés, visiteurs et chaîne VIP
         h = datetime.datetime.now(PARIS).hour
         if TOKEN and 11 <= h <= 20 and time.time() - etat.get("partage_t", 0) >= PARTAGE_JOURS * 86400:
