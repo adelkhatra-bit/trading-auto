@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
 Prix gratuits Kraken (BTC = XBTUSD, Gold = PAXGUSD), signaux envoyés sur Telegram.
-Tourne toutes les 15 minutes (GitHub Actions). Aucune dépendance externe."""
+Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
 import json, os, time, urllib.request, urllib.parse, datetime
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
@@ -181,10 +181,20 @@ def analyser(pair):
     dirPlan = 1 if zoneHaut else -1 if zoneBas else 1 if longT >= 2 else -1 if longT <= -2 else 1 if retHaut else -1 if retBas else sens
     nom = ("★ ACHAT FORT" if fortHaut else "EXPLOSION ▲" if explHaut else "ZONE DE REBOND ▲") if sigHaut else \
           ("★ VENTE FORTE" if fortBas else "EXPLOSION ▼" if explBas else "ZONE DE RETOURNEMENT ▼") if sigBas else ""
-    # Confirmation GROSSES UT : 1h, 2h, 4h, Daily (au moins 3 sur 4 dans le même sens, aucune contre)
-    gros = dirs[7:]
-    confirme = 1 if gros.count(1) >= 3 and -1 not in gros else -1 if gros.count(-1) >= 3 and 1 not in gros else 0
-    return dict(m1=m1, confirme=confirme, atr=a, t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
+    # ═══ STRATÉGIE : alignement 15m + 1h + 4h ═══
+    d15, d1h, d4h = dirs[4], dirs[7], dirs[9]
+    confirme = d15 if d15 != 0 and d15 == d1h == d4h else 0
+    # Contexte Daily / Weekly : où est le prix dans sa zone (0 = tout en bas, 1 = tout en haut)
+    w1 = kraken(pair, 10080)
+    def position(bars, n):
+        z = bars[-n:]; haut = max(x["h"] for x in z); bas = min(x["l"] for x in z)
+        return (cl - bas) / max(haut - bas, 1e-9), haut, bas
+    posD, hautD, basD = position(d1, 5)
+    posW, hautW, basW = position(w1, 4)
+    # RSI 5 min (déclencheur de l'entrée parfaite) et RSI 15 min
+    r5 = rsi([x["c"] for x in m5])
+    return dict(m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
+                grosses=grosses, b15=b[-12:], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
 
@@ -220,8 +230,9 @@ def texte_etat(nom_marche, r):
               f"{r['bull']} UT hausse • {r['bear']} baisse • {r['comp']} comprimées • RSI surachat {r['rsiOB']} / survente {r['rsiOS']}"]
     if r["retHaut"]: lignes.append("Retournement HAUSSIER en préparation")
     if r["retBas"]: lignes.append("Retournement BAISSIER en préparation")
-    if d:
-        lignes += ["", texte_plan(nom_marche, r, r["plan"], d)]
+    al = r["confirme"]
+    lignes.append(f"Alignement 15m/1h/4h : {'▲ HAUSSE' if al == 1 else '▼ BAISSE' if al == -1 else 'NON — pas de trade'} • RSI 5m {r['r5'][-1]:.0f}")
+    lignes.append(f"Zone Daily : {zone_txt(r['posD'])} • Zone Weekly : {zone_txt(r['posW'])}")
     return "\n".join(lignes)
 
 def telegram(methode, **params):
@@ -234,8 +245,34 @@ def fmt_trade(m, tr):
     return (f"{sens} {m}\nEntrée : {px(tr['e'])}\nTP1 : {px(tr['tp1'])} ({tr['n1']})\nTP2 : {px(tr['tp2'])} ({tr['n2']})\n"
             f"Stop : {px(tr['sl'])}\nGain/risque ≈ {tr['rr']:.1f}")
 
+def zone_txt(pos):
+    return "tout en HAUT" if pos >= 0.85 else "en haut" if pos >= 0.65 else "tout en BAS" if pos <= 0.15 else "en bas" if pos <= 0.35 else "au milieu"
+
+def plan_entree(r, d, p):
+    """Entrée au prix actuel, stop derrière le dernier creux/sommet 15m et le niveau 1h, TP sur 1h / 4h / Daily."""
+    a = r["atr"]; b = r["b15"]
+    if d == 1:
+        swing = min(x["l"] for x in b) - a * 0.2
+        sup1h = [v for v, n in r["grosses"] if n == "1h" and v < p - a * 0.3]
+        sl = min(swing, max(sup1h) - a * 0.3) if sup1h and p - max(sup1h) < 3 * a else swing
+    else:
+        swing = max(x["h"] for x in b) + a * 0.2
+        res1h = [v for v, n in r["grosses"] if n == "1h" and v > p + a * 0.3]
+        sl = max(swing, min(res1h) + a * 0.3) if res1h and min(res1h) - p < 3 * a else swing
+    mini = max(a, p * 0.0008)
+    if abs(p - sl) < mini:
+        sl = p - d * mini
+    risque = abs(p - sl)
+    cibles = sorted([z for z in r["grosses"] if d * (z[0] - p) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+    t1 = cibles[0] if cibles else (p + d * risque * 2, "projection 2 x le risque")
+    loin = [z for z in cibles if d * (z[0] - t1[0]) >= a]
+    t2 = loin[0] if loin else (p + d * risque * 3.5, "projection 3,5 x le risque")
+    return dict(d=d, e=p, sl=sl, tp1=t1[0], n1=(("résistance " if d == 1 else "support ") + t1[1]) if t1[1] in ("1h", "4h", "Daily") else t1[1],
+                tp2=t2[0], n2=(("résistance " if d == 1 else "support ") + t2[1]) if t2[1] in ("1h", "4h", "Daily") else t2[1],
+                rr=abs(t1[0] - p) / risque)
+
 def agent(m, r, cle, ferme):
-    """Renvoie la liste des messages à envoyer pour ce marché."""
+    """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
     out = []
     tr = cle.get("trade")
     depuis = cle.get("t1m", 0)
@@ -243,59 +280,64 @@ def agent(m, r, cle, ferme):
     cle["t1m"] = r["m1"][-1]["t"]
     p = r["m1"][-1]["c"]
     hi = max(x["h"] for x in bougies); lo = min(x["l"] for x in bougies)
+    d = r["confirme"]
+    r5, r5p = r["r5"][-1], r["r5"][-2]
+    ctx = f"Contexte : {zone_txt(r['posD'])} de la zone Daily, {zone_txt(r['posW'])} de la zone Weekly."
 
-    # Pas de trade en cours : on cherche un setup CONFIRMÉ par les grosses UT
+    # ── Pas de trade : on attend l'alignement, puis le repli en surcharge RSI ──
     if not tr:
-        d = r["confirme"]
-        if d and r["dirPlan"] == d:
-            pl = r["planH"] if d == 1 else r["planB"]
-            avance = d * (p - pl["e"])  # > 0 = le prix a déjà dépassé l'entrée dans le bon sens
-            if pl["rr"] >= 1.5 and avance < 0.25 * abs(pl["tp1"] - pl["e"]):
-                tr = dict(d=d, e=pl["e"], sl=pl["sl"], tp1=pl["tp1"], tp2=pl["tp2"], n1=pl["n1"], n2=pl["n2"], rr=pl["rr"],
-                          statut="attente", cree=r["t"], proche=False, encore=0)
-                cle["trade"] = tr
-                out.append(f"🧭 SETUP CONFIRMÉ — {m}\nLes grosses UT (1h, 2h, 4h, Daily) sont alignées {'à la HAUSSE' if d == 1 else 'à la BAISSE'}.\n"
-                           f"Je surveille le point d'entrée, ne rentre pas encore.\n\n{fmt_trade(m, tr)}\n\n{barre(r)}{ferme}")
+        if not d:
+            if cle.get("aligne"):
+                out.append(f"⚪ {m} : alignement 15m / 1h / 4h perdu. J'attends.")
+            cle["aligne"] = 0; cle["prep"] = False
+            return out
+        # Daily / Weekly : on évite d'acheter tout en haut ou de vendre tout en bas
+        bloque = (d == 1 and r["posW"] >= 0.92 and r["posD"] >= 0.9) or (d == -1 and r["posW"] <= 0.08 and r["posD"] <= 0.1)
+        if cle.get("aligne") != d:
+            cle["aligne"] = d; cle["prep"] = False
+            out.append(f"🧭 {m} ALIGNÉ {'▲ HAUSSE' if d == 1 else '▼ BAISSE'} sur 15m, 1h et 4h.\n{ctx}\n"
+                       + ("⚠️ Prix collé à l'extrême Daily/Weekly : je ne prendrai pas d'entrée tant qu'il n'y a pas de repli." if bloque else
+                          f"J'attends un repli en surcharge RSI pour une entrée parfaite ({'RSI 5m en survente' if d == 1 else 'RSI 5m en surachat'}).")
+                       + f"\n\n{barre(r)}{ferme}")
+        if bloque:
+            return out
+        repli = (r5 <= 40) if d == 1 else (r5 >= 60)
+        surcharge = (min(r["r5"]) <= 30) if d == 1 else (max(r["r5"]) >= 70)
+        reprise = (r5 > r5p and r5 > 30) if d == 1 else (r5 < r5p and r5 < 70)
+        if repli and not cle.get("prep"):
+            cle["prep"] = True
+            pl = plan_entree(r, d, p)
+            out.append(f"⏳ PRÉPARE-TOI — {m}\nRepli en cours (RSI 5m {r5:.0f}), dans le sens de la tendance {'haussière' if d == 1 else 'baissière'}.\n"
+                       f"Entrée probable autour de {px(p)}. Stop prévu ≈ {px(pl['sl'])}, TP1 ≈ {px(pl['tp1'])}.\nJe te dis quand rentrer.")
+        if surcharge and reprise:
+            pl = plan_entree(r, d, p)
+            if pl["rr"] >= 1.5:
+                tr = dict(pl, statut="entree", cree=r["t"], encore=0)
+                cle["trade"] = tr; cle["prep"] = False
+                out.append(f"✅ ENTRÉE PARFAITE — {m}\nAlignement 15m/1h/4h + RSI 5m sorti de {'survente' if d == 1 else 'surachat'} ({r5:.0f}). Tu peux rentrer maintenant.\n{ctx}\n\n{fmt_trade(m, tr)}{ferme}")
+        elif not repli:
+            cle["prep"] = False
         return out
 
+    # ── Trade en cours ──
     d, e, sl, t1, t2 = tr["d"], tr["e"], tr["sl"], tr["tp1"], tr["tp2"]
-    risque = abs(e - sl)
-    touche_e = (lo <= e) if d == 1 else (hi >= e)
     touche_sl = (lo <= sl) if d == 1 else (hi >= sl)
     touche_t1 = (hi >= t1) if d == 1 else (lo <= t1)
     touche_t2 = (hi >= t2) if d == 1 else (lo <= t2)
-    progres = d * (p - e) / max(abs(t1 - e), 1e-9)   # 0 = sur l'entrée, 1 = sur le TP1
-
-    if tr["statut"] == "attente":
-        if r["confirme"] == -d:
-            out.append(f"🚫 SETUP ANNULÉ — {m}\nLes grosses UT ont changé de sens. On ne prend pas ce trade.")
-            cle.pop("trade"); return out
-        if r["t"] - tr["cree"] > 6 * 3600:
-            out.append(f"⌛ SETUP EXPIRÉ — {m}\nLe prix n'est pas venu sur l'entrée en 6 h. On attend le prochain.")
-            cle.pop("trade"); return out
-        if touche_e and not touche_sl:
-            tr["statut"] = "entree"
-            out.append(f"✅ TU PEUX RENTRER — {m}\nLe prix est sur le point d'entrée {px(e)} (prix actuel {px(p)}).\n\n{fmt_trade(m, tr)}{ferme}")
-        elif progres > 0.35:
-            out.append(f"⛔ TROP TARD — {m}\nLe prix est parti vers le TP sans repasser par l'entrée. Ne cours pas après, on attend le prochain setup.")
-            cle.pop("trade"); return out
-        elif not tr["proche"] and abs(p - e) <= max(0.5 * risque, r["atr"] * 0.6):
-            tr["proche"] = True
-            out.append(f"⏳ PRÉPARE-TOI — {m}\nLe prix ({px(p)}) arrive sur le point d'entrée {px(e)}.\nPrépare ton ordre : {'achat' if d == 1 else 'vente'}, stop {px(sl)}, TP1 {px(t1)}.")
-        return out
+    progres = d * (p - e) / max(abs(t1 - e), 1e-9)
 
     if tr["statut"] == "entree":
         if touche_sl:
-            out.append(f"❌ STOP TOUCHÉ — {m}\nLe stop {px(sl)} a été touché. Trade terminé, on attend le prochain setup confirmé.")
-            cle.pop("trade"); return out
+            out.append(f"❌ STOP TOUCHÉ — {m}\nStop {px(sl)} touché. Trade terminé, j'attends le prochain alignement.")
+            cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
-            tr["statut"] = "tp1"
-            out.append(f"🎯 TP1 ATTEINT — {m} ({px(t1)})\nSécurise une partie et remonte ton stop au point d'entrée {px(e)} (0 risque).\n"
-                       f"Prochain objectif : TP2 {px(t2)} ({tr['n2']}). Patience, on laisse courir.")
+            tr["statut"] = "tp1"; tr["sl"] = e
+            out.append(f"🎯 TP1 ATTEINT — {m} ({px(t1)})\nSécurise une partie et remonte ton stop à l'entrée {px(e)} (0 risque).\n"
+                       f"Prochain objectif : TP2 {px(t2)} ({tr['n2']}). Patience.")
             return out
         if progres < 0.25:
-            if tr["encore"] < 2 and r["t"] - cle.get("dernier_encore", 0) >= 3600:
-                tr["encore"] += 1; cle["dernier_encore"] = r["t"]
+            if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
+                tr["encore"] += 1
                 out.append(f"👍 TU PEUX ENCORE RENTRER — {m}\nPrix {px(p)}, encore proche de l'entrée {px(e)}. Stop {px(sl)}, TP1 {px(t1)}.")
         elif not tr.get("tard"):
             tr["tard"] = True
@@ -305,11 +347,19 @@ def agent(m, r, cle, ferme):
 
     if tr["statut"] == "tp1":
         if touche_t2:
-            out.append(f"🏆 TP2 ATTEINT — {m} ({px(t2)})\nObjectif maximum atteint. Trade terminé, bravo. J'attends le prochain setup confirmé.")
-            cle.pop("trade"); return out
-        if (lo <= e) if d == 1 else (hi >= e):
-            out.append(f"↩️ RETOUR AU POINT D'ENTRÉE — {m}\nTon stop remonté à l'entrée sort à 0. Le TP1 est déjà sécurisé.")
-            cle.pop("trade"); return out
+            # Déplacement du TP : tendance 4h toujours dans le bon sens et RSI 15m pas en excès → on vise plus loin
+            suivants = sorted([z for z in r["grosses"] if d * (z[0] - t2) >= r["atr"]], key=lambda z: d * z[0])
+            excès = (r["r15"] >= 70) if d == 1 else (r["r15"] <= 30)
+            if r["dirs"][9] == d and not excès and suivants and not tr.get("etendu"):
+                tr["etendu"] = True; tr["sl"] = t1; tr["tp2"] = suivants[0][0]
+                out.append(f"📈 TP2 ATTEINT ET DÉPLACÉ — {m}\nLa tendance 4h reste forte. Remonte ton stop au TP1 {px(t1)}.\n"
+                           f"Nouvel objectif : {px(suivants[0][0])} ({suivants[0][1]}).")
+                return out
+            out.append(f"🏆 OBJECTIF FINAL ATTEINT — {m} ({px(t2)})\nTrade terminé, bravo. J'attends le prochain alignement.")
+            cle.pop("trade"); cle["aligne"] = 0; return out
+        if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
+            out.append(f"↩️ SORTIE AU STOP SÉCURISÉ — {m} ({px(tr['sl'])})\nLe TP1 est déjà encaissé, pas de perte.")
+            cle.pop("trade"); cle["aligne"] = 0; return out
     return out
 
 # ───────── Programme ─────────
