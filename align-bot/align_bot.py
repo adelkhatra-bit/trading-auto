@@ -436,9 +436,19 @@ def annonces_et_sessions(etat, maintenant, derniers):
             out.append("📅 Aucune annonce majeure US aujourd'hui.")
     # Rappel 30 min avant chaque annonce
     for e in ev:
-        if 0 <= e["t"] - maintenant <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
+        reste = e["t"] - maintenant
+        fin = heure(e["t"] + 15 * 60)
+        if 6 * 60 < reste <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev{e['t']}{e['titre']}")
-            out.append(f"⚠️ Annonce {e['titre']} à {heure(e['t'])} (dans {round((e['t'] - maintenant) / 60)} min).\nNe rentre pas maintenant, attends 15 min après l'annonce.")
+            out.append(f"⚠️⚠️ NEWS USA dans {round(reste / 60)} min ({heure(e['t'])})\n📰 {e['titre']}\n\n"
+                       f"🟥 N'ouvre AUCUN trade\n🛡 Déjà en position ? Vérifie que ton STOP est bien placé\n"
+                       f"💥 Le prix peut bouger très fort dans les 2 sens\n⏳ On reprend à {fin}")
+        if 0 <= reste <= 6 * 60 and f"ev5{e['t']}{e['titre']}" not in vus:
+            vus.append(f"ev5{e['t']}{e['titre']}")
+            out.append(f"🚨🚨🚨 NEWS DANS {max(1, round(reste / 60))} MIN — {e['titre']}\n🟥 Ne touche à rien\n🛡 Stop en place ? OK, on attend")
+        if 15 * 60 <= -reste <= 25 * 60 and f"evfin{e['t']}{e['titre']}" not in vus:
+            vus.append(f"evfin{e['t']}{e['titre']}")
+            out.append(f"✅ News passée ({e['titre']}). 🟩 Le bot reprend la recherche d'entrées.")
     # Ouvertures de marché (jours de semaine)
     if jour.weekday() < 5:
         for nom, zone, h, mn in (("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
@@ -456,12 +466,28 @@ def annonce_proche(etat, maintenant):
     return any(abs(e["t"] - maintenant) <= 15 * 60 for e in etat.get("cal", {}).get("ev", []))
 
 # ───────── Agent : suit le trade du début à la fin ─────────
-def fmt_trade(m, tr):
-    sens = "▲ LONG (achat)" if tr["d"] == 1 else "▼ SHORT (vente)"
-    z = (f"Zone d'entrée : {px(tr['za'])} → {px(tr['zb'])}\nFibonacci 50 / 61,8 / 78,6 % : {px(tr['f50'])} / {px(tr['f618'])} / {px(tr['f786'])}\n"
-         if "za" in tr else "")
-    return (f"{sens} {m}\nEntrée : {px(tr['e'])}\n{z}TP1 : {px(tr['tp1'])} ({tr['n1']})\nTP2 : {px(tr['tp2'])} ({tr['n2']})\n"
-            f"Stop : {px(tr['sl'])}\nGain/risque ≈ {tr['rr']:.1f}")
+def fmt_trade(m, tr, p=None):
+    """Carte visuelle pour débutant : couleurs + échelle des prix dessinée de haut en bas."""
+    d = tr["d"]
+    tete = ("🟩🟩🟩  ACHAT " if d == 1 else "🟥🟥🟥  VENTE ") + m + ("  🟩🟩🟩" if d == 1 else "  🟥🟥🟥")
+    za, zb = tr.get("za", tr["e"]), tr.get("zb", tr["e"])
+    bougie = "en dessous de la dernière bougie basse" if d == 1 else "au-dessus de la dernière bougie haute"
+    risque = abs(tr["e"] - tr["sl"]); gain = abs(tr["tp1"] - tr["e"])
+    barres = lambda x: "▮" * max(1, min(10, round(x / max(risque, 1e-9) * 2)))
+    # Échelle des prix, du plus haut au plus bas
+    pts = [(tr["sl"], "🛑", "STOP"), (tr["tp1"], "💰", "TP1"), (tr["tp2"], "🏁", "TP2")]
+    pts += [(zb, "🟨", "ENTRÉE haut"), (za, "🟨", "ENTRÉE bas")] if abs(zb - za) > 1e-9 else [(tr["e"], "🟨", "ENTRÉE")]
+    if p is not None:
+        pts.append((p, "👉", "PRIX ACTUEL"))
+    echelle = "\n".join(f"{ic} {px(v)}  {nom}" for v, ic, nom in sorted(pts, key=lambda z: -z[0]))
+    return (f"{tete}\n"
+            f"⏱ Mets ton graphique en 15 minutes\n\n"
+            f"{echelle}\n\n"
+            f"🟨 Entre entre {px(za)} et {px(zb)}\n"
+            f"🛑 Stop {px(tr['sl'])} ({bougie})\n"
+            f"💰 TP1 {px(tr['tp1'])} → sécurise, stop à l'entrée\n"
+            f"🏁 TP2 {px(tr['tp2'])}\n\n"
+            f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})")
 
 def zone_txt(pos):
     return "tout en HAUT" if pos >= 0.85 else "en haut" if pos >= 0.65 else "tout en BAS" if pos <= 0.15 else "en bas" if pos <= 0.35 else "au milieu"
@@ -565,11 +591,10 @@ def agent(m, r, cle, ferme):
                            f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
-                out.append(f"🧭 {m} ALIGNÉ {'▲' if d == 1 else '▼'} sur 15m, 1h et 4h. {ctx}\n"
-                           f"🎯 Point d'entrée visé : {'ACHAT' if d == 1 else 'VENTE'} à {px(o['e'])} ({o['src']})\n"
-                           f"Zone d'entrée possible : {px(o['za'])} → {px(o['zb'])} (Fibonacci 50 → 78,6 %)\n"
-                           f"Stop {px(o['sl'])} • TP1 {px(o['tp1'])} • TP2 {px(o['tp2'])} • gain/risque {o['rr']:.1f}\n"
-                           f"Je te préviens quand le prix arrive dessus.{ferme}")
+                out.append(f"🔔 PRÉPARE-TOI — {m} {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
+                           f"⏳ N'entre PAS encore : j'attends que le prix vienne dans la zone 🟨\n\n"
+                           f"{fmt_trade(m, o, p)}\n\n"
+                           f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}")
         if bloque or o["rr"] < 1.5:
             return out
         # On ajuste le point tant que le prix n'est pas encore arrivé (les niveaux bougent)
@@ -580,7 +605,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append(f"⏳ {m} : le prix ({px(p)}) arrive sur le point d'entrée {px(o['e'])}.\nPrépare ton ordre limite : {'ACHAT' if d == 1 else 'VENTE'} {px(o['e'])} • stop {px(o['sl'])} • TP1 {px(o['tp1'])}")
+            out.append(f"🟡🟡 BIENTÔT — {m} approche de la zone 🟨\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Prépare ton ordre {'ACHAT 🟩' if d == 1 else 'VENTE 🟥'}, stop {px(o['sl'])}\n⏳ N'entre pas avant mon signal 🟢")
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
@@ -603,10 +628,10 @@ def agent(m, r, cle, ferme):
             if surcharge:
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
-                out.append((f"✅ ENTRE MAINTENANT — {m}\nPrix sur le point d'entrée + {'survente' if d == 1 else 'surachat'} sur plusieurs UT ({', '.join(['5m'] + [u + 'm' for u in petites])}) + confirmation 1h.\n{detail}\n{fmt_trade(m, tr)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                out.append((f"🟢🟢🟢 ENTRE MAINTENANT — {m} 🟢🟢🟢\n✅ Prix dans la zone 🟨\n✅ RSI {'trop bas (rebond)' if d == 1 else 'trop haut (baisse)'} sur {', '.join(['5m'] + [u + 'm' for u in petites])}\n✅ Confirmé en 1h\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
-                out.append(f"👀 {m} : prix sur le point d'entrée {px(o['e'])}. J'attends la surcharge RSI sur plusieurs UT.\n{detail}")
+                out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
         elif d * (p - o["e"]) > 0.35 * abs(o["tp1"] - o["e"]) and cle.get("prep"):
             out.append(f"⛔ {m} : le prix est parti sans toucher le point d'entrée. Trop tard, je recalcule le prochain point.")
             cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
