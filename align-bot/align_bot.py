@@ -16,7 +16,7 @@ POIDS = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
 # ───────── Données ─────────
 def http_json(url, data=None):
     req = urllib.request.Request(url, data=data, headers={"User-Agent": "align-bot"})
-    with urllib.request.urlopen(req, timeout=20) as r:
+    with urllib.request.urlopen(req, timeout=70) as r:
         return json.loads(r.read().decode())
 
 def kraken(pair, interval):
@@ -242,6 +242,57 @@ def telegram(methode, **params):
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
+CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "✅ Je suis rentré"}, {"text": "❌ Non"}]],
+                      "resize_keyboard": True, "is_persistent": True})
+ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
+
+def envoyer_analyse(cid):
+    for nom_marche, pair in MARCHES.items():
+        try:
+            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, analyser(pair)), reply_markup=CLAVIER)
+        except Exception as ex:
+            print("analyse", ex)
+
+def repondre(etat, cid, oui, mk=None):
+    """Oui / Non sur le trade en attente de réponse (ou sur le marché du bouton cliqué)."""
+    cands = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
+    cands = [m for m in cands if etat[m]["trade"].get("moi") is None] or cands
+    if not cands:
+        telegram("sendMessage", chat_id=cid, text="Aucun trade en cours pour le moment. Je te préviens dès qu'il y a une entrée.", reply_markup=CLAVIER)
+        return
+    m = cands[0]; etat[m]["trade"]["moi"] = oui
+    telegram("sendMessage", chat_id=cid, reply_markup=CLAVIER,
+             text=(f"👊 OK, on est dedans ensemble sur {m}. Je te coache jusqu'au TP." if oui else f"👌 OK, pas de position sur {m}. J'attends le prochain setup."))
+
+def traiter(etat, chats, updates):
+    """Boutons cliqués et messages reçus. Renvoie la liste des téléphones qui demandent une analyse."""
+    demandes = []
+    for u in updates:
+        etat["offset"] = u["update_id"] + 1
+        cb = u.get("callback_query")
+        if cb:
+            choix, _, mk = cb.get("data", "").partition(":")
+            try:
+                telegram("answerCallbackQuery", callback_query_id=cb["id"])
+            except Exception:
+                pass
+            repondre(etat, str(cb["message"]["chat"]["id"]), choix == "in", mk)
+            continue
+        msg = u.get("message") or {}
+        cid = str(msg.get("chat", {}).get("id", ""))
+        if not cid:
+            continue
+        if cid not in chats:
+            chats.add(cid)
+            telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Signaux BTC et Gold ici.\nUtilise les boutons en bas.", reply_markup=CLAVIER)
+        txt = msg.get("text", "").lower().replace("é", "e")
+        if "analyse" in txt or "etat" in txt:
+            demandes.append(cid)
+        elif "rentre" in txt or txt.strip() == "oui":
+            repondre(etat, cid, True)
+        elif "non" in txt:
+            repondre(etat, cid, False)
+    return demandes
 def boutons(m):
     return json.dumps({"inline_keyboard": [[{"text": "✅ Je suis rentré", "callback_data": f"in:{m}"},
                                             {"text": "❌ Non", "callback_data": f"out:{m}"}]]})
@@ -343,7 +394,9 @@ def annonce_proche(etat, maintenant):
 # ───────── Agent : suit le trade du début à la fin ─────────
 def fmt_trade(m, tr):
     sens = "▲ LONG (achat)" if tr["d"] == 1 else "▼ SHORT (vente)"
-    return (f"{sens} {m}\nEntrée : {px(tr['e'])}\nTP1 : {px(tr['tp1'])} ({tr['n1']})\nTP2 : {px(tr['tp2'])} ({tr['n2']})\n"
+    z = (f"Zone d'entrée : {px(tr['za'])} → {px(tr['zb'])}\nFibonacci 50 / 61,8 / 78,6 % : {px(tr['f50'])} / {px(tr['f618'])} / {px(tr['f786'])}\n"
+         if "za" in tr else "")
+    return (f"{sens} {m}\nEntrée : {px(tr['e'])}\n{z}TP1 : {px(tr['tp1'])} ({tr['n1']})\nTP2 : {px(tr['tp2'])} ({tr['n2']})\n"
             f"Stop : {px(tr['sl'])}\nGain/risque ≈ {tr['rr']:.1f}")
 
 def zone_txt(pos):
@@ -409,7 +462,13 @@ def point_entree(r, d, p):
     loin = [z for z in cibles if d * (z[0] - t1[0]) >= a]
     t2 = loin[0] if loin else (e + d * risque * 3.5, "projection 3,5 x le risque")
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
-    return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src)
+    # Zone d'entrée : du retracement 50 % jusqu'au 78,6 %, jamais à moins de 25 % du risque avant le stop
+    if d == -1:
+        za, zb = min(e, max(z50, p)), max(e, z786); zb = min(zb, sl - 0.25 * (sl - e))
+    else:
+        zb, za = max(e, min(z50, p)), min(e, z786); za = max(za, sl + 0.25 * (e - sl))
+    return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
+                za=min(za, zb), zb=max(za, zb), f50=z50, f618=z618, f786=z786)
 
 def agent(m, r, cle, ferme):
     """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
@@ -444,6 +503,7 @@ def agent(m, r, cle, ferme):
                 cle["ordre"] = o
                 out.append(f"🧭 {m} ALIGNÉ {'▲' if d == 1 else '▼'} sur 15m, 1h et 4h. {ctx}\n"
                            f"🎯 Point d'entrée visé : {'ACHAT' if d == 1 else 'VENTE'} à {px(o['e'])} ({o['src']})\n"
+                           f"Zone d'entrée possible : {px(o['za'])} → {px(o['zb'])} (Fibonacci 50 → 78,6 %)\n"
                            f"Stop {px(o['sl'])} • TP1 {px(o['tp1'])} • TP2 {px(o['tp2'])} • gain/risque {o['rr']:.1f}\n"
                            f"Je te préviens quand le prix arrive dessus.{ferme}")
         if bloque or o["rr"] < 1.5:
@@ -457,7 +517,18 @@ def agent(m, r, cle, ferme):
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
             out.append(f"⏳ {m} : le prix ({px(p)}) arrive sur le point d'entrée {px(o['e'])}.\nPrépare ton ordre limite : {'ACHAT' if d == 1 else 'VENTE'} {px(o['e'])} • stop {px(o['sl'])} • TP1 {px(o['tp1'])}")
-        surcharge = (min(r["r5"]) <= 35) if d == 1 else (max(r["r5"]) >= 65)
+        # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
+        R = dict(zip(UT, r["rsis"]))
+        if d == 1:
+            r5ok = min(r["r5"]) <= 35
+            petites = [u for u in ("10", "15", "30") if R[u] <= 40]
+            conf1h = R["1h"] <= 48
+        else:
+            r5ok = max(r["r5"]) >= 65
+            petites = [u for u in ("10", "15", "30") if R[u] >= 60]
+            conf1h = R["1h"] >= 52
+        surcharge = r5ok and len(petites) >= 1 and conf1h
+        detail = f"RSI 5m {r5:.0f} • " + " • ".join(f"{u}m {R[u]:.0f}" for u in ("10", "15", "30")) + f" • 1h {R['1h']:.0f}"
         if touche and not ((lo <= o["sl"]) if d == 1 else (hi >= o["sl"])):
             if r.get("annonce"):
                 if not cle.get("pause"):
@@ -468,10 +539,10 @@ def agent(m, r, cle, ferme):
             if surcharge:
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
-                out.append((f"✅ ENTRE MAINTENANT — {m}\nPrix sur le point d'entrée + RSI 5m en {'survente' if d == 1 else 'surachat'} ({r5:.0f}).\n{fmt_trade(m, tr)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                out.append((f"✅ ENTRE MAINTENANT — {m}\nPrix sur le point d'entrée + {'survente' if d == 1 else 'surachat'} sur plusieurs UT ({', '.join(['5m'] + [u + 'm' for u in petites])}) + confirmation 1h.\n{detail}\n{fmt_trade(m, tr)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
-                out.append(f"👀 {m} : prix sur le point d'entrée {px(o['e'])}, j'attends la confirmation RSI 5m (actuel {r5:.0f}).")
+                out.append(f"👀 {m} : prix sur le point d'entrée {px(o['e'])}. J'attends la surcharge RSI sur plusieurs UT.\n{detail}")
         elif d * (p - o["e"]) > 0.35 * abs(o["tp1"] - o["e"]) and cle.get("prep"):
             out.append(f"⛔ {m} : le prix est parti sans toucher le point d'entrée. Trop tard, je recalcule le prochain point.")
             cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
@@ -531,34 +602,15 @@ def main():
     if os.environ.get("TELEGRAM_CHAT_ID"):
         chats.add(os.environ["TELEGRAM_CHAT_ID"].strip())
 
-    # Messages reçus : /start enregistre ton téléphone, « etat » demande l'état actuel
+    # Messages reçus et boutons
+    debut = time.time()
     demandes = []
     if TOKEN:
-        maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=0)
-        for u in maj.get("result", []):
-            etat["offset"] = u["update_id"] + 1
-            cb = u.get("callback_query")
-            if cb:
-                choix, _, mk = cb.get("data", "").partition(":")
-                trc = etat.get(mk, {}).get("trade")
-                try:
-                    telegram("answerCallbackQuery", callback_query_id=cb["id"])
-                except Exception:
-                    pass
-                cidc = str(cb["message"]["chat"]["id"])
-                if trc:
-                    trc["moi"] = choix == "in"
-                    telegram("sendMessage", chat_id=cidc, text=(f"👊 OK, on est dedans ensemble sur {mk}. Je te coache jusqu'au TP." if choix == "in"
-                                                             else f"👌 OK, pas de position sur {mk}. J'attends le prochain setup."))
-                continue
-            msg = u.get("message") or {}
-            cid = str(msg.get("chat", {}).get("id", ""))
-            if cid:
-                if cid not in chats:
-                    chats.add(cid)
-                    telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Tu recevras les signaux BTC et Gold ici.\nÉcris « etat » pour voir l'analyse du moment.")
-                if "etat" in (msg.get("text", "").lower().replace("é", "e")):
-                    demandes.append(cid)
+        demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
+        if etat.get("clavier") != 1:
+            for cid in chats:
+                telegram("sendMessage", chat_id=cid, text="🆕 Boutons activés : 📊 Analyse • ✅ Je suis rentré • ❌ Non", reply_markup=CLAVIER)
+            etat["clavier"] = 1
 
     envois, derniers = [], {}
     calendrier(etat, int(time.time()))
@@ -574,7 +626,7 @@ def main():
         derniers[nom_marche] = r
         cle["vu"] = r["t"]
         for cid in demandes:
-            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r))
+            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r), reply_markup=CLAVIER)
         print(texte_etat(nom_marche, r), "\n")
 
     try:
@@ -593,6 +645,16 @@ def main():
             if nom_marche in derniers:
                 maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats)
     print(f"{len(envois)} signal(s) envoyé(s) à {len(chats)} téléphone(s)")
+    json.dump(dict(etat, chats=sorted(chats)), open(ETAT_FICHIER, "w"))
+    # Écoute en continu jusqu'au prochain lancement : réponses presque immédiates aux boutons
+    while TOKEN and time.time() - debut < ECOUTE_SEC:
+        reste = int(ECOUTE_SEC - (time.time() - debut))
+        try:
+            maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=max(1, min(50, reste))).get("result", [])
+        except Exception as ex:
+            print("ecoute", ex); break
+        for cid in traiter(etat, chats, maj):
+            envoyer_analyse(cid)
     etat["chats"] = sorted(chats)
     json.dump(etat, open(ETAT_FICHIER, "w"))
 
