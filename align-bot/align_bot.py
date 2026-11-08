@@ -181,7 +181,10 @@ def analyser(pair):
     dirPlan = 1 if zoneHaut else -1 if zoneBas else 1 if longT >= 2 else -1 if longT <= -2 else 1 if retHaut else -1 if retBas else sens
     nom = ("★ ACHAT FORT" if fortHaut else "EXPLOSION ▲" if explHaut else "ZONE DE REBOND ▲") if sigHaut else \
           ("★ VENTE FORTE" if fortBas else "EXPLOSION ▼" if explBas else "ZONE DE RETOURNEMENT ▼") if sigBas else ""
-    return dict(t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
+    # Confirmation GROSSES UT : 1h, 2h, 4h, Daily (au moins 3 sur 4 dans le même sens, aucune contre)
+    gros = dirs[7:]
+    confirme = 1 if gros.count(1) >= 3 and -1 not in gros else -1 if gros.count(-1) >= 3 and 1 not in gros else 0
+    return dict(m1=m1, confirme=confirme, atr=a, t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
 
@@ -225,6 +228,90 @@ def telegram(methode, **params):
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
     return http_json(url, urllib.parse.urlencode(params).encode())
 
+# ───────── Agent : suit le trade du début à la fin ─────────
+def fmt_trade(m, tr):
+    sens = "▲ LONG (achat)" if tr["d"] == 1 else "▼ SHORT (vente)"
+    return (f"{sens} {m}\nEntrée : {px(tr['e'])}\nTP1 : {px(tr['tp1'])} ({tr['n1']})\nTP2 : {px(tr['tp2'])} ({tr['n2']})\n"
+            f"Stop : {px(tr['sl'])}\nGain/risque ≈ {tr['rr']:.1f}")
+
+def agent(m, r, cle, ferme):
+    """Renvoie la liste des messages à envoyer pour ce marché."""
+    out = []
+    tr = cle.get("trade")
+    depuis = cle.get("t1m", 0)
+    bougies = [x for x in r["m1"] if x["t"] > depuis] or r["m1"][-1:]
+    cle["t1m"] = r["m1"][-1]["t"]
+    p = r["m1"][-1]["c"]
+    hi = max(x["h"] for x in bougies); lo = min(x["l"] for x in bougies)
+
+    # Pas de trade en cours : on cherche un setup CONFIRMÉ par les grosses UT
+    if not tr:
+        d = r["confirme"]
+        if d and r["dirPlan"] == d:
+            pl = r["planH"] if d == 1 else r["planB"]
+            avance = d * (p - pl["e"])  # > 0 = le prix a déjà dépassé l'entrée dans le bon sens
+            if pl["rr"] >= 1.5 and avance < 0.25 * abs(pl["tp1"] - pl["e"]):
+                tr = dict(d=d, e=pl["e"], sl=pl["sl"], tp1=pl["tp1"], tp2=pl["tp2"], n1=pl["n1"], n2=pl["n2"], rr=pl["rr"],
+                          statut="attente", cree=r["t"], proche=False, encore=0)
+                cle["trade"] = tr
+                out.append(f"🧭 SETUP CONFIRMÉ — {m}\nLes grosses UT (1h, 2h, 4h, Daily) sont alignées {'à la HAUSSE' if d == 1 else 'à la BAISSE'}.\n"
+                           f"Je surveille le point d'entrée, ne rentre pas encore.\n\n{fmt_trade(m, tr)}\n\n{barre(r)}{ferme}")
+        return out
+
+    d, e, sl, t1, t2 = tr["d"], tr["e"], tr["sl"], tr["tp1"], tr["tp2"]
+    risque = abs(e - sl)
+    touche_e = (lo <= e) if d == 1 else (hi >= e)
+    touche_sl = (lo <= sl) if d == 1 else (hi >= sl)
+    touche_t1 = (hi >= t1) if d == 1 else (lo <= t1)
+    touche_t2 = (hi >= t2) if d == 1 else (lo <= t2)
+    progres = d * (p - e) / max(abs(t1 - e), 1e-9)   # 0 = sur l'entrée, 1 = sur le TP1
+
+    if tr["statut"] == "attente":
+        if r["confirme"] == -d:
+            out.append(f"🚫 SETUP ANNULÉ — {m}\nLes grosses UT ont changé de sens. On ne prend pas ce trade.")
+            cle.pop("trade"); return out
+        if r["t"] - tr["cree"] > 6 * 3600:
+            out.append(f"⌛ SETUP EXPIRÉ — {m}\nLe prix n'est pas venu sur l'entrée en 6 h. On attend le prochain.")
+            cle.pop("trade"); return out
+        if touche_e and not touche_sl:
+            tr["statut"] = "entree"
+            out.append(f"✅ TU PEUX RENTRER — {m}\nLe prix est sur le point d'entrée {px(e)} (prix actuel {px(p)}).\n\n{fmt_trade(m, tr)}{ferme}")
+        elif progres > 0.35:
+            out.append(f"⛔ TROP TARD — {m}\nLe prix est parti vers le TP sans repasser par l'entrée. Ne cours pas après, on attend le prochain setup.")
+            cle.pop("trade"); return out
+        elif not tr["proche"] and abs(p - e) <= max(0.5 * risque, r["atr"] * 0.6):
+            tr["proche"] = True
+            out.append(f"⏳ PRÉPARE-TOI — {m}\nLe prix ({px(p)}) arrive sur le point d'entrée {px(e)}.\nPrépare ton ordre : {'achat' if d == 1 else 'vente'}, stop {px(sl)}, TP1 {px(t1)}.")
+        return out
+
+    if tr["statut"] == "entree":
+        if touche_sl:
+            out.append(f"❌ STOP TOUCHÉ — {m}\nLe stop {px(sl)} a été touché. Trade terminé, on attend le prochain setup confirmé.")
+            cle.pop("trade"); return out
+        if touche_t1:
+            tr["statut"] = "tp1"
+            out.append(f"🎯 TP1 ATTEINT — {m} ({px(t1)})\nSécurise une partie et remonte ton stop au point d'entrée {px(e)} (0 risque).\n"
+                       f"Prochain objectif : TP2 {px(t2)} ({tr['n2']}). Patience, on laisse courir.")
+            return out
+        if progres < 0.25:
+            if tr["encore"] < 2 and r["t"] - cle.get("dernier_encore", 0) >= 3600:
+                tr["encore"] += 1; cle["dernier_encore"] = r["t"]
+                out.append(f"👍 TU PEUX ENCORE RENTRER — {m}\nPrix {px(p)}, encore proche de l'entrée {px(e)}. Stop {px(sl)}, TP1 {px(t1)}.")
+        elif not tr.get("tard"):
+            tr["tard"] = True
+            out.append(f"⛔ TROP TARD POUR RENTRER — {m}\nLe prix ({px(p)}) est déjà loin de l'entrée. Si tu es dedans, garde le plan.\n"
+                       f"Patience : prochain objectif TP1 {px(t1)}, puis TP2 {px(t2)}.")
+        return out
+
+    if tr["statut"] == "tp1":
+        if touche_t2:
+            out.append(f"🏆 TP2 ATTEINT — {m} ({px(t2)})\nObjectif maximum atteint. Trade terminé, bravo. J'attends le prochain setup confirmé.")
+            cle.pop("trade"); return out
+        if (lo <= e) if d == 1 else (hi >= e):
+            out.append(f"↩️ RETOUR AU POINT D'ENTRÉE — {m}\nTon stop remonté à l'entrée sort à 0. Le TP1 est déjà sécurisé.")
+            cle.pop("trade"); return out
+    return out
+
 # ───────── Programme ─────────
 def main():
     etat = {}
@@ -257,16 +344,7 @@ def main():
             print(nom_marche, "erreur", ex); continue
         cle = etat.setdefault(nom_marche, {})
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
-        for sens, ok, p in ((1, r["sigHaut"], r["planH"]), (-1, r["sigBas"], r["planB"])):
-            k = "dernierH" if sens == 1 else "dernierB"
-            if ok and r["t"] - cle.get(k, 0) > 12 * 900 and cle.get("vu") != r["t"]:
-                cle[k] = r["t"]
-                envois.append(f"🚨 {r['nom']}\n{texte_plan(nom_marche, r, p, sens)}\n\n{barre(r)}  RSI {r['rC']:.0f}{ferme}")
-        for flag, txt in (("retHaut", "🔄 Retournement HAUSSIER en préparation"), ("retBas", "🔄 Retournement BAISSIER en préparation")):
-            if r[flag] and not cle.get(flag):
-                p = r["planH"] if flag == "retHaut" else r["planB"]
-                envois.append(f"{txt} — {nom_marche}\nObjectif TP1 : {px(p['tp1'])} ({p['n1']})\n\n{barre(r)}{ferme}")
-            cle[flag] = r[flag]
+        envois += agent(nom_marche, r, cle, ferme)
         cle["vu"] = r["t"]
         for cid in demandes:
             telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r))
