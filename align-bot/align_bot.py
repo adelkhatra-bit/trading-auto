@@ -239,15 +239,29 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     maj = 1 if [d15, d1h, d4h].count(1) >= 2 else -1 if [d15, d1h, d4h].count(-1) >= 2 else 0
     n_ok = [d15, d1h, d4h].count(maj) if maj else 0
     al = r["confirme"]
+    D, R = r["dirs"], r["rsis"]
+    ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
+    verbe = lambda d: "monte" if d == 1 else "descend"
+    if al:
+        conclusion = f"✅ Tout est aligné : le marché {verbe(al)} {'⬆️' if al == 1 else '⬇️'}"
+    elif d1h and d1h == d4h:
+        conclusion = f"⏳ Le 1 h et le 4 h {'montent ⬆️' if d1h == 1 else 'descendent ⬇️'}\n⏳ La 15 min pas encore → patience"
+    elif d15 and d15 == d1h:
+        conclusion = f"⏳ La 15 min et le 1 h {'montent ⬆️' if d15 == 1 else 'descendent ⬇️'}\n⏳ Le 4 h pas encore → patience"
+    elif d4h:
+        conclusion = f"{'⬆️' if d4h == 1 else '⬇️'} Le 4 h {verbe(d4h)}, le reste hésite\n⏳ Patience"
+    else:
+        conclusion = "😴 Pas de direction claire → on attend"
+    if maj and D[0] == -maj:
+        conclusion += f"\n🔄 En 1 min, petit {'rebond' if maj == -1 else 'repli'} : normal"
     l = [f"📊 {nom_marche}   {px(r['prix'])}",
-         "━━━━━━━━━━━━",
-         f"15 min   {fl(d15)}",
-         f"1 h        {fl(d1h)}",
-         f"4 h        {fl(d4h)}",
+         "━━━━━━━━━━━━"]
+    l += [f"{nom:<7} {fl(D[i])}   RSI {R[i]:.0f}" for nom, i in ut]
+    l += ["━━━━━━━━━━━━",
+         conclusion,
          "━━━━━━━━━━━━",
          f"🧭 Alignement   {n_ok}/3 {'✅' if al else '⏳'}",
          f"🎯 Sens   {'⬆️ HAUSSE' if r['sens'] == 1 else '⬇️ BAISSE' if r['sens'] == -1 else '➖ INDÉCIS'}",
-         f"💥 RSI 5 min   {r['r5'][-1]:.0f}",
          f"📍 Daily   {zone_txt(r['posD'])}",
          f"📍 Weekly   {zone_txt(r['posW'])}"]
     if r["retHaut"] or r["retBas"]:
