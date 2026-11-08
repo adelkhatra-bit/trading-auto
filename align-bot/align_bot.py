@@ -2,7 +2,7 @@
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
 Prix gratuits Kraken (BTC = XBTUSD, Gold = PAXGUSD), signaux envoyés sur Telegram.
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
-import json, os, time, urllib.request, urllib.error, urllib.parse, datetime
+import json, os, re, time, urllib.request, urllib.error, urllib.parse, datetime
 from zoneinfo import ZoneInfo
 PARIS = ZoneInfo("Europe/Paris")
 
@@ -301,8 +301,13 @@ def traiter(etat, chats, updates):
         if msg.get("chat", {}).get("type") != "private":
             continue
         if not autorise(etat, cid, msg.get("from", {}).get("id")):
-            refuser(etat, cid); chats.discard(cid)
+            chats.discard(cid)
+            if cid not in etat.setdefault("prospects", []):
+                etat["prospects"].append(cid)       # visiteur : reçoit les signaux masqués + 1 signal offert par jour
+            refuser(etat, cid)
             continue
+        if cid in etat.get("prospects", []):
+            etat["prospects"].remove(cid)
         if cid not in chats:
             chats.add(cid)
             telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Signaux BTC et Gold ici.\nUtilise les boutons en bas.", reply_markup=CLAVIER)
@@ -330,10 +335,41 @@ def membre(etat, user_id):
 def autorise(etat, cid, user_id):
     return cid in proprio(etat) or membre(etat, user_id)
 
-def refuser(etat, cid):
+def bouton_payer(etat):
     lien = etat.get("lien")
-    _envoi_sur(cid, text=("🔒 Les signaux ALIGN sont réservés aux abonnés VIP.\n"
-             + (f"Abonnement mensuel : {lien}\nUne fois abonné, reviens ici et appuie sur /start." if lien else "Ouverture des abonnements très bientôt.")))
+    return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (≈ 10 € / mois)", "url": lien}]]}) if lien else None
+
+def refuser(etat, cid):
+    kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
+    _envoi_sur(cid, text=("👋 Bienvenue sur ALIGN Signaux (BTC + Gold)\n\n"
+                          "🎁 Tu reçois GRATUITEMENT :\n• les alertes news 📰\n• les ouvertures de marché 🔔\n• 1 signal complet offert de temps en temps\n\n"
+                          "🔒 Les autres positions arrivent MASQUÉES.\n"
+                          "🔓 Pour tout voir (entrée, stop, TP, coaching Oui / Non, bouton Analyse) : abonne-toi avec le bouton ci-dessous, "
+                          "puis reviens ici et tape /start."), **kw)
+
+def masquer(texte):
+    """Cache tous les prix (entrée, stop, TP) pour les visiteurs non abonnés."""
+    return re.sub(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", "🔒🔒🔒", texte).replace("\n\nTu es rentré ?", "")
+
+def envoyer_prospects(etat, texte, signal):
+    """Visiteurs : news en clair, positions masquées, sauf 1 signal offert par jour."""
+    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
+    offert = signal and etat.get("offert") != jour
+    if offert:
+        etat["offert"] = jour
+        txt = "🎁 SIGNAL OFFERT (1 par jour)\n\n" + texte.replace("\n\nTu es rentré ?", "") + "\n\n🔓 Tous les signaux + coaching en direct : bouton ci-dessous"
+    elif signal:
+        txt = masquer(texte) + "\n\n🔒 Position masquée — réservée aux abonnés VIP"
+    else:
+        txt = texte
+    kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
+    for cid in list(etat.get("prospects", [])):
+        try:
+            telegram("sendMessage", chat_id=cid, text=txt, **kw)
+        except Exception as ex:
+            print("prospect", cid, ex)
+            if "403" in str(ex):
+                etat["prospects"].remove(cid)
 
 def _envoi_sur(cid, **kw):
     try:
@@ -775,6 +811,8 @@ def main():
                     print("envoi", cid, ex)
                     if "403" in str(ex) and cid not in proprio(etat):
                         chats.discard(cid)   # l'abonné a bloqué le bot
+            # Visiteurs non abonnés : teaser (positions masquées + bouton de paiement)
+            envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("PRÉPARE-TOI", "ENTRE MAINTENANT")))
         for nom_marche in MARCHES:
             if nom_marche in derniers:
                 maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
