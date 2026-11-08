@@ -575,7 +575,8 @@ def point_entree(r, d, p):
         else:
             e, src = z618, "retracement Fibonacci 61,8 %"
         e = max(e, p)
-        res1h = [v for v, n in r["grosses"] if n in ("1h", "4h") and e < v < e + 3 * a]
+        res4h = [v for v, n in r["grosses"] if n == "4h" and e < v < e + 3 * a]
+        res1h = res4h or [v for v, n in r["grosses"] if n == "1h" and e < v < e + 3 * a]   # résistance la plus costaud d'abord (4h)
         sl = max(H, min(res1h) if res1h else H) + 0.3 * a
     else:         # LONG : on achète un repli vers un support
         z50, z618, z786 = H - 0.5 * (H - L), H - 0.618 * (H - L), H - 0.786 * (H - L)
@@ -587,7 +588,8 @@ def point_entree(r, d, p):
         else:
             e, src = z618, "retracement Fibonacci 61,8 %"
         e = min(e, p)
-        sup1h = [v for v, n in r["grosses"] if n in ("1h", "4h") and e - 3 * a < v < e]
+        sup4h = [v for v, n in r["grosses"] if n == "4h" and e - 3 * a < v < e]
+        sup1h = sup4h or [v for v, n in r["grosses"] if n == "1h" and e - 3 * a < v < e]   # support le plus costaud d'abord (4h)
         sl = min(L, max(sup1h) if sup1h else L) - 0.3 * a
     if abs(e - sl) < max(a, e * 0.0008):
         sl = e - d * max(a, e * 0.0008)
@@ -604,6 +606,46 @@ def point_entree(r, d, p):
         zb, za = max(e, min(z50, p)), min(e, z786); za = max(za, sl + 0.25 * (e - sl))
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
                 za=min(za, zb), zb=max(za, zb), f50=z50, f618=z618, f786=z786)
+
+def coach(etat, m, r, cle):
+    """Agent individuel : messages courts envoyés UNIQUEMENT aux abonnés qui ont dit « Je suis rentré »."""
+    tr = cle.get("trade")
+    if not tr:
+        return
+    dedans = [c for c, oui in tr.get("qui", {}).items() if oui]
+    if not dedans:
+        return
+    d, e = tr["d"], tr["e"]; p = r["m1"][-1]["c"]
+    cible = tr["tp2"] if tr["statut"] == "tp1" else tr["tp1"]
+    prog = d * (p - e) / max(abs(cible - e), 1e-9)        # 1 = objectif atteint
+    perte = d * (e - p) / max(abs(e - tr["sl"]), 1e-9)    # 1 = stop touché
+    vu = tr.setdefault("coach", [])
+    msgs = []
+    fleche = "⬆️" if d == 1 else "⬇️"
+    if prog >= 0.7 and f"presque{tr['statut']}" not in vu:
+        vu.append(f"presque{tr['statut']}")
+        msgs.append(f"{fleche}{fleche} {m} : tiens bon 💪\n{barre_pct(prog * 100)}\n🎯 Objectif {px(cible)} tout proche")
+    if 0.3 <= prog < 0.7 and "bon" not in vu and tr["statut"] == "entree":
+        vu.append("bon")
+        msgs.append(f"{fleche} {m} : ça part dans le bon sens ✅\n{barre_pct(prog * 100)}")
+    if perte >= 0.6 and "danger" not in vu:
+        vu.append("danger")
+        msgs.append(f"⚠️ {m} : le prix revient contre nous\n🛑 Garde ton stop {px(tr['sl'])}, ne le déplace pas")
+    # Plan annulé : la 4h se retourne, ou la 15m ET la 1h passent contre nous
+    dirs = r["dirs"]
+    if (dirs[9] == -d or (dirs[4] == -d and dirs[7] == -d)) and "annule" not in vu and tr["statut"] == "entree":
+        vu.append("annule")
+        msgs.append(f"❌❌ PLAN ANNULÉ — {m}\n{'⬇️' if d == 1 else '⬆️'} Les unités de temps se retournent\n✂️ Coupe ta position maintenant")
+    # Annonce économique pendant la position
+    for ev in etat.get("cal", {}).get("ev", []):
+        reste = ev["t"] - time.time()
+        if 0 <= reste <= 30 * 60 and f"news{ev['t']}" not in vu:
+            vu.append(f"news{ev['t']}")
+            msgs.append(f"📰⚠️ NEWS dans {round(reste / 60)} min — {m}\n"
+                        + (f"🔒 Mets ton stop à l'entrée {px(e)}" if prog > 0.2 else "✂️ Le trade n'avance pas : mieux vaut couper avant la news"))
+    for c in dedans:
+        for t in msgs:
+            _envoi_sur(c, text=t, reply_markup=CLAVIER)
 
 def agent(m, r, cle, ferme):
     """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
@@ -784,6 +826,8 @@ def main():
         r["annonce"] = annonce_proche(etat, int(time.time()))
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
+        if TOKEN:
+            coach(etat, nom_marche, r, cle)
         derniers[nom_marche] = r
         cle["vu"] = r["t"]
         for cid in demandes:
