@@ -269,10 +269,10 @@ def telegram(methode, **params):
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}]],
-                      "resize_keyboard": True, "is_persistent": True})
+CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "📈 Mes résultats"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}]],
+                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "💎 Devenir VIP"}]],
-                               "resize_keyboard": True, "is_persistent": True})
+                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
@@ -326,16 +326,72 @@ def envoyer_analyse(cid, etat=None):
         except Exception as ex:
             print("analyse", ex)
 
+def prix_actuel(m):
+    """Dernier prix Kraken du marché (pour figer l'entrée ou la sortie d'un abonné)."""
+    try:
+        j = http_json(f"https://api.kraken.com/0/public/Ticker?pair={MARCHES[m]}")
+        return float(next(iter(j["result"].values()))["c"][0])
+    except Exception as ex:
+        print("prix", ex); return None
+
+def noter(etat, cid, m, pos, sortie, motif):
+    """Enregistre le résultat d'un abonné : points, %, TP ou SL."""
+    pts = pos["d"] * (sortie - pos["e"])
+    pct = pts / pos["e"] * 100
+    st = etat.setdefault("stats", {}).setdefault(cid, {"tp": 0, "sl": 0, "pts": {}, "pct": 0.0, "hist": []})
+    st["tp" if pts > 0 else "sl"] += 1
+    st["pts"][m] = st["pts"].get(m, 0) + pts
+    st["pct"] += pct
+    st["hist"] = (st["hist"] + [[m, round(pts, 2), round(pct, 2), motif, int(time.time())]])[-20:]
+    pos["fini"] = True
+    _envoi_sur(cid, reply_markup=CLAVIER, text=(
+        f"{'✅' if pts > 0 else '❌'} {m} clôturé — {motif}\n"
+        f"📌 Entrée {px(pos['e'])} → sortie {px(sortie)}\n"
+        f"{'⬆️' if pts > 0 else '⬇️'} {pts:+,.2f} pts ({pct:+.2f} %)".replace(",", " ")))
+
+def texte_resultats(etat, cid):
+    st = etat.get("stats", {}).get(cid)
+    if not st:
+        return "📈 Mes résultats\n━━━━━━━━━━━━\nAucun trade clôturé pour l'instant.\n👉 Appuie sur ✅ Je suis rentré quand tu prends une position."
+    n = st["tp"] + st["sl"]
+    l = ["📈 Mes résultats", "━━━━━━━━━━━━",
+         f"✅ TP gagnés   {st['tp']}", f"❌ Stops touchés   {st['sl']}",
+         f"🎯 Réussite   {round(100 * st['tp'] / n) if n else 0} %"]
+    l += [f"{'⬆️' if v >= 0 else '⬇️'} {k}   {v:+,.2f} pts".replace(",", " ") for k, v in st["pts"].items()]
+    l += [f"💰 Total   {st['pct']:+.2f} %", "━━━━━━━━━━━━", "Derniers trades :"]
+    l += [f"{'✅' if h[1] > 0 else '❌'} {h[0]}  {h[2]:+.2f} %" for h in st["hist"][-5:]]
+    return "\n".join(l)
+
 def repondre(etat, cid, oui, mk=None):
-    """Oui / Non sur le trade en attente de réponse (ou sur le marché du bouton cliqué)."""
-    cands = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
-    cands = [m for m in cands if cid not in etat[m]["trade"].get("qui", {})] or cands
-    if not cands:
-        telegram("sendMessage", chat_id=cid, text="Aucun trade en cours pour le moment. Je te préviens dès qu'il y a une entrée.", reply_markup=CLAVIER)
+    """✅ Je suis rentré : l'entrée et le stop sont FIGÉS pour cet abonné. 🚪 Je suis sorti : calcul automatique du résultat."""
+    trades = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
+    if oui:
+        cands = [m for m in trades if not isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict)]
+        if not cands:
+            _envoi_sur(cid, text="⏳ Aucune position en cours pour le moment.\n🔔 Je te préviens dès qu'il y en a une.", reply_markup=CLAVIER)
+            return
+        m = cands[0]; tr = etat[m]["trade"]
+        e = prix_actuel(m) or tr["e"]
+        tr.setdefault("qui", {})[cid] = {"e": e, "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
+        _envoi_sur(cid, reply_markup=CLAVIER, text=(
+            f"👊 C'est noté, on est dedans sur {m} {'⬆️ ACHAT' if tr['d'] == 1 else '⬇️ VENTE'}\n"
+            f"📌 Ton entrée figée   {px(e)}\n🛑 Ton stop   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n"
+            f"🤖 Je calcule ton résultat automatiquement"))
         return
-    m = cands[0]; etat[m]["trade"].setdefault("qui", {})[cid] = oui
-    telegram("sendMessage", chat_id=cid, reply_markup=CLAVIER,
-             text=(f"👊 OK, on est dedans ensemble sur {m}. Je te coache jusqu'au TP." if oui else f"👌 OK, pas de position sur {m}. J'attends le prochain setup."))
+    ouverts = [m for m in trades if isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict) and not etat[m]["trade"]["qui"][cid].get("fini")]
+    if not ouverts:
+        for m in trades:
+            etat[m]["trade"].setdefault("qui", {}).setdefault(cid, False)
+        _envoi_sur(cid, text="👌 Pas de position ouverte. J'attends le prochain setup.", reply_markup=CLAVIER)
+        return
+    m = ouverts[0]; pos = etat[m]["trade"]["qui"][cid]
+    noter(etat, cid, m, pos, prix_actuel(m) or pos["e"], "sortie manuelle 🚪")
+
+def cloturer_abonnes(etat, m, tr, sortie, motif):
+    """Fin du trade : chaque abonné encore dedans est clôturé au même niveau (stop ou TP)."""
+    for cid, pos in tr.get("qui", {}).items():
+        if isinstance(pos, dict) and not pos.get("fini"):
+            noter(etat, cid, m, pos, sortie, motif)
 
 def traiter(etat, chats, updates):
     """Boutons cliqués et messages reçus. Renvoie la liste des téléphones qui demandent une analyse."""
@@ -395,8 +451,10 @@ def traiter(etat, chats, updates):
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'accès VIP", "callback_data": f"offrir:{cid}"}]]}))
             elif "analyse" in txtv:
                 analyse_visiteur(etat, cid)
-            else:
+            elif "vip" in txtv or "/start" in txtv:
                 refuser(etat, cid)
+            else:
+                _envoi_sur(cid, text="⌨️ Utilise les boutons en bas 👇", reply_markup=CLAVIER_VISITEUR)
             continue
         if cid in etat.get("prospects", []):
             etat["prospects"].remove(cid)
@@ -410,6 +468,10 @@ def traiter(etat, chats, updates):
             repondre(etat, cid, True)
         elif "sorti" in txt or "non" in txt:
             repondre(etat, cid, False)
+        elif "resultat" in txt:
+            _envoi_sur(cid, text=texte_resultats(etat, cid), reply_markup=CLAVIER)
+        elif cid not in proprio(etat):
+            _envoi_sur(cid, text="⌨️ Utilise les boutons en bas 👇", reply_markup=CLAVIER)
     return demandes
 def proprio(etat):
     return set(etat.get("proprio", []))
@@ -516,7 +578,8 @@ def barre_pct(pct, n=10):
 def jauge(m, r, cle, cid=None, canal=False):
     """Texte de la jauge (un seul message mis à jour toutes les 5 min), ou None."""
     tr = cle.get("trade"); p = r["m1"][-1]["c"]; d = r["confirme"]
-    if tr and (canal or tr.get("qui", {}).get(cid)):
+    pos = tr.get("qui", {}).get(cid) if tr else None
+    if tr and (canal or (isinstance(pos, dict) and not pos.get("fini"))):
         e, t1, t2 = tr["e"], tr["tp1"], tr["tp2"]; cible = t2 if tr["statut"] == "tp1" else t1
         pct = 100 * tr["d"] * (p - e) / max(abs(cible - e), 1e-9)
         vit = abs(r["m1"][-1]["c"] - r["m1"][-31]["c"]) / 30 if len(r["m1"]) > 31 else 0   # vitesse moyenne / minute
@@ -718,7 +781,7 @@ def coach(etat, m, r, cle):
     tr = cle.get("trade")
     if not tr:
         return
-    dedans = [c for c, oui in tr.get("qui", {}).items() if oui]
+    dedans = [c for c, pos in tr.get("qui", {}).items() if isinstance(pos, dict) and not pos.get("fini")]
     if not dedans:
         return
     d, e = tr["d"], tr["e"]; p = r["m1"][-1]["c"]
@@ -840,6 +903,7 @@ def agent(m, r, cle, ferme):
     if tr["statut"] == "entree":
         if touche_sl:
             out.append(f"❌ {m} : stop {px(sl)} touché. On coupe, prochain setup bientôt.")
+            cle["fin"] = [tr, sl, "stop touché 🛑"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
@@ -852,7 +916,7 @@ def agent(m, r, cle, ferme):
                     out.append((f"👍 {m} : tu peux encore rentrer ({px(p)}). Stop {px(sl)} • TP1 {px(t1)}\n\nTu es rentré ?", boutons(m)))
         elif not tr.get("tard"):
             tr["tard"] = True
-            if not any(tr.get("qui", {}).values()):
+            if not any(isinstance(v, dict) for v in tr.get("qui", {}).values()):
                 out.append(f"⛔ {m} : trop tard pour rentrer. On attend le prochain setup.")
                 cle.pop("trade"); cle["aligne"] = 0
             else:
@@ -869,9 +933,11 @@ def agent(m, r, cle, ferme):
                 out.append(f"📈 {m} : TP2 touché, la tendance continue.\n→ Stop au TP1 {px(t1)}\n→ Nouvel objectif {px(suivants[0][0])}")
                 return out
             out.append(f"🏆 {m} : objectif final {px(t2)} atteint. Trade terminé, bravo !")
+            cle["fin"] = [tr, t2, "objectif final atteint 🏆"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
             out.append(f"↩️ {m} : sortie au stop sécurisé {px(tr['sl'])}. TP1 encaissé, pas de perte.")
+            cle["fin"] = [tr, t1 if d * (tr["sl"] - t1) < 0 else tr["sl"], "TP1 encaissé 💰"]
             cle.pop("trade"); cle["aligne"] = 0; return out
     return out
 
@@ -891,12 +957,12 @@ def main():
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 2:
+        if etat.get("clavier") != 3:
             for cid in chats:
-                _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • ✅ Je suis rentré • 🚪 Je suis sorti", reply_markup=CLAVIER)
+                _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • 📈 Mes résultats • ✅ Je suis rentré • 🚪 Je suis sorti", reply_markup=CLAVIER)
             for cid in etat.get("prospects", []):
                 _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 2
+            etat["clavier"] = 3
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
@@ -936,6 +1002,9 @@ def main():
         envois += agent(nom_marche, r, cle, ferme)
         if TOKEN:
             coach(etat, nom_marche, r, cle)
+            if cle.get("fin"):
+                trf, sortie, motif = cle.pop("fin")
+                cloturer_abonnes(etat, nom_marche, trf, sortie, motif)
         derniers[nom_marche] = r
         cle["vu"] = r["t"]
         for cid in demandes:
