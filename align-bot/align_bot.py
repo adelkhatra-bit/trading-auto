@@ -196,7 +196,7 @@ def analyser(pair):
     # RSI 5 min (déclencheur de l'entrée parfaite) et RSI 15 min
     r5 = rsi([x["c"] for x in m5])
     return dict(m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
-                grosses=grosses, b15=b[-12:], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
+                grosses=grosses, b15=b[-30:], ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
 
@@ -260,14 +260,13 @@ def jauge(m, r, cle):
         reste = abs(cible - p) / vit if vit > 0 else None
         return (f"📍 {m} en position {'LONG' if tr['d'] == 1 else 'SHORT'}\n{'TP2' if tr['statut'] == 'tp1' else 'TP1'} : {barre_pct(pct)}\n"
                 f"Prix {px(p)} → objectif {px(cible)}" + (f" • ≈ {reste:.0f} min" if reste and reste < 600 else ""))
-    if not tr and d:
-        r5 = r["r5"][-1]; seuil = 30 if d == 1 else 70
-        pct = 100 * (50 - r5) / 20 if d == 1 else 100 * (r5 - 50) / 20
-        pente = (r["r5"][-1] - r["r5"][0]) / 2   # variation du RSI 5m par bougie de 5 min
-        vers = -pente if d == 1 else pente
-        reste = (abs(r5 - seuil) / vers * 5) if vers > 0 else None
-        return (f"⏱ {m} aligné {'▲' if d == 1 else '▼'} — entrée parfaite\n{barre_pct(pct)}\nRSI 5m {r5:.0f} → {seuil}"
-                + (f" • ≈ {reste:.0f} min" if reste and reste < 240 else " • en attente du repli"))
+    if not tr and d and cle.get("ordre"):
+        o = cle["ordre"]; dep = abs(o["sl"] - o["e"]) * 3
+        pct = 100 * (1 - min(abs(p - o["e"]) / max(dep, 1e-9), 1))
+        vit = abs(r["m1"][-1]["c"] - r["m1"][-31]["c"]) / 30 if len(r["m1"]) > 31 else 0
+        reste = abs(p - o["e"]) / vit if vit > 0 else None
+        return (f"⏱ {m} {'▲ ACHAT' if d == 1 else '▼ VENTE'} visé à {px(o['e'])}\n{barre_pct(pct)}\nPrix {px(p)} • RSI 5m {r['r5'][-1]:.0f}"
+                + (f" • arrivée ≈ {reste:.0f} min" if reste and reste < 300 else ""))
     return None
 
 def maj_jauge(m, r, cle, chats):
@@ -373,6 +372,45 @@ def plan_entree(r, d, p):
                 tp2=t2[0], n2=(("résistance " if d == 1 else "support ") + t2[1]) if t2[1] in ("1h", "4h", "Daily") else t2[1],
                 rr=abs(t1[0] - p) / risque)
 
+def point_entree(r, d, p):
+    """Ordre limite au point le plus précis : confluence retracement 50-61,8 % du dernier mouvement 15m
+    + résistance/support 15m/1h/4h + EMA 20 (15m). Stop derrière le sommet/creux du mouvement."""
+    a = r["atr"]; b = r["b15"][-24:]
+    H = max(x["h"] for x in b); L = min(x["l"] for x in b)
+    if d == -1:   # SHORT : on vend un rebond vers une résistance
+        z50, z618, z786 = L + 0.5 * (H - L), L + 0.618 * (H - L), L + 0.786 * (H - L)
+        cand = [(v, n) for v, n in r["niveaux"] if z50 - 0.3 * a <= v <= z786 + 0.3 * a and n in ("15m", "1h", "4h")]
+        if cand:
+            e, src = min(cand, key=lambda z: abs(z[0] - z618)); src = f"résistance {src} + retracement Fibonacci"
+        elif z50 <= r["ema15"] <= z786:
+            e, src = r["ema15"], "EMA 20 (15m) + retracement Fibonacci"
+        else:
+            e, src = z618, "retracement Fibonacci 61,8 %"
+        e = max(e, p)
+        res1h = [v for v, n in r["grosses"] if n in ("1h", "4h") and e < v < e + 3 * a]
+        sl = max(H, min(res1h) if res1h else H) + 0.3 * a
+    else:         # LONG : on achète un repli vers un support
+        z50, z618, z786 = H - 0.5 * (H - L), H - 0.618 * (H - L), H - 0.786 * (H - L)
+        cand = [(v, n) for v, n in r["niveaux"] if z786 - 0.3 * a <= v <= z50 + 0.3 * a and n in ("15m", "1h", "4h")]
+        if cand:
+            e, src = min(cand, key=lambda z: abs(z[0] - z618)); src = f"support {src} + retracement Fibonacci"
+        elif z786 <= r["ema15"] <= z50:
+            e, src = r["ema15"], "EMA 20 (15m) + retracement Fibonacci"
+        else:
+            e, src = z618, "retracement Fibonacci 61,8 %"
+        e = min(e, p)
+        sup1h = [v for v, n in r["grosses"] if n in ("1h", "4h") and e - 3 * a < v < e]
+        sl = min(L, max(sup1h) if sup1h else L) - 0.3 * a
+    if abs(e - sl) < max(a, e * 0.0008):
+        sl = e - d * max(a, e * 0.0008)
+    risque = abs(e - sl)
+    cibles = sorted([z for z in r["grosses"] if d * (z[0] - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+    t1 = cibles[0] if cibles else (e + d * risque * 2, "projection 2 x le risque")
+    loin = [z for z in cibles if d * (z[0] - t1[0]) >= a]
+    t2 = loin[0] if loin else (e + d * risque * 3.5, "projection 3,5 x le risque")
+    nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
+    return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src)
+
 def agent(m, r, cle, ferme):
     """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
     out = []
@@ -386,43 +424,57 @@ def agent(m, r, cle, ferme):
     r5, r5p = r["r5"][-1], r["r5"][-2]
     ctx = f"Contexte : {zone_txt(r['posD'])} de la zone Daily, {zone_txt(r['posW'])} de la zone Weekly."
 
-    # ── Pas de trade : on attend l'alignement, puis le repli en surcharge RSI ──
+    # ── Pas de trade : alignement 15m + 1h + 4h obligatoire, puis ordre limite au point précis ──
     if not tr:
         if not d:
             if cle.get("aligne"):
-                out.append(f"⚪ {m} : alignement 15m / 1h / 4h perdu. J'attends.")
-            cle["aligne"] = 0; cle["prep"] = False
+                out.append(f"⚪ {m} : alignement 15m / 1h / 4h perdu. Ordre annulé, j'attends.")
+            cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
-        # Daily / Weekly : on évite d'acheter tout en haut ou de vendre tout en bas
-        bloque = (d == 1 and r["posW"] >= 0.92 and r["posD"] >= 0.9) or (d == -1 and r["posW"] <= 0.08 and r["posD"] <= 0.1)
+        # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
+        bloque = (d == -1 and (r["posD"] <= 0.15 or (r["posW"] <= 0.15 and r["posD"] <= 0.35))) or \
+                 (d == 1 and (r["posD"] >= 0.85 or (r["posW"] >= 0.85 and r["posD"] >= 0.65)))
+        o = point_entree(r, d, p)
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
-            out.append(f"🧭 {m} ALIGNÉ {'▲ HAUSSE' if d == 1 else '▼ BAISSE'} sur 15m, 1h et 4h.\n{ctx}\n"
-                       + ("⚠️ Prix collé à l'extrême Daily/Weekly : je ne prendrai pas d'entrée tant qu'il n'y a pas de repli." if bloque else
-                          f"J'attends un repli en surcharge RSI pour une entrée parfaite ({'RSI 5m en survente' if d == 1 else 'RSI 5m en surachat'}).")
-                       + f"\n\n{barre(r)}{ferme}")
-        if bloque:
+            if bloque:
+                out.append(f"🧭 {m} aligné {'▲' if d == 1 else '▼'} sur 15m/1h/4h, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
+                           f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
+            else:
+                cle["ordre"] = o
+                out.append(f"🧭 {m} ALIGNÉ {'▲' if d == 1 else '▼'} sur 15m, 1h et 4h. {ctx}\n"
+                           f"🎯 Point d'entrée visé : {'ACHAT' if d == 1 else 'VENTE'} à {px(o['e'])} ({o['src']})\n"
+                           f"Stop {px(o['sl'])} • TP1 {px(o['tp1'])} • TP2 {px(o['tp2'])} • gain/risque {o['rr']:.1f}\n"
+                           f"Je te préviens quand le prix arrive dessus.{ferme}")
+        if bloque or o["rr"] < 1.5:
             return out
-        repli = (r5 <= 40) if d == 1 else (r5 >= 60)
-        surcharge = (min(r["r5"]) <= 30) if d == 1 else (max(r["r5"]) >= 70)
-        reprise = (r5 > r5p and r5 > 30) if d == 1 else (r5 < r5p and r5 < 70)
-        if repli and not cle.get("prep"):
+        # On ajuste le point tant que le prix n'est pas encore arrivé (les niveaux bougent)
+        if not cle.get("prep"):
+            cle["ordre"] = o
+        o = cle.get("ordre", o)
+        dist = d * (p - o["e"])       # < 0 = le prix n'est pas encore arrivé au point d'entrée
+        touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
+        if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            pl = plan_entree(r, d, p)
-            out.append(f"⏳ {m} : prépare-toi, repli en cours.\n{'Achat' if d == 1 else 'Vente'} probable vers {px(p)} • stop ≈ {px(pl['sl'])} • TP1 ≈ {px(pl['tp1'])}")
-        if surcharge and reprise and r.get("annonce"):
-            out.append(f"⏸ {m} : setup d'entrée, mais annonce économique dans moins de 15 min. On ne rentre pas.") if not cle.get("pause") else None
-            cle["pause"] = True
-            return out
-        cle["pause"] = False
-        if surcharge and reprise:
-            pl = plan_entree(r, d, p)
-            if pl["rr"] >= 1.5:
-                tr = dict(pl, statut="entree", cree=r["t"], encore=0)
-                cle["trade"] = tr; cle["prep"] = False
-                out.append((f"✅ ENTRE MAINTENANT — {m}\n{fmt_trade(m, tr)}{ferme}\n\nTu es rentré ?", boutons(m)))
-        elif not repli:
-            cle["prep"] = False
+            out.append(f"⏳ {m} : le prix ({px(p)}) arrive sur le point d'entrée {px(o['e'])}.\nPrépare ton ordre limite : {'ACHAT' if d == 1 else 'VENTE'} {px(o['e'])} • stop {px(o['sl'])} • TP1 {px(o['tp1'])}")
+        surcharge = (min(r["r5"]) <= 35) if d == 1 else (max(r["r5"]) >= 65)
+        if touche and not ((lo <= o["sl"]) if d == 1 else (hi >= o["sl"])):
+            if r.get("annonce"):
+                if not cle.get("pause"):
+                    out.append(f"⏸ {m} : prix sur le point d'entrée, mais annonce économique dans moins de 15 min. On ne rentre pas.")
+                cle["pause"] = True
+                return out
+            cle["pause"] = False
+            if surcharge:
+                tr = dict(o, statut="entree", cree=r["t"], encore=0)
+                cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
+                out.append((f"✅ ENTRE MAINTENANT — {m}\nPrix sur le point d'entrée + RSI 5m en {'survente' if d == 1 else 'surachat'} ({r5:.0f}).\n{fmt_trade(m, tr)}{ferme}\n\nTu es rentré ?", boutons(m)))
+            elif not cle.get("attente_rsi"):
+                cle["attente_rsi"] = True
+                out.append(f"👀 {m} : prix sur le point d'entrée {px(o['e'])}, j'attends la confirmation RSI 5m (actuel {r5:.0f}).")
+        elif d * (p - o["e"]) > 0.35 * abs(o["tp1"] - o["e"]) and cle.get("prep"):
+            out.append(f"⛔ {m} : le prix est parti sans toucher le point d'entrée. Trop tard, je recalcule le prochain point.")
+            cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
         return out
 
     # ── Trade en cours ──
