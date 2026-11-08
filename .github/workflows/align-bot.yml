@@ -1,0 +1,38 @@
+name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
+
+on:
+  schedule:
+    - cron: "1,16,31,46 * * * *"   # toutes les 15 minutes, juste après la clôture des bougies 15m
+  workflow_dispatch:                # bouton « Run workflow » pour tester à la main
+
+concurrency:
+  group: align-bot
+  cancel-in-progress: false
+
+jobs:
+  signaux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: align-bot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: align-bot
+      - name: Récupérer la mémoire du robot
+        uses: actions/cache/restore@v4
+        with:
+          path: align-bot/state.json
+          key: align-etat-${{ github.run_id }}
+          restore-keys: align-etat-
+      - name: Analyse BTC + Gold et envoi Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: python3 align_bot.py
+      - name: Sauver la mémoire du robot
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: align-bot/state.json
+          key: align-etat-${{ github.run_id }}
