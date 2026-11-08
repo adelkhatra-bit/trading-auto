@@ -349,9 +349,13 @@ def noter(etat, cid, m, pos, sortie, motif):
     st["hist"] = (st["hist"] + [[m, round(pts, 2), round(pct, 2), motif, int(time.time())]])[-20:]
     pos["fini"] = True
     _envoi_sur(cid, reply_markup=CLAVIER, text=(
-        f"{'✅' if pts > 0 else '❌'} {m} clôturé — {motif}\n"
-        f"📌 Entrée {px(pos['e'])} → sortie {px(sortie)}\n"
-        f"{'⬆️' if pts > 0 else '⬇️'} {pts:+,.2f} pts ({pct:+.2f} %)".replace(",", " ")))
+        f"{'✅' if pts > 0 else '❌'} {m} clôturé\n"
+        f"{motif}\n"
+        f"📌 Entrée   {px(pos['e'])}\n"
+        f"🚪 Sortie   {px(sortie)}\n"
+        f"{'⬆️' if pts > 0 else '⬇️'} {pts:+,.2f} pts\n".replace(",", " ")
+        + f"📊 {pct:+.2f} %\n"
+        + ("🎉 Bravo !" if pts > 0 else "💪 On repart au prochain")))
 
 def texte_resultats(etat, cid):
     st = etat.get("stats", {}).get(cid)
@@ -363,7 +367,7 @@ def texte_resultats(etat, cid):
          f"🎯 Réussite   {round(100 * st['tp'] / n) if n else 0} %"]
     l += [f"{'⬆️' if v >= 0 else '⬇️'} {k}   {v:+,.2f} pts".replace(",", " ") for k, v in st["pts"].items()]
     l += [f"💰 Total   {st['pct']:+.2f} %", "━━━━━━━━━━━━", "Derniers trades :"]
-    l += [f"{'✅' if h[1] > 0 else '❌'} {h[0]}  {h[2]:+.2f} %" for h in st["hist"][-5:]]
+    l += [f"{'✅' if h[1] > 0 else '❌'} {h[0]}   {h[2]:+.2f} %" for h in st["hist"][-5:]]
     return "\n".join(l)
 
 def repondre(etat, cid, oui, mk=None):
@@ -378,11 +382,13 @@ def repondre(etat, cid, oui, mk=None):
         e = prix_actuel(m) or tr["e"]
         tr.setdefault("qui", {})[cid] = {"e": e, "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
         _envoi_sur(cid, reply_markup=CLAVIER, text=(
-            f"👊 C'est noté, on est dedans sur {m} {'⬆️ ACHAT' if tr['d'] == 1 else '⬇️ VENTE'}\n"
-            f"📌 Ton entrée figée   {px(e)}\n🛑 Ton stop   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n"
-            f"🤖 Ton coach IA te suit jusqu'au TP\n"
-            f"📰 Je te préviens si une news arrive\n"
-            f"📈 Ton résultat est calculé tout seul"))
+            f"👊 {m}   {'⬆️ ACHAT' if tr['d'] == 1 else '⬇️ VENTE'}\n"
+            f"📌 Entrée   {px(e)}\n"
+            f"🛑 Stop   {px(tr['sl'])}\n"
+            f"💰 TP1   {px(tr['tp1'])}\n"
+            f"🤖 Coach IA activé jusqu'au TP\n"
+            f"📰 Alertes news activées\n"
+            f"📈 Résultat calculé tout seul"))
         return
     ouverts = [m for m in trades if isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict) and not etat[m]["trade"]["qui"][cid].get("fini")]
     if not ouverts:
@@ -391,7 +397,7 @@ def repondre(etat, cid, oui, mk=None):
         _envoi_sur(cid, text="👌 Pas de position ouverte. J'attends le prochain setup.", reply_markup=CLAVIER)
         return
     m = ouverts[0]; pos = etat[m]["trade"]["qui"][cid]
-    noter(etat, cid, m, pos, prix_actuel(m) or pos["e"], "sortie manuelle 🚪")
+    noter(etat, cid, m, pos, prix_actuel(m) or pos["e"], "🚪 Sortie manuelle")
 
 def cloturer_abonnes(etat, m, tr, sortie, motif):
     """Fin du trade : chaque abonné encore dedans est clôturé au même niveau (stop ou TP)."""
@@ -799,13 +805,13 @@ def coach(etat, m, r, cle):
     fleche = "⬆️" if d == 1 else "⬇️"
     if prog >= 0.7 and f"presque{tr['statut']}" not in vu:
         vu.append(f"presque{tr['statut']}")
-        msgs.append(f"{fleche}{fleche} {m} : tiens bon 💪\n{barre_pct(prog * 100)}\n🎯 Objectif {px(cible)} tout proche")
+        msgs.append(f"💪 {m}\nTiens bon, presque arrivé\n{fleche} {barre_pct(prog * 100)}\n🎯 Objectif   {px(cible)}")
     if 0.3 <= prog < 0.7 and "bon" not in vu and tr["statut"] == "entree":
         vu.append("bon")
-        msgs.append(f"{fleche} {m} : ça part dans le bon sens ✅\n{barre_pct(prog * 100)}")
+        msgs.append(f"✅ {m}\nÇa part dans le bon sens\n{fleche} {barre_pct(prog * 100)}")
     if perte >= 0.6 and "danger" not in vu:
         vu.append("danger")
-        msgs.append(f"⚠️ {m} : le prix revient contre nous\n🛑 Garde ton stop {px(tr['sl'])}, ne le déplace pas")
+        msgs.append(f"⚠️ {m}\nLe prix revient contre nous\n🛑 Stop   {px(tr['sl'])}\n🙅 On ne le déplace pas")
     # Petites perturbations pendant le trade (messages rassurants, 1 fois toutes les 30-45 min max)
     tps = tr.setdefault("coach_t", {})
     def libre(cle_m, minutes):
@@ -816,29 +822,29 @@ def coach(etat, m, r, cle):
     surcharge5 = (r5 >= 65) if d == -1 else (r5 <= 35)
     grandes_ok = r["dirs"][7] == d and r["dirs"][9] == d
     if 0.25 <= perte < 0.6 and grandes_ok and libre("perturb", 30):
-        msgs.append(f"😌 {m} : petite perturbation, c'est normal\n"
-                    + (f"⚡ Surcharge RSI en 5 min ({r5:.0f})\n" if surcharge5 else "")
-                    + f"✅ 1 h et 4 h toujours {'⬆️' if d == 1 else '⬇️'}\n"
-                    f"{fleche} Le marché devrait reprendre vers le TP\n🛑 Stop {px(tr['sl'])} en place, on ne touche à rien")
+        msgs.append(f"😌 {m}\nPetite perturbation, c'est normal\n"
+                    + (f"⚡ RSI 5 min   {r5:.0f} (surcharge)\n" if surcharge5 else "")
+                    + f"✅ 1 h   {fleche}\n✅ 4 h   {fleche}\n"
+                    f"🎯 Cap sur le TP\n🛑 Stop   {px(tr['sl'])}")
     if 0 < prog < 0.7:
         a = r["atr"]
         obstacle = [(v, n) for v, n in r["niveaux"] if n in ("15m", "1h", "4h") and abs(v - p) <= 0.3 * a and d * (cible - v) > 0]
         if obstacle and libre("mur", 45):
             v, n = obstacle[0]
-            msgs.append(f"🧱 {m} : le prix teste {'une résistance' if d == 1 else 'un support'} {n} ({px(v)})\n"
-                        f"⏸ Patience, c'est une pause normale\n{fleche} S'il casse, direction le TP 🎯")
+            msgs.append(f"🧱 {m}\n{'Résistance' if d == 1 else 'Support'} {n}   {px(v)}\n"
+                        f"⏸ Pause normale, patience\n🎯 S'il casse : cap sur le TP")
     # Plan annulé : la 4h se retourne, ou la 15m ET la 1h passent contre nous
     dirs = r["dirs"]
     if (dirs[9] == -d or (dirs[4] == -d and dirs[7] == -d)) and "annule" not in vu and tr["statut"] == "entree":
         vu.append("annule")
-        msgs.append(f"❌❌ PLAN ANNULÉ — {m}\n{'⬇️' if d == 1 else '⬆️'} Les unités de temps se retournent\n✂️ Je coupe ma position")
+        msgs.append(f"❌ {m}\nPlan annulé\n{'⬇️' if d == 1 else '⬆️'} Les unités de temps se retournent\n✂️ Je coupe ma position")
     # Annonce économique pendant la position
     for ev in etat.get("cal", {}).get("ev", []):
         reste = ev["t"] - time.time()
         if 0 <= reste <= 30 * 60 and f"news{ev['t']}" not in vu:
             vu.append(f"news{ev['t']}")
-            msgs.append(f"📰⚠️ NEWS dans {round(reste / 60)} min — {m}\n"
-                        + (f"🔒 Je mets mon stop à l'entrée {px(e)}" if prog > 0.2 else "✂️ Le trade n'avance pas : je coupe avant la news"))
+            msgs.append(f"📰 {m}\nNews dans   {round(reste / 60)} min\n"
+                        + (f"🔒 Stop à l'entrée   {px(e)}" if prog > 0.2 else "✂️ Le trade n'avance pas\n✂️ Je coupe avant la news"))
     for c in dedans:
         for t in msgs:
             _envoi_sur(c, text=t, reply_markup=CLAVIER)
@@ -930,7 +936,7 @@ def agent(m, r, cle, ferme):
     if tr["statut"] == "entree":
         if touche_sl:
             out.append(f"❌ {m} : stop {px(sl)} touché. On coupe, prochain setup bientôt.")
-            cle["fin"] = [tr, sl, "stop touché 🛑"]
+            cle["fin"] = [tr, sl, "🛑 Stop touché"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
@@ -960,11 +966,11 @@ def agent(m, r, cle, ferme):
                 out.append(f"📈 {m} : TP2 touché, la tendance continue.\n→ Stop au TP1 {px(t1)}\n→ Nouvel objectif {px(suivants[0][0])}")
                 return out
             out.append(f"🏆 {m} : objectif final {px(t2)} atteint. Trade terminé, bravo !")
-            cle["fin"] = [tr, t2, "objectif final atteint 🏆"]
+            cle["fin"] = [tr, t2, "🏆 Objectif final"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
             out.append(f"↩️ {m} : sortie au stop sécurisé {px(tr['sl'])}. TP1 encaissé, pas de perte.")
-            cle["fin"] = [tr, t1 if d * (tr["sl"] - t1) < 0 else tr["sl"], "TP1 encaissé 💰"]
+            cle["fin"] = [tr, t1 if d * (tr["sl"] - t1) < 0 else tr["sl"], "💰 TP1 encaissé"]
             cle.pop("trade"); cle["aligne"] = 0; return out
     return out
 
