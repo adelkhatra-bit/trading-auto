@@ -678,7 +678,7 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -1491,6 +1491,7 @@ def controle_entree(etat, m, d):
 def repondre(etat, cid, oui, mk=None):
     """✅ Je suis rentré : l'entrée et le stop sont FIGÉS pour cet abonné. 🚪 Je suis sorti : calcul automatique du résultat."""
     trades = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
+    CLAVIER = CLAVIER_VISITEUR if cid in etat.get("prospects", []) else globals()["CLAVIER"]
     if oui:
         cands = [m for m in trades if not isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict)]
         if not cands and trades:
@@ -1651,14 +1652,63 @@ def publier_resultat(etat, m, tr, sortie, motif, gain):
         except Exception as ex:
             print("résultat", ex)
     # Le lien du groupe des résultats n'apparaît QUE après un TP ou un SL
-    lien = etat.get("lien_preuves") or LIEN_RESULTATS
+    lien = lien_validation(etat)
     kb = json.dumps({"inline_keyboard": [[{"text": "📸 Voir les résultats ALIGN", "url": lien}]]})
     for c, pos in (tr.get("qui") or {}).items():
-        if isinstance(pos, dict):
+        if isinstance(pos, dict) and c in etat.get("prospects", []):
+            g_ = pos["d"] * (sortie - pos["e"]) / pos["e"] * 100
+            pay = bouton_payer(etat) or kb
+            _envoi_sur(c, reply_markup=pay, text=(
+                f"🎉🎉 BRAVO — {ICONE.get(m, '')} {m}\n💰 Ta position gratuite : {g_:+.2f} %\n🔥 C'est ça, ALIGN\n"
+                "😍 Imagine chaque position comme celle-là\n💎 En VIP : toutes les positions + le sens + le coach (BE, TP)\n🔓 VIP 49,90 € / mois 👇"
+                if g_ > 0 else
+                f"🛡 {ICONE.get(m, '')} {m} : SL touché, risque maîtrisé\n📊 Ça fait partie du jeu : on coupe petit, on gagne gros\n"
+                "💎 En VIP : toutes les positions pour se refaire + le coach\n🔓 VIP 49,90 € / mois 👇"))
+        elif isinstance(pos, dict):
             _envoi_sur(c, reply_markup=kb, text=(
                 f"🔥 {ICONE.get(m, '')} {m} : bravo !\n📸 N'hésite pas à partager ta capture dans ALIGN Résultats\n👇 Bouton 📸 Partager mon gain"
                 if gain > 0 else
                 f"🛡 {ICONE.get(m, '')} {m} : SL touché, risque maîtrisé\n📊 Tous les résultats (TP et SL) sont publiés en toute transparence\n👇 Bouton ci-dessous"))
+
+def demande_entree(etat, jr):
+    """Quelqu'un demande à rejoindre un groupe / canal ALIGN : c'est TOI qui valides (anti-bots, anti-faux profils)."""
+    ch, us = jr["chat"], jr["from"]
+    cle_d = f"{ch['id']}_{us['id']}"
+    etat.setdefault("demandes_entree", {})[cle_d] = {"chat": ch["id"], "user": us["id"], "t": int(time.time())}
+    nom = (us.get("first_name", "") + " " + us.get("last_name", "")).strip() or "?"
+    pseudo = f"@{us['username']}" if us.get("username") else "pas de pseudo"
+    louche = us.get("is_bot") or not us.get("username")
+    txt = (f"🚪 DEMANDE D'ENTRÉE — {ch.get('title', 'groupe ALIGN')}\n👤 Nom : {nom}\n🔖 Pseudo : {pseudo}\n🆔 ID : {us['id']}\n"
+           f"🌐 Langue : {us.get('language_code', '?')}\n"
+           + ("⚠️ Attention : compte sans pseudo ou robot, vérifie bien" if louche else "✅ Profil normal") + "\n🚦 À toi de décider")
+    kb = json.dumps({"inline_keyboard": [[{"text": "✅ Accepter", "callback_data": f"jok:{cle_d}"}, {"text": "❌ Refuser", "callback_data": f"jno:{cle_d}"}],
+                                        ] + ([[{"text": "👀 Voir son profil", "url": f"https://t.me/{us['username']}"}]] if us.get("username") else [])})
+    for pid in proprio(etat):
+        _envoi_sur(pid, text=txt, reply_markup=kb)
+
+def decider_entree(etat, cb, ok, cle_d):
+    d = etat.setdefault("demandes_entree", {}).pop(cle_d, None)
+    try:
+        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Accepté" if ok else "❌ Refusé")
+    except Exception:
+        pass
+    if not d:
+        _envoi_sur(str(cb["message"]["chat"]["id"]), text="ℹ️ Demande déjà traitée"); return
+    try:
+        telegram("approveChatJoinRequest" if ok else "declineChatJoinRequest", chat_id=d["chat"], user_id=d["user"])
+        _envoi_sur(str(cb["message"]["chat"]["id"]), text=("✅ Accepté : il est entré" if ok else "❌ Refusé : il n'entre pas"))
+    except Exception as ex:
+        _envoi_sur(str(cb["message"]["chat"]["id"]), text=f"⚠️ Impossible : {str(ex)[:120]}")
+
+def lien_validation(etat):
+    """Lien d'entrée du groupe ALIGN Résultats AVEC validation (chaque entrée passe par toi)."""
+    if etat.get("canal_preuves") and not etat.get("lien_preuves_valid"):
+        try:
+            res = telegram("createChatInviteLink", chat_id=etat["canal_preuves"], name="ALIGN Résultats (validation)", creates_join_request="true")
+            etat["lien_preuves_valid"] = res["result"]["invite_link"]
+        except Exception as ex:
+            print("lien validation", ex)
+    return etat.get("lien_preuves_valid") or etat.get("lien_preuves") or LIEN_RESULTATS
 
 def traiter(etat, chats, updates):
     """Boutons cliqués et messages reçus. Renvoie la liste des téléphones qui demandent une analyse."""
@@ -1669,10 +1719,17 @@ def traiter(etat, chats, updates):
         if mcm and mcm["chat"].get("type") in ("channel", "supergroup"):
             connecter_canal(etat, mcm)
             continue
+        jr = u.get("chat_join_request")
+        if jr:
+            demande_entree(etat, jr)
+            continue
         cb = u.get("callback_query")
         if cb:
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
+            if choix in ("jok", "jno") and qui in proprio(etat):
+                decider_entree(etat, cb, choix == "jok", mk)
+                continue
             if choix in ("tvoffre", "tvok") and qui in proprio(etat):
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="OK")
@@ -1729,6 +1786,12 @@ def traiter(etat, chats, updates):
                 continue
             bienvenue = etat.get("bienvenue", {}).get(qui) == mk and etat.get(mk, {}).get("trade")
             if not bienvenue and not autorise(etat, qui, cb["from"]["id"]):
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Réservé aux VIP")
+                except Exception:
+                    pass
+                _envoi_sur(qui, text="🔒 Cette position est réservée aux VIP\n" + ("🎁 Ta position gratuite du jour est déjà utilisée\n⏰ Une nouvelle demain\n" if qui in etat.get("bienvenue", {}) else "🎁 Ta position gratuite arrive avec le prochain signal\n") + "💎 VIP 49,90 € / mois 👇",
+                           **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}))
                 continue
             try:
                 telegram("answerCallbackQuery", callback_query_id=cb["id"])
@@ -2139,9 +2202,11 @@ def annonces_et_sessions(etat, maintenant, derniers):
         fin = heure(e["t"] + 15 * 60)
         if 6 * 60 < reste <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev{e['t']}{e['titre']}")
+            avis = ia(etat, "Explique en 2 lignes très simples ce que cette annonce peut faire au Gold et au BTC (sans donner de sens à trader, juste le risque).",
+                      {"annonce": e["titre"], "prévu": e.get("prev"), "avant": e.get("avant")}, cle_cache=f"news{e['t']}{e['titre']}", duree=3600)
             out.append(f"⚠️⚠️ NEWS USA dans {round(reste / 60)} min ({heure(e['t'])})\n📰 {e['titre']}\n\n"
                        f"🟥 N'ouvre AUCUN trade\n🛡 Déjà en position ? Vérifie que ton STOP est bien placé\n"
-                       f"💥 Le prix peut bouger très fort dans les 2 sens\n⏳ On reprend à {fin}")
+                       f"💥 Le prix peut bouger très fort dans les 2 sens\n⏳ On reprend à {fin}" + (f"\n\n🧠 L'avis de l'IA ALIGN\n{avis}" if avis else ""))
         if 0 <= reste <= 6 * 60 and f"ev5{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev5{e['t']}{e['titre']}")
             out.append(f"🚨🚨🚨 NEWS DANS {max(1, round(reste / 60))} MIN — {e['titre']}\n🟥 Ne touche à rien\n🛡 Stop en place ? OK, on attend")
