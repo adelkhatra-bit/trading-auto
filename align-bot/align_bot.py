@@ -156,6 +156,15 @@ def rsi(c, n=14):
     ru, rd = rma(up, n), rma(dn, n)
     return [None if u is None or d is None else (100 if d == 0 else 100 - 100 / (1 + u / d)) for u, d in zip(ru, rd)]
 
+def divergence(bars, g=3, recent=12):
+    """Divergence RSI sur les derniers sommets / creux : (baissière, haussière)."""
+    c = [x["c"] for x in bars]; rr = [v or 50 for v in rsi(c)]
+    hs = [i for i in range(g, len(bars) - g) if bars[i]["h"] == max(x["h"] for x in bars[i - g:i + g + 1])]
+    ls = [i for i in range(g, len(bars) - g) if bars[i]["l"] == min(x["l"] for x in bars[i - g:i + g + 1])]
+    baisse = len(hs) >= 2 and len(bars) - hs[-1] <= recent and bars[hs[-1]]["h"] >= bars[hs[-2]]["h"] * 0.999 and rr[hs[-1]] < rr[hs[-2]] - 3
+    hausse = len(ls) >= 2 and len(bars) - ls[-1] <= recent and bars[ls[-1]]["l"] <= bars[ls[-2]]["l"] * 1.001 and rr[ls[-1]] > rr[ls[-2]] + 3
+    return baisse, hausse
+
 def linreg_fin(y):
     n = len(y); xs = range(n); mx = (n - 1) / 2; my = sum(y) / n
     pente = sum((i - mx) * (v - my) for i, v in zip(xs, y)) / sum((i - mx) ** 2 for i in xs)
@@ -269,7 +278,11 @@ def analyser(pair):
     posW, hautW, basW = position(w1, 4)
     # RSI 5 min (déclencheur de l'entrée parfaite) et RSI 15 min
     r5 = rsi([x["c"] for x in m5])
-    return dict(m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
+    # Distribution (sommet qui s'essouffle) / accumulation (creux qui se charge) : divergences 1h + 4h en haut / en bas de zone
+    div1h, div4h = divergence(h1), divergence(h4)
+    distrib = (div1h[0] or div4h[0]) and (posD >= 0.65 or posW >= 0.75)
+    accum = (div1h[1] or div4h[1]) and (posD <= 0.35 or posW <= 0.25)
+    return dict(distrib=distrib, accum=accum, div4h=div4h,m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
                 grosses=grosses, b15=b[-30:], ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
@@ -318,6 +331,10 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
           f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
           f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
           r.get("news") or "📰 News : calendrier indisponible"]
+    if r.get("distrib"):
+        l.append("⚠️ Distribution possible : le haut s'essouffle (divergence RSI)")
+    if r.get("accum"):
+        l.append("⚠️ Accumulation possible : le bas se charge (divergence RSI)")
     o = (cle or {}).get("ordre")
     if r["confirme"] and o and not (cle or {}).get("trade"):
         l.append(f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🟨 Zone   🔒🔒🔒")
@@ -512,7 +529,22 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "(regarde en vue Daily)": "(check the Daily chart)", "(regarde en vue 4 heures)": "(check the 4h chart)",
+"(en cours)": "(now)",
+"🎁🎁 POSITION DE BIENVENUE OFFERTE 🎁🎁": "🎁🎁 FREE WELCOME POSITION 🎁🎁",
+"👀 Suis-la en vue 15 minutes, tout est expliqué en bougies": "👀 Follow it on the 15-min chart, everything is explained in candles",
+"💎 C'est ta position offerte. Les suivantes + le coach : VIP 49,90 € / mois": "💎 This is your free position. Next ones + the coach: VIP €49.90 / month",
+"🔒 Position réservée aux VIP": "🔒 VIP-only position", "🎁 Ta position de bienvenue est déjà utilisée": "🎁 Your welcome position is already used",
+"💎 VIP 49,90 € / mois : toutes les positions + le coach en direct": "💎 VIP €49.90 / month: all positions + live coach",
+"💎 VIP 49,90 € / mois : toutes les positions + le coach": "💎 VIP €49.90 / month: all positions + the coach",
+"🎁 Ta 1re POSITION est OFFERTE": "🎁 Your 1st POSITION is FREE", "🕯 Expliquée en bougies (vue 15 min) + coach jusqu'au TP": "🕯 Explained in candles (15-min chart) + coach to TP",
+"📰 Alertes news et discours gratuites": "📰 Free news and speech alerts", "🔔 Ouvertures de marché gratuites": "🔔 Free market-open alerts",
+"🔒 Ensuite les positions arrivent MASQUÉES": "🔒 After that, positions arrive HIDDEN", "👉 Bouton ci-dessous, puis reviens ici et tape /start": "👉 Button below, then come back and type /start",
+"🔒 Les positions en direct sont réservées aux VIP": "🔒 Live positions are VIP-only", "🎁 Ta position de bienvenue reste offerte": "🎁 Your welcome position is still free",
+"⚠️ Distribution possible : le haut s'essouffle (divergence RSI)": "⚠️ Possible distribution: the top is fading (RSI divergence)",
+"⚠️ Accumulation possible : le bas se charge (divergence RSI)": "⚠️ Possible accumulation: the bottom is loading (RSI divergence)",
+": DISTRIBUTION possible": ": possible DISTRIBUTION", ": ACCUMULATION possible": ": possible ACCUMULATION",
+"🕯 Le haut s'essouffle (divergence RSI": "🕯 The top is fading (RSI divergence", "🕯 Le bas se charge (divergence RSI": "🕯 The bottom is loading (RSI divergence",
+"🙅 Prudence sur les": "🙅 Careful with", "👀 Un 🟥 SHORT ⬇️ peut se préparer": "👀 A 🟥 SHORT ⬇️ may be building", "👀 Un 🟩 LONG ⬆️ peut se préparer": "👀 A 🟩 LONG ⬆️ may be building", "(regarde en vue Daily)": "(check the Daily chart)", "(regarde en vue 4 heures)": "(check the 4h chart)",
 "(regarde en vue 1 heure)": "(check the 1h chart)", "(regarde en vue 15 minutes)": "(check the 15-min chart)",
 "(vue Daily)": "(Daily chart)", "(vue 4 heures)": "(4h chart)", "(vue 1 heure)": "(1h chart)", "(vue 15 minutes)": "(15-min chart)", "(dans": "(in", "🌐 English": "🌐 Français",
 # Règles / accueil / indicateur
@@ -649,7 +681,7 @@ def message_partage(etat):
     return txt, json.dumps({"inline_keyboard": [[{"text": "📤 Partager à un ami", "url": url}]]})
 
 OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet offert aux visiteurs tous les X jours
-POSITIONS_GRATUITES = os.environ.get("POSITIONS_GRATUITES", "1") == "1"   # positions gratuites pour tous, on vend l'indicateur
+POSITIONS_GRATUITES = os.environ.get("POSITIONS_GRATUITES", "0") == "1"   # 0 = positions VIP (49,90 €/mois), 1 position de bienvenue offerte
 LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script TradingView « invite-only » (à remplir après publication)
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "2500"))   # abonnement VIP mensuel : 2 500 ⭐ ≈ 49,90 €
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # (ancien réglage, gardé pour compatibilité)
@@ -846,7 +878,8 @@ def traiter(etat, chats, updates):
                     off.remove(mk); chats.discard(mk)
                     _envoi_sur(qui, text=f"⛔ Accès retiré à {etat.get('noms', {}).get(mk, mk)}")
                 continue
-            if not autorise(etat, qui, cb["from"]["id"]):
+            bienvenue = etat.get("bienvenue", {}).get(qui) == mk and etat.get(mk, {}).get("trade")
+            if not bienvenue and not autorise(etat, qui, cb["from"]["id"]):
                 continue
             try:
                 telegram("answerCallbackQuery", callback_query_id=cb["id"])
@@ -995,30 +1028,42 @@ def refuser(etat, cid):
     _envoi_sur(cid, text="👋 ALIGN Signaux — BTC + Gold\n⬆️⬇️ Les positions arrivent ici en direct", reply_markup=CLAVIER_VISITEUR)
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
     _envoi_sur(cid, text=("👋 Bienvenue sur ALIGN Signaux (BTC + Gold)\n\n"
-                          "🎁 Tu reçois GRATUITEMENT :\n• les alertes news 📰\n• les ouvertures de marché 🔔\n• 1 signal complet offert de temps en temps\n\n"
-                          "🔒 Les autres positions arrivent MASQUÉES.\n"
-                          "🔓 Pour tout voir (entrée, stop, TP, coaching Oui / Non, bouton Analyse) : abonne-toi avec le bouton ci-dessous, "
-                          "puis reviens ici et tape /start.\n\n" + AVERTISSEMENT), **kw)
+                          "🎁 Ta 1re POSITION est OFFERTE\n"
+                          "🕯 Expliquée en bougies (vue 15 min) + coach jusqu'au TP\n"
+                          "📰 Alertes news et discours gratuites\n"
+                          "🔔 Ouvertures de marché gratuites\n\n"
+                          "🔒 Ensuite les positions arrivent MASQUÉES\n"
+                          "💎 VIP 49,90 € / mois : toutes les positions + le coach en direct\n"
+                          "👉 Bouton ci-dessous, puis reviens ici et tape /start\n\n" + AVERTISSEMENT), **kw)
 
 def masquer(texte):
     """Cache tous les prix (entrée, stop, TP) pour les visiteurs non abonnés."""
     texte = re.sub(r"[+-]\d+,\d+ %", "🔒 %", texte)
     return re.sub(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", "🔒🔒🔒", texte).replace("\n\nTu es rentré ?", "")
 
-def envoyer_prospects(etat, texte, signal):
-    """Visiteurs : news en clair, positions masquées, sauf 1 signal offert par jour."""
-    offert = signal and time.time() - etat.get("offert_t", 0) >= OFFERT_JOURS * 86400
-    if offert:
-        etat["offert_t"] = time.time()
-        txt = "🎁🎁 SIGNAL OFFERT — pour te montrer que ça marche\n\n" + texte.replace("\n\nTu es rentré ?", "") + "\n\n🔓 Tous les signaux + coaching en direct : bouton ci-dessous"
-    elif signal:
-        txt = masquer(texte) + "\n\n🔒 Position masquée — réservée aux abonnés VIP"
-    else:
-        txt = texte
+def envoyer_prospects(etat, texte, signal, clavier=None):
+    """Visiteurs : news en clair ; UNE position de bienvenue complète (expliquée en bougies + coach) ;
+    ensuite les positions arrivent masquées avec le bouton VIP."""
+    entree = signal and "J'ENTRE MAINTENANT" in texte
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
+    deja = etat.setdefault("bienvenue", {})
+    m = next((x for x in MARCHES if x in texte.split("\n")[0]), None)
     for cid in list(etat.get("prospects", [])):
+        if signal and cid not in deja:
+            txt = ("🎁🎁 POSITION DE BIENVENUE OFFERTE 🎁🎁\n"
+                   "👀 Suis-la en vue 15 minutes, tout est expliqué en bougies\n\n" + texte)
+            k = {"reply_markup": clavier} if (entree and clavier) else {}
+            if entree:
+                deja[cid] = m
+                txt += "\n\n💎 C'est ta position offerte. Les suivantes + le coach : VIP 49,90 € / mois"
+        elif signal:
+            txt = (masquer(texte) + "\n\n🔒 Position réservée aux VIP\n"
+                   "🎁 Ta position de bienvenue est déjà utilisée\n💎 VIP 49,90 € / mois : toutes les positions + le coach en direct")
+            k = kw
+        else:
+            txt, k = texte, {}
         try:
-            telegram("sendMessage", chat_id=cid, text=txt, **kw)
+            telegram("sendMessage", chat_id=cid, text=txt, **k)
         except Exception as ex:
             print("prospect", cid, ex)
             if "403" in str(ex):
@@ -1128,7 +1173,8 @@ def calendrier(etat, maintenant):
             brut = http_json("https://nfs.faireconomy.media/ff_calendar_thisweek.json")
             cache["ev"] = [dict(titre=x["title"], pays=x["country"], t=int(datetime.datetime.fromisoformat(x["date"]).timestamp()),
                                 prev=x.get("forecast", ""), avant=x.get("previous", ""))
-                           for x in brut if x.get("impact") == "High" and x.get("country") in ("USD",)]
+                           for x in brut if x.get("country") == "USD" and (x.get("impact") == "High" or (
+                               x.get("impact") == "Medium" and any(k in x.get("title", "") for k in ("Speaks", "FOMC", "Fed", "Powell", "PCE", "PPI", "Jobless"))))]
             cache["t"] = maintenant
         except Exception as ex:
             print("calendrier", ex)
@@ -1617,11 +1663,13 @@ def un_tour(etat, chats):
             for cid in [c for c in chats if c not in proprio(etat) and c not in etat.get("offerts", []) and not POSITIONS_GRATUITES]:
                 if not membre(etat, int(cid)):
                     chats.discard(cid)
-                    try:
-                        telegram("sendMessage", chat_id=cid, text="⏸ Ton abonnement VIP n'est plus actif. Les signaux sont en pause."
-                                 + (f"\nRenouveler : {etat['lien']}" if etat.get("lien") else ""))
-                    except Exception:
-                        pass
+                    if cid not in etat.setdefault("prospects", []):
+                        etat["prospects"].append(cid)
+                    _envoi_sur(cid, reply_markup=CLAVIER_VISITEUR, text=(
+                        "🔒 Les positions en direct sont réservées aux VIP\n"
+                        + ("🎁 Ta position de bienvenue reste offerte\n" if cid not in etat.get("bienvenue", {}) else "")
+                        + "💎 VIP 49,90 € / mois : toutes les positions + le coach"
+                        + (f"\n👉 {etat['lien']}" if etat.get("lien") else "")))
 
     envois, derniers = [], {}
     calendrier(etat, int(time.time()))
@@ -1646,6 +1694,15 @@ def un_tour(etat, chats):
                 bil["tp" if gain > 0 else "sl"] += 1
                 bil["pct"] += gain
         derniers[nom_marche] = r
+        for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
+                                 f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
+                                 f"📍 Prix {zone_txt(r['posD'])} Daily\n🙅 Prudence sur les 🟩 LONG\n👀 Un 🟥 SHORT ⬇️ peut se préparer"),
+                                ("accum_vu", r.get("accum"),
+                                 f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : ACCUMULATION possible\n🕯 Le bas se charge (divergence RSI {'4h' if r['div4h'][1] else '1h'})\n"
+                                 f"📍 Prix {zone_txt(r['posD'])} Daily\n🙅 Prudence sur les 🟥 SHORT\n👀 Un 🟩 LONG ⬆️ peut se préparer")):
+            if oui and not cle.get(cle_p):
+                envois.append(txt)
+            cle[cle_p] = bool(oui)
         cle["vu"] = r["t"]
         for cid, mq in demandes:
             if mq in (None, nom_marche):
@@ -1684,7 +1741,7 @@ def un_tour(etat, chats):
                     if "403" in str(ex) and cid not in proprio(etat):
                         chats.discard(cid)   # l'abonné a bloqué le bot
             # Visiteurs non abonnés : teaser (positions masquées + bouton de paiement)
-            envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("JE PRÉPARE", "J'ENTRE MAINTENANT")))
+            envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("JE PRÉPARE", "J'ENTRE MAINTENANT")), clavier)
         for nom_marche in MARCHES:
             if nom_marche in derniers:
                 maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
