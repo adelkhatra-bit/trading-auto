@@ -1262,9 +1262,15 @@ def maj_chronos(etat, m, r):
 
 def lancer_chrono(etat, cid, m, r=None):
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
-    if str(cid) in ch:
-        return
-    t0 = time.time()
+    if str(cid) in ch:                     # déjà un chrono : on le redescend en bas de la conversation
+        try:
+            telegram("deleteMessage", chat_id=cid, message_id=ch[str(cid)]["mid"])
+        except Exception:
+            pass
+        t_garde = ch.pop(str(cid))["t0"]
+    else:
+        t_garde = None
+    t0 = t_garde or time.time()
     txt = chrono_txt(m, r, etat.get(m, {}), t0) if r else f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}\n🔄 Démarrage…"
     try:
         res = telegram("sendMessage", chat_id=cid, text=txt, disable_notification="true")
@@ -2555,6 +2561,9 @@ def agent(m, r, cle, ferme):
         # On ajuste le point tant que le prix n'est pas encore arrivé (les niveaux bougent)
         if not cle.get("prep"):
             cle["ordre"] = o
+        ancien = cle.get("ordre")
+        if ancien and (not ancien.get("sl_h") or abs(ancien["e"] - ancien["sl"]) > RISQUE_MAX * r["atr"] * 1.05):
+            cle["ordre"] = o                     # ancien ordre (SL trop grand ou sans heure de bougie) remplacé
         o = cle.get("ordre", o)
         if not cle.get("prep"):
             cle.pop("traverse", None)
