@@ -385,8 +385,8 @@ TRAD = {
 "📤 Partager à un ami": "📤 Share with a friend", "🎁 Offrir l'accès VIP": "🎁 Gift VIP access",
 "🎁 Offrir l'indicateur": "🎁 Gift the indicator", "⛔ Retirer l'accès": "⛔ Remove access",
 "✅ C'est fait, accès donné": "✅ Done, access given",
-"🔓 Débloquer les positions (≈ 10 € / mois)": "🔓 Unlock positions (≈ €10 / month)",
-"🧩 Obtenir l'indicateur (≈ 10 € / mois)": "🧩 Get the indicator (≈ €10 / month)",
+"🔓 Débloquer les positions (49,90 € / mois)": "🔓 Unlock positions (€49.90 / month)",
+"🧩 Obtenir l'indicateur (49,90 € / mois)": "🧩 Get the indicator (€49.90 / month)",
 # Verdicts / analyse
 "🔴🔴 N'ENTRE PAS": "🔴🔴 DON'T ENTER", "🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
 "⛔ TROP TARD — le marché est déjà parti": "⛔ TOO LATE — the market has already moved",
@@ -531,14 +531,14 @@ TRAD = {
 "✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.": "✅ ALIGN MTF BOT activated. My BTC and Gold positions arrive here.",
 "⬇️ Utilise les boutons en bas.": "⬇️ Use the buttons below.", "⬇️ Utilise les boutons en bas": "⬇️ Use the buttons below", "⌨️ Utilise les boutons en bas 👇": "⌨️ Use the buttons below 👇",
 "🤝 Tu aimes ALIGN Signaux ?": "🤝 Like ALIGN Signals?", "📤 Partage-le à tes amis, fais-les en profiter": "📤 Share it with your friends",
-"🎁 Positions gratuites": "🎁 Free positions", "🧩 Indicateur TradingView ≈ 10 € / mois": "🧩 TradingView indicator ≈ €10 / month",
+"🎁 Positions gratuites": "🎁 Free positions", "🧩 Indicateur TradingView 49,90 € / mois": "🧩 TradingView indicator €49.90 / month",
 "📈 Signaux BTC + Gold en direct, simples et clairs 👇": "📈 Live BTC + Gold signals, simple and clear 👇",
 "🧩 Indicateur ALIGN MTF PRO — TradingView": "🧩 ALIGN MTF PRO indicator — TradingView", "🧩 Indicateur ALIGN MTF PRO": "🧩 ALIGN MTF PRO indicator",
 "✅ Ton accès est actif": "✅ Your access is active", "👤 Pseudo": "👤 Username", "📍 TradingView → Indicateurs → Sur invitation": "📍 TradingView → Indicators → Invite-only",
 "✅ Tu y as droit": "✅ You're entitled to it", "✍️ Écris ton pseudo TradingView": "✍️ Type your TradingView username", "(exemple : adel_khatra)": "(example: adel_khatra)",
 "📊 Alignement des 11 unités de temps": "📊 Alignment of 11 timeframes", "🟨 Zone d'entrée + Fibonacci": "🟨 Entry zone + Fibonacci",
 "🛑 Stop derrière la mèche": "🛑 SL behind the wick", "💰 TP sur les grosses unités de temps": "💰 TP on the big timeframes", "⚡ Surcharge RSI + explosions": "⚡ RSI overextension + breakouts",
-"🎁 Les positions restent gratuites ici": "🎁 Positions stay free here", "💎 Indicateur ≈ 10 € / mois": "💎 Indicator ≈ €10 / month",
+"🎁 Les positions restent gratuites ici": "🎁 Positions stay free here", "💎 Indicateur 49,90 € / mois": "💎 Indicator €49.90 / month",
 "👉 Après paiement, reviens appuyer sur 🧩": "👉 After paying, come back and tap 🧩", "👌 Pseudo reçu": "👌 Username received",
 "⏳ Ton accès arrive très vite": "⏳ Your access is coming very soon", "✅ Accès indicateur ouvert !": "✅ Indicator access open!",
 "🎁 L'indicateur t'est offert !": "🎁 The indicator is a gift for you!", "👉 Appuie sur 🧩 Indicateur TradingView": "👉 Tap 🧩 TradingView indicator",
@@ -644,14 +644,14 @@ def message_partage(etat):
     txt = ("🤝 Tu aimes ALIGN Signaux ?\n"
            "📤 Partage-le à tes amis, fais-les en profiter\n"
            f"👉 {lien}\n"
-           "🎁 Positions gratuites\n🧩 Indicateur TradingView ≈ 10 € / mois")
+           "🎁 Positions gratuites\n🧩 Indicateur TradingView 49,90 € / mois")
     url = "https://t.me/share/url?" + urllib.parse.urlencode({"url": lien, "text": "📈 Signaux BTC + Gold en direct, simples et clairs 👇"})
     return txt, json.dumps({"inline_keyboard": [[{"text": "📤 Partager à un ami", "url": url}]]})
 
 OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet offert aux visiteurs tous les X jours
 POSITIONS_GRATUITES = os.environ.get("POSITIONS_GRATUITES", "1") == "1"   # positions gratuites pour tous, on vend l'indicateur
 LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script TradingView « invite-only » (à remplir après publication)
-PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
+PRIX_STARS = int(os.environ.get("PRIX_STARS", "2500"))   # abonnement VIP mensuel : 2 500 ⭐ ≈ 49,90 €
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # (ancien réglage, gardé pour compatibilité)
 DUREE_SEC = int(os.environ.get("DUREE_SEC", str(ECOUTE_SEC)))   # durée d'un lancement (5 h 40 sur GitHub = bot toujours allumé)
 PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "60"))   # une analyse complète BTC + Gold toutes les 60 s
@@ -936,7 +936,7 @@ def a_indicateur(etat, cid):
 
 def bouton_indicateur(etat):
     lien = etat.get("lien")
-    return json.dumps({"inline_keyboard": [[{"text": "🧩 Obtenir l'indicateur (≈ 10 € / mois)", "url": lien}]]}) if lien else None
+    return json.dumps({"inline_keyboard": [[{"text": "🧩 Obtenir l'indicateur (49,90 € / mois)", "url": lien}]]}) if lien else None
 
 def menu_indicateur(etat, cid, user):
     """Bouton 🧩 Indicateur : présentation, ou demande du pseudo TradingView si l'abonné y a droit."""
@@ -959,7 +959,7 @@ def menu_indicateur(etat, cid, user):
         "🧩 Indicateur ALIGN MTF PRO — TradingView\n━━━━━━━━━━━━\n"
         "📊 Alignement des 11 unités de temps\n🟨 Zone d'entrée + Fibonacci\n🛑 Stop derrière la mèche\n"
         "💰 TP sur les grosses unités de temps\n⚡ Surcharge RSI + explosions\n━━━━━━━━━━━━\n"
-        "🎁 Les positions restent gratuites ici\n💎 Indicateur ≈ 10 € / mois\n"
+        "🎁 Les positions restent gratuites ici\n💎 Indicateur 49,90 € / mois\n"
         "👉 Après paiement, reviens appuyer sur 🧩"), **kw)
     for p in proprio(etat):
         _envoi_sur(p, text=f"🧩 {user} s'intéresse à l'indicateur",
@@ -977,7 +977,7 @@ def recevoir_pseudo(etat, cid, pseudo):
 
 def bouton_payer(etat):
     lien = etat.get("lien")
-    return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (≈ 10 € / mois)", "url": lien}]]}) if lien else None
+    return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (49,90 € / mois)", "url": lien}]]}) if lien else None
 
 def analyse_visiteur(etat, cid, mq=None):
     """Analyse gratuite pour les visiteurs : tendance visible, plan de trade réservé VIP."""
@@ -1038,10 +1038,10 @@ def connecter_canal(etat, mcm):
         etat["canal"] = cid; etat["canal_nom"] = chat.get("title", "")
         texte = f"✅ Bot connecté à la chaîne « {etat['canal_nom']} ». Les signaux y seront publiés automatiquement."
         try:
-            if chat.get("type") == "channel" and not etat.get("lien"):
+            if chat.get("type") == "channel" and (not etat.get("lien") or etat.get("prix_lien", 500) != PRIX_STARS):
                 res = telegram("createChatSubscriptionInviteLink", chat_id=cid, name="Abonnement VIP",
                                subscription_period=2592000, subscription_price=PRIX_STARS)["result"]
-                etat["lien"] = res["invite_link"]
+                etat["lien"] = res["invite_link"]; etat["prix_lien"] = PRIX_STARS
             if etat.get("lien"):
                 texte += f"\n💳 Lien d'abonnement ({PRIX_STARS} ⭐ / mois) : {etat['lien']}\nC'est ce lien que tu partages pour vendre l'accès."
         except Exception as ex:
@@ -1593,13 +1593,16 @@ def un_tour(etat, chats):
                 etat["bot"] = telegram("getMe")["result"]["username"]
             except Exception as ex:
                 print("getMe", ex)
-        # Chaîne VIP connectée mais lien d'abonnement pas encore créé : on réessaie à chaque lancement
-        if etat.get("canal") and not etat.get("lien"):
+        # Chaîne VIP : lien d'abonnement absent OU ancien prix → nouveau lien au bon prix (1 essai par heure max)
+        if etat.get("canal") and (not etat.get("lien") or etat.get("prix_lien", 500) != PRIX_STARS) \
+                and time.time() - etat.get("essai_lien", 0) > 3600:
+            etat["essai_lien"] = time.time()
             try:
                 etat["lien"] = telegram("createChatSubscriptionInviteLink", chat_id=etat["canal"], name="Abonnement VIP",
                                         subscription_period=2592000, subscription_price=PRIX_STARS)["result"]["invite_link"]
+                etat["prix_lien"] = PRIX_STARS
                 for p in proprio(etat):
-                    telegram("sendMessage", chat_id=p, text=f"💳 Lien d'abonnement VIP créé ({PRIX_STARS} ⭐ / mois, ≈ 10 €) :\n{etat['lien']}\n\n👉 C'est ce lien que tu partages pour vendre l'accès.")
+                    telegram("sendMessage", chat_id=p, text=f"💳 Lien d'abonnement VIP créé ({PRIX_STARS} ⭐ / mois ≈ 49,90 €) :\n{etat['lien']}\n\n👉 C'est ce lien que tu partages pour vendre l'accès.")
             except Exception as ex:
                 print("lien abonnement", ex)
         # Toutes les heures : on retire les abonnés qui n'ont pas renouvelé
