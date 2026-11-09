@@ -643,14 +643,21 @@ def plan_cassure(r, d):
     if not casse or trop:
         return None
     e = r["m1"][-1]["c"]
-    sl = (min(b[-1]["l"], L - 0.5 * a) - 0.2 * a) if d == 1 else (max(b[-1]["h"], L + 0.5 * a) + 0.2 * a)
+    # SL derrière la STRUCTURE (plus bas / plus haut des 3 dernières bougies 15 min), pas juste derrière la bougie de cassure :
+    # le retest de la cassure revient souvent chercher ces mèches. Au moins 1 bougie moyenne, jamais plus de 1,5.
+    if d == 1:
+        sl = min(min(x["l"] for x in b[-3:]), L - 0.5 * a) - 0.35 * a
+        sl = min(sl, e - 1.0 * a); sl = max(sl, e - RISQUE_MAX * a)
+    else:
+        sl = max(max(x["h"] for x in b[-3:]), L + 0.5 * a) + 0.35 * a
+        sl = max(sl, e + 1.0 * a); sl = min(sl, e + RISQUE_MAX * a)
     if abs(e - sl) < max(a, e * 0.0008):
         sl = e - d * max(a, e * 0.0008)
     risque = abs(e - sl)
     t1, t2 = objectifs(r, d, e, risque)
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
-                src="cassure 15 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=heure(b[-1]["t"]), sl_ut="15 min")
+                src="cassure 15 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=bougie_protegee(b[-3:], d, sl), sl_ut="15 min")
 
 def ligne_cassure(r, d):
     L = niveau_cassure(r, d)
@@ -848,7 +855,7 @@ TRAD = {
 "💰 Ton gain est protégé": "💰 Your profit is protected", "🛡 Ta perte possible est réduite": "🛡 Your possible loss is reduced",
 ": reste cool": ": stay cool", "🌬 Le marché respire": "🌬 The market is breathing", "🕯 Il peut revenir un peu, c'est normal": "🕯 It may pull back a bit, that's normal",
 "🛑 Ne touche pas ton SL": "🛑 Don't touch your SL",
-"SOUS la mèche du dernier creux": "BELOW the wick of the last low", "SOUS la mèche basse": "BELOW the low wick", "AU-DESSUS de la mèche haute": "ABOVE the high wick", "• bougie 15 min de": "• 15 min candle at", "• bougie 5 min de": "• 5 min candle at", "(bougie de cassure)": "(breakout candle)", "AU-DESSUS de la mèche du dernier sommet": "ABOVE the wick of the last high",
+"SOUS la mèche du dernier creux": "BELOW the wick of the last low", "SOUS la mèche basse": "BELOW the low wick", "AU-DESSUS de la mèche haute": "ABOVE the high wick", "• bougie 15 min de": "• 15 min candle at", "• bougie 5 min de": "• 5 min candle at", "(bougie de cassure)": "(breakout candle)", "(sous la structure 15 min)": "(behind the 15 min structure)", "AU-DESSUS de la mèche du dernier sommet": "ABOVE the wick of the last high",
 "la mèche du dernier creux": "the wick of the last low", "la mèche du dernier sommet": "the wick of the last high",
 "🛑 SL un peu": "🛑 SL a little", "SOUS": "BELOW", "AU-DESSUS de": "ABOVE", "sous la": "below the", "au-dessus du": "above the",
 "résistance": "resistance", "support": "support",
@@ -2412,7 +2419,7 @@ def fmt_trade(m, tr, p=None):
             f"⏱ Vue 15 minutes\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
             f"1️⃣ 👀 Mets-toi en vue 15 minutes\n"
-            + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (bougie de cassure)\n"
+            + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (sous la structure 15 min)\n"
                f"3️⃣ 🟨 Entrée {SENS[d]} : à la clôture de la bougie 15 min qui casse ≈ {px(tr.get('niveau', tr['e']))}\n"
                if tr.get("src") == "cassure 15 min" else
                f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)}\n" +
@@ -3011,7 +3018,7 @@ def agent(m, r, cle, ferme):
                 cle.pop("attente_rejet", None); cle.pop("touche_t", None); cle.pop("traverse", None)
                 sl_m = (bj["l"] - 0.2 * r["atr"]) if d == 1 else (bj["h"] + 0.2 * r["atr"])   # SL juste derrière la mèche de rejet
                 # SL derrière la mèche ET derrière le bas de la zone (le marché respire dans la zone), jamais plus de 1,5 ATR
-                sl_m = min(sl_m, o["sl"], p - 0.8 * r["atr"]) if d == 1 else max(sl_m, o["sl"], p + 0.8 * r["atr"])
+                sl_m = min(sl_m, o["sl"], p - 1.0 * r["atr"]) if d == 1 else max(sl_m, o["sl"], p + 1.0 * r["atr"])
                 sl_m = max(sl_m, p - RISQUE_MAX * r["atr"]) if d == 1 else min(sl_m, p + RISQUE_MAX * r["atr"])
                 o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True,
                          sl_h=heure(bj["t"]), sl_ut="5 min" if r["b5"] and bj is r["b5"][-1] else "15 min")
