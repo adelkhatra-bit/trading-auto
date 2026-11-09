@@ -598,7 +598,7 @@ TRAD = {
 "(en cours)": "(now)", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
 " — dans ": " — in ", " jours": " days", " — en cours": " — now", "✅ Rien d'ici": "✅ Nothing within", "✅ Plus aucune annonce ni discours cette semaine": "✅ No more news or speeches this week",
 "lun. ": "Mon ", "mar. ": "Tue ", "mer. ": "Wed ", "jeu. ": "Thu ", "ven. ": "Fri ", "sam. ": "Sat ", "dim. ": "Sun ", ": ÇA RETRACE": ": IT'S PULLING BACK", "😎 Le repli qu'on attend commence": "😎 The pullback we're waiting for is starting",
-"🎯 Zone visée ≈": "🎯 Target zone ≈", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
+"🎯 Zone visée ≈": "🎯 Target zone ≈", "🎯 Il devrait revenir vers ≈": "🎯 It should come back to ≈", "🕯 La moitié du dernier grand mouvement (vue 15 min)": "🕯 Half of the last big move (15-min chart)", "👀 Sois patient": "👀 Be patient", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
 ": LE REPLI EST LÀ": ": THE PULLBACK IS HERE", "se prépare": "is building", "👀 Vue 15 min, tiens-toi prêt": "👀 15-min chart, get ready", "🔔 Prochaine alerte : ÇA ARRIVE": "🔔 Next alert: IT'S COMING", "⚡⚡ PRÉPARE-TOI —": "⚡⚡ GET READY —", "🎯 On est à quelques pips de l'entrée": "🎯 We're a few pips from the entry",
 "🛑 Dès que tu es dedans : SL un peu": "🛑 As soon as you're in: SL a little", "💰 TP1 juste": "💰 TP1 just", "🙅 Jamais de position sans SL": "🙅 Never a position without SL",
 "🚦 Feu vert 🟢 dans un instant": "🚦 Green light 🟢 in a moment", "🛑 Mets ton SL TOUT DE SUITE": "🛑 Set your SL RIGHT NOW", "✅ Ton bot t'a déjà mis dedans 🤖": "✅ Your bot already put you in 🤖", "🤖 Mon bot": "🤖 My bot", "🤖 MON BOT": "🤖 MY BOT",
@@ -1941,8 +1941,12 @@ def agent(m, r, cle, ferme):
             if (r["dirs"][2] == -d or (r["dirs"][0] == -d and recul >= 0.3 * r["atr"])) and not cle.get("retrace_vu") \
                     and r["t"] - cle.get("retrace_t", 0) >= 1800:        # 1 alerte « ça retrace » par 30 min maximum
                 cle["retrace_vu"] = True; cle["retrace_t"] = r["t"]
+                zv = point_entree(r, d, p_)
                 out.append(f"↩️ {ICONE.get(m, '')} {m} : ÇA RETRACE {'⬇️' if d == 1 else '⬆️'}\n😎 Le repli qu'on attend commence\n"
-                           f"🔜 Prochaine entrée   {SENS[d]}\n🎯 Zone visée ≈ {px(r['ema15'])}\n👀 Vue 15 min, sois patient\n🔔 Je te préviens dès qu'on y est")
+                           f"🔜 Prochaine entrée   {SENS[d]}\n"
+                           f"🎯 Il devrait revenir vers ≈ {px(zv['za'])} – {px(zv['zb'])}\n"
+                           f"🕯 La moitié du dernier grand mouvement (vue 15 min){', ' + zv['src'].split(' + ')[0] if 'Fibonacci' not in zv['src'].split(' + ')[0] else ''}\n"
+                           f"👀 Sois patient\n🔔 Je te préviens dès qu'on y est")
             elif r["dirs"][2] == d:
                 cle["retrace_vu"] = False
             cle["aligne"] = d
