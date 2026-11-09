@@ -375,15 +375,230 @@ def verdict(r, cle):
             f"✅ 15 min / 1 h / 4 h alignées\n{'✅' if zone else '⏳'} Prix dans la zone 🟨\n⏳ Surcharge RSI 5 min\n✅ Pas de news proche\n"
             "🚦 Attends mon 🟢 J'ENTRE MAINTENANT")
 
+# ───────── Langue : chaque utilisateur choisit 🇫🇷 / 🇬🇧, tout le système suit ─────────
+TRAD = {
+# Boutons
+"🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis",
+"✅ Je suis rentré": "✅ I'm in", "🚪 Je suis sorti": "🚪 I'm out", "📈 Mes résultats": "📈 My results",
+"🧩 Indicateur TradingView": "🧩 TradingView indicator", "💎 Devenir VIP": "💎 Become VIP",
+"Utilise les boutons 👇": "Use the buttons 👇", "❌ Non": "❌ No",
+"📤 Partager à un ami": "📤 Share with a friend", "🎁 Offrir l'accès VIP": "🎁 Gift VIP access",
+"🎁 Offrir l'indicateur": "🎁 Gift the indicator", "⛔ Retirer l'accès": "⛔ Remove access",
+"✅ C'est fait, accès donné": "✅ Done, access given",
+"🔓 Débloquer les positions (≈ 10 € / mois)": "🔓 Unlock positions (≈ €10 / month)",
+"🧩 Obtenir l'indicateur (≈ 10 € / mois)": "🧩 Get the indicator (≈ €10 / month)",
+# Verdicts / analyse
+"🔴🔴 N'ENTRE PAS": "🔴🔴 DON'T ENTER", "🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
+"⛔ TROP TARD — le marché est déjà parti": "⛔ TOO LATE — the market has already moved",
+"😎 Patience, on trouve une autre entrée": "😎 Be patient, we'll find another entry",
+"⏳ 15 min / 1 h / 4 h pas alignées": "⏳ 15 min / 1 h / 4 h not aligned",
+"✅ 15 min / 1 h / 4 h alignées": "✅ 15 min / 1 h / 4 h aligned",
+"🔔 Je te préviens dès que c'est bon": "🔔 I'll tell you when it's ready",
+"🔔 Je te préviens dès qu'il y en a une": "🔔 I'll tell you as soon as there is one",
+"🔔 Je te préviens": "🔔 I'll let you know",
+"📰 News dans moins de 15 min": "📰 News in less than 15 min",
+"💥 Le prix peut bouger très fort dans les 2 sens": "💥 Price can move very hard both ways",
+"💥 Le prix peut bouger très fort": "💥 Price can move very hard",
+"🔄 Risque de rebond : pas de": "🔄 Bounce risk: no",
+"Prix dans la zone 🟨": "Price in the zone 🟨", "⏳ Surcharge RSI 5 min": "⏳ RSI 5 min overextension",
+"✅ Pas de news proche": "✅ No news nearby", "Pas de news proche": "No news nearby",
+"🚦 Attends mon 🟢 J'ENTRE MAINTENANT": "🚦 Wait for my 🟢 I'M ENTERING NOW",
+"👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
+"⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
+"⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet",
+"🔜 Prochaine entrée": "🔜 Next entry", "↩️ Sur le repli vers": "↩️ On the pullback to",
+"👀 Si 15 min / 1 h / 4 h se retournent": "👀 If 15 min / 1 h / 4 h turn",
+"🧭 Alignement": "🧭 Alignment", 
+"tout en HAUT": "at the very TOP", "tout en BAS": "at the very BOTTOM", "en haut": "high", "en bas": "low", "au milieu": "in the middle",
+"✅ Aucune annonce ni discours d'ici": "✅ No news or speech within",
+"📰 News : calendrier indisponible": "📰 News: calendar unavailable",
+"Pas de news majeure prévue cette semaine": "No major news this week",
+"bientôt": "soon",
+# Jauge
+"🔌 Prochaine position": "🔌 Next position", "🔌 EN POSITION": "🔌 IN POSITION", "🔌 Position ouverte": "🔌 Position open",
+"🚀 Déjà parti : patience": "🚀 Already gone: patience", "⏳ Je calcule la zone": "⏳ Computing the zone",
+"⚡ Dans la zone : j'attends le RSI": "⚡ In the zone: waiting for RSI",
+"⏱ Le prix approche doucement": "⏱ Price is slowly getting closer", "⏱ Arrivée ≈": "⏱ Arrival ≈",
+"🛑 Ton stop": "🛑 Your SL", "bloqué : prix": "blocked: price",
+# Agent / signaux
+"🔔 JE PRÉPARE UNE POSITION —": "🔔 PREPARING A POSITION —",
+"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨": "⏳ Not entering yet: waiting for price to reach the zone 🟨",
+"👀 Mets-toi en vue 15 minutes": "👀 Switch to the 15-minute chart", "⏱ Mets-toi en vue 15 minutes": "⏱ Switch to the 15-minute chart",
+"👀 Vue 15 minutes": "👀 15-minute chart", "⏱ Vue 15 minutes": "⏱ 15-minute chart",
+"🕯 Repère le dernier creux (mèche du bas)": "🕯 Find the last low (bottom wick)",
+"🕯 Repère le dernier sommet (mèche du haut)": "🕯 Find the last high (top wick)",
+"le dernier creux (mèche du bas)": "the last low (bottom wick)", "le dernier sommet (mèche du haut)": "the last high (top wick)",
+"🟨 L'entrée sera à peu près": "🟨 Entry will be roughly", "au-dessus de ce creux": "above this low", "sous ce sommet": "below this high",
+"🚦 Attends mon feu vert 🟢": "🚦 Wait for my green light 🟢",
+"monte sur 15m, 1h et 4h ✅✅✅": "is rising on 15m, 1h and 4h ✅✅✅", "descend sur 15m, 1h et 4h ✅✅✅": "is falling on 15m, 1h and 4h ✅✅✅",
+"🟡🟡 TIENS-TOI PRÊT —": "🟡🟡 GET READY —", "arrive dans la zone 🟨": "is reaching the zone 🟨",
+"📲 Je prépare mon ordre": "📲 Preparing my order", "⏳ J'attends le signal 🟢": "⏳ Waiting for the 🟢 signal",
+"🟢🟢🟢 J'ENTRE MAINTENANT —": "🟢🟢🟢 I'M ENTERING NOW —", "J'ENTRE MAINTENANT": "I'M ENTERING NOW",
+"🎯 Confiance": "🎯 Confidence", "15 min • 1 h • 4 h alignées": "15 min • 1 h • 4 h aligned",
+"Daily / Weekly favorables": "Daily / Weekly favourable", "Zone Fibonacci 50 – 78,6 %": "Fibonacci zone 50 – 78.6 %",
+"Niveau 15m / 1h / 4h ou EMA": "15m / 1h / 4h level or EMA", "RSI en surcharge (": "RSI overextended (",
+"Confirmé en 1 h": "Confirmed on 1 h", "Gain / risque x": "Reward / risk x", "Tu es rentré ?": "Are you in?",
+"🕯 EN BOUGIES (marche sur toutes les plateformes) :": "🕯 IN CANDLES (works on every platform):",
+"1️⃣ 👀 Mets-toi en vue 15 minutes": "1️⃣ 👀 Switch to the 15-minute chart",
+"2️⃣ 🛑 SL : un tout petit peu": "2️⃣ 🛑 SL: just a little", "3️⃣ 🟨 Entrée": "3️⃣ 🟨 Entry",
+"sur le repli": "on the pullback", "sur le rebond": "on the bounce",
+"vers la moitié de la dernière grande bougie verte": "around the middle of the last big green candle",
+"vers la moitié de la dernière grande bougie rouge": "around the middle of the last big red candle",
+"4️⃣ 💰 TP1 : juste": "4️⃣ 💰 TP1: just", "4️⃣ 💰 TP1 : environ": "4️⃣ 💰 TP1: about", "fois ton risque": "times your risk",
+"5️⃣ 🏁 TP2 : on laisse courir, je te guide": "5️⃣ 🏁 TP2: we let it run, I'll guide you", "5️⃣ 🏁 TP2 :": "5️⃣ 🏁 TP2:",
+"💡 TP1 touché → SL à BE": "💡 TP1 hit → SL to BE", "(regarde en vue": "(look at the chart", "(vue": "(chart",
+"📍 Repère prix (XAUUSD / Kraken BTC) :": "📍 Price guide (XAUUSD / Kraken BTC):", "📍 Repère prix : SL ≈": "📍 Price guide: SL ≈",
+"📍 Repère prix   ≈": "📍 Price guide   ≈", "PRIX ACTUEL": "CURRENT PRICE", "ENTRÉE haut": "ENTRY top", "ENTRÉE bas": "ENTRY bottom", "ENTRÉE": "ENTRY",
+"Risque": "Risk", "Gain   ": "Reward ",
+"ℹ️ Ma position perso • pas un conseil • risque de perte": "ℹ️ My personal position • not advice • risk of loss",
+"📐 Zone = Fibonacci 50 → 78,6 % +": "📐 Zone = Fibonacci 50 → 78.6 % +",
+"est déjà parti": "has already moved", "😎 On ne court pas après le prix": "😎 We don't chase the price",
+": alignement 15m / 1h / 4h perdu. Ordre annulé, j'attends.": ": 15m / 1h / 4h alignment lost. Order cancelled, waiting.",
+"aligné": "aligned", "sur 15m/1h/4h, MAIS prix": "on 15m/1h/4h, BUT price",
+"ici : risque de rebond. J'attends un meilleur prix.": "here: bounce risk. Waiting for a better price.", "⛔ Pas de": "⛔ No",
+": le prix est parti sans toucher le point d'entrée. Trop tard, je recalcule le prochain point.": ": price left without touching the entry. Too late, recalculating the next one.",
+": prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳": ": price IN the zone 🟨 — waiting for RSI confirmation ⏳",
+": prix sur le point d'entrée, mais annonce économique dans moins de 15 min. On ne rentre pas.": ": price at entry, but economic news in less than 15 min. Not entering.",
+": tu peux encore rentrer (": ": you can still enter (", ": trop tard pour rentrer. On attend le prochain setup.": ": too late to enter. Waiting for the next setup.",
+": trop tard pour rentrer maintenant. Ceux qui sont dedans : on continue vers le TP1": ": too late to enter now. Those already in: we keep going to TP1",
+"touché. On coupe, prochain setup bientôt.": "hit. We close, next setup soon.", "touché !": "hit!",
+"→ Sécurise une partie": "→ Secure part of it", "→ Mets ton SL à BE (prix d'entrée)": "→ Move your SL to BE (entry price)", "→ On vise TP2": "→ Aiming for TP2",
+": TP2 touché, la tendance continue.": ": TP2 hit, the trend continues.", "→ Stop au TP1": "→ SL at TP1", "→ Nouvel objectif": "→ New target",
+"objectif final": "final target", "atteint. Trade terminé, bravo !": "reached. Trade done, well done!",
+": sortie au stop sécurisé": ": exit at the protected SL", ". TP1 encaissé, pas de perte.": ". TP1 banked, no loss.",
+# Coach
+"Tiens bon, presque arrivé": "Hold on, almost there", "🎯 Objectif": "🎯 Target", "Ça part dans le bon sens": "Moving the right way",
+"Le prix revient contre nous": "Price is coming back against us", "🙅 On ne le déplace pas": "🙅 We don't move it",
+"Petite perturbation, c'est normal": "Small wobble, that's normal", "(surcharge)": "(overextended)", "🎯 Cap sur le TP": "🎯 Heading for TP",
+"⏸ Pause normale, patience": "⏸ Normal pause, be patient", "🎯 S'il casse : cap sur le TP": "🎯 If it breaks: heading for TP",
+"Résistance": "Resistance", "Plan annulé": "Plan cancelled", "Les unités de temps se retournent": "Timeframes are turning",
+"✂️ Je coupe ma position": "✂️ I'm closing my position", "News dans": "News in", "🔒 Mets ton SL à BE (prix d'entrée)": "🔒 Move your SL to BE (entry price)",
+"✂️ Le trade n'avance pas": "✂️ The trade isn't moving", "✂️ Je coupe avant la news": "✂️ Closing before the news",
+"🔁 Mets ton SL à BE (ton prix d'entrée)": "🔁 Move your SL to BE (your entry price)",
+"🛡 Comme ça, plus aucune perte possible": "🛡 This way, no loss possible", "🎯 On laisse courir vers le TP": "🎯 We let it run to TP",
+"🕯 Repère la mèche du dernier": "🕯 Find the wick of the last", "creux": "low", "sommet": "high",
+"⬆️ Monte": "⬆️ Raise", "⬇️ Descends": "⬇️ Lower", "ton SL un peu": "your SL a little", "cette mèche": "this wick",
+"🙅 Jamais pile sur la mèche : elle peut être retouchée": "🙅 Never exactly on the wick: it can be retested", "🙅 Jamais pile sur la mèche": "🙅 Never exactly on the wick",
+"💰 Ton gain est protégé": "💰 Your profit is protected", "🛡 Ta perte possible est réduite": "🛡 Your possible loss is reduced",
+": reste cool": ": stay cool", "🌬 Le marché respire": "🌬 The market is breathing", "🕯 Il peut revenir un peu, c'est normal": "🕯 It may pull back a bit, that's normal",
+"🛑 Ne touche pas ton SL": "🛑 Don't touch your SL",
+"SOUS la mèche du dernier creux": "BELOW the wick of the last low", "AU-DESSUS de la mèche du dernier sommet": "ABOVE the wick of the last high",
+"la mèche du dernier creux": "the wick of the last low", "la mèche du dernier sommet": "the wick of the last high",
+"🛑 SL un peu": "🛑 SL a little", "SOUS": "BELOW", "AU-DESSUS de": "ABOVE", "sous la": "below the", "au-dessus du": "above the",
+"résistance": "resistance", "support": "support",
+# Entrée abonné
+"🤖 Coach IA activé jusqu'au TP": "🤖 AI coach on until TP", "🔎 Je surveille toutes les 5 min :": "🔎 I check every 5 min:",
+"🧭 15 min / 1 h / 4 h • ⚡ RSI • 🧱 niveaux • 🎤 news": "🧭 15 min / 1 h / 4 h • ⚡ RSI • 🧱 levels • 🎤 news",
+"📈 Résultat calculé tout seul": "📈 Result calculated automatically", "📌 Entrée": "📌 Entry", "🛑 Stop": "🛑 SL", "(surcharge, normal)": "(overextended, normal)",
+"🔴 Le bot n'a pas de position ouverte": "🔴 The bot has no open position", "👉 Attends 🟢 J'ENTRE MAINTENANT": "👉 Wait for 🟢 I'M ENTERING NOW",
+"🟠 / 🥇 Ou appuie sur Analyse BTC / Gold": "🟠 / 🥇 Or tap BTC / Gold Analysis",
+"👌 Pas de position ouverte. J'attends le prochain setup.": "👌 No open position. Waiting for the next setup.",
+"clôturé": "closed", "🚪 Sortie": "🚪 Exit", "🎉 Bravo !": "🎉 Well done!", "💪 On repart au prochain": "💪 On to the next one",
+"🚪 Sortie manuelle": "🚪 Manual exit", "🛑 Stop touché": "🛑 SL hit", "🔒 Stop protégé touché": "🔒 Protected SL hit", "🛡 Stop remonté touché": "🛡 Raised SL hit",
+"💰 TP1 encaissé": "💰 TP1 banked", "🏆 Objectif final": "🏆 Final target",
+# Résultats
+"Aucun trade clôturé pour l'instant.": "No closed trade yet.", "👉 Appuie sur ✅ Je suis rentré quand tu prends une position.": "👉 Tap ✅ I'm in when you take a position.",
+"✅ TP gagnés": "✅ TP won", "❌ Stops touchés": "❌ SL hit", "🎯 Réussite": "🎯 Win rate", "💰 Total": "💰 Total", "Derniers trades :": "Last trades:",
+"🤖 Bilan du bot   en cours de construction": "🤖 Bot record   being built", "🤖 Bilan du bot": "🤖 Bot record",
+# News / sessions
+"📅 Annonces importantes aujourd'hui (heure de Paris) :": "📅 Important news today (Paris time):", "(prévu": "(forecast", ", avant": ", previous",
+"→ Pas de nouvelle entrée 15 min avant et après. Volatilité forte possible.": "→ No new entry 15 min before and after. Strong volatility possible.",
+"📅 Aucune annonce majeure US aujourd'hui.": "📅 No major US news today.", "⚠️⚠️ NEWS USA dans": "⚠️⚠️ US NEWS in",
+"🟥 N'ouvre AUCUN trade": "🟥 Open NO trade", "🛡 Déjà en position ? Vérifie que ton STOP est bien placé": "🛡 Already in? Check your SL is in place",
+"⏳ On reprend à": "⏳ We resume at", "🚨🚨🚨 NEWS DANS": "🚨🚨🚨 NEWS IN", "🟥 Ne touche à rien": "🟥 Don't touch anything",
+"🛡 Stop en place ? OK, on attend": "🛡 SL in place? OK, we wait", "✅ News passée (": "✅ News passed (",
+"). 🟩 Le bot reprend la recherche d'entrées.": "). 🟩 The bot is looking for entries again.", "🔔 Ouverture de": "🔔 Opening of",
+"min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
+"comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
+"⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
+"(en cours)": "(now)", "(regarde en vue Daily)": "(check the Daily chart)", "(regarde en vue 4 heures)": "(check the 4h chart)",
+"(regarde en vue 1 heure)": "(check the 1h chart)", "(regarde en vue 15 minutes)": "(check the 15-min chart)",
+"(vue Daily)": "(Daily chart)", "(vue 4 heures)": "(4h chart)", "(vue 1 heure)": "(1h chart)", "(vue 15 minutes)": "(15-min chart)", "(dans": "(in", "🌐 English": "🌐 Français",
+# Règles / accueil / indicateur
+"📌 RÈGLES — ALIGN Signaux": "📌 RULES — ALIGN Signals", "1️⃣ Ce sont MES positions perso, ma vision du marché": "1️⃣ These are MY personal positions, my view of the market",
+"❗ Pas un conseil en investissement": "❗ Not investment advice", "2️⃣ Les prix changent selon la plateforme (FTMO, Topstep, broker…)": "2️⃣ Prices differ between platforms (FTMO, Topstep, broker…)",
+"👉 Suis les mèches et les %, pas le prix exact": "👉 Follow the wicks and %, not the exact price", "3️⃣ ⏱ Mets-toi en vue 15 minutes": "3️⃣ ⏱ Use the 15-minute chart",
+"4️⃣ 🛑 Toujours un stop, derrière la mèche indiquée": "4️⃣ 🛑 Always an SL, behind the given wick", "5️⃣ 📰 Pas de trade 15 min avant et après une news": "5️⃣ 📰 No trade 15 min before and after news",
+"6️⃣ 💰 TP1 touché → stop à l'entrée": "6️⃣ 💰 TP1 hit → SL to entry", "7️⃣ ⚖️ Petit risque : 1 à 2 % du compte maximum par position": "7️⃣ ⚖️ Small risk: 1 to 2 % of the account max per position",
+"8️⃣ ⚠️ Le trading peut faire perdre tout le capital": "8️⃣ ⚠️ Trading can lose all your capital",
+"📰 Je t'envoie les news : pas de trade juste avant ni juste après": "📰 I send you the news: no trade right before or after",
+"🤖 Appuie sur ✅ Je suis rentré : ton coach IA te suit jusqu'au TP": "🤖 Tap ✅ I'm in: your AI coach follows you to TP",
+"📈 Tes gains et tes pertes sont calculés tout seuls": "📈 Your wins and losses are calculated automatically",
+"🧩 L'indicateur TradingView : bouton 🧩 en bas": "🧩 The TradingView indicator: 🧩 button below", "🤝 Partage à tes amis :": "🤝 Share with your friends:",
+"ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. Ce n'est pas un conseil en investissement ni une recommandation personnalisée. Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.":
+ "ℹ️ These are MY personal positions, shared for information and education. This is not investment advice or a personal recommendation. Trading (CFDs, futures, crypto) can lose all invested capital: everyone decides alone and is responsible for their choices.",
+"✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.": "✅ ALIGN MTF BOT activated. My BTC and Gold positions arrive here.",
+"⬇️ Utilise les boutons en bas.": "⬇️ Use the buttons below.", "⬇️ Utilise les boutons en bas": "⬇️ Use the buttons below", "⌨️ Utilise les boutons en bas 👇": "⌨️ Use the buttons below 👇",
+"🤝 Tu aimes ALIGN Signaux ?": "🤝 Like ALIGN Signals?", "📤 Partage-le à tes amis, fais-les en profiter": "📤 Share it with your friends",
+"🎁 Positions gratuites": "🎁 Free positions", "🧩 Indicateur TradingView ≈ 10 € / mois": "🧩 TradingView indicator ≈ €10 / month",
+"📈 Signaux BTC + Gold en direct, simples et clairs 👇": "📈 Live BTC + Gold signals, simple and clear 👇",
+"🧩 Indicateur ALIGN MTF PRO — TradingView": "🧩 ALIGN MTF PRO indicator — TradingView", "🧩 Indicateur ALIGN MTF PRO": "🧩 ALIGN MTF PRO indicator",
+"✅ Ton accès est actif": "✅ Your access is active", "👤 Pseudo": "👤 Username", "📍 TradingView → Indicateurs → Sur invitation": "📍 TradingView → Indicators → Invite-only",
+"✅ Tu y as droit": "✅ You're entitled to it", "✍️ Écris ton pseudo TradingView": "✍️ Type your TradingView username", "(exemple : adel_khatra)": "(example: adel_khatra)",
+"📊 Alignement des 11 unités de temps": "📊 Alignment of 11 timeframes", "🟨 Zone d'entrée + Fibonacci": "🟨 Entry zone + Fibonacci",
+"🛑 Stop derrière la mèche": "🛑 SL behind the wick", "💰 TP sur les grosses unités de temps": "💰 TP on the big timeframes", "⚡ Surcharge RSI + explosions": "⚡ RSI overextension + breakouts",
+"🎁 Les positions restent gratuites ici": "🎁 Positions stay free here", "💎 Indicateur ≈ 10 € / mois": "💎 Indicator ≈ €10 / month",
+"👉 Après paiement, reviens appuyer sur 🧩": "👉 After paying, come back and tap 🧩", "👌 Pseudo reçu": "👌 Username received",
+"⏳ Ton accès arrive très vite": "⏳ Your access is coming very soon", "✅ Accès indicateur ouvert !": "✅ Indicator access open!",
+"🎁 L'indicateur t'est offert !": "🎁 The indicator is a gift for you!", "👉 Appuie sur 🧩 Indicateur TradingView": "👉 Tap 🧩 TradingView indicator",
+"🎁 Accès VIP offert !": "🎁 VIP access gifted!", "✅ Tu reçois maintenant toutes mes positions": "✅ You now get all my positions",
+"⏸ Ton abonnement indicateur n'est plus actif.": "⏸ Your indicator subscription is no longer active.",
+"⏸ Ton abonnement VIP n'est plus actif. Les signaux sont en pause.": "⏸ Your VIP subscription is no longer active. Signals are paused.", "Renouveler :": "Renew:",
+"👋 ALIGN Signaux — BTC + Gold": "👋 ALIGN Signals — BTC + Gold", "⬆️⬇️ Les positions arrivent ici en direct": "⬆️⬇️ Positions arrive here live",
+"👋 Bienvenue sur ALIGN Signaux (BTC + Gold)": "👋 Welcome to ALIGN Signals (BTC + Gold)", "🎁 Tu reçois GRATUITEMENT :": "🎁 You get for FREE:",
+"• les alertes news 📰": "• news alerts 📰", "• les ouvertures de marché 🔔": "• market opens 🔔", "• 1 signal complet offert de temps en temps": "• 1 full free signal now and then",
+"🔒 Les autres positions arrivent MASQUÉES.": "🔒 Other positions arrive HIDDEN.",
+"🔓 Pour tout voir (entrée, stop, TP, coaching Oui / Non, bouton Analyse) : abonne-toi avec le bouton ci-dessous, puis reviens ici et tape /start.": "🔓 To see everything (entry, SL, TP, coaching, Analysis button): subscribe with the button below, then come back and type /start.",
+"🔒 Entrée, stop, TP et coaching en direct : réservés aux VIP 💎": "🔒 Entry, SL, TP and live coaching: VIP only 💎",
+"🔒 Position masquée — réservée aux abonnés VIP": "🔒 Hidden position — VIP subscribers only", "🔓 Tous les signaux + coaching en direct : bouton ci-dessous": "🔓 All signals + live coaching: button below",
+"🎁🎁 SIGNAL OFFERT — pour te montrer que ça marche": "🎁🎁 FREE SIGNAL — to show you it works",
+"🆕 Nouveaux boutons": "🆕 New buttons", "🚦 Chaque analyse te dit si tu peux entrer ou pas": "🚦 Each analysis tells you if you can enter or not",
+"👉 Coaching perso : @": "👉 Personal coaching: @", "Contexte :": "Context:", "de la zone Daily,": "of the Daily range,", "de la zone Weekly.": "of the Weekly range.",
+"au marché": "at market", "ordre limite": "limit order", "Entrée :": "Entry:", "Stop :": "SL:", "Gain/risque ≈": "Reward/risk ≈",
+"⬆️ ACHAT": "⬆️ BUY", "⬇️ VENTE": "⬇️ SELL", "Prochaine news": "Next news", "📍 Prix": "📍 Price", "👉 Prix": "👉 Price",
+", stop": ", SL", 
+}
+
+LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
+_CLES = sorted(TRAD, key=len, reverse=True)
+BOUTONS_FR = ["🟠 Analyse BTC", "🥇 Analyse Gold", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
+              "🧩 Indicateur TradingView", "💎 Devenir VIP", "❌ Non"]
+INVERSE = {TRAD[b]: b for b in BOUTONS_FR}        # bouton anglais reçu → même action qu'en français
+
+def traduire(t):
+    for k in _CLES:
+        if k in t:
+            t = t.replace(k, TRAD[k])
+    return t
+
+def traduire_clavier(kb):
+    """Traduit le texte des boutons (clavier du bas ou boutons sous un message)."""
+    try:
+        j = json.loads(kb)
+    except Exception:
+        return kb
+    for cle in ("keyboard", "inline_keyboard"):
+        for ligne in j.get(cle, []):
+            for b in ligne:
+                b["text"] = traduire(b["text"])
+    if "input_field_placeholder" in j:
+        j["input_field_placeholder"] = traduire(j["input_field_placeholder"])
+    return json.dumps(j)
+
 def telegram(methode, **params):
+    if methode in ("sendMessage", "editMessageText") and str(params.get("chat_id")) in LANG_EN:
+        params["text"] = traduire(params.get("text", ""))
+        if params.get("reply_markup"):
+            params["reply_markup"] = traduire_clavier(params["reply_markup"])
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
 CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
-                                   [{"text": "📈 Mes résultats"}, {"text": "🧩 Indicateur TradingView"}]],
+                                   [{"text": "📈 Mes résultats"}, {"text": "🧩 Indicateur TradingView"}], [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}]],
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}], [{"text": "🌐 English"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
@@ -569,6 +784,22 @@ def cloturer_abonnes(etat, m, tr, sortie, motif):
         if isinstance(pos, dict) and not pos.get("fini"):
             noter(etat, cid, m, pos, sortie, motif)
 
+def changer_langue(etat, cid, anglais, membre_ok):
+    langues = etat.setdefault("en", [])
+    if anglais and cid not in langues:
+        langues.append(cid)
+    if not anglais and cid in langues:
+        langues.remove(cid)
+    LANG_EN.clear(); LANG_EN.update(langues)
+    kb = CLAVIER if membre_ok else CLAVIER_VISITEUR
+    _envoi_sur(cid, reply_markup=kb, text=("✅ Language: English 🇬🇧\nThe whole bot now speaks English\n🌐 Tap 🌐 Français to switch back"
+                                         if anglais else "✅ Langue : Français 🇫🇷\nTout le bot parle maintenant français\n🌐 Appuie sur 🌐 English pour changer"))
+    try:   # règles épinglées dans la nouvelle langue
+        res = telegram("sendMessage", chat_id=cid, text=REGLES, disable_notification="true")
+        telegram("pinChatMessage", chat_id=cid, message_id=res["result"]["message_id"], disable_notification="true")
+    except Exception as ex:
+        print("regles langue", ex)
+
 def traiter(etat, chats, updates):
     """Boutons cliqués et messages reçus. Renvoie la liste des téléphones qui demandent une analyse."""
     demandes = []
@@ -628,6 +859,13 @@ def traiter(etat, chats, updates):
         if not cid:
             continue
         if msg.get("chat", {}).get("type") != "private":
+            continue
+        tx = msg.get("text", "")
+        if tx in INVERSE:
+            msg["text"] = tx = INVERSE[tx]
+        bas = tx.lower()
+        if "english" in bas or "français" in bas or "francais" in bas:
+            changer_langue(etat, cid, "english" in bas, autorise(etat, cid, msg.get("from", {}).get("id")))
             continue
         if not autorise(etat, cid, msg.get("from", {}).get("id")):
             chats.discard(cid)
@@ -1340,15 +1578,16 @@ def agent(m, r, cle, ferme):
 # ───────── Programme ─────────
 def un_tour(etat, chats):
     """Un tour complet : messages reçus, analyse BTC + Gold, envois, jauges, sauvegarde."""
+    LANG_EN.clear(); LANG_EN.update(etat.get("en", []))
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 5:
+        if etat.get("clavier") != 6:
             for cid in chats:
-                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas", reply_markup=CLAVIER)
+                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas\n🌐 English : le bot en anglais", reply_markup=CLAVIER)
             for cid in etat.get("prospects", []):
                 _envoi_sur(cid, text="🆕 Boutons : 🟠 Analyse BTC • 🥇 Analyse Gold • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 5
+            etat["clavier"] = 6
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
