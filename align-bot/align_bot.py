@@ -540,6 +540,14 @@ TRAD = {
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
 "(en cours)": "(now)",
+"🎁 TON ANALYSE GRATUITE DU JOUR": "🎁 YOUR FREE ANALYSIS OF THE DAY", "⏳ Attends que le prix vienne dans la zone 🟨": "⏳ Wait for price to reach the zone 🟨",
+"✅ Analyse gratuite du jour utilisée": "✅ Free analysis of the day used", "⏰ Une nouvelle demain": "⏰ A new one tomorrow",
+"💎 En VIP, plus besoin d'appuyer sur Analyse": "💎 With VIP, no need to tap Analysis", "🤖 Les positions arrivent toutes seules": "🤖 Positions arrive automatically",
+"👀 Alerte « ÇA ARRIVE » juste avant chaque entrée": "👀 « IT'S COMING » alert right before each entry", "🔔 Active la cloche du bot pour ne rien louper": "🔔 Turn on the bot's bell so you miss nothing",
+"🔒 Ton analyse gratuite du jour est déjà utilisée": "🔒 Your free analysis of the day is already used", "⏰ Reviens demain": "⏰ Come back tomorrow",
+"💎 VIP 49,90 € / mois : plus besoin d'appuyer sur Analyse": "💎 VIP €49.90 / month: no need to tap Analysis", "🔔 Active la cloche pour ne rien louper": "🔔 Turn on the bell so you miss nothing",
+"🔔 Cloche activée ? Ne rate pas le feu vert": "🔔 Bell on? Don't miss the green light", "🔔 Active la cloche (notifications) pour ne rien louper": "🔔 Turn on the bell (notifications) so you miss nothing",
+"🔍 + 1 analyse complète GRATUITE par jour (bouton Analyse)": "🔍 + 1 FREE full analysis per day (Analysis button)",
 "📈 Le marché MONTE": "📈 The market is RISING", "📉 Le marché DESCEND": "📉 The market is FALLING", "➖ Le marché hésite": "➖ The market is hesitating",
 "🔒 Entrée : VIP": "🔒 Entry: VIP", "🔒 SL : VIP": "🔒 SL: VIP", "🔒 TP : VIP": "🔒 TP: VIP", "🔒 Prochaine entrée : VIP": "🔒 Next entry: VIP",
 "👀 Les VIP savent déjà où rentrer": "👀 VIPs already know where to enter", "😬 Tu vas louper le prochain move ?": "😬 Gonna miss the next move?",
@@ -945,7 +953,7 @@ def traiter(etat, chats, updates):
             etat["prospects"].remove(cid)
         if cid not in chats:
             chats.add(cid)
-            telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.\n⬇️ Utilise les boutons en bas.\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
+            telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.\n🔔 Active la cloche (notifications) pour ne rien louper\n⬇️ Utilise les boutons en bas.\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
         txt = msg.get("text", "").lower().replace("é", "e")
         if cid in etat.get("attente_tv", []) and msg.get("text") and not any(k in txt for k in ("analyse", "resultat", "rentre", "sorti", "indicateur")):
             recevoir_pseudo(etat, cid, msg["text"])
@@ -1035,21 +1043,43 @@ def bouton_payer(etat):
     return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (49,90 € / mois)", "url": lien}]]}) if lien else None
 
 def analyse_visiteur(etat, cid, mq=None):
-    """Analyse visiteur : il voit si le marché monte ou descend (preuve que ça marche), le reste est caché."""
+    """Visiteur : 1 analyse COMPLÈTE gratuite par jour (sens, verdict, point d'entrée en bougies).
+    Les suivantes du même jour : sens du marché seulement + invitation au VIP (positions automatiques)."""
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}
+    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
+    utilise = etat.setdefault("analyse_gratuite", {}).get(cid) == jour
     for nom_marche, pair in MARCHES.items():
         if mq and mq != nom_marche:
             continue
         try:
-            _envoi_sur(cid, text=texte_etat(nom_marche, analyse_marche(etat, pair), etat.get(nom_marche), vip=False), **kw)
+            r = analyse_marche(etat, pair); cle = etat.get(nom_marche, {})
+            if utilise:
+                _envoi_sur(cid, text=texte_etat(nom_marche, r, cle, vip=False), **kw)
+                continue
+            txt = "🎁 TON ANALYSE GRATUITE DU JOUR\n\n" + texte_etat(nom_marche, r, cle)
+            d = r["confirme"]; p = r["m1"][-1]["c"]
+            if not cle.get("trade") and d and not etire(r, d) and not bloque_dw(r, d) and not r.get("annonce"):
+                o = cle.get("ordre") or point_entree(r, d, p)
+                txt += "\n\n" + fmt_trade(nom_marche, o, p) + "\n⏳ Attends que le prix vienne dans la zone 🟨"
+            _envoi_sur(cid, text=txt, reply_markup=CLAVIER_VISITEUR)
         except Exception as ex:
             print("analyse visiteur", ex)
+    if not utilise:
+        etat["analyse_gratuite"][cid] = jour
+        _envoi_sur(cid, text=("✅ Analyse gratuite du jour utilisée\n⏰ Une nouvelle demain\n━━━━━━━━━━━━\n"
+                              "💎 En VIP, plus besoin d'appuyer sur Analyse\n🤖 Les positions arrivent toutes seules\n"
+                              "👀 Alerte « ÇA ARRIVE » juste avant chaque entrée\n🔔 Active la cloche du bot pour ne rien louper"), **kw)
+    else:
+        _envoi_sur(cid, text=("🔒 Ton analyse gratuite du jour est déjà utilisée\n⏰ Reviens demain\n━━━━━━━━━━━━\n"
+                              "💎 VIP 49,90 € / mois : plus besoin d'appuyer sur Analyse\n🤖 Les positions arrivent toutes seules\n"
+                              "👀 Alerte « ÇA ARRIVE » juste avant chaque entrée\n🔔 Active la cloche pour ne rien louper"), **kw)
 
 def refuser(etat, cid):
     _envoi_sur(cid, text="👋 ALIGN Signaux — BTC + Gold\n⬆️⬇️ Les positions arrivent ici en direct", reply_markup=CLAVIER_VISITEUR)
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
     _envoi_sur(cid, text=("👋 Bienvenue sur ALIGN Signaux (BTC + Gold)\n\n"
                           "🎁 Ta 1re POSITION est OFFERTE\n"
+                          "🔍 + 1 analyse complète GRATUITE par jour (bouton Analyse)\n"
                           "🕯 Expliquée en bougies (vue 15 min) + coach jusqu'au TP\n"
                           "📰 Alertes news et discours gratuites\n"
                           "🔔 Ouvertures de marché gratuites\n\n"
@@ -1578,7 +1608,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append(f"👀👀 ÇA ARRIVE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}")
+            out.append(f"👀👀 ÇA ARRIVE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}")
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
