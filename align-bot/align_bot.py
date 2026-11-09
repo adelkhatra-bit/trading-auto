@@ -1057,19 +1057,36 @@ def boutons_canal(etat, texte):
 
 # ───────── IA (GitHub Models, gratuite avec le jeton GitHub du workflow) ─────────
 # IA : Google Gemini (gratuit). GitHub Models a été fermé le 30/07/2026 → clé GEMINI_API_KEY dans les secrets GitHub.
-IA_JETON = os.environ.get("GEMINI_API_KEY", "")
-IA_MODELE = os.environ.get("IA_MODELE", "gemini-flash-latest")
-IA_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "120"))
+# IA : plusieurs IA GRATUITES à la suite — si l'une tombe, la suivante répond (aucune clé obligatoire).
+# 1) Google Gemini (si la clé GEMINI_API_KEY existe)  2) OVHcloud Llama 3.3 70B (sans clé)  3) OVHcloud Mistral (sans clé)
+# 4) Pollinations (sans clé)  5) LLM7 (sans clé). Et si TOUT tombe : l'analyse interne du bot répond quand même.
+IA_FOURNISSEURS = [
+    ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-flash-latest", os.environ.get("GEMINI_API_KEY", ""), True),
+    ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta-Llama-3_3-70B-Instruct", "", False),
+    ("OVH Mistral", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Mistral-Small-3.2-24B-Instruct", "", False),
+    ("Pollinations", "https://text.pollinations.ai/openai", "openai", "", False),
+    ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", "", False),
+]
+IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "300"))
 IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style jeune et simple, "
              "avec quelques emojis. Tu parles en bougies (vue 15 min, mèches, clôtures). Tu t'appuies UNIQUEMENT sur les données fournies : "
              "aucun prix inventé, jamais de contradiction avec le verdict du bot (si le bot dit d'attendre, tu dis d'attendre). "
              "Pas de promesse de gain, ce n'est pas un conseil financier.")
 
+def _appel_ia(url, modele, cle, messages):
+    corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 700, "messages": messages}).encode()
+    h = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "align-bot"}
+    if cle:
+        h["Authorization"] = f"Bearer {cle}"
+    with urllib.request.urlopen(urllib.request.Request(url, data=corps, headers=h), timeout=25) as rep_:
+        j = json.loads(rep_.read().decode())
+    txt = (j["choices"][0]["message"].get("content") or "").strip()
+    if len(txt) < 8:
+        raise ValueError("réponse vide")
+    return txt
+
 def ia(etat, consigne, donnees, cle_cache=None, duree=600):
-    """Commentaire court d'une vraie IA. Renvoie '' si l'IA n'est pas disponible (le bot marche sans)."""
-    if not IA_JETON:
-        return ""
+    """Commentaire court d'une vraie IA. Essaie chaque IA gratuite à la suite ; '' seulement si toutes sont tombées."""
     cache = etat.setdefault("ia_cache", {})
     if cle_cache and cle_cache in cache and time.time() - cache[cle_cache][0] < duree:
         return cache[cle_cache][1]
@@ -1077,28 +1094,29 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
     compte = etat.setdefault("ia_jour", {})
     if compte.get(jour, 0) >= IA_MAX_JOUR:
         return ""
-    corps = json.dumps({"model": IA_MODELE, "temperature": 0.4, "max_tokens": 700,
-                        "messages": [{"role": "system", "content": IA_REGLES},
-                                     {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]}).encode()
-    try:
-        req = urllib.request.Request(IA_URL, data=corps,
-                                     headers={"Authorization": f"Bearer {IA_JETON}", "Content-Type": "application/json",
-                                              "Accept": "application/json", "User-Agent": "align-bot"})
-        with urllib.request.urlopen(req, timeout=25) as rep_:
-            txt = json.loads(rep_.read().decode())["choices"][0]["message"]["content"].strip()
-    except Exception as ex:
-        corps_err = ""
+    messages = [{"role": "system", "content": IA_REGLES},
+                {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]
+    txt, erreurs = "", []
+    for nom, url, modele, cle, besoin_cle in IA_FOURNISSEURS:
+        if besoin_cle and not cle:
+            continue
+        if time.time() < etat.get("ia_pause", {}).get(nom, 0):
+            continue                                   # IA en panne récemment : on passe à la suivante
         try:
-            corps_err = ex.read().decode()[:300]
-        except Exception:
-            pass
-        etat["ia_err"] = f"{ex} {corps_err}".strip()
-        print("ia", etat["ia_err"], flush=True)
+            txt = _appel_ia(url, modele, cle, messages)
+            etat.setdefault("ia_ok", {})[nom] = int(time.time())
+            break
+        except Exception as ex:
+            erreurs.append(f"{nom}: {str(ex)[:80]}")
+            etat.setdefault("ia_pause", {})[nom] = time.time() + 300   # on la laisse souffler 5 min
+            print("ia", nom, ex, flush=True)
+    if not txt:
+        etat["ia_err"] = " | ".join(erreurs)
         if time.time() - etat.get("ia_err_t", 0) > 21600:        # le propriétaire est prévenu (1 fois / 6 h)
             etat["ia_err_t"] = time.time()
             for pid in proprio(etat):
                 try:
-                    _envoi_sur(pid, text=f"⚠️ IA ALIGN indisponible\n{etat['ia_err'][:250]}")
+                    _envoi_sur(pid, text=f"⚠️ Toutes les IA gratuites sont tombées (l'analyse interne prend le relais)\n{etat['ia_err'][:250]}")
                 except Exception:
                     pass
         return ""
@@ -1127,7 +1145,11 @@ def donnees_ia(m, r, cle):
 def avis_ia(etat, m, r, cle):
     t = ia(etat, "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer.", donnees_ia(m, r, cle),
            cle_cache=f"analyse_{m}_{int(time.time() // 600)}")
-    return f"🧠 L'avis de l'IA ALIGN\n{t}" if t else ""
+    if t:
+        return f"🧠 L'avis de l'IA ALIGN\n{t}"
+    # Toutes les IA en panne : l'analyse interne du bot répond (jamais de silence)
+    titre, raison = verdict(r, cle)
+    return "🧠 L'avis ALIGN (analyse interne)\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
 
 def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
@@ -2008,7 +2030,7 @@ def fmt_trade(m, tr, p=None):
             + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (bougie de cassure)\n"
                f"3️⃣ 🟨 Entrée {SENS[d]} : à la clôture de la bougie 15 min qui casse ≈ {px(tr.get('niveau', tr['e']))}\n"
                if tr.get("src") == "cassure 15 min" else
-               f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)}\n"
+               f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)}\n" +
                (f"3️⃣ 🟨 Entrée {SENS[d]} : MAINTENANT, à la clôture de la bougie de rejet ({tr.get('sl_ut', '5 min')} de {tr.get('sl_h', '')})\n" if tr.get("rejet") else
                 f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n"))
             + (f"4️⃣ 💰 TP1 : juste {'sous la' if d == 1 else 'au-dessus du'} {tr['n1']} (regarde en vue {vue(tr['n1'])})\n"
