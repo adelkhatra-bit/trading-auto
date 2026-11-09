@@ -686,7 +686,7 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -973,7 +973,7 @@ def traduire_clavier(kb):
         j["input_field_placeholder"] = traduire(j["input_field_placeholder"])
     return json.dumps(j)
 
-STATUT_LIB = {"🚦 🟢 J'ENTRE": ("🚦 Statut", "🟢 J'entre"), "🚦 🙅 JE N'ENTRE PAS": ("🚦 Statut", "🙅 Je n'entre pas"),
+STATUT_LIB = {"🚦 🙅 PAS DE NOUVELLE POSITION": ("🚦 Statut", "🙅 Pas de nouvelle position"), "🚦 🙅 NO NEW POSITION": ("🚦 Status", "🙅 No new position"),"🚦 🟢 J'ENTRE": ("🚦 Statut", "🟢 J'entre"), "🚦 🙅 JE N'ENTRE PAS": ("🚦 Statut", "🙅 Je n'entre pas"),
               "🚦 ⏳ JE N'ENTRE PAS ENCORE": ("🚦 Statut", "⏳ Je n'entre pas encore"), "🚦 🟢 ON RESTE EN POSITION": ("🚦 Statut", "🟢 On reste en position"),
               "🚦 🟢 I'M ENTERING": ("🚦 Status", "🟢 I'm entering"), "🚦 🙅 I'M NOT ENTERING": ("🚦 Status", "🙅 I'm not entering"),
               "🚦 ⏳ NOT ENTERING YET": ("🚦 Status", "⏳ Not entering yet"), "🚦 🙅 JE NE SUIS PLUS EN POSITION": ("🚦 Statut", "🙅 Je ne suis plus en position"), "🚦 🙅 I'M OUT": ("🚦 Status", "🙅 I'm out"), "🚦 🟢 WE STAY IN": ("🚦 Status", "🟢 We stay in")}
@@ -2221,6 +2221,19 @@ def annonces_et_sessions(etat, maintenant, derniers):
         if 15 * 60 <= -reste <= 25 * 60 and f"evfin{e['t']}{e['titre']}" not in vus:
             vus.append(f"evfin{e['t']}{e['titre']}")
             out.append(f"✅ News passée ({e['titre']}). 🟩 Le bot reprend la recherche d'entrées.")
+    # Fermeture du Gold : 1 h avant et 35 min avant (jours de semaine)
+    if jour.weekday() < 5:
+        f_ = minutes_avant_fermeture_gold(maintenant)
+        fin = maintenant + f_ * 60
+        for avant, cle_f in ((60, "f60"), (35, "f35")):
+            if avant - 5 < f_ <= avant and f"{cle_f}{cle_j}" not in vus:
+                vus.append(f"{cle_f}{cle_j}")
+                tr_g = (etat.get("GOLD") or {}).get("trade")
+                week = jour.weekday() == 4
+                out.append(f"🌙 FERMETURE DU GOLD DANS {avant} MIN — 🥇 GOLD\n🚦 🙅 PAS DE NOUVELLE POSITION\n"
+                           f"⏰ Fermeture à {heure(fin)} • réouverture {'dimanche soir' if week else f'à {heure(fin + 3600)}'} (heure de Paris)\n"
+                           + ("🔒 Tu es en position : mets-toi à BE si tu es en gain\n🛡 Vérifie que ton SL est bien placé\n" if tr_g else "🛡 Ne pas ouvrir de position avant la fermeture\n")
+                           + ("💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains" if week else "💥 À la réouverture le prix peut sauter (écart)"))
     # Ouvertures de marché (jours de semaine)
     if jour.weekday() < 5:
         for nom, zone, h, mn in (("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
@@ -2279,6 +2292,12 @@ def prochaine_news(etat):
     e = ev[0]
     jour = datetime.datetime.fromtimestamp(e["t"], PARIS).strftime("%d/%m")
     return f"Prochaine news   {jour} {heure(e['t'])} {e['titre']}"
+
+def minutes_avant_fermeture_gold(ts=None):
+    """Le Gold (CFD / futures) ferme chaque jour à 17:00 heure de New York (23:00 à Paris l'hiver), 1 h de pause."""
+    ny = datetime.datetime.fromtimestamp(ts or time.time(), ZoneInfo("America/New_York"))
+    ferme = ny.replace(hour=17, minute=0, second=0, microsecond=0)
+    return (ferme - ny).total_seconds() / 60
 
 def annonce_proche(etat, maintenant):
     return any(abs(e["t"] - maintenant) <= 15 * 60 for e in etat.get("cal", {}).get("ev", []))
@@ -2650,6 +2669,14 @@ def agent(m, r, cle, ferme):
         print("manipulation", ex)
 
     # ── Pas de trade : alignement 15m + 1h + 4h obligatoire, puis ordre limite au point précis ──
+    if not tr and r.get("fermeture"):
+        if r["t"] - cle.get("ferm_dit", 0) > 3 * 3600:
+            cle["ferm_dit"] = r["t"]
+            fin = time.time() + minutes_avant_fermeture_gold() * 60
+            out.append(f"🌙 MARCHÉ BIENTÔT FERMÉ — {ICONE.get(m, '')} {m}\n🚦 🙅 JE N'ENTRE PAS\n"
+                       f"⏰ Fermeture à {heure(fin)} • réouverture à {heure(fin + 3600)} (heure de Paris)\n"
+                       "🛡 Pas de nouvelle position avant la fermeture\n🔔 Je reprends la recherche après la réouverture")
+        return out
     if not tr:
         if not d:
             if cle.get("aligne"):
@@ -2986,6 +3013,8 @@ def un_tour(etat, chats):
         cle = etat.setdefault(nom_marche, {})
         tendance_armee(r, cle)
         r["annonce"] = annonce_proche(etat, int(time.time()))
+        f_ = minutes_avant_fermeture_gold()
+        r["fermeture"] = nom_marche == "GOLD" and (0 < f_ <= 35 or -70 <= f_ <= 0)
         r["news"] = news_txt(etat)
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
