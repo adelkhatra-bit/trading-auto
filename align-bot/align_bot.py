@@ -311,6 +311,7 @@ def texte_plan(nom_marche, r, p, d):
             f"Stop : {px(p['sl'])}\nGain/risque ≈ {p['rr']:.1f}")
 
 ICONE = {"BTC": "🟠", "GOLD": "🥇"}
+PIP = {"BTC": 1.0, "GOLD": 0.1}      # 1 pip : 1 $ sur le BTC, 0,10 $ sur l'or
 SENS = {1: "🟩 LONG ⬆️", -1: "🟥 SHORT ⬇️"}
 
 def alignement(r):
@@ -539,7 +540,9 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "✅ Ton bot t'a déjà mis dedans 🤖": "✅ Your bot already put you in 🤖", "🤖 Mon bot": "🤖 My bot", "🤖 MON BOT": "🤖 MY BOT",
+"(en cours)": "(now)", "⚡⚡ PRÉPARE-TOI —": "⚡⚡ GET READY —", "🎯 On est à quelques pips de l'entrée": "🎯 We're a few pips from the entry",
+"🛑 Dès que tu es dedans : SL un peu": "🛑 As soon as you're in: SL a little", "💰 TP1 juste": "💰 TP1 just", "🙅 Jamais de position sans SL": "🙅 Never a position without SL",
+"🚦 Feu vert 🟢 dans un instant": "🚦 Green light 🟢 in a moment", "🛑 Mets ton SL TOUT DE SUITE": "🛑 Set your SL RIGHT NOW", "✅ Ton bot t'a déjà mis dedans 🤖": "✅ Your bot already put you in 🤖", "🤖 Mon bot": "🤖 My bot", "🤖 MON BOT": "🤖 MY BOT",
 "✅ Il entre tout seul dans chaque position": "✅ It enters every position by itself", "👀 Vue 15 min • SL un peu sous / au-dessus de la mèche": "👀 15-min chart • SL a little below / above the wick",
 "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP", "⏸ Il n'entre plus pour toi": "⏸ It no longer enters for you", "🔔 Tu reçois quand même les positions": "🔔 You still get the positions",
 "🤖 Positions prises par ton bot": "🤖 Positions taken by your bot", "🤖 Positions prises par mon bot": "🤖 Positions taken by my bot", "⏸ Arrêts manuels": "⏸ Manual stops",
@@ -818,7 +821,7 @@ def entrer_inscrits(etat, m, tr, chats=()):
             "👀 Mets-toi en vue 15 minutes\n"
             f"🛑 SL un peu {'SOUS la mèche du dernier creux' if tr['d'] == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
             f"📍 Repère prix : entrée ≈ {px(tr['e'])} • SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n"
-            "🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"),
+            "🛑 Mets ton SL TOUT DE SUITE\n🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"),
             reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]]}))
 
 def envoyer_analyse(cid, etat=None, mq=None):
@@ -1293,7 +1296,7 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
         fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : OBJECTIF ATTEINT 🔥🔥🔥\n" + (f"💰 +{g:.2f} % pour les VIP\n" if g else "") + "😬 Tu as loupé ça\n💎 Rejoins le VIP 👇"
     elif m and "stop" in tete.lower() and "touché" in tete:
         fomo = f"❌ {ICONE.get(m, '')} {m} : SL touché pour les VIP\n🛡 Risque maîtrisé, on repart\n💎 Toutes les positions et les résultats : VIP 👇"
-    elif m and "ÇA ARRIVE" in tete:
+    elif m and ("ÇA ARRIVE" in tete or "PRÉPARE-TOI" in tete):
         fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
     for cid in list(etat.get("prospects", [])):
         sa_bienvenue = m and deja.get(cid) == m and tr is not None
@@ -1799,6 +1802,14 @@ def agent(m, r, cle, ferme):
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
             out.append((f"👀👀 ÇA ARRIVE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
+        # À quelques pips de l'entrée : « PRÉPARE-TOI » + rappel SL / TP (1 fois par point d'entrée)
+        seuil = max(5 * PIP.get(m, 0.1), 0.05 * r["atr"])
+        if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
+            cle["pret_t"] = time.time()
+            out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
+                        f"🛑 Dès que tu es dedans : SL un peu {'SOUS la mèche du dernier creux' if d == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
+                        f"💰 TP1 juste {'sous la' if d == 1 else 'au-dessus du'} {o['n1']}\n🙅 Jamais de position sans SL\n🚦 Feu vert 🟢 dans un instant",
+                        bouton_auto(m)))
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
