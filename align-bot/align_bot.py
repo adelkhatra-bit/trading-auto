@@ -10,6 +10,7 @@ TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 ETAT_FICHIER = os.environ.get("STATE_FILE", "state.json")
 MARCHES = {"BTC": "XBTUSD", "GOLD": "XAUUSD"}  # BTC → FTMO (CFD 24/7) • GOLD → Topstep (MGC) / FTMO
 MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 2.0
+RISQUE_MAX = 1.5      # SL jamais plus loin que 1,5 ATR 15 min : pas de gros SL, on attend mieux
 UT = ["1", "2", "5", "10", "15", "30", "45", "1h", "2h", "4h", "D"]
 POIDS = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
 
@@ -394,7 +395,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     l += ["━━━━━━━━━━━━",
           f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
           f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
-          r.get("news") or "📰 News : calendrier indisponible"]
+          r.get("news") or "📰 News : calendrier indisponible", "━━━━━━━━━━━━"] + strategie_mtf(r)
     if r.get("repli"):
         l.append(f"↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer {SENS[r['confirme']]}")
     if r.get("distrib"):
@@ -411,6 +412,31 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
         l.append(prochaine(r, cle))
     return "\n".join(l)
+
+def strategie_mtf(r):
+    """Stratégie multi-unités de temps : 4 h + Daily = le FOND, 1 h = la CONFIRMATION,
+    15 min = le DÉCLENCHEUR, 5 min = le TIMING. Une position n'est VALIDÉE que si 15 min + 1 h + 4 h vont dans le même sens."""
+    fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
+    D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
+    fond = d4h if d4h and dD != -d4h else 0
+    l = ["🧭 STRATÉGIE MULTI-UT",
+         f"🏔 Fond 4 h + Daily   {fl(d4h)} {fl(dD)}",
+         f"🔁 Confirmation 1 h   {fl(d1h)}",
+         f"🎯 Déclencheur 15 min   {fl(d15)}",
+         f"⏱ Timing 5 min   {fl(d5)}"]
+    if r["confirme"]:
+        l.append(f"✅ VALIDÉ   {SENS[r['confirme']]}")
+    elif not d4h:
+        l.append("➖ Pas de tendance de fond en 4 h\n⛔ Rien de validé : on ne trade pas")
+    elif dD == -d4h:
+        l.append("⚖️ 4 h et Daily en désaccord\n⛔ Rien de validé : on attend")
+    elif d15 == -fond or d1h == -fond:
+        l.append(("↩️ Repli contre la tendance de fond" if fond == 1 else "↩️ Rebond contre la tendance de fond") + f" ({'15 min' if d15 == -fond else '1 h'})\n"
+                 f"⏳ {SENS[fond]} possible PLUS TARD — ⛔ PAS ENCORE VALIDÉ\n"
+                 f"✅ Validé quand le 1 h PUIS le 15 min repassent {fl(fond)}")
+    else:
+        l.append(f"⏳ {SENS[fond]} en préparation — ⛔ PAS ENCORE VALIDÉ\n✅ Il manque {'le 1 h' if d1h != fond else 'le 15 min'} {fl(fond)}")
+    return l
 
 def bloque_dw(r, d, prix=None):
     """Daily / Weekly : pas de short tout en bas, pas de long tout en haut.
@@ -574,7 +600,10 @@ def prochaine(r, cle):
     if d:
         return f"🔜 Prochaine entrée   {SENS[d]}"
     maj, n_ok = alignement(r)
-    return f"🔜 Prochaine entrée   {SENS[maj]}   ({n_ok}/3)" if maj else "🔜 Prochaine entrée   ➖ pas encore de sens"
+    fond = r["dirs"][9] if r["dirs"][9] and r["dirs"][10] != -r["dirs"][9] else 0
+    if not maj and fond:
+        return f"🔜 Prochaine entrée   {SENS[fond]}   (⛔ pas encore validée)"
+    return f"🔜 Prochaine entrée   {SENS[maj]}   ({n_ok}/3 • ⛔ pas encore validée)" if maj else "🔜 Prochaine entrée   ➖ pas encore de sens"
 
 def verdict(r, cle):
     """Réponse claire pour l'utilisateur : peut-il entrer maintenant ou non ?"""
@@ -632,7 +661,15 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🏔 Fond 4 h + Daily": "🏔 Trend 4 h + Daily", "🔁 Confirmation 1 h": "🔁 Confirmation 1 h",
+"🎯 Déclencheur 15 min": "🎯 Trigger 15 min", "⏱ Timing 5 min": "⏱ Timing 5 min", "✅ VALIDÉ": "✅ VALIDATED",
+"➖ Pas de tendance de fond en 4 h": "➖ No 4 h trend", "⛔ Rien de validé : on ne trade pas": "⛔ Nothing validated: no trade",
+"⚖️ 4 h et Daily en désaccord": "⚖️ 4 h and Daily disagree", "⛔ Rien de validé : on attend": "⛔ Nothing validated: we wait",
+"↩️ Repli contre la tendance de fond": "↩️ Pullback against the main trend", "↩️ Rebond contre la tendance de fond": "↩️ Bounce against the main trend",
+"possible PLUS TARD — ⛔ PAS ENCORE VALIDÉ": "possible LATER — ⛔ NOT VALIDATED YET", "✅ Validé quand le 1 h PUIS le 15 min repassent": "✅ Validated when 1 h THEN 15 min turn",
+"en préparation — ⛔ PAS ENCORE VALIDÉ": "building — ⛔ NOT VALIDATED YET", "✅ Il manque": "✅ Missing", "⛔ pas encore validée": "⛔ not validated yet",
+"🕯 J'attends une MÈCHE DE REJET + CLÔTURE": "🕯 Waiting for a REJECTION WICK + CLOSE", "🛑 SL serré juste derrière la mèche": "🛑 Tight SL just behind the wick",
+": pas de rejet dans la zone": ": no rejection in the zone", "😎 Je recalcule le prochain point": "😎 Recalculating the next point",
 "🔜 Prochaine entrée": "🔜 Next entry", "↩️ Sur le repli vers": "↩️ On the pullback to",
 "👀 Si 15 min / 1 h / 4 h se retournent": "👀 If 15 min / 1 h / 4 h turn",
 "🧭 Alignement": "🧭 Alignment", 
@@ -738,7 +775,7 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "🧠 L'avis de l'IA ALIGN": "🧠 ALIGN AI's view", "🧠 L'IA ALIGN sur cette entrée": "🧠 ALIGN AI on this entry", "🧠 La leçon de l'IA ALIGN": "🧠 ALIGN AI's lesson", ": RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳": ": RSI overextended ✅ — waiting for the REJECTION WICK and the CLOSE ⏳",
+"(en cours)": "(now)", ": la zone a été traversée sans rejet": ": the zone was crossed with no rejection", "🙅 Pas d'entrée, heureusement": "🙅 No entry, luckily", "🔎 Je recalcule le prochain point plus bas": "🔎 Recalculating the next point lower", "🔎 Je recalcule le prochain point plus haut": "🔎 Recalculating the next point higher", ": la mèche de rejet est trop grande (SL trop loin)": ": the rejection wick is too big (SL too far)", "😎 Je ne prends pas ce risque, j'attends mieux": "😎 I'm not taking that risk, waiting for better", "🧠 L'avis de l'IA ALIGN": "🧠 ALIGN AI's view", "🧠 L'IA ALIGN sur cette entrée": "🧠 ALIGN AI on this entry", "🧠 La leçon de l'IA ALIGN": "🧠 ALIGN AI's lesson", ": RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳": ": RSI overextended ✅ — waiting for the REJECTION WICK and the CLOSE ⏳",
 "👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en remontant": "👀 5 / 15-min chart: a candle that dips into the zone then closes back up",
 "👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en redescendant": "👀 5 / 15-min chart: a candle that spikes into the zone then closes back down",
 "Mèche de rejet + clôture (5 / 15 min)": "Rejection wick + close (5 / 15 min)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
@@ -2007,8 +2044,19 @@ def point_entree(r, d, p):
         za, zb = min(e, max(z50, p)), max(e, z786); zb = min(zb, sl - 0.25 * (sl - e))
     else:
         zb, za = max(e, min(z50, p)), min(e, z786); za = max(za, sl + 0.25 * (e - sl))
+    za, zb = min(za, zb), max(za, zb)
+    # SL serré : juste derrière le bas (LONG) / le haut (SHORT) de la zone, là où se fera la mèche de rejet
+    sl_serre = za - 0.6 * a if d == 1 else zb + 0.6 * a
+    if d * (sl_serre - sl) > 0:
+        sl = sl_serre
+    # Jamais de gros SL : si le risque dépasse 1,5 ATR, on attend un repli plus profond (entrée plus près du SL)
+    if abs(e - sl) > RISQUE_MAX * a:
+        e = sl + d * RISQUE_MAX * a
+        if d == 1: zb = max(za, min(zb, e))
+        else: za = min(zb, max(za, e))
+    risque = max(abs(e - sl), 1e-9)
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
-                za=min(za, zb), zb=max(za, zb), f50=z50, f618=z618, f786=z786)
+                za=za, zb=zb, f50=z50, f618=z618, f786=z786)
 
 def coach(etat, m, r, cle):
     """Agent individuel : messages courts envoyés UNIQUEMENT aux abonnés qui ont dit « Je suis rentré »."""
@@ -2222,16 +2270,20 @@ def agent(m, r, cle, ferme):
         if not cle.get("prep"):
             cle["ordre"] = o
         o = cle.get("ordre", o)
+        if not cle.get("prep"):
+            cle.pop("traverse", None)
         dist = d * (p - o["e"])       # < 0 = le prix n'est pas encore arrivé au point d'entrée
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
+            if r["t"] - cle.get("recalc_t", 0) >= 1800:
+                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
         # À quelques pips de l'entrée : « PRÉPARE-TOI » + rappel SL / TP (1 fois par point d'entrée)
         seuil = max(5 * PIP.get(m, 0.1), 0.05 * r["atr"])
         if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
             cle["pret_t"] = time.time()
-            out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
+            if r["t"] - cle.get("recalc_t", 0) >= 1800:
+                out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
                         f"🛑 Dès que tu es dedans : SL un peu {'SOUS la mèche du dernier creux' if d == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
                         f"💰 TP1 juste {'sous la' if d == 1 else 'au-dessus du'} {o['n1']}\n🙅 Jamais de position sans SL\n🚦 Feu vert 🟢 dans un instant",
                         bouton_auto(m)))
@@ -2250,9 +2302,25 @@ def agent(m, r, cle, ferme):
         if touche:
             cle["touche_t"] = r["t"]
         sl_touche = (lo <= o["sl"]) if d == 1 else (hi >= o["sl"])
-        recent_zone = cle.get("touche_t") and r["t"] - cle["touche_t"] <= 1800 and d * (p - o["e"]) <= 0.6 * r["atr"]
-        if sl_touche:
-            cle.pop("touche_t", None)
+        if sl_touche and cle.get("prep") and not cle.get("traverse"):
+            # Zone traversée : on N'ENTRE PAS, mais on garde la zone et on attend la mèche de rejet + clôture
+            cle["traverse"] = True; cle["touche_t"] = r["t"]
+            if r["t"] - cle.get("recalc_t", 0) >= 1800:
+                cle["recalc_t"] = r["t"]
+                out.append(f"↩️ {ICONE.get(m, '')} {m} : la zone a été traversée sans rejet\n🙅 Pas d'entrée, heureusement\n"
+                           f"🕯 J'attends une MÈCHE DE REJET + CLÔTURE {'en remontant' if d == 1 else 'en redescendant'} (vue 5 / 15 min)\n🛑 SL serré juste derrière la mèche")
+        loin = d * (o["e"] - p) > 2.5 * r["atr"]          # le prix s'est enfoncé beaucoup trop loin
+        expire = cle.get("touche_t") and r["t"] - cle["touche_t"] > 3600
+        if cle.get("prep") and (loin or (expire and cle.get("traverse"))):
+            cle.pop("touche_t", None); cle.pop("traverse", None); cle["prep"] = False; cle["attente_rsi"] = False
+            cle.pop("attente_rejet", None); cle.pop("ordre", None)
+            if r["t"] - cle.get("recalc_t", 0) >= 1800:
+                out.append(f"🔎 {ICONE.get(m, '')} {m} : pas de rejet dans la zone\n😎 Je recalcule le prochain point {'plus bas' if d == 1 else 'plus haut'}")
+            cle["recalc_t"] = r["t"]
+            return out
+        recent_zone = cle.get("touche_t") and r["t"] - cle["touche_t"] <= 3600 and d * (p - o["e"]) <= 0.6 * r["atr"]
+        if cle.get("traverse"):
+            sl_touche = False          # l'ancien SL est remplacé par celui derrière la mèche de rejet
         if (touche or recent_zone) and not sl_touche:
             if r.get("annonce"):
                 if not cle.get("pause"):
@@ -2263,11 +2331,17 @@ def agent(m, r, cle, ferme):
             bj = rejet(r, d, o["e"], r["atr"]) if surcharge else None
             if surcharge and not bj and not cle.get("attente_rejet"):
                 cle["attente_rejet"] = True
-                out.append(f"🕯 {ICONE.get(m, '')} {m} : RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳\n"
+                if r["t"] - cle.get("recalc_t", 0) >= 1800:
+                    out.append(f"🕯 {ICONE.get(m, '')} {m} : RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳\n"
                            f"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture {'en remontant' if d == 1 else 'en redescendant'}")
             if surcharge and bj:
-                cle.pop("attente_rejet", None); cle.pop("touche_t", None)
-                sl_m = min(o["sl"], bj["l"] - 0.2 * r["atr"]) if d == 1 else max(o["sl"], bj["h"] + 0.2 * r["atr"])
+                cle.pop("attente_rejet", None); cle.pop("touche_t", None); cle.pop("traverse", None)
+                sl_m = (bj["l"] - 0.2 * r["atr"]) if d == 1 else (bj["h"] + 0.2 * r["atr"])   # SL juste derrière la mèche de rejet
+                sl_m = min(sl_m, p - 0.6 * r["atr"]) if d == 1 else max(sl_m, p + 0.6 * r["atr"])   # jamais trop collé : le marché respire
+                if abs(p - sl_m) > RISQUE_MAX * r["atr"]:
+                    out.append(f"🛑 {ICONE.get(m, '')} {m} : la mèche de rejet est trop grande (SL trop loin)\n😎 Je ne prends pas ce risque, j'attends mieux")
+                    cle.pop("touche_t", None)
+                    return out
                 o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True)
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 tr["profil"] = profil_trade(m, tr, r)
@@ -2288,7 +2362,8 @@ def agent(m, r, cle, ferme):
                 out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}\n{qualite(tr)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not surcharge and not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
-                out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
+                if r["t"] - cle.get("recalc_t", 0) >= 1800:
+                    out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
         elif d * (p - o["e"]) > 0.35 * abs(o["tp1"] - o["e"]) and cle.get("prep"):
             out.append(f"⛔ {m} : le prix est parti sans toucher le point d'entrée. Trop tard, je recalcule le prochain point.")
             cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
