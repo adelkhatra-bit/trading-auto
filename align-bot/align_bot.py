@@ -401,8 +401,6 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
           f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
           f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
           r.get("news") or "📰 News : calendrier indisponible", "━━━━━━━━━━━━"] + strategie_mtf(r)
-    if r.get("repli"):
-        l.append(f"↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer {SENS[r['confirme']]}")
     if r.get("distrib"):
         l.append("⚠️ Distribution possible : le haut s'essouffle (divergence RSI)")
     if r.get("accum"):
