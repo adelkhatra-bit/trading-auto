@@ -539,7 +539,14 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "🎯 Je rentre dans la prochaine position": "🎯 I'm in for the next position",
+"(en cours)": "(now)", "✅ Ton bot t'a déjà mis dedans 🤖": "✅ Your bot already put you in 🤖", "🤖 Mon bot": "🤖 My bot", "🤖 MON BOT": "🤖 MY BOT",
+"✅ Il entre tout seul dans chaque position": "✅ It enters every position by itself", "👀 Vue 15 min • SL un peu sous / au-dessus de la mèche": "👀 15-min chart • SL a little below / above the wick",
+"🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP", "⏸ Il n'entre plus pour toi": "⏸ It no longer enters for you", "🔔 Tu reçois quand même les positions": "🔔 You still get the positions",
+"🤖 Positions prises par ton bot": "🤖 Positions taken by your bot", "🤖 Positions prises par mon bot": "🤖 Positions taken by my bot", "⏸ Arrêts manuels": "⏸ Manual stops",
+"⏸ Arrêter mon bot": "⏸ Stop my bot", "▶️ Relancer mon bot": "▶️ Restart my bot", "▶️ Ton bot est relancé": "▶️ Your bot is restarted",
+"🤖 Il entre tout seul dans la prochaine position": "🤖 It will enter the next position by itself", "⏸ Ton bot est arrêté": "⏸ Your bot is stopped",
+"🔔 Tu reçois toujours les positions": "🔔 You still get the positions", "▶️ Relance-le avec 🤖 Mon bot": "▶️ Restart it with 🤖 My bot",
+": JE SUIS RENTRÉ, SUIS-MOI": ": I'M IN, FOLLOW ME", "📍 Repère prix : entrée ≈": "📍 Price guide: entry ≈", "🎯 Je rentre dans la prochaine position": "🎯 I'm in for the next position",
 "✅ Noté ! Prochaine position": "✅ Got it! Next position", "📲 Place ton ordre limite dans la zone 🟨 (vue 15 min)": "📲 Place your limit order in the zone 🟨 (15-min chart)",
 "🤖 Dès que j'entre, tu es compté dedans automatiquement": "🤖 As soon as I enter, you're counted in automatically", "🎯 Le coach te suit : SL à BE, SL remonté, TP": "🎯 The coach follows you: SL to BE, raised SL, TP",
 "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme": "ℹ️ The bot doesn't place orders on your platform for you", ": TU ES DEDANS": ": YOU'RE IN",
@@ -637,7 +644,7 @@ TRAD = {
 
 LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
 _CLES = sorted(TRAD, key=len, reverse=True)
-BOUTONS_FR = ["📸 Partager mon gain", "🟠 Analyse BTC", "🥇 Analyse Gold", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
+BOUTONS_FR = ["🤖 Mon bot", "📸 Partager mon gain", "🟠 Analyse BTC", "🥇 Analyse Gold", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
               "🧩 Indicateur TradingView", "💎 Devenir VIP", "❌ Non"]
 INVERSE = {TRAD[b]: b for b in BOUTONS_FR}        # bouton anglais reçu → même action qu'en français
 
@@ -674,7 +681,8 @@ def telegram(methode, **params):
 
 # ───────── Boutons et jauge ─────────
 CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
-                                   [{"text": "📈 Mes résultats"}, {"text": "🧩 Indicateur TradingView"}], [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
+                                   [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}], [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
+                                   [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}], [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
@@ -770,18 +778,48 @@ def inscrire_auto(etat, cid, m):
         + "🤖 Dès que j'entre, tu es compté dedans automatiquement\n🎯 Le coach te suit : SL à BE, SL remonté, TP\n"
           "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme"))
 
-def entrer_inscrits(etat, m, tr):
-    """Le bot vient d'entrer : tous ceux qui ont réservé sont mis dans la position au prix d'entrée du bot."""
-    for cid in etat.get("auto", {}).pop(m, []):
+def bot_on(etat, cid):
+    return cid not in etat.get("bot_off", [])
+
+def stats_bot(etat, cid):
+    return etat.setdefault("stats_bot", {}).setdefault(cid, {"arrets": 0, "auto": 0})
+
+def menu_bot(etat, cid):
+    on = bot_on(etat, cid); st = stats_bot(etat, cid)
+    _envoi_sur(cid, text=(f"🤖 MON BOT   {'▶️ ON' if on else '⏸ OFF'}\n━━━━━━━━━━━━\n"
+                          + ("✅ Il entre tout seul dans chaque position\n👀 Vue 15 min • SL un peu sous / au-dessus de la mèche\n🎯 Le coach te suit jusqu'au TP\n"
+                             if on else "⏸ Il n'entre plus pour toi\n🔔 Tu reçois quand même les positions\n")
+                          + f"━━━━━━━━━━━━\n🤖 Positions prises par ton bot   {st['auto']}\n⏸ Arrêts manuels   {st['arrets']}"),
+               reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"} if on
+                                                            else {"text": "▶️ Relancer mon bot", "callback_data": "boton:x"}]]}))
+
+def regler_bot(etat, cid, on):
+    off = etat.setdefault("bot_off", [])
+    if on and cid in off:
+        off.remove(cid)
+    elif not on and cid not in off:
+        off.append(cid); stats_bot(etat, cid)["arrets"] += 1
+    _envoi_sur(cid, reply_markup=CLAVIER, text=("▶️ Ton bot est relancé\n🤖 Il entre tout seul dans la prochaine position" if on
+                                                else "⏸ Ton bot est arrêté\n🔔 Tu reçois toujours les positions\n▶️ Relance-le avec 🤖 Mon bot"))
+
+def entrer_inscrits(etat, m, tr, chats=()):
+    """Le bot vient d'entrer : il fait entrer automatiquement tous les membres dont le bot est ON,
+    plus ceux qui ont appuyé sur 🎯, au prix d'entrée du bot (coach + résultats comptés)."""
+    auto = [c for c in chats if bot_on(etat, c) and c not in etat.get("prospects", []) and c != etat.get("canal")]
+    for cid in list(dict.fromkeys(etat.get("auto", {}).pop(m, []) + auto)):
         if isinstance(tr.setdefault("qui", {}).get(cid), dict):
             continue
         tr["qui"][cid] = {"e": tr["e"], "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
         if cid in etat.get("prospects", []):
             etat.setdefault("bienvenue", {}).setdefault(cid, m)
-        _envoi_sur(cid, reply_markup=CLAVIER, text=(
-            f"🤖 {ICONE.get(m, '')} {m} : TU ES DEDANS\n{SENS[tr['d']]}\n"
-            f"📌 Entrée   {px(tr['e'])}\n🛑 SL   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n"
-            "🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"))
+        stats_bot(etat, cid)["auto"] += 1
+        _envoi_sur(cid, text=(
+            f"🤖 {ICONE.get(m, '')} {m} : JE SUIS RENTRÉ, SUIS-MOI\n{SENS[tr['d']]}\n"
+            "👀 Mets-toi en vue 15 minutes\n"
+            f"🛑 SL un peu {'SOUS la mèche du dernier creux' if tr['d'] == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
+            f"📍 Repère prix : entrée ≈ {px(tr['e'])} • SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n"
+            "🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"),
+            reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]]}))
 
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
@@ -831,7 +869,10 @@ def texte_bilan(etat):
             f"🎯 Réussite   {round(100 * b['tp'] / n)} %\n💰 Total   {b['pct']:+.2f} %")
 
 def texte_resultats(etat, cid):
-    return _texte_resultats(etat, cid) + "\n━━━━━━━━━━━━\n" + texte_bilan(etat)
+    sb = stats_bot(etat, cid)
+    return (_texte_resultats(etat, cid) + "\n━━━━━━━━━━━━\n"
+            + f"🤖 Mon bot   {'▶️ ON' if bot_on(etat, cid) else '⏸ OFF'}\n🤖 Positions prises par mon bot   {sb['auto']}\n⏸ Arrêts manuels   {sb['arrets']}\n━━━━━━━━━━━━\n"
+            + texte_bilan(etat))
 
 def _texte_resultats(etat, cid):
     st = etat.get("stats", {}).get(cid)
@@ -864,6 +905,9 @@ def repondre(etat, cid, oui, mk=None):
     trades = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
     if oui:
         cands = [m for m in trades if not isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict)]
+        if not cands and trades:
+            _envoi_sur(cid, text="✅ Ton bot t'a déjà mis dedans 🤖\n🎯 Le coach te suit jusqu'au TP", reply_markup=CLAVIER)
+            return
         if not cands:
             _envoi_sur(cid, text=("🔴 Le bot n'a pas de position ouverte\n"
                                   "👉 Attends 🟢 J'ENTRE MAINTENANT\n"
@@ -1002,6 +1046,13 @@ def traiter(etat, chats, updates):
                         + (f"🔗 {LIEN_INDICATEUR}\n" if LIEN_INDICATEUR else "") + "⏱ Mets-toi en vue 15 minutes"))
                     _envoi_sur(qui, text="👍 Abonné prévenu.")
                 continue
+            if choix in ("boton", "botoff"):
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="▶️ ON" if choix == "boton" else "⏸ OFF")
+                except Exception:
+                    pass
+                regler_bot(etat, qui, choix == "boton")
+                continue
             if choix == "auto":
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Noté")
@@ -1090,6 +1141,9 @@ def traiter(etat, chats, updates):
             nom = (fr.get("first_name", "") + (" @" + fr["username"] if fr.get("username") else "")).strip() or cid
             etat.setdefault("noms", {})[cid] = nom
             menu_indicateur(etat, cid, nom)
+            continue
+        if "mon bot" in txt:
+            menu_bot(etat, cid)
             continue
         if "analyse" in txt or "etat" in txt:
             demandes.append((cid, marche_demande(txt)))
@@ -1838,12 +1892,12 @@ def un_tour(etat, chats):
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 7:
+        if etat.get("clavier") != 8:
             for cid in chats:
-                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas\n🌐 English : le bot en anglais\n📸 Partager mon gain : ta capture publiée", reply_markup=CLAVIER)
+                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas\n🌐 English : le bot en anglais\n📸 Partager mon gain : ta capture publiée\n🤖 Mon bot : il entre tout seul pour toi (ON / OFF)", reply_markup=CLAVIER)
             for cid in etat.get("prospects", []):
                 _envoi_sur(cid, text="🆕 Boutons : 🟠 Analyse BTC • 🥇 Analyse Gold • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 7
+            etat["clavier"] = 8
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
@@ -1895,7 +1949,7 @@ def un_tour(etat, chats):
         envois += agent(nom_marche, r, cle, ferme)
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
             cle["trade"]["auto_fait"] = True
-            entrer_inscrits(etat, nom_marche, cle["trade"])
+            entrer_inscrits(etat, nom_marche, cle["trade"], chats)
         if TOKEN:
             coach(etat, nom_marche, r, cle)
             if cle.get("fin"):
