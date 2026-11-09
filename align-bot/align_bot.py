@@ -540,7 +540,11 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "⚡⚡ PRÉPARE-TOI —": "⚡⚡ GET READY —", "🎯 On est à quelques pips de l'entrée": "🎯 We're a few pips from the entry",
+"(en cours)": "(now)", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
+" — dans ": " — in ", " jours": " days", " — en cours": " — now", "✅ Rien d'ici": "✅ Nothing within", "✅ Plus aucune annonce ni discours cette semaine": "✅ No more news or speeches this week",
+"lun. ": "Mon ", "mar. ": "Tue ", "mer. ": "Wed ", "jeu. ": "Thu ", "ven. ": "Fri ", "sam. ": "Sat ", "dim. ": "Sun ", ": ÇA RETRACE": ": IT'S PULLING BACK", "😎 Le repli qu'on attend commence": "😎 The pullback we're waiting for is starting",
+"🎯 Zone visée ≈": "🎯 Target zone ≈", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
+": LE REPLI EST LÀ": ": THE PULLBACK IS HERE", "se prépare": "is building", "👀 Vue 15 min, tiens-toi prêt": "👀 15-min chart, get ready", "🔔 Prochaine alerte : ÇA ARRIVE": "🔔 Next alert: IT'S COMING", "⚡⚡ PRÉPARE-TOI —": "⚡⚡ GET READY —", "🎯 On est à quelques pips de l'entrée": "🎯 We're a few pips from the entry",
 "🛑 Dès que tu es dedans : SL un peu": "🛑 As soon as you're in: SL a little", "💰 TP1 juste": "💰 TP1 just", "🙅 Jamais de position sans SL": "🙅 Never a position without SL",
 "🚦 Feu vert 🟢 dans un instant": "🚦 Green light 🟢 in a moment", "🛑 Mets ton SL TOUT DE SUITE": "🛑 Set your SL RIGHT NOW", "✅ Ton bot t'a déjà mis dedans 🤖": "✅ Your bot already put you in 🤖", "🤖 Mon bot": "🤖 My bot", "🤖 MON BOT": "🤖 MY BOT",
 "✅ Il entre tout seul dans chaque position": "✅ It enters every position by itself", "👀 Vue 15 min • SL un peu sous / au-dessus de la mèche": "👀 15-min chart • SL a little below / above the wick",
@@ -1296,7 +1300,7 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
         fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : OBJECTIF ATTEINT 🔥🔥🔥\n" + (f"💰 +{g:.2f} % pour les VIP\n" if g else "") + "😬 Tu as loupé ça\n💎 Rejoins le VIP 👇"
     elif m and "stop" in tete.lower() and "touché" in tete:
         fomo = f"❌ {ICONE.get(m, '')} {m} : SL touché pour les VIP\n🛡 Risque maîtrisé, on repart\n💎 Toutes les positions et les résultats : VIP 👇"
-    elif m and ("ÇA ARRIVE" in tete or "PRÉPARE-TOI" in tete):
+    elif m and ("ÇA ARRIVE" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
         fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
     for cid in list(etat.get("prospects", [])):
         sa_bienvenue = m and deja.get(cid) == m and tr is not None
@@ -1441,7 +1445,8 @@ def calendrier(etat, maintenant):
             cache["ev"] = [dict(titre=x["title"], pays=x["country"], t=int(datetime.datetime.fromisoformat(x["date"]).timestamp()),
                                 prev=x.get("forecast", ""), avant=x.get("previous", ""))
                            for x in brut if x.get("country") == "USD" and (x.get("impact") == "High" or (
-                               x.get("impact") == "Medium" and any(k in x.get("title", "") for k in ("Speaks", "FOMC", "Fed", "Powell", "PCE", "PPI", "Jobless"))))]
+                               x.get("impact") == "Medium" and any(k in x.get("title", "") for k in ("Speaks", "FOMC", "Fed", "Powell", "PCE", "PPI", "CPI", "Jobless", "Claims",
+                                                                        "Retail", "GDP", "ISM", "Payrolls", "JOLTS", "Sentiment", "Employment"))))]
             cache["t"] = maintenant
         except Exception as ex:
             print("calendrier", ex)
@@ -1494,18 +1499,41 @@ def annonces_et_sessions(etat, maintenant, derniers):
     del vus[:-200]
     return out
 
-def news_txt(etat, heures=4):
-    """Annonces ET discours USA à fort impact (Fed, CPI, NFP…) : BTC et Gold y réagissent."""
+JOURS_FR = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
+
+def quand_txt(t):
+    """« aujourd'hui 14:30 », « demain 10:00 », « mar. 10/11 14:30 » — toujours à l'heure de Paris."""
+    d = datetime.datetime.fromtimestamp(t, PARIS); auj = datetime.datetime.now(PARIS).date()
+    jour = "aujourd'hui" if d.date() == auj else "demain" if (d.date() - auj).days == 1 else f"{JOURS_FR[d.weekday()]} {d.strftime('%d/%m')}"
+    return f"{jour} {d.strftime('%H:%M')}"
+
+def dans_txt(sec):
+    mn = round(sec / 60)
+    if mn <= 0:
+        return "en cours"
+    if mn < 60:
+        return f"dans {mn} min"
+    if mn < 2880:
+        return f"dans {mn // 60} h {mn % 60:02d}"
+    return f"dans {mn // 1440} jours"
+
+def news_txt(etat, heures=4, n=2):
+    """Les prochaines annonces ET discours USA (Fed, CPI, NFP…) à l'heure de Paris, avec le compte à rebours."""
     maintenant = time.time()
-    ev = sorted((e for e in etat.get("cal", {}).get("ev", []) if -15 * 60 <= e["t"] - maintenant <= heures * 3600), key=lambda e: e["t"])
-    if not etat.get("cal", {}).get("ev") and not etat.get("cal", {}).get("t"):
+    cal = etat.get("cal", {})
+    if not cal.get("t"):
         return "📰 News : calendrier indisponible"
+    ev = sorted((e for e in cal.get("ev", []) if e["t"] - maintenant >= -15 * 60), key=lambda e: e["t"])
     if not ev:
-        return f"✅ Aucune annonce ni discours d'ici {heures} h"
-    e = ev[0]; mn = round((e["t"] - maintenant) / 60)
-    ic = "🎤" if "speak" in e["titre"].lower() else "📰"
-    quand = f"en cours" if mn <= 0 else f"dans {mn} min" if mn < 60 else f"dans {mn // 60} h {mn % 60:02d}"
-    return f"⚠️ {ic} {e['titre']} {heure(e['t'])} ({quand})"
+        return "✅ Plus aucune annonce ni discours cette semaine"
+    proche = ev[0]["t"] - maintenant <= heures * 3600
+    lignes = [("⚠️ " if proche else "📰 ") + "Prochaines news (heure de Paris) :"]
+    for e in ev[:n]:
+        ic = "🎤" if "speak" in e["titre"].lower() else "📰"
+        lignes.append(f"{ic} {quand_txt(e['t'])} {e['titre']} — {dans_txt(e['t'] - maintenant)}")
+    if not proche:
+        lignes.append(f"✅ Rien d'ici {heures} h")
+    return "\n".join(lignes)
 
 def prochaine_news(etat):
     """Prochaine annonce ou discours USA à fort impact (BTC et Gold y réagissent)."""
@@ -1772,10 +1800,22 @@ def agent(m, r, cle, ferme):
         if not cle.get("prep") and etire(r, d):
             if not cle.get("parti"):
                 cle["parti"] = True; cle["attente_rsi"] = False; cle.pop("ordre", None)
-                out.append(f"🚀 {ICONE.get(m, '')} {m} est déjà parti {'⬆️' if d == 1 else '⬇️'}\n😎 On ne court pas après le prix\n{prochaine(r, cle)}")
+                if time.time() - cle.get("parti_t", 0) > 7200:      # pas de répétition (2 h)
+                    cle["parti_t"] = time.time()
+                    out.append(f"🚀 {ICONE.get(m, '')} {m} est déjà parti {'⬆️' if d == 1 else '⬇️'}\n😎 On ne court pas après le prix\n{prochaine(r, cle)}")
+            # Le prix commence à revenir (5 min dans l'autre sens) : on le dit, comme si on regardait le graphique ensemble
+            if r["dirs"][2] == -d and not cle.get("retrace_vu"):
+                cle["retrace_vu"] = True
+                out.append(f"↩️ {ICONE.get(m, '')} {m} : ÇA RETRACE {'⬇️' if d == 1 else '⬆️'}\n😎 Le repli qu'on attend commence\n"
+                           f"🔜 Prochaine entrée   {SENS[d]}\n🎯 Zone visée ≈ {px(r['ema15'])}\n👀 Vue 15 min, sois patient\n🔔 Je te préviens dès qu'on y est")
+            elif r["dirs"][2] == d:
+                cle["retrace_vu"] = False
             cle["aligne"] = 0
             return out
-        cle["parti"] = False
+        if cle.get("parti"):
+            # Il n'est plus trop loin : le repli est là, l'entrée se prépare
+            cle["parti"] = False; cle["retrace_vu"] = False
+            out.append(f"↩️ {ICONE.get(m, '')} {m} : LE REPLI EST LÀ {'⬇️' if d == 1 else '⬆️'}\n{SENS[d]} se prépare\n👀 Vue 15 min, tiens-toi prêt\n🔔 Prochaine alerte : ÇA ARRIVE")
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
