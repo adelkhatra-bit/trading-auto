@@ -631,7 +631,7 @@ def verdict(r, cle):
     if not cle.get("ordre") and bloque_dw(r, al, zone_repli(r, al)["e"]):      # une position déjà préparée n'est pas annulée par un petit va-et-vient du Daily
         return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
     zone = bool(cle.get("attente_rsi"))
-    return (f"🟡 PATIENCE   {SENS[al]} bientôt",
+    return (f"🟡 PATIENCE   {SENS[al]} bientôt\n🚦 ⏳ JE N'ENTRE PAS ENCORE" + (f"\n💰 TP visé ≈ {px(cle['ordre']['tp1'])}" if cle.get("ordre") else ""),
             f"✅ 15 min / 1 h / 4 h alignées\n{'✅' if zone else '⏳'} Prix dans la zone 🟨\n⏳ Surcharge RSI 5 min\n✅ Pas de news proche\n"
             "🚦 Attends mon 🟢 J'ENTRE MAINTENANT")
 
@@ -666,7 +666,7 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -1212,7 +1212,7 @@ def chrono_txt(m, r, cle, t0):
     l = [f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}   {px(p)}",
          f"🎯 Inscrit depuis {mmss(now - t0)}"]
     if tr:
-        l += [f"✅ ENTRÉ   {SENS[tr['d']]}", "🎯 Le coach te suit jusqu'au TP"]
+        l += [f"✅ ENTRÉ   {SENS[tr['d']]}", statut_txt(1, tr).strip(), "🎯 Le coach te suit jusqu'au TP"]
         return "\n".join(l)
     if r.get("annonce"):
         etape, estim = "⏸ News dans moins de 15 min : pause", "⏳ Reprise juste après la news"
@@ -1231,6 +1231,7 @@ def chrono_txt(m, r, cle, t0):
         etape = f"3️⃣/4 🟨 Le prix approche de la zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}"
         estim = f"⏳ Arrivée estimée ≈ {max(1, round(dist / vit))} min" if dist / vit < 240 else "⏳ Encore loin : ça peut prendre des heures"
     l += [etape, estim,
+          statut_txt(0, o).strip(),
           f"🕯 Prochaine clôture 15 min dans {mmss(cloture - now)}",
           f"⌛ Si rien avant {heure(t0 + CHRONO_MAX)} : j'annule ta réservation (pas d'entrée forcée)",
           f"🔄 Mis à jour à {heure(now)}:{datetime.datetime.fromtimestamp(now, PARIS).strftime('%S')}"]
@@ -1352,7 +1353,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
         _envoi_sur(cid, reply_markup=CLAVIER, text="\n".join(
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
-             f"👆 Mon analyse de {heure(der['t'])} est juste au-dessus : elle est toujours bonne"] + utile + ["🔔 Je te préviens dès que ça change"]))
+             f"👆 Mon analyse de {heure(der['t'])} est juste au-dessus : elle est toujours bonne"] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
         return
     vu[str(cid)] = {"sig": sig, "t": time.time()}
     _envoi_sur(cid, text=texte_etat(m, r, cle), reply_markup=markup_analyse(etat, m, r))
@@ -2470,7 +2471,16 @@ def manipulation(out, m, r, cle):
         l += [f"⏳ {SENS[dm]} possible — ⛔ PAS ENCORE VALIDÉ",
               "✅ Validé quand 15 min + 1 h + 4 h vont dans le même sens",
               "🔔 Je te préviens dès que c'est bon"]
+    if not tr:
+        l.append(statut_txt(0 if r["confirme"] == dm else -1, cle.get("ordre") if r["confirme"] == dm else None).strip())
     out.append(("\n".join(l), bouton_auto(m)) if not tr else "\n".join(l))
+
+def statut_txt(entre, o=None):
+    """Toujours clair : est-ce que j'entre ou pas, et quel TP on vise."""
+    l = ["🚦 " + ("🟢 J'ENTRE" if entre == 1 else "🙅 JE N'ENTRE PAS" if entre == -1 else "⏳ JE N'ENTRE PAS ENCORE")]
+    if o and o.get("tp1"):
+        l.append(f"💰 TP visé ≈ {px(o['tp1'])} ({o.get('n1', 'TP1')})")
+    return "\n" + "\n".join(l)
 
 def manip_txt(cle, d, r):
     mp = cle.get("manip")
@@ -2592,7 +2602,7 @@ def agent(m, r, cle, ferme):
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
+                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}{statut_txt(0, o)}", bouton_auto(m)))
         # À quelques pips de l'entrée : « PRÉPARE-TOI » + rappel SL / TP (1 fois par point d'entrée)
         seuil = max(5 * PIP.get(m, 0.1), 0.05 * r["atr"])
         if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
@@ -2600,7 +2610,7 @@ def agent(m, r, cle, ferme):
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
                 out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
                         f"🛑 Dès que tu es dedans : SL un peu {meche_sl(o)}\n"
-                        f"💰 TP1 juste {'sous la' if d == 1 else 'au-dessus du'} {o['n1']}\n🙅 Jamais de position sans SL\n🚦 Feu vert 🟢 dans un instant",
+                        f"💰 TP1 juste {'sous la' if d == 1 else 'au-dessus du'} {o['n1']}\n🙅 Jamais de position sans SL{statut_txt(0, o)}",
                         bouton_auto(m)))
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
@@ -2623,14 +2633,14 @@ def agent(m, r, cle, ferme):
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
                 cle["recalc_t"] = r["t"]
                 out.append(f"↩️ {ICONE.get(m, '')} {m} : la zone a été traversée sans rejet\n🙅 Pas d'entrée, heureusement\n"
-                           f"🕯 J'attends une MÈCHE DE REJET + CLÔTURE {'en remontant' if d == 1 else 'en redescendant'} (vue 5 / 15 min)\n🛑 SL serré juste derrière la mèche")
+                           f"🕯 J'attends une MÈCHE DE REJET + CLÔTURE {'en remontant' if d == 1 else 'en redescendant'} (vue 5 / 15 min)\n🛑 SL serré juste derrière la mèche{statut_txt(0, o)}")
         loin = d * (o["e"] - p) > 2.5 * r["atr"]          # le prix s'est enfoncé beaucoup trop loin
         expire = cle.get("touche_t") and r["t"] - cle["touche_t"] > 3600
         if cle.get("prep") and (loin or (expire and cle.get("traverse"))):
             cle.pop("touche_t", None); cle.pop("traverse", None); cle["prep"] = False; cle["attente_rsi"] = False
             cle.pop("attente_rejet", None); cle.pop("ordre", None)
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                out.append(f"🔎 {ICONE.get(m, '')} {m} : pas de rejet dans la zone\n😎 Je recalcule le prochain point {'plus bas' if d == 1 else 'plus haut'}")
+                out.append(f"🔎 {ICONE.get(m, '')} {m} : pas de rejet dans la zone\n😎 Je recalcule le prochain point {'plus bas' if d == 1 else 'plus haut'}{statut_txt(-1)}")
             cle["recalc_t"] = r["t"]
             return out
         recent_zone = cle.get("touche_t") and r["t"] - cle["touche_t"] <= 3600 and d * (p - o["e"]) <= 0.6 * r["atr"]
@@ -2694,9 +2704,9 @@ def agent(m, r, cle, ferme):
                     fin = r["b15"][-1]["t"] + 1800
                     out.append(f"🟨 {ICONE.get(m, '')} {m} : prix DANS la zone\n{SENS[d]}\n"
                                f"🕯 J'entre dès qu'une bougie clôture {'en remontant' if d == 1 else 'en redescendant'}\n"
-                               f"⏱ Prochaine décision : clôture de {heure(fin)}\n🔔 Tiens-toi prêt, ça peut être tout de suite")
+                               f"⏱ Prochaine décision : clôture de {heure(fin)}\n🔔 Tiens-toi prêt, ça peut être tout de suite{statut_txt(0, o)}")
         elif d * (p - o["e"]) > 0.35 * abs(o["tp1"] - o["e"]) and cle.get("prep"):
-            out.append(f"⛔ {ICONE.get(m, '')} {m} : le prix est reparti {'⬆️' if d == 1 else '⬇️'} sans signal d'entrée\n😎 Pas de position forcée\n🔎 Je calcule le prochain point")
+            out.append(f"⛔ {ICONE.get(m, '')} {m} : le prix est reparti {'⬆️' if d == 1 else '⬇️'} sans signal d'entrée\n😎 Pas de position forcée\n🔎 Je calcule le prochain point{statut_txt(-1)}")
             cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
         return out
 
