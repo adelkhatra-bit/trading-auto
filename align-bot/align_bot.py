@@ -232,49 +232,30 @@ def texte_plan(nom_marche, r, p, d):
             f"TP1 : {px(p['tp1'])} ({p['n1']})\nTP2 : {px(p['tp2'])} ({p['n2']})\n"
             f"Stop : {px(p['sl'])}\nGain/risque ≈ {p['rr']:.1f}")
 
+ICONE = {"BTC": "🟠", "GOLD": "🥇"}
+SENS = {1: "🟩🟩 TRÈS LONG ⬆️", -1: "🟥🟥 TRÈS SHORT ⬇️"}
+
+def alignement(r):
+    """Sens majoritaire sur 15m / 1h / 4h et nombre d'UT d'accord (0 à 3)."""
+    trio = [r["dirs"][4], r["dirs"][7], r["dirs"][9]]
+    maj = 1 if trio.count(1) >= 2 else -1 if trio.count(-1) >= 2 else 0
+    return maj, (trio.count(maj) if maj else 0)
+
 def texte_etat(nom_marche, r, cle=None, vip=True):
-    """Analyse lisible : une seule information par ligne + radar de la prochaine position."""
-    fl = lambda d: "⬆️ hausse" if d == 1 else "⬇️ baisse" if d == -1 else "➖ neutre"
-    d15, d1h, d4h = r["dirs"][4], r["dirs"][7], r["dirs"][9]
-    maj = 1 if [d15, d1h, d4h].count(1) >= 2 else -1 if [d15, d1h, d4h].count(-1) >= 2 else 0
-    n_ok = [d15, d1h, d4h].count(maj) if maj else 0
-    al = r["confirme"]
+    """Analyse courte : 1 info par ligne, verdict clair à la fin."""
+    fl = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
     D, R = r["dirs"], r["rsis"]
+    maj, n_ok = alignement(r)
     ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
-    verbe = lambda d: "monte" if d == 1 else "descend"
-    if al:
-        conclusion = f"✅ Tout est aligné : le marché {verbe(al)} {'⬆️' if al == 1 else '⬇️'}"
-    elif d1h and d1h == d4h:
-        conclusion = f"⏳ Le 1 h et le 4 h {'montent ⬆️' if d1h == 1 else 'descendent ⬇️'}\n⏳ La 15 min pas encore → patience"
-    elif d15 and d15 == d1h:
-        conclusion = f"⏳ La 15 min et le 1 h {'montent ⬆️' if d15 == 1 else 'descendent ⬇️'}\n⏳ Le 4 h pas encore → patience"
-    elif d4h:
-        conclusion = f"{'⬆️' if d4h == 1 else '⬇️'} Le 4 h {verbe(d4h)}, le reste hésite\n⏳ Patience"
-    else:
-        conclusion = "😴 Pas de direction claire → on attend"
-    if maj and D[0] == -maj:
-        conclusion += f"\n🔄 En 1 min, petit {'rebond' if maj == -1 else 'repli'} : normal"
-    l = [f"📊 {nom_marche}   {px(r['prix'])}",
-         "━━━━━━━━━━━━"]
+    l = [f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(r['prix'])}", "━━━━━━━━━━━━"]
     l += [f"{nom:<7} {fl(D[i])}   RSI {R[i]:.0f}" for nom, i in ut]
     l += ["━━━━━━━━━━━━",
-         conclusion,
-         "━━━━━━━━━━━━",
-         f"🧭 Alignement   {n_ok}/3 {'✅' if al else '⏳'}",
-         f"🎯 Sens   {'⬆️ HAUSSE' if r['sens'] == 1 else '⬇️ BAISSE' if r['sens'] == -1 else '➖ INDÉCIS'}",
-         f"📍 Daily   {zone_txt(r['posD'])}",
-         f"📍 Weekly   {zone_txt(r['posW'])}"]
-    if r["retHaut"] or r["retBas"]:
-        l.append(f"🔄 Retournement {'⬆️' if r['retHaut'] else '⬇️'} en préparation")
-    l.append("━━━━━━━━━━━━")
-    o = (cle or {}).get("trade") or (cle or {}).get("ordre")
-    if (cle or {}).get("trade"):
-        l.append(f"🟢 Position en cours   {'⬆️ ACHAT' if o['d'] == 1 else '⬇️ VENTE'}")
-    elif al and o:
-        zone = f"{px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🔒🔒🔒"
-        l.append(f"🔜 Prochaine position   {'⬆️ ACHAT' if al == 1 else '⬇️ VENTE'}")
-        l.append(f"🟨 Zone   {zone}")
-    l.append(f"📡 Radar   {barre_pct(100 * n_ok / 3, 6)}")
+          f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
+          f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
+          r.get("news") or "📰 News : calendrier indisponible"]
+    o = (cle or {}).get("ordre")
+    if r["confirme"] and o and not (cle or {}).get("trade"):
+        l.append(f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🟨 Zone   🔒🔒🔒")
     titre, raison = verdict(r, cle)
     l += ["━━━━━━━━━━━━", titre, raison]
     return "\n".join(l)
@@ -293,7 +274,7 @@ def verdict(r, cle):
         sens = "⬆️ ACHAT" if tr["d"] == 1 else "⬇️ VENTE"
         prog = tr["d"] * (p - tr["e"]) / max(abs(tr["tp1"] - tr["e"]), 1e-9)
         if tr["statut"] == "entree" and prog < 0.25 and not tr.get("tard"):
-            return ("🟢🟢 TU PEUX ENTRER", f"{sens}\n🛑 Stop   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
+            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"🛑 Stop   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
         return ("🔴🔴 N'ENTRE PAS", f"⏰ Trop tard : la position {sens} est déjà partie\n⏳ J'attends le prochain setup")
     if r.get("annonce"):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
@@ -302,7 +283,7 @@ def verdict(r, cle):
         return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
     if bloque_dw(r, al):
         return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
-    return ("🟡🟡 PAS ENCORE", f"✅ Aligné {'⬆️ ACHAT' if al == 1 else '⬇️ VENTE'}\n🟨 J'attends que le prix vienne dans la zone\n🚦 Je t'envoie 🟢 J'ENTRE MAINTENANT")
+    return (f"🟡 PAS ENCORE — bientôt\n{SENS[al]}", "🟨 J'attends le prix dans la zone\n🚦 Je t'envoie 🟢 J'ENTRE MAINTENANT")
 
 def telegram(methode, **params):
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
@@ -376,6 +357,7 @@ def marche_demande(txt):
 def analyse_marche(etat, pair):
     r = analyser(pair)
     r["annonce"] = annonce_proche(etat or {}, int(time.time()))
+    r["news"] = news_txt(etat or {})
     return r
 
 def envoyer_analyse(cid, etat=None, mq=None):
@@ -438,6 +420,18 @@ def _texte_resultats(etat, cid):
     l += [f"{'✅' if h[1] > 0 else '❌'} {h[0]}   {h[2]:+.2f} %" for h in st["hist"][-5:]]
     return "\n".join(l)
 
+def controle_entree(etat, m, d):
+    """Vérification en direct au moment où l'abonné dit « Je suis rentré »."""
+    try:
+        r = analyse_marche(etat, MARCHES[m])
+    except Exception as ex:
+        print("controle", ex); return news_txt(etat)
+    fl = lambda x: "✅" if x == d else "⚠️"
+    r5 = r["r5"][-1]
+    return (f"{fl(r['dirs'][4])} 15 min   {fl(r['dirs'][7])} 1 h   {fl(r['dirs'][9])} 4 h\n"
+            f"⚡ RSI 5 min   {r5:.0f}{' (surcharge, normal)' if (r5 >= 65 if d == -1 else r5 <= 35) else ''}\n"
+            f"{r['news']}")
+
 def repondre(etat, cid, oui, mk=None):
     """✅ Je suis rentré : l'entrée et le stop sont FIGÉS pour cet abonné. 🚪 Je suis sorti : calcul automatique du résultat."""
     trades = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
@@ -453,15 +447,16 @@ def repondre(etat, cid, oui, mk=None):
         e = prix_actuel(m) or tr["e"]
         tr.setdefault("qui", {})[cid] = {"e": e, "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
         _envoi_sur(cid, reply_markup=CLAVIER, text=(
-            f"👊 {m}   {'⬆️ ACHAT' if tr['d'] == 1 else '⬇️ VENTE'}\n"
+            f"👊 {ICONE.get(m, '')} {m}\n{SENS[tr['d']]}\n"
             f"📌 Entrée   {px(e)}\n"
             f"🛑 Stop   {px(tr['sl'])}\n"
             f"💰 TP1   {px(tr['tp1'])}\n"
             f"━━━━━━━━━━━━\n"
             f"🤖 Coach IA activé jusqu'au TP\n"
-            f"🔎 Je vérifie toutes les 5 min :\n"
-            f"🧭 15 min / 1 h / 4 h\n⚡ Surcharge RSI\n🧱 Résistances et supports\n"
-            f"📰 {prochaine_news(etat)}\n"
+            f"{controle_entree(etat, m, tr['d'])}\n"
+            f"━━━━━━━━━━━━\n"
+            f"🔎 Je surveille toutes les 5 min :\n"
+            f"🧭 15 min / 1 h / 4 h • ⚡ RSI • 🧱 niveaux • 🎤 news\n"
             f"📈 Résultat calculé tout seul"))
         return
     ouverts = [m for m in trades if isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict) and not etat[m]["trade"]["qui"][cid].get("fini")]
@@ -736,24 +731,39 @@ def barre_pct(pct, n=10):
     return "▓" * plein + "░" * (n - plein) + f" {pct:.0f}%"
 
 def jauge(m, r, cle, cid=None, canal=False):
-    """Texte de la jauge (un seul message mis à jour toutes les 5 min), ou None."""
+    """Jauge connectée (1 message mis à jour toutes les 5 min) : elle se charge quand la position approche."""
     tr = cle.get("trade"); p = r["m1"][-1]["c"]; d = r["confirme"]
+    vit = abs(r["m1"][-1]["c"] - r["m1"][-31]["c"]) / 30 if len(r["m1"]) > 31 else 0   # vitesse moyenne / minute
+    tete = f"{ICONE.get(m, '📊')} {m}   {px(p)}"
     pos = tr.get("qui", {}).get(cid) if tr else None
     if tr and (canal or (isinstance(pos, dict) and not pos.get("fini"))):
         e, t1, t2 = tr["e"], tr["tp1"], tr["tp2"]; cible = t2 if tr["statut"] == "tp1" else t1
         pct = 100 * tr["d"] * (p - e) / max(abs(cible - e), 1e-9)
-        vit = abs(r["m1"][-1]["c"] - r["m1"][-31]["c"]) / 30 if len(r["m1"]) > 31 else 0   # vitesse moyenne / minute
         reste = abs(cible - p) / vit if vit > 0 else None
-        return (f"📍 {m} en position {'LONG' if tr['d'] == 1 else 'SHORT'}\n{'TP2' if tr['statut'] == 'tp1' else 'TP1'} : {barre_pct(pct)}\n"
-                f"Prix {px(p)} → objectif {px(cible)}" + (f" • ≈ {reste:.0f} min" if reste and reste < 600 else ""))
-    if not tr and d and cle.get("ordre"):
-        o = cle["ordre"]; dep = abs(o["sl"] - o["e"]) * 3
-        pct = 100 * (1 - min(abs(p - o["e"]) / max(dep, 1e-9), 1))
-        vit = abs(r["m1"][-1]["c"] - r["m1"][-31]["c"]) / 30 if len(r["m1"]) > 31 else 0
-        reste = abs(p - o["e"]) / vit if vit > 0 else None
-        return (f"⏱ {m} {'▲ ACHAT' if d == 1 else '▼ VENTE'} visé à {px(o['e'])}\n{barre_pct(pct)}\nPrix {px(p)} • RSI 5m {r['r5'][-1]:.0f}"
-                + (f" • arrivée ≈ {reste:.0f} min" if reste and reste < 300 else ""))
-    return None
+        return (f"{tete}\n🔌 EN POSITION   {SENS[tr['d']]}\n{barre_pct(pct)}\n"
+                f"🎯 {'TP2' if tr['statut'] == 'tp1' else 'TP1'}   {px(cible)}" + (f"   ⏱ ≈ {reste:.0f} min" if reste and reste < 600 else "")
+                + f"\n{r.get('news', '')}")
+    if tr:
+        titre, _ = verdict(r, cle)
+        return f"{tete}\n🔌 Position ouverte   {SENS[tr['d']]}\n{titre.splitlines()[0]}"
+    maj, n_ok = alignement(r)
+    if not d:   # étape 1 : l'alignement se charge (0 → 40 %)
+        return (f"{tete}\n🔌 Prochaine position\n{barre_pct(40 * n_ok / 3)}\n"
+                f"🧭 Alignement   {n_ok}/3 ⏳" + (f"   {SENS[maj].split()[-2]} {SENS[maj].split()[-1]}" if maj else ""))
+    if bloque_dw(r, d):
+        return f"{tete}\n🔌 Prochaine position\n{barre_pct(40)}\n⛔ {SENS[d]} bloqué : prix {zone_txt(r['posD'])} Daily"
+    o = cle.get("ordre")
+    if not o:
+        return f"{tete}\n🔌 Prochaine position   {SENS[d]}\n{barre_pct(40)}\n⏳ Je calcule la zone"
+    # étape 2 : le prix approche de la zone (40 → 90 %), étape 3 : surcharge RSI (90 → 100 %)
+    dep = abs(o["sl"] - o["e"]) * 3
+    approche = 1 - min(abs(p - o["e"]) / max(dep, 1e-9), 1)
+    pct = 95 if cle.get("attente_rsi") else 40 + 50 * approche
+    reste = abs(p - o["e"]) / vit if vit > 0 else None
+    etape = "⚡ Dans la zone : j'attends le RSI" if cle.get("attente_rsi") else \
+            (f"⏱ Arrivée ≈ {reste:.0f} min" if reste and reste < 300 else "⏱ Le prix approche doucement")
+    return (f"{tete}\n🔌 Prochaine position   {SENS[d]}\n{barre_pct(pct)}\n"
+            f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n{etape}")
 
 def maj_jauge(m, r, cle, chats, canal=None):
     for cid in list(chats) + ([canal] if canal else []):
@@ -761,10 +771,13 @@ def maj_jauge(m, r, cle, chats, canal=None):
         mid = cle.get("jauge", {}).get(cid)
         try:
             if txt and mid:
-                telegram("editMessageText", chat_id=cid, message_id=mid, text=txt)
+                if cle.setdefault("jauge_txt", {}).get(cid) != txt:
+                    telegram("editMessageText", chat_id=cid, message_id=mid, text=txt)
             elif txt:
                 res = telegram("sendMessage", chat_id=cid, text=txt, disable_notification="true")
                 cle.setdefault("jauge", {})[cid] = res["result"]["message_id"]
+            if txt:
+                cle.setdefault("jauge_txt", {})[cid] = txt
             elif mid:
                 telegram("deleteMessage", chat_id=cid, message_id=mid)
                 cle["jauge"].pop(cid, None)
@@ -833,6 +846,19 @@ def annonces_et_sessions(etat, maintenant, derniers):
     del vus[:-200]
     return out
 
+def news_txt(etat, heures=4):
+    """Annonces ET discours USA à fort impact (Fed, CPI, NFP…) : BTC et Gold y réagissent."""
+    maintenant = time.time()
+    ev = sorted((e for e in etat.get("cal", {}).get("ev", []) if -15 * 60 <= e["t"] - maintenant <= heures * 3600), key=lambda e: e["t"])
+    if not etat.get("cal", {}).get("ev") and not etat.get("cal", {}).get("t"):
+        return "📰 News : calendrier indisponible"
+    if not ev:
+        return f"✅ Aucune annonce ni discours d'ici {heures} h"
+    e = ev[0]; mn = round((e["t"] - maintenant) / 60)
+    ic = "🎤" if "speak" in e["titre"].lower() else "📰"
+    quand = f"en cours" if mn <= 0 else f"dans {mn} min" if mn < 60 else f"dans {mn // 60} h {mn % 60:02d}"
+    return f"⚠️ {ic} {e['titre']} {heure(e['t'])} ({quand})"
+
 def prochaine_news(etat):
     """Prochaine annonce ou discours USA à fort impact (BTC et Gold y réagissent)."""
     maintenant = time.time()
@@ -850,7 +876,7 @@ def annonce_proche(etat, maintenant):
 def fmt_trade(m, tr, p=None):
     """Carte visuelle pour débutant : couleurs + échelle des prix dessinée de haut en bas."""
     d = tr["d"]
-    tete = ("🟩🟩🟩  ACHAT " if d == 1 else "🟥🟥🟥  VENTE ") + m + ("  🟩🟩🟩" if d == 1 else "  🟥🟥🟥")
+    tete = ("🟩🟩🟩  TRÈS LONG " if d == 1 else "🟥🟥🟥  TRÈS SHORT ") + m + ("  🟩🟩🟩" if d == 1 else "  🟥🟥🟥")
     za, zb = tr.get("za", tr["e"]), tr.get("zb", tr["e"])
     bougie = "en dessous de la dernière bougie basse" if d == 1 else "au-dessus de la dernière bougie haute"
     risque = abs(tr["e"] - tr["sl"]); gain = abs(tr["tp1"] - tr["e"])
@@ -1055,7 +1081,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append(f"🟡🟡 BIENTÔT — {m} approche de la zone 🟨\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Je prépare mon ordre {'ACHAT 🟩' if d == 1 else 'VENTE 🟥'}, stop {px(o['sl'])}\n⏳ J'attends le signal 🟢")
+            out.append(f"🟡🟡 BIENTÔT — {m} approche de la zone 🟨\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Je prépare mon ordre {SENS[d]}, stop {px(o['sl'])}\n⏳ J'attends le signal 🟢")
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
@@ -1207,6 +1233,7 @@ def main():
             print(nom_marche, "erreur", ex); continue
         cle = etat.setdefault(nom_marche, {})
         r["annonce"] = annonce_proche(etat, int(time.time()))
+        r["news"] = news_txt(etat)
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
         if TOKEN:
