@@ -972,6 +972,14 @@ def mise_en_forme(t):
             out.append(l)
     while out and not out[-1]:
         out.pop()
+    # Le statut (j'entre / je n'entre pas + TP visé) passe TOUT EN HAUT, juste sous le titre
+    STATUTS = ("🚦 🟢 J'ENTRE", "🚦 🙅 JE N'ENTRE PAS", "🚦 ⏳ JE N'ENTRE PAS ENCORE", "🚦 🟢 I'M ENTERING", "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ NOT ENTERING YET")
+    i = next((k for k, l in enumerate(out) if l in STATUTS), None)
+    if i is not None and i > 2:
+        bloc = [out[i]] + ([out[i + 1]] if i + 1 < len(out) and out[i + 1].startswith("💰 T") else [])
+        reste = out[:i] + out[i + len(bloc):]
+        tete = 2 if reste and reste[0].endswith("—") else 1
+        out = reste[:tete] + bloc + reste[tete:]
     return "\n".join(out)
 
 def telegram(methode, **params):
