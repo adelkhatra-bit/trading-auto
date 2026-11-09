@@ -429,7 +429,9 @@ def strategie_mtf(r):
          f"🔁 Confirmation 1 h   {fl(d1h)}",
          f"🎯 Déclencheur 15 min   {fl(d15)}",
          f"⏱ Timing 5 min   {fl(d5)}"]
-    if r["confirme"]:
+    if r["confirme"] and r.get("repli"):
+        l.append(f"✅ Tendance VALIDÉE   {SENS[r['confirme']]}\n⏳ Le 15 min fait son repli : l'entrée n'est PAS encore là")
+    elif r["confirme"]:
         l.append(f"✅ VALIDÉ   {SENS[r['confirme']]}")
     elif not d4h:
         l.append("➖ Pas de tendance de fond en 4 h\n⛔ Rien de validé : on ne trade pas")
@@ -676,7 +678,7 @@ TRAD = {
 "tant que 15 min / 1 h / 4 h ne se retournent pas": "while 15 min / 1 h / 4 h don't turn", "🔔 Je te préviens si ça se retourne": "🔔 I'll tell you if it turns",
 "✅ Validé quand 15 min + 1 h + 4 h vont dans le même sens": "✅ Validated when 15 min + 1 h + 4 h agree",
 "🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens": "🌀 After the manipulation: stops were taken, we enter the right way", "🏔 Fond 4 h + Daily": "🏔 Trend 4 h + Daily", "🔁 Confirmation 1 h": "🔁 Confirmation 1 h",
-"🎯 Déclencheur 15 min": "🎯 Trigger 15 min", "⏱ Timing 5 min": "⏱ Timing 5 min", "✅ VALIDÉ": "✅ VALIDATED",
+"🎯 Déclencheur 15 min": "🎯 Trigger 15 min", "⏱ Timing 5 min": "⏱ Timing 5 min", "✅ Tendance VALIDÉE": "✅ Trend VALIDATED", "⏳ Le 15 min fait son repli : l'entrée n'est PAS encore là": "⏳ The 15 min is pulling back: the entry is NOT there yet", "✅ VALIDÉ": "✅ VALIDATED",
 "➖ Pas de tendance de fond en 4 h": "➖ No 4 h trend", "⛔ Rien de validé : on ne trade pas": "⛔ Nothing validated: no trade",
 "⚖️ 4 h et Daily en désaccord": "⚖️ 4 h and Daily disagree", "⛔ Rien de validé : on attend": "⛔ Nothing validated: we wait",
 "↩️ Repli contre la tendance de fond": "↩️ Pullback against the main trend", "↩️ Rebond contre la tendance de fond": "↩️ Bounce against the main trend",
@@ -1054,8 +1056,10 @@ def boutons_canal(etat, texte):
     return json.dumps({"inline_keyboard": lignes})
 
 # ───────── IA (GitHub Models, gratuite avec le jeton GitHub du workflow) ─────────
-IA_JETON = os.environ.get("GITHUB_TOKEN", "")
-IA_MODELE = os.environ.get("IA_MODELE", "openai/gpt-4o-mini")
+# IA : Google Gemini (gratuit). GitHub Models a été fermé le 30/07/2026 → clé GEMINI_API_KEY dans les secrets GitHub.
+IA_JETON = os.environ.get("GEMINI_API_KEY", "")
+IA_MODELE = os.environ.get("IA_MODELE", "gemini-flash-latest")
+IA_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "120"))
 IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style jeune et simple, "
              "avec quelques emojis. Tu parles en bougies (vue 15 min, mèches, clôtures). Tu t'appuies UNIQUEMENT sur les données fournies : "
@@ -1073,11 +1077,11 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
     compte = etat.setdefault("ia_jour", {})
     if compte.get(jour, 0) >= IA_MAX_JOUR:
         return ""
-    corps = json.dumps({"model": IA_MODELE, "temperature": 0.4, "max_tokens": 220,
+    corps = json.dumps({"model": IA_MODELE, "temperature": 0.4, "max_tokens": 700,
                         "messages": [{"role": "system", "content": IA_REGLES},
                                      {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]}).encode()
     try:
-        req = urllib.request.Request("https://models.github.ai/inference/chat/completions", data=corps,
+        req = urllib.request.Request(IA_URL, data=corps,
                                      headers={"Authorization": f"Bearer {IA_JETON}", "Content-Type": "application/json",
                                               "Accept": "application/json", "User-Agent": "align-bot"})
         with urllib.request.urlopen(req, timeout=25) as rep_:
