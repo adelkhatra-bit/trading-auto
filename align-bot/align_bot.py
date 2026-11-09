@@ -41,9 +41,17 @@ def kraken(pair, interval):
     c = _CACHE_K.get((pair, interval))
     if c and time.time() - c[0] < TTL_KRAKEN.get(interval, 60):
         return c[1]
-    rows = _kraken(pair, interval)
-    _CACHE_K[(pair, interval)] = (time.time(), rows)
-    return rows
+    for essai in range(2):                     # Kraken a parfois un petit raté : on réessaie une fois
+        try:
+            rows = _kraken(pair, interval)
+            _CACHE_K[(pair, interval)] = (time.time(), rows)
+            return rows
+        except Exception as ex:
+            err = ex
+            time.sleep(1)
+    if c and time.time() - c[0] < 600:          # sinon les dernières bougies connues (moins de 10 min)
+        return c[1]
+    raise err
 
 _CACHE_K = {}
 
