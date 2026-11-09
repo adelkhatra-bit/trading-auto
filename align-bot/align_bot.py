@@ -423,6 +423,70 @@ def bloque_dw(r, d, prix=None):
     return (d == -1 and (posD <= 0.15 or (posW <= 0.15 and posD <= 0.35))) or \
            (d == 1 and (posD >= 0.85 or (posW >= 0.85 and posD >= 0.65)))
 
+# ───────── Mémoire du bot : il apprend de ses TP et de ses SL ─────────
+MEMOIRE = []          # copie de etat["memoire"] (sauvegardé entre les lancements)
+
+def session_de(ts):
+    h = datetime.datetime.fromtimestamp(ts, PARIS).hour
+    return "Asie" if h < 8 else "Londres" if h < 14 else "New York" if h < 22 else "Asie"
+
+def profil_trade(m, tr, r):
+    return {"m": m, "type": "cassure" if tr.get("src") == "cassure 15 min" else "repli",
+            "d": tr["d"], "session": session_de(time.time()), "haut": bool(r["posD"] >= 0.75 if tr["d"] == 1 else r["posD"] <= 0.25)}
+
+def stats_profil(p, cles=("m", "type", "d", "session")):
+    proches = [x for x in MEMOIRE if all(x["p"].get(k) == p.get(k) for k in cles)]
+    return len(proches), sum(1 for x in proches if x["g"] > 0)
+
+def avis_memoire(p):
+    """Ce que le bot a appris sur ce type de position (rien tant qu'il n'a pas assez d'exemples)."""
+    n, w = stats_profil(p)
+    if n < 5:
+        n, w = stats_profil(p, ("m", "type", "d"))
+    if n < 5:
+        return ""
+    return f"🧠 Mémoire du bot : ce type de position a gagné {w}/{n} fois ({round(100 * w / n)} %)\n"
+
+def memoire_refuse(p):
+    """Le bot passe son tour si ce type de position perd trop souvent (au moins 8 exemples, moins de 35 % gagnants)."""
+    n, w = stats_profil(p, ("m", "type", "d"))
+    return n >= 8 and w / n < 0.35, n, w
+
+def apprendre(etat, trf, gain):
+    p = trf.get("profil")
+    if not p:
+        return
+    mem = etat.setdefault("memoire", [])
+    mem.append({"p": p, "g": round(gain, 3), "t": int(time.time())})
+    del mem[:-300]
+    MEMOIRE[:] = mem
+
+def texte_memoire(etat):
+    mem = etat.get("memoire", [])
+    if len(mem) < 3:
+        return "🧠 Le bot apprend : il note chaque TP et chaque SL"
+    groupes = {}
+    for x in mem:
+        k = (x["p"]["m"], x["p"]["type"], x["p"]["session"])
+        g = groupes.setdefault(k, [0, 0]); g[0] += 1; g[1] += x["g"] > 0
+    l = ["🧠 Ce que le bot a appris :"]
+    for (m, t, se), (n, w) in sorted(groupes.items(), key=lambda z: -z[1][0])[:4]:
+        l.append(f"{'✅' if w / n >= 0.5 else '⚠️'} {m} {t} ({se})   {w}/{n} gagnés")
+    return "\n".join(l)
+
+def qualite(o):
+    """Étiquette de la position : très belle (gros mouvement ou gain ≥ 3 x le risque), belle, ou rien."""
+    try:
+        gain = abs(o["tp1"] - o["e"]) / o["e"] * 100
+        rr = o.get("rr") or abs(o["tp1"] - o["e"]) / max(abs(o["e"] - o["sl"]), 1e-9)
+    except Exception:
+        return ""
+    if rr >= 3 or gain >= 1.0:
+        return f"🔥🔥🔥 TRÈS BELLE POSITION   +{gain:.1f} % visés (x{rr:.1f})\n"
+    if rr >= 2.5 or gain >= 0.6:
+        return f"🔥 BELLE POSITION   +{gain:.1f} % visés (x{rr:.1f})\n"
+    return ""
+
 def niveau_cassure(r, d):
     """Niveau à casser (vue 15 min) : le plus haut (LONG) ou le plus bas (SHORT) des 20 dernières bougies 15 min."""
     b = r["b15"][-21:-1]
@@ -617,7 +681,7 @@ TRAD = {
 "🛑 SL un peu": "🛑 SL a little", "SOUS": "BELOW", "AU-DESSUS de": "ABOVE", "sous la": "below the", "au-dessus du": "above the",
 "résistance": "resistance", "support": "support",
 # Entrée abonné
-"🤖 Coach IA activé jusqu'au TP": "🤖 AI coach on until TP", "🔎 Je surveille toutes les 5 min :": "🔎 I check every 5 min:",
+"🤖 Coach activé jusqu'au TP": "🤖 Coach on until TP", "🔎 Je surveille toutes les 5 min :": "🔎 I check every 5 min:",
 "🧭 15 min / 1 h / 4 h • ⚡ RSI • 🧱 niveaux • 🎤 news": "🧭 15 min / 1 h / 4 h • ⚡ RSI • 🧱 levels • 🎤 news",
 "📈 Résultat calculé tout seul": "📈 Result calculated automatically", "📌 Entrée": "📌 Entry", "🛑 Stop": "🛑 SL", "(surcharge, normal)": "(overextended, normal)",
 "🔴 Le bot n'a pas de position ouverte": "🔴 The bot has no open position", "👉 Attends 🟢 J'ENTRE MAINTENANT": "👉 Wait for 🟢 I'M ENTERING NOW",
@@ -641,7 +705,14 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "la mèche de la bougie de cassure": "the wick of the breakout candle", ": à la clôture de la bougie 15 min qui casse ≈": ": at the close of the 15-min candle breaking ≈", "💥 CASSURE CONFIRMÉE": "💥 BREAKOUT CONFIRMED", "🕯 La bougie 15 min a CLÔTURÉ au-dessus de ≈": "🕯 The 15-min candle CLOSED above ≈",
+"(en cours)": "(now)", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
+"cassure vue, mais je passe mon tour": "breakout seen, but I'm skipping", "prix dans la zone, mais je passe mon tour": "price in the zone, but I'm skipping",
+"📚 Ce type de position a perdu trop souvent": "📚 This type of position lost too often", " gagnés": " won", ": je note ce": ": I'm noting this",
+"en session": "in session", "🧠 Bilan de ce type :": "🧠 Record for this type:", "💡 Leçon : je serai plus prudent sur ce type de position": "💡 Lesson: I'll be more careful with this type of position",
+"💪 Je garde ce type de position": "💪 I keep this type of position", "🧠 Le bot apprend : il note chaque TP et chaque SL": "🧠 The bot learns: it records every TP and SL",
+"🧠 Ce que le bot a appris :": "🧠 What the bot has learned:", "🔥🔥🔥 TRÈS BELLE POSITION": "🔥🔥🔥 VERY NICE POSITION", "🔥 BELLE POSITION": "🔥 NICE POSITION", "% visés": "% targeted", "CASSURE EN VUE —": "BREAKOUT IN SIGHT —", "👀 Le prix approche ≈": "👀 Price is approaching ≈", "plus haut des dernières bougies 15 min": "high of the last 15-min candles",
+"plus bas des dernières bougies 15 min": "low of the last 15-min candles", "🕯 Si une bougie 15 min CLÔTURE au-dessus → j'entre": "🕯 If a 15-min candle CLOSES above → I enter",
+"🕯 Si une bougie 15 min CLÔTURE en dessous → j'entre": "🕯 If a 15-min candle CLOSES below → I enter", "🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture": "🙅 A wick poking through isn't enough: we wait for the close", "🔔 Tiens-toi prêt": "🔔 Get ready", "la mèche de la bougie de cassure": "the wick of the breakout candle", ": à la clôture de la bougie 15 min qui casse ≈": ": at the close of the 15-min candle breaking ≈", "💥 CASSURE CONFIRMÉE": "💥 BREAKOUT CONFIRMED", "🕯 La bougie 15 min a CLÔTURÉ au-dessus de ≈": "🕯 The 15-min candle CLOSED above ≈",
 "🕯 La bougie 15 min a CLÔTURÉ en dessous de ≈": "🕯 The 15-min candle CLOSED below ≈", "la mèche de cette bougie": "the wick of this candle",
 "🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE au-dessus de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES above ≈", "🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE en dessous de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES below ≈",
 "sur la cassure": "on the breakout", "🅰️ Entrée sur le repli dans la zone 🟨": "🅰️ Entry on the pullback in the zone 🟨", "POINT D'ENTRÉE À VENIR —": "ENTRY POINT COMING —", "👀 ÇA ARRIVE": "👀 IT'S COMING", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
@@ -716,7 +787,7 @@ TRAD = {
 "6️⃣ 💰 TP1 touché → stop à l'entrée": "6️⃣ 💰 TP1 hit → SL to entry", "7️⃣ ⚖️ Petit risque : 1 à 2 % du compte maximum par position": "7️⃣ ⚖️ Small risk: 1 to 2 % of the account max per position",
 "8️⃣ ⚠️ Le trading peut faire perdre tout le capital": "8️⃣ ⚠️ Trading can lose all your capital",
 "📰 Je t'envoie les news : pas de trade juste avant ni juste après": "📰 I send you the news: no trade right before or after",
-"🤖 Appuie sur ✅ Je suis rentré : ton coach IA te suit jusqu'au TP": "🤖 Tap ✅ I'm in: your AI coach follows you to TP",
+"🤖 Appuie sur ✅ Je suis rentré : ton coach te suit jusqu'au TP": "🤖 Tap ✅ I'm in: your coach follows you to TP",
 "📈 Tes gains et tes pertes sont calculés tout seuls": "📈 Your wins and losses are calculated automatically",
 "🧩 L'indicateur TradingView : bouton 🧩 en bas": "🧩 The TradingView indicator: 🧩 button below", "🤝 Partage à tes amis :": "🤝 Share with your friends:",
 "ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. Ce n'est pas un conseil en investissement ni une recommandation personnalisée. Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.":
@@ -815,7 +886,7 @@ REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
           "8️⃣ ⚠️ Le trading peut faire perdre tout le capital\n"
           "━━━━━━━━━━━━\n"
           "📰 Je t'envoie les news : pas de trade juste avant ni juste après\n"
-          "🤖 Appuie sur ✅ Je suis rentré : ton coach IA te suit jusqu'au TP\n"
+          "🤖 Appuie sur ✅ Je suis rentré : ton coach te suit jusqu'au TP\n"
           "📈 Tes gains et tes pertes sont calculés tout seuls\n"
           "🧩 L'indicateur TradingView : bouton 🧩 en bas\n"
           "━━━━━━━━━━━━\n"
@@ -887,7 +958,7 @@ def boutons_canal(etat, texte):
     m = next((x for x in MARCHES if x in texte.split("\n")[0]), None)
     lien = lambda p: f"https://t.me/{bot}?start={p}"
     lignes = []
-    if m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "PRÉPARE-TOI", "J'ENTRE MAINTENANT", "REPLI", "RETRACE", "parti")):
+    if m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "CASSURE", "PRÉPARE-TOI", "J'ENTRE MAINTENANT", "REPLI", "RETRACE", "parti")):
         lignes.append([{"text": "🎯 Je rentre dans la position (coach)", "url": lien(f"auto_{m.lower()}")}])
     lignes.append([{"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}, {"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}])
     lignes.append([{"text": "🤖 Mon coach", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}])
@@ -1012,7 +1083,7 @@ def texte_resultats(etat, cid):
     sb = stats_bot(etat, cid)
     return (_texte_resultats(etat, cid) + "\n━━━━━━━━━━━━\n"
             + f"🤖 Mon bot   {'▶️ ON' if bot_on(etat, cid) else '⏸ OFF'}\n🤖 Positions prises par mon bot   {sb['auto']}\n⏸ Arrêts manuels   {sb['arrets']}\n━━━━━━━━━━━━\n"
-            + texte_bilan(etat))
+            + texte_bilan(etat) + "\n━━━━━━━━━━━━\n" + texte_memoire(etat))
 
 def _texte_resultats(etat, cid):
     st = etat.get("stats", {}).get(cid)
@@ -1063,7 +1134,7 @@ def repondre(etat, cid, oui, mk=None):
             f"🛑 Stop   {px(tr['sl'])}\n"
             f"💰 TP1   {px(tr['tp1'])}\n"
             f"━━━━━━━━━━━━\n"
-            f"🤖 Coach IA activé jusqu'au TP\n"
+            f"🤖 Coach activé jusqu'au TP\n"
             f"{controle_entree(etat, m, tr['d'])}\n"
             f"━━━━━━━━━━━━\n"
             f"🔎 Je surveille toutes les 5 min :\n"
@@ -1479,7 +1550,7 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
         fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : OBJECTIF ATTEINT 🔥🔥🔥\n" + (f"💰 +{g:.2f} % pour les VIP\n" if g else "") + "😬 Tu as loupé ça\n💎 Rejoins le VIP 👇"
     elif m and "stop" in tete.lower() and "touché" in tete:
         fomo = f"❌ {ICONE.get(m, '')} {m} : SL touché pour les VIP\n🛡 Risque maîtrisé, on repart\n💎 Toutes les positions et les résultats : VIP 👇"
-    elif m and ("ÇA ARRIVE" in tete or "POINT D'ENTRÉE À VENIR" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
+    elif m and ("ÇA ARRIVE" in tete or "POINT D'ENTRÉE À VENIR" in tete or "CASSURE EN VUE" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
         fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
     for cid in list(etat.get("prospects", [])):
         sa_bienvenue = m and deja.get(cid) == m and tr is not None
@@ -1980,12 +2051,26 @@ def agent(m, r, cle, ferme):
         if pc and pc["t15"] != cle.get("cassure_t") and not r.get("annonce"):
             cle["cassure_t"] = pc["t15"]
             tr = dict(pc, statut="entree", cree=r["t"], encore=0)
+            tr["profil"] = profil_trade(m, tr, r)
+            non, n_, w_ = memoire_refuse(tr["profil"])
+            if non:
+                out.append(f"🧠 {ICONE.get(m, '')} {m} : cassure vue, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
+                return out
             cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle["parti"] = False; cle.pop("ordre", None)
-            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n"
+            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{avis_memoire(tr['profil'])}"
                         f"🕯 La bougie 15 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
                         f"🛑 SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de cette bougie\n\n"
                         f"{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             return out
+        # Le prix approche du niveau de cassure : on l'annonce AVANT (1 fois par niveau)
+        if len(r["b15"]) >= 22 and not r.get("annonce"):
+            L = niveau_cassure(r, d)
+            if 0 <= d * (L - p) <= 0.35 * r["atr"] and abs(L - cle.get("cassure_vue", 0)) > 0.2 * r["atr"]:
+                cle["cassure_vue"] = L
+                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} CASSURE EN VUE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n"
+                            f"👀 Le prix approche ≈ {px(L)} ({'plus haut' if d == 1 else 'plus bas'} des dernières bougies 15 min)\n"
+                            f"🕯 Si une bougie 15 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} → j'entre {SENS[d]}\n"
+                            f"🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture\n🔔 Tiens-toi prêt", bouton_auto(m)))
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
         o = point_entree(r, d, p)
         bloque = bloque_dw(r, d, o["e"])      # on juge le prix d'entrée du repli, pas le prix actuel
@@ -2028,7 +2113,7 @@ def agent(m, r, cle, ferme):
                            f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
-                out.append((f"🔔 JE PRÉPARE UNE POSITION — {ICONE.get(m, '')} {m}\n{SENS[d]}   {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
+                out.append((f"🔔 JE PRÉPARE UNE POSITION — {ICONE.get(m, '')} {m}\n{SENS[d]}   {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n{qualite(o)}"
                            f"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨\n"
                            f"👀 Mets-toi en vue 15 minutes\n"
                            f"🕯 Repère {'le dernier creux (mèche du bas)' if d == 1 else 'le dernier sommet (mèche du haut)'}\n"
@@ -2047,12 +2132,12 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
+            out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
         # À quelques pips de l'entrée : « PRÉPARE-TOI » + rappel SL / TP (1 fois par point d'entrée)
         seuil = max(5 * PIP.get(m, 0.1), 0.05 * r["atr"])
         if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
             cle["pret_t"] = time.time()
-            out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
+            out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
                         f"🛑 Dès que tu es dedans : SL un peu {'SOUS la mèche du dernier creux' if d == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
                         f"💰 TP1 juste {'sous la' if d == 1 else 'au-dessus du'} {o['n1']}\n🙅 Jamais de position sans SL\n🚦 Feu vert 🟢 dans un instant",
                         bouton_auto(m)))
@@ -2077,6 +2162,12 @@ def agent(m, r, cle, ferme):
             cle["pause"] = False
             if surcharge:
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
+                tr["profil"] = profil_trade(m, tr, r)
+                non, n_, w_ = memoire_refuse(tr["profil"])
+                if non:
+                    cle["prep"] = False; cle.pop("ordre", None)
+                    out.append(f"🧠 {ICONE.get(m, '')} {m} : prix dans la zone, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
+                    return out
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
                 niveau = "Fibonacci" not in o["src"] or "+" in o["src"]   # confluence avec un niveau 15m / 1h / 4h ou l'EMA
                 checks = [("15 min • 1 h • 4 h alignées", True), ("Daily / Weekly favorables", True),
@@ -2085,7 +2176,7 @@ def agent(m, r, cle, ferme):
                           ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}\n{qualite(tr)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
@@ -2143,6 +2234,7 @@ def agent(m, r, cle, ferme):
 def un_tour(etat, chats):
     """Un tour complet : messages reçus, analyse BTC + Gold, envois, jauges, sauvegarde."""
     LANG_EN.clear(); LANG_EN.update(etat.get("en", []))
+    MEMOIRE[:] = etat.get("memoire", [])
     if TOKEN:
         installer_menu(etat)
     demandes = []
@@ -2218,6 +2310,13 @@ def un_tour(etat, chats):
                 bil["tp" if gain > 0 else "sl"] += 1
                 bil["pct"] += gain
                 cle["dernier"] = round(gain, 2)
+                apprendre(etat, trf, gain)
+                pr = trf.get("profil") or {}
+                n_, w_ = stats_profil(pr, ("m", "type", "d")) if pr else (0, 0)
+                envois.append(f"🧠 {ICONE.get(nom_marche, '')} {nom_marche} : je note ce {'TP ✅' if gain > 0 else 'SL ❌'}\n"
+                              f"📚 {pr.get('type', 'position')} {'LONG' if pr.get('d') == 1 else 'SHORT'} en session {pr.get('session', '?')}\n"
+                              f"🧠 Bilan de ce type : {w_}/{n_} gagnés\n"
+                              + ("💡 Leçon : je serai plus prudent sur ce type de position" if gain <= 0 else "💪 Je garde ce type de position"))
         derniers[nom_marche] = r
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
