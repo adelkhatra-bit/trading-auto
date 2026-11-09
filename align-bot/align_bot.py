@@ -410,10 +410,20 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(prochaine(r, cle))
     return "\n".join(l)
 
-def bloque_dw(r, d):
-    """Daily / Weekly : pas de short tout en bas, pas de long tout en haut."""
-    return (d == -1 and (r["posD"] <= 0.15 or (r["posW"] <= 0.15 and r["posD"] <= 0.35))) or \
-           (d == 1 and (r["posD"] >= 0.85 or (r["posW"] >= 0.85 and r["posD"] >= 0.65)))
+def bloque_dw(r, d, prix=None):
+    """Daily / Weekly : pas de short tout en bas, pas de long tout en haut.
+    Avec « prix » : on juge le point d'entrée du repli (acheter plus bas n'est plus « tout en haut »)."""
+    if prix is None:
+        posD, posW = r["posD"], r["posW"]
+    else:
+        posD = (prix - r["basD"]) / max(r["hautD"] - r["basD"], 1e-9)
+        posW = (prix - r["basW"]) / max(r["hautW"] - r["basW"], 1e-9)
+    return (d == -1 and (posD <= 0.15 or (posW <= 0.15 and posD <= 0.35))) or \
+           (d == 1 and (posD >= 0.85 or (posW >= 0.85 and posD >= 0.65)))
+
+def zone_repli(r, d):
+    """Point d'entrée du repli (même calcul que l'agent)."""
+    return point_entree(r, d, r["m1"][-1]["c"])
 
 def etire(r, d):
     """Le prix est déjà parti loin (RSI 15 min en excès ou trop loin de l'EMA 20) : entrée loupée."""
@@ -451,7 +461,7 @@ def verdict(r, cle):
         return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
     if etire(r, al):
         return ("⛔ TROP TARD — le marché est déjà parti", "😎 Patience, on trouve une autre entrée\n" + prochaine(r, cle))
-    if bloque_dw(r, al) and not cle.get("ordre"):      # une position déjà préparée n'est pas annulée par un petit va-et-vient du Daily
+    if not cle.get("ordre") and bloque_dw(r, al, zone_repli(r, al)["e"]):      # une position déjà préparée n'est pas annulée par un petit va-et-vient du Daily
         return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
     zone = bool(cle.get("attente_rsi"))
     return (f"🟡 PATIENCE   {SENS[al]} bientôt",
@@ -595,7 +605,7 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
+"(en cours)": "(now)", "POINT D'ENTRÉE À VENIR —": "ENTRY POINT COMING —", "👀 ÇA ARRIVE": "👀 IT'S COMING", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
 " — dans ": " — in ", " jours": " days", " — en cours": " — now", "✅ Rien d'ici": "✅ Nothing within", "✅ Plus aucune annonce ni discours cette semaine": "✅ No more news or speeches this week",
 "lun. ": "Mon ", "mar. ": "Tue ", "mer. ": "Wed ", "jeu. ": "Thu ", "ven. ": "Fri ", "sam. ": "Sat ", "dim. ": "Sun ", ": ÇA RETRACE": ": IT'S PULLING BACK", "😎 Le repli qu'on attend commence": "😎 The pullback we're waiting for is starting",
 "🎯 Zone visée ≈": "🎯 Target zone ≈", "🎯 Il devrait revenir vers ≈": "🎯 It should come back to ≈", "🕯 La moitié du dernier grand mouvement (vue 15 min)": "🕯 Half of the last big move (15-min chart)", "👀 Sois patient": "👀 Be patient", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
@@ -1376,7 +1386,7 @@ def analyse_visiteur(etat, cid, mq=None):
                 continue
             txt = "🎁 TON ANALYSE GRATUITE DU JOUR\n\n" + texte_etat(nom_marche, r, cle)
             d = r["confirme"]; p = r["m1"][-1]["c"]
-            if not cle.get("trade") and d and not etire(r, d) and not bloque_dw(r, d) and not r.get("annonce"):
+            if not cle.get("trade") and d and not etire(r, d) and not bloque_dw(r, d, zone_repli(r, d)["e"]) and not r.get("annonce"):
                 o = cle.get("ordre") or point_entree(r, d, p)
                 txt += "\n\n" + fmt_trade(nom_marche, o, p) + "\n⏳ Attends que le prix vienne dans la zone 🟨"
             _envoi_sur(cid, text=txt, reply_markup=CLAVIER_VISITEUR)
@@ -1430,7 +1440,7 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
         fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : OBJECTIF ATTEINT 🔥🔥🔥\n" + (f"💰 +{g:.2f} % pour les VIP\n" if g else "") + "😬 Tu as loupé ça\n💎 Rejoins le VIP 👇"
     elif m and "stop" in tete.lower() and "touché" in tete:
         fomo = f"❌ {ICONE.get(m, '')} {m} : SL touché pour les VIP\n🛡 Risque maîtrisé, on repart\n💎 Toutes les positions et les résultats : VIP 👇"
-    elif m and ("ÇA ARRIVE" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
+    elif m and ("ÇA ARRIVE" in tete or "POINT D'ENTRÉE À VENIR" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
         fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
     for cid in list(etat.get("prospects", [])):
         sa_bienvenue = m and deja.get(cid) == m and tr is not None
@@ -1531,7 +1541,7 @@ def jauge(m, r, cle, cid=None, canal=False):
         return (f"{tete}\n{prochaine(r, cle)}\n{barre_pct(40 * n_ok / 3)}\n🧭 Alignement   {n_ok}/3 ⏳")
     if etire(r, d):
         return f"{tete}\n🚀 Déjà parti : patience\n{barre_pct(40)}\n{prochaine(r, cle)}"
-    if bloque_dw(r, d) and not cle.get("ordre"):
+    if not cle.get("ordre") and bloque_dw(r, d, zone_repli(r, d)["e"]):
         return f"{tete}\n🔌 Prochaine position\n{barre_pct(40)}\n⛔ {SENS[d]} bloqué : prix {zone_txt(r['posD'])} Daily"
     o = cle.get("ordre")
     if not o:
@@ -1908,7 +1918,7 @@ def agent(m, r, cle, ferme):
     out = []
     tr = cle.get("trade")
     depuis = cle.get("t1m", 0)
-    bougies = [x for x in r["m1"] if x["t"] > depuis] or r["m1"][-1:]
+    bougies = ([x for x in r["m1"] if x["t"] > depuis][-10:] if depuis else []) or r["m1"][-1:]   # seulement les minutes depuis le dernier tour
     cle["t1m"] = r["m1"][-1]["t"]
     p = r["m1"][-1]["c"]
     hi = max(x["h"] for x in bougies); lo = min(x["l"] for x in bougies)
@@ -1924,8 +1934,8 @@ def agent(m, r, cle, ferme):
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
-        bloque = bloque_dw(r, d)
         o = point_entree(r, d, p)
+        bloque = bloque_dw(r, d, o["e"])      # on juge le prix d'entrée du repli, pas le prix actuel
         # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
         p_ = r["m1"][-1]["c"]
         calme = ((r["r15"] < 62 and p_ - r["ema15"] < 1.5 * r["atr"]) if d == 1 else (r["r15"] > 38 and r["ema15"] - p_ < 1.5 * r["atr"]))
@@ -1964,7 +1974,7 @@ def agent(m, r, cle, ferme):
                            f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
-                out.append((f"🔔 JE PRÉPARE UNE POSITION — {m} {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
+                out.append((f"🔔 JE PRÉPARE UNE POSITION — {ICONE.get(m, '')} {m}\n{SENS[d]}   {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
                            f"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨\n"
                            f"👀 Mets-toi en vue 15 minutes\n"
                            f"🕯 Repère {'le dernier creux (mèche du bas)' if d == 1 else 'le dernier sommet (mèche du haut)'}\n"
@@ -1982,7 +1992,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append((f"👀👀 ÇA ARRIVE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
+            out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
         # À quelques pips de l'entrée : « PRÉPARE-TOI » + rappel SL / TP (1 fois par point d'entrée)
         seuil = max(5 * PIP.get(m, 0.1), 0.05 * r["atr"])
         if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
