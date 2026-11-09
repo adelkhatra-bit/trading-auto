@@ -668,7 +668,12 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "🕯 Vue 15 min : grosse mèche SOUS le dernier plus bas": "🕯 15 min view: big wick BELOW the last low",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "🕯 Vue 15 min : la bougie de": "🕯 15 min view: the candle at",
+"a piqué SOUS le dernier plus bas": "spiked BELOW the last low", "a piqué AU-DESSUS du dernier plus haut": "spiked ABOVE the last high",
+"🎣 Les stops viennent d'être pris et le prix revient": "🎣 Stops were just taken and price is coming back", "🙅 N'entre pas maintenant": "🙅 Don't enter now",
+"⏳ J'attends la CLÔTURE de cette bougie": "⏳ Waiting for this candle's CLOSE", "pour confirmer la manipulation": "to confirm the manipulation",
+": pas de manipulation confirmée": ": manipulation not confirmed", "n'a pas clôturé en revenant": "didn't close back inside",
+"⚠️ C'est peut-être une vraie cassure": "⚠️ It may be a real breakout", "vers le bas : prudence": "downwards: be careful", "vers le haut : prudence": "upwards: be careful", "🕯 Vue 15 min : grosse mèche SOUS le dernier plus bas": "🕯 15 min view: big wick BELOW the last low",
 "🕯 Vue 15 min : grosse mèche AU-DESSUS du dernier plus haut": "🕯 15 min view: big wick ABOVE the last high", "🎣 Les stops ont été pris, puis la bougie a CLÔTURÉ en revenant": "🎣 Stops were hunted, then the candle CLOSED back inside",
 "🙅 On ne court pas après la bougie": "🙅 We don't chase the candle", "📰 C'est l'effet de la news : encore plus de prudence": "📰 It's the news effect: extra caution",
 "🧘 Tu es en position : reste cool, ton SL est en place": "🧘 You're in a trade: stay cool, your SL is set", "⚠️ C'est CONTRE ta position : ne bouge pas ton SL, je surveille": "⚠️ It's AGAINST your trade: don't move your SL, I'm watching",
@@ -2252,6 +2257,40 @@ def gerer_stop(etat, m, r, tr, c):
             "🕯 Il peut revenir un peu, c'est normal\n"
             "🛑 Ne touche pas ton SL\n🎯 Cap sur le TP"))
 
+def meche_suspecte(out, m, r, cle):
+    """PRÉ-ALERTE pendant la bougie 15 min EN COURS : la mèche vient de passer sous le dernier plus bas
+    (ou au-dessus du dernier plus haut) puis le prix revient. Confirmation (ou non) à la clôture."""
+    b = r["b15"]; a = r["atr"]
+    if len(b) < 21 or a < 0.0005 * b[-1]["c"]:
+        return
+    debut = b[-1]["t"] + 900                       # début de la bougie 15 min en cours
+    en_cours = [x for x in r["m1"] if x["t"] >= debut]
+    pa = cle.get("pre_manip")
+    # À la clôture : la bougie suspecte n'a PAS été confirmée comme manipulation → on le dit
+    if pa and pa["t15"] < debut and cle.get("manip_t") != pa["t15"]:
+        cle.pop("pre_manip", None)
+        out.append(f"❌ {ICONE.get(m, '')} {m} : pas de manipulation confirmée\n🕯 La bougie 15 min de {heure(pa['t15'])} n'a pas clôturé en revenant\n"
+                   f"⚠️ C'est peut-être une vraie cassure {'vers le bas' if pa['d'] == 1 else 'vers le haut'} : prudence")
+        return
+    if len(en_cours) < 5 or (pa and pa["t15"] == debut):
+        return
+    z = b[-20:]
+    H = max(y["h"] for y in z); L = min(y["l"] for y in z)
+    h = max(x["h"] for x in en_cours); l = min(x["l"] for x in en_cours); o = en_cours[0]["o"]; c = en_cours[-1]["c"]
+    rng = max(h - l, 1e-9)
+    dm = 0
+    if l < L - 0.15 * a and c > L + 0.1 * a and (min(o, c) - l) >= 0.6 * rng and rng >= 1.0 * a:
+        dm, niv = 1, L
+    elif h > H + 0.15 * a and c < H - 0.1 * a and (h - max(o, c)) >= 0.6 * rng and rng >= 1.0 * a:
+        dm, niv = -1, H
+    if not dm:
+        return
+    cle["pre_manip"] = {"t15": debut, "d": dm}
+    out.append(f"⚠️ MÈCHE SUSPECTE EN COURS — {ICONE.get(m, '')} {m}\n"
+               f"🕯 Vue 15 min : la bougie de {heure(debut)} a piqué {'SOUS le dernier plus bas' if dm == 1 else 'AU-DESSUS du dernier plus haut'} ≈ {px(niv)}\n"
+               f"🎣 Les stops viennent d'être pris et le prix revient\n"
+               f"🙅 N'entre pas maintenant\n⏳ J'attends la CLÔTURE de cette bougie ({heure(debut + 900)}) pour confirmer la manipulation")
+
 def manipulation(out, m, r, cle):
     """MANIPULATION (chasse aux stops) vue 15 min : une grosse bougie pique AU-DELÀ du dernier plus bas / plus haut
     des 20 bougies 15 min (elle prend les stops) puis CLÔTURE en revenant à l'intérieur. 1 message par bougie."""
@@ -2318,6 +2357,7 @@ def agent(m, r, cle, ferme):
     ctx = f"Contexte : {zone_txt(r['posD'])} de la zone Daily, {zone_txt(r['posW'])} de la zone Weekly."
     try:
         manipulation(out, m, r, cle)
+        meche_suspecte(out, m, r, cle)
     except Exception as ex:
         print("manipulation", ex)
 
