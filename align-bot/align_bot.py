@@ -15,6 +15,7 @@ TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 ETAT_FICHIER = os.environ.get("STATE_FILE", "state.json")
 MARCHES = {"BTC": "XBTUSD", "GOLD": "XAUUSD"}  # BTC → FTMO (CFD 24/7) • GOLD → Topstep (MGC) / FTMO
 MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 2.0
+LIEN_RESULTATS = "https://t.me/+RajFd_hMgl1kNmQ0"     # groupe ALIGN Résultats (lien privé)
 RISQUE_MAX = 1.5      # SL jamais plus loin que 1,5 ATR 15 min : pas de gros SL, on attend mieux
 UT = ["1", "2", "5", "10", "15", "30", "45", "1h", "2h", "4h", "D"]
 POIDS = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
@@ -677,7 +678,7 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -1635,6 +1636,29 @@ def valider_gain(etat, chats, pid, publier, cb):
         except Exception as ex:
             print("publier gain", ex)
     _envoi_sur(ph["cid"], text="✅ Ton gain est publié 🔥\n🙏 Merci, ça motive tout le monde !")
+
+def publier_resultat(etat, m, tr, sortie, motif, gain):
+    """Chaque TP ou SL du bot part aussi dans ALIGN Résultats (transparence), + invitation à partager sa capture."""
+    duree = int((time.time() - tr.get("cree", time.time())) // 60)
+    txt = (f"{'✅' if gain > 0 else '🔒' if abs(gain) < 0.02 else '❌'} RÉSULTAT ALIGN — {ICONE.get(m, '')} {m}\n"
+           f"🚦 {motif}\n{SENS[tr['d']]}\n"
+           f"📌 Entrée ≈ {px(tr['e'])}\n🏁 Sortie ≈ {px(sortie)}\n"
+           f"📈 Résultat : {gain:+.2f} %\n⏱ Durée : {duree // 60} h {duree % 60:02d}\n"
+           + ("📸 Tu étais dedans ? Partage ta capture ici avec le bouton 📸 Partager mon gain" if gain > 0 else "🛡 SL respecté, risque maîtrisé"))
+    if etat.get("canal_preuves"):
+        try:
+            telegram("sendMessage", chat_id=etat["canal_preuves"], text=txt)
+        except Exception as ex:
+            print("résultat", ex)
+    # Le lien du groupe des résultats n'apparaît QUE après un TP ou un SL
+    lien = etat.get("lien_preuves") or LIEN_RESULTATS
+    kb = json.dumps({"inline_keyboard": [[{"text": "📸 Voir les résultats ALIGN", "url": lien}]]})
+    for c, pos in (tr.get("qui") or {}).items():
+        if isinstance(pos, dict):
+            _envoi_sur(c, reply_markup=kb, text=(
+                f"🔥 {ICONE.get(m, '')} {m} : bravo !\n📸 N'hésite pas à partager ta capture dans ALIGN Résultats\n👇 Bouton 📸 Partager mon gain"
+                if gain > 0 else
+                f"🛡 {ICONE.get(m, '')} {m} : SL touché, risque maîtrisé\n📊 Tous les résultats (TP et SL) sont publiés en toute transparence\n👇 Bouton ci-dessous"))
 
 def traiter(etat, chats, updates):
     """Boutons cliqués et messages reçus. Renvoie la liste des téléphones qui demandent une analyse."""
@@ -2901,6 +2925,7 @@ def un_tour(etat, chats):
                 bil["pct"] += gain
                 cle["dernier"] = round(gain, 2)
                 apprendre(etat, trf, gain)
+                publier_resultat(etat, nom_marche, trf, sortie, motif, gain)
                 pr = trf.get("profil") or {}
                 n_, w_ = stats_profil(pr, ("m", "type", "d")) if pr else (0, 0)
                 envois.append(f"🧠 {ICONE.get(nom_marche, '')} {nom_marche} : je note ce {'TP ✅' if gain > 0 else 'SL ❌'}\n"
