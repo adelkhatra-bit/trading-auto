@@ -962,40 +962,61 @@ def traduire_clavier(kb):
         j["input_field_placeholder"] = traduire(j["input_field_placeholder"])
     return json.dumps(j)
 
+STATUT_LIB = {"🚦 🟢 J'ENTRE": ("🚦 Statut", "🟢 J'entre"), "🚦 🙅 JE N'ENTRE PAS": ("🚦 Statut", "🙅 Je n'entre pas"),
+              "🚦 ⏳ JE N'ENTRE PAS ENCORE": ("🚦 Statut", "⏳ Je n'entre pas encore"), "🚦 🟢 ON RESTE EN POSITION": ("🚦 Statut", "🟢 On reste en position"),
+              "🚦 🟢 I'M ENTERING": ("🚦 Status", "🟢 I'm entering"), "🚦 🙅 I'M NOT ENTERING": ("🚦 Status", "🙅 I'm not entering"),
+              "🚦 ⏳ NOT ENTERING YET": ("🚦 Status", "⏳ Not entering yet"), "🚦 🟢 WE STAY IN": ("🚦 Status", "🟢 We stay in")}
+
 def mise_en_forme(t):
-    """Tous les messages rangés pareil : titre seul en haut, puis UNE info par ligne, sans espaces en trop."""
+    """Tous les messages rangés pareil : le titre au-dessus, l'info en dessous, une ligne vide entre chaque bloc."""
     if not isinstance(t, str) or not t:
         return t
     lignes = t.split("\n")
-    if " — " in lignes[0] and len(lignes[0]) > 22:
+    titre2 = " — " in lignes[0]
+    if titre2:
         g, d_ = lignes[0].split(" — ", 1)
-        lignes = [g.strip() + " —", d_.strip()] + lignes[1:]
-    out = []
+        lignes = [g.strip(), d_.strip()] + lignes[1:]
+    plat = []
     for l in lignes:
         l = re.sub(r" {2,}", " ", l.strip())
         if " • " in l and l.count("≈") >= 2:          # « entrée ≈ X • SL ≈ Y • TP1 ≈ Z » → une info par ligne
             parts = [x.strip() for x in l.split(" • ") if x.strip()]
-            out += [parts[0]] + [("🛑 " if x.startswith("SL") else "💰 " if x.startswith("TP") else "🟨 " if x.lower().startswith(("entrée", "zone")) else "") + x
-                                 for x in parts[1:]]
-        elif l or (out and out[-1]):
-            out.append(l)
-    while out and not out[-1]:
-        out.pop()
+            plat += [parts[0]] + [("🛑 " if x.startswith("SL") else "💰 " if x.startswith("TP") else "🟨 " if x.lower().startswith(("entrée", "zone")) else "") + x
+                                  for x in parts[1:]]
+        else:
+            plat.append(l)
     # Le statut (j'entre / je n'entre pas + TP visé) passe TOUT EN HAUT, juste sous le titre
-    STATUTS = ("🚦 🟢 J'ENTRE", "🚦 🙅 JE N'ENTRE PAS", "🚦 ⏳ JE N'ENTRE PAS ENCORE", "🚦 🟢 I'M ENTERING", "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ NOT ENTERING YET")
-    i = next((k for k, l in enumerate(out) if l in STATUTS), None)
-    if i is not None and i > 2:
-        bloc = [out[i]] + ([out[i + 1]] if i + 1 < len(out) and out[i + 1].startswith("💰 T") else [])
-        reste = out[:i] + out[i + len(bloc):]
-        tete = 2 if reste and reste[0].endswith("—") else 1
-        out = reste[:tete] + bloc + reste[tete:]
-    return "\n".join(out)
+    i = next((k for k, l in enumerate(plat) if l in STATUT_LIB), None)
+    if i is not None and i > 1:
+        bloc = [plat[i]] + ([plat[i + 1]] if i + 1 < len(plat) and plat[i + 1].startswith("💰 T") else [])
+        reste = plat[:i] + plat[i + len(bloc):]
+        tete = 2 if titre2 else 1
+        plat = reste[:tete] + bloc + reste[tete:]
+    # Titre au-dessus / info en dessous
+    out = []
+    for k, l in enumerate(plat):
+        if not l:
+            if out and out[-1]:
+                out.append("")
+            continue
+        if l in STATUT_LIB:
+            out += (["", *STATUT_LIB[l], ""] if out and out[-1] else [*STATUT_LIB[l], ""])
+            continue
+        mt = re.search(r" ?: | ≈ ", l)
+        if mt and not l.startswith(("ℹ️", "RSI")):
+            g, d_ = l[:mt.start()], l[mt.end():]
+            if 2 < len(g) <= 34 and d_.strip():
+                if out and out[-1]:
+                    out.append("")
+                out += [g.strip(), ("≈ " if "≈" in mt.group() else "") + d_.strip(), ""]
+                continue
+        if l.endswith(" :") or l.endswith(":"):
+            l = l.rstrip(" :")
+        out.append(l)
+    txt = "\n".join(out)
+    return re.sub(r"\n{3,}", "\n\n", txt).strip()
 
 def telegram(methode, **params):
-    if methode in ("sendMessage", "editMessageText", "sendPhoto"):
-        for k in ("text", "caption"):
-            if k in params:
-                params[k] = mise_en_forme(params[k])
     if methode in ("sendMessage", "editMessageText", "sendPhoto") and str(params.get("chat_id")) in LANG_EN:
         if "text" in params:
             params["text"] = traduire(params["text"])
@@ -1003,6 +1024,10 @@ def telegram(methode, **params):
             params["caption"] = traduire(params["caption"])
         if params.get("reply_markup"):
             params["reply_markup"] = traduire_clavier(params["reply_markup"])
+    if methode in ("sendMessage", "editMessageText", "sendPhoto"):      # traduit d'abord, rangé ensuite
+        for k in ("text", "caption"):
+            if k in params:
+                params[k] = mise_en_forme(params[k])
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
     return http_json(url, urllib.parse.urlencode(params).encode())
 
