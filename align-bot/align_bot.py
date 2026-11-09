@@ -4,6 +4,11 @@ Prix gratuits : BTC = Kraken XBTUSD, Gold = XAUUSD spot (bougies COMEX Yahoo rec
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
 import json, os, re, time, urllib.request, urllib.error, urllib.parse, datetime
 from zoneinfo import ZoneInfo
+import sys
+try:
+    sys.stdout.reconfigure(line_buffering=True)   # les logs GitHub s’affichent tout de suite
+except Exception:
+    pass
 PARIS = ZoneInfo("Europe/Paris")
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
@@ -573,7 +578,7 @@ def plan_cassure(r, d):
     t2 = loin[0] if loin else (e + d * risque * 5, "projection 5 x le risque")
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
-                src="cassure 15 min", za=e, zb=e, niveau=L, t15=b[-1]["t"])
+                src="cassure 15 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=heure(b[-1]["t"]), sl_ut="15 min")
 
 def ligne_cassure(r, d):
     L = niveau_cassure(r, d)
@@ -614,7 +619,7 @@ def verdict(r, cle):
         sens = "⬆️ ACHAT" if tr["d"] == 1 else "⬇️ VENTE"
         prog = tr["d"] * (p - tr["e"]) / max(abs(tr["tp1"] - tr["e"]), 1e-9)
         if tr["statut"] == "entree" and prog < 0.25 and not tr.get("tard"):
-            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {'SOUS la mèche du dernier creux' if tr['d'] == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n🙅 Jamais pile sur la mèche\n📍 Repère prix : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
+            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {meche_sl(tr)}\n🙅 Jamais pile sur la mèche\n📍 Repère prix : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
         return ("🔴🔴 N'ENTRE PAS", f"⏰ Trop tard : la position {sens} est déjà partie\n⏳ J'attends le prochain setup")
     if r.get("annonce"):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
@@ -747,7 +752,9 @@ TRAD = {
 "Résistance": "Resistance", "Plan annulé": "Plan cancelled", "Les unités de temps se retournent": "Timeframes are turning",
 "✂️ Je coupe ma position": "✂️ I'm closing my position", "News dans": "News in", "🔒 Mets ton SL à BE (prix d'entrée)": "🔒 Move your SL to BE (entry price)",
 "✂️ Le trade n'avance pas": "✂️ The trade isn't moving", "✂️ Je coupe avant la news": "✂️ Closing before the news",
-"🔁 Mets ton SL à BE (ton prix d'entrée)": "🔁 Move your SL to BE (your entry price)",
+"🔁 Mets ton SL à BE (ton prix d'entrée)": "🔁 Move your SL to BE (your entry price)", "a CLÔTURÉ bien au-dessus de ton entrée": "CLOSED well above your entry", "a CLÔTURÉ bien en dessous de ton entrée": "CLOSED well below your entry",
+"🕯 La bougie 15 min de": "🕯 The 15 min candle at", ": MAINTENANT, à la clôture de la bougie de rejet": ": NOW, at the close of the rejection candle", "🕯 Repère la mèche basse": "🕯 Find the low wick", "🕯 Repère la mèche haute": "🕯 Find the high wick",
+"💥 La bougie 15 min a CLÔTURÉ au-delà du niveau": "💥 The 15 min candle CLOSED beyond the level", ": on protège sans se faire sortir au retest": ": we protect without being stopped on the retest",
 "🛡 Comme ça, plus aucune perte possible": "🛡 This way, no loss possible", "🎯 On laisse courir vers le TP": "🎯 We let it run to TP",
 "🕯 Repère la mèche du dernier": "🕯 Find the wick of the last", "creux": "low", "sommet": "high",
 "⬆️ Monte": "⬆️ Raise", "⬇️ Descends": "⬇️ Lower", "ton SL un peu": "your SL a little", "cette mèche": "this wick",
@@ -755,7 +762,7 @@ TRAD = {
 "💰 Ton gain est protégé": "💰 Your profit is protected", "🛡 Ta perte possible est réduite": "🛡 Your possible loss is reduced",
 ": reste cool": ": stay cool", "🌬 Le marché respire": "🌬 The market is breathing", "🕯 Il peut revenir un peu, c'est normal": "🕯 It may pull back a bit, that's normal",
 "🛑 Ne touche pas ton SL": "🛑 Don't touch your SL",
-"SOUS la mèche du dernier creux": "BELOW the wick of the last low", "AU-DESSUS de la mèche du dernier sommet": "ABOVE the wick of the last high",
+"SOUS la mèche du dernier creux": "BELOW the wick of the last low", "SOUS la mèche basse": "BELOW the low wick", "AU-DESSUS de la mèche haute": "ABOVE the high wick", "• bougie 15 min de": "• 15 min candle at", "• bougie 5 min de": "• 5 min candle at", "(bougie de cassure)": "(breakout candle)", "AU-DESSUS de la mèche du dernier sommet": "ABOVE the wick of the last high",
 "la mèche du dernier creux": "the wick of the last low", "la mèche du dernier sommet": "the wick of the last high",
 "🛑 SL un peu": "🛑 SL a little", "SOUS": "BELOW", "AU-DESSUS de": "ABOVE", "sous la": "below the", "au-dessus du": "above the",
 "résistance": "resistance", "support": "support",
@@ -1076,7 +1083,21 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
         with urllib.request.urlopen(req, timeout=25) as rep_:
             txt = json.loads(rep_.read().decode())["choices"][0]["message"]["content"].strip()
     except Exception as ex:
-        print("ia", ex); return ""
+        corps_err = ""
+        try:
+            corps_err = ex.read().decode()[:300]
+        except Exception:
+            pass
+        etat["ia_err"] = f"{ex} {corps_err}".strip()
+        print("ia", etat["ia_err"], flush=True)
+        if time.time() - etat.get("ia_err_t", 0) > 21600:        # le propriétaire est prévenu (1 fois / 6 h)
+            etat["ia_err_t"] = time.time()
+            for pid in proprio(etat):
+                try:
+                    _envoi_sur(pid, text=f"⚠️ IA ALIGN indisponible\n{etat['ia_err'][:250]}")
+                except Exception:
+                    pass
+        return ""
     for k in list(compte):
         if k != jour:
             compte.pop(k)
@@ -1124,7 +1145,7 @@ def inscrire_auto(etat, cid, m):
     _envoi_sur(cid, reply_markup=CLAVIER, text=(
         f"✅ Noté ! Prochaine position {ICONE.get(m, '')} {m}\n{SENS[d]}\n"
         "📲 Place ton ordre limite dans la zone 🟨 (vue 15 min)\n"
-        f"🛑 SL un peu {'SOUS la mèche du dernier creux' if d == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
+        f"🛑 SL un peu {meche_sl(dict(o or {}, d=d))}\n"
         + (f"📍 Repère prix : zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))} • SL ≈ {px(o['sl'])}\n" if o else "")
         + "🤖 Dès que j'entre, tu es compté dedans automatiquement\n🎯 Le coach te suit : SL à BE, SL remonté, TP\n"
           "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme"))
@@ -1167,7 +1188,7 @@ def entrer_inscrits(etat, m, tr, chats=()):
         _envoi_sur(cid, text=(
             f"🤖 {ICONE.get(m, '')} {m} : JE SUIS RENTRÉ, SUIS-MOI\n{SENS[tr['d']]}\n"
             "👀 Mets-toi en vue 15 minutes\n"
-            f"🛑 SL un peu {'SOUS la mèche du dernier creux' if tr['d'] == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
+            f"🛑 SL un peu {meche_sl(tr)}\n"
             f"📍 Repère prix : entrée ≈ {px(tr['e'])} • SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n"
             "🛑 Mets ton SL TOUT DE SUITE\n🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"),
             reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]]}))
@@ -1845,6 +1866,24 @@ def calendrier(etat, maintenant):
             print("calendrier", ex)
     return cache.get("ev", [])
 
+def meche_sl(o):
+    """Quelle mèche regarder pour le SL : la bougie précise (unité de temps + heure de Paris, comme sur TradingView)."""
+    d = o.get("d", 1); h = o.get("sl_h")
+    if not h:
+        return "SOUS la mèche du dernier creux" if d == 1 else "AU-DESSUS de la mèche du dernier sommet"
+    return (f"SOUS la mèche basse • bougie {o.get('sl_ut', '15 min')} de {h}" if d == 1 else
+            f"AU-DESSUS de la mèche haute • bougie {o.get('sl_ut', '15 min')} de {h}")
+
+def bougie_protegee(b, d, sl):
+    """La bougie dont la mèche est protégée par le SL : le plus bas (LONG) / plus haut (SHORT) juste devant le SL."""
+    if d == 1:
+        c = [x for x in b if x["l"] >= sl] or b
+        x = min(c, key=lambda y: y["l"])
+    else:
+        c = [x for x in b if x["h"] <= sl] or b
+        x = max(c, key=lambda y: y["h"])
+    return heure(x["t"])
+
 def heure(ts):
     return datetime.datetime.fromtimestamp(ts, PARIS).strftime("%H:%M")
 
@@ -1962,11 +2001,12 @@ def fmt_trade(m, tr, p=None):
             f"⏱ Vue 15 minutes\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
             f"1️⃣ 👀 Mets-toi en vue 15 minutes\n"
-            + (f"2️⃣ 🛑 SL : un tout petit peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de la bougie de cassure\n"
+            + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (bougie de cassure)\n"
                f"3️⃣ 🟨 Entrée {SENS[d]} : à la clôture de la bougie 15 min qui casse ≈ {px(tr.get('niveau', tr['e']))}\n"
                if tr.get("src") == "cassure 15 min" else
-               f"2️⃣ 🛑 SL : un tout petit peu {'SOUS' if d == 1 else 'AU-DESSUS de'} {meche}\n"
-               f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n")
+               f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)}\n"
+               (f"3️⃣ 🟨 Entrée {SENS[d]} : MAINTENANT, à la clôture de la bougie de rejet ({tr.get('sl_ut', '5 min')} de {tr.get('sl_h', '')})\n" if tr.get("rejet") else
+                f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n"))
             + (f"4️⃣ 💰 TP1 : juste {'sous la' if d == 1 else 'au-dessus du'} {tr['n1']} (regarde en vue {vue(tr['n1'])})\n"
                if "projection" not in tr["n1"] else f"4️⃣ 💰 TP1 : environ {tr['rr']:.1f} fois ton risque\n")
             + (f"5️⃣ 🏁 TP2 : {tr['n2']} (vue {vue(tr['n2'])})\n" if "projection" not in tr["n2"] else "5️⃣ 🏁 TP2 : on laisse courir, je te guide\n")
@@ -2065,7 +2105,7 @@ def point_entree(r, d, p):
         else: za = min(zb, max(za, e))
     risque = max(abs(e - sl), 1e-9)
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
-                za=za, zb=zb, f50=z50, f618=z618, f786=z786)
+                za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(b, d, sl), sl_ut="15 min")
 
 def coach(etat, m, r, cle):
     """Agent individuel : messages courts envoyés UNIQUEMENT aux abonnés qui ont dit « Je suis rentré »."""
@@ -2144,25 +2184,31 @@ def gerer_stop(etat, m, r, tr, c):
     if gain <= 0:
         return
     # Niveaux franchis entre l'entrée et le prix : le stop se cache juste derrière le plus proche du prix
-    murs = [v for v, n in r["niveaux"] if n in ("15m", "1h", "4h") and d * (p - v) > 0.6 * a and d * (v - (e - d * 0.6 * a)) > 0]
+    # Pas de manque à gagner : on ne bouge le SL que quand une bougie 15 min a CLÔTURÉ au-delà (pas sur une mèche),
+    # et on le place assez loin derrière le niveau cassé pour survivre au retest (le prix revient souvent tester la cassure)
+    clot = r["b15"][-1]["c"]
+    murs = [v for v, n in r["niveaux"] if n in ("15m", "1h", "4h") and d * (p - v) > 0.6 * a and d * (clot - v) > 0.3 * a
+            and d * (v - (e - d * 0.6 * a)) > 0]
     nouveau, pourquoi = None, ""
     if murs:
         v = max(murs) if d == 1 else min(murs)
-        n = next(n for vv, n in r["niveaux"] if vv == v)
-        nouveau, pourquoi = v - d * 0.3 * a, "mèche"
-    if gain >= 0.8 * risque and (nouveau is None or d * (nouveau - e) < 0) and not any(abs(v - e) < 0.6 * a for v in murs):
+        nouveau, pourquoi = v - d * 0.5 * a, "mèche"
+    if gain >= 1.2 * risque and d * (clot - e) >= 1.0 * a and (nouveau is None or d * (nouveau - e) < 0) \
+            and not any(abs(v - e) < 0.6 * a for v in murs):
         nouveau, pourquoi = e + d * 0.05 * a, "be"
     if nouveau is not None and d * (nouveau - sl) > 0.3 * a and d * (p - nouveau) > 0.5 * a:
         pos["sl_conseil"] = nouveau
         if pourquoi == "be" or abs(nouveau - e) < 0.2 * a:
             texte = (f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
                      "🔁 Mets ton SL à BE (ton prix d'entrée)\n"
+                     f"🕯 La bougie 15 min de {heure(r['b15'][-1]['t'])} a CLÔTURÉ bien {'au-dessus' if d == 1 else 'en dessous'} de ton entrée\n"
                      "🛡 Comme ça, plus aucune perte possible\n"
                      "🎯 On laisse courir vers le TP")
         else:
             texte = (f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
                      "👀 Mets-toi en vue 15 minutes\n"
-                     f"🕯 Repère la mèche du dernier {'creux' if d == 1 else 'sommet'}\n"
+                     f"🕯 Repère la mèche {'basse' if d == 1 else 'haute'} • bougie 15 min de {bougie_protegee(r['b15'][-24:], d, nouveau)}\n"
+                     f"💥 La bougie 15 min a CLÔTURÉ au-delà du niveau ≈ {px(v)} : on protège sans se faire sortir au retest\n"
                      f"{'⬆️ Monte' if d == 1 else '⬇️ Descends'} ton SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} cette mèche\n"
                      "🙅 Jamais pile sur la mèche : elle peut être retouchée\n"
                      + ("💰 Ton gain est protégé" if d * (nouveau - e) > 0 else "🛡 Ta perte possible est réduite")
@@ -2215,7 +2261,7 @@ def manipulation(out, m, r, cle):
         l += [f"✅ Dans le sens de la tendance : {SENS[dm]}",
               f"🎯 Point d'entrée visé : retour vers ≈ {px(niv)} ({'ancien plus bas' if dm == 1 else 'ancien plus haut'} 15 min)",
               f"⭐ Encore mieux : milieu de la mèche ≈ {px(mid)}",
-              f"🛑 SL un peu {'SOUS' if dm == 1 else 'AU-DESSUS de'} la mèche ≈ {px(meche - dm * 0.2 * a)}",
+              f"🛑 SL un peu {'SOUS' if dm == 1 else 'AU-DESSUS de'} la mèche ≈ {px(meche - dm * 0.2 * a)} • bougie 15 min de {heure(x['t'])}",
               "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE (5 / 15 min)",
               "🔔 Je t'envoie 🟢 J'ENTRE MAINTENANT au bon moment"]
     elif r["confirme"] == -dm:
@@ -2275,8 +2321,10 @@ def agent(m, r, cle, ferme):
         # Le prix approche du niveau de cassure : on l'annonce AVANT (1 fois par niveau)
         if len(r["b15"]) >= 22 and not r.get("annonce"):
             L = niveau_cassure(r, d)
-            if 0 <= d * (L - p) <= 0.35 * r["atr"] and abs(L - cle.get("cassure_vue", 0)) > 0.2 * r["atr"]:
-                cle["cassure_vue"] = L
+            nouveau_niv = abs(L - cle.get("cassure_vue", 0)) > 1.0 * r["atr"]
+            if 0 <= d * (L - p) <= 0.35 * r["atr"] and (nouveau_niv or (abs(L - cle.get("cassure_vue", 0)) > 0.2 * r["atr"]
+                                                                     and time.time() - cle.get("cassure_vue_t", 0) > 1800)):
+                cle["cassure_vue"] = L; cle["cassure_vue_t"] = time.time()
                 out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} CASSURE EN VUE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n"
                             f"👀 Le prix approche ≈ {px(L)} ({'plus haut' if d == 1 else 'plus bas'} des dernières bougies 15 min)\n"
                             f"🕯 Si une bougie 15 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} → j'entre {SENS[d]}\n"
@@ -2349,7 +2397,7 @@ def agent(m, r, cle, ferme):
             cle["pret_t"] = time.time()
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
                 out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
-                        f"🛑 Dès que tu es dedans : SL un peu {'SOUS la mèche du dernier creux' if d == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
+                        f"🛑 Dès que tu es dedans : SL un peu {meche_sl(o)}\n"
                         f"💰 TP1 juste {'sous la' if d == 1 else 'au-dessus du'} {o['n1']}\n🙅 Jamais de position sans SL\n🚦 Feu vert 🟢 dans un instant",
                         bouton_auto(m)))
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
@@ -2407,7 +2455,8 @@ def agent(m, r, cle, ferme):
                     out.append(f"🛑 {ICONE.get(m, '')} {m} : la mèche de rejet est trop grande (SL trop loin)\n😎 Je ne prends pas ce risque, j'attends mieux")
                     cle.pop("touche_t", None)
                     return out
-                o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True)
+                o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True,
+                         sl_h=heure(bj["t"]), sl_ut="15 min" if bj is r["b15"][-1] else "5 min")
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 tr["profil"] = profil_trade(m, tr, r)
                 non, n_, w_ = memoire_refuse(tr["profil"])
