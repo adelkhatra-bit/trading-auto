@@ -551,6 +551,18 @@ def rejet(r, d, e, a):
                 return b
     return None
 
+def objectifs(r, d, e, risque):
+    """TP1 atteignable (au plus 3 x le risque) puis TP2 sur le grand niveau 4h / Daily. TP2 toujours PLUS LOIN que TP1."""
+    a = r["atr"]
+    cibles = sorted([z for z in r["grosses"] if z[1] in ("4h", "Daily") and d * (z[0] - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+    proj3 = (e + d * risque * 3, "projection 3 x le risque")
+    if cibles and d * (cibles[0][0] - proj3[0]) > 0.5 * a:
+        return proj3, cibles[0]                        # grand niveau loin : on sécurise d'abord à 3 x le risque
+    t1 = cibles[0] if cibles else (e + d * risque * 2.5, "projection 2,5 x le risque")
+    loin = [z for z in cibles if d * (z[0] - t1[0]) >= 2 * a]
+    t2 = loin[0] if loin else (t1[0] + d * max(risque * 2, 2 * a), "projection : on laisse courir")
+    return t1, t2
+
 def niveau_cassure(r, d):
     """Niveau à casser (vue 15 min) : le plus haut (LONG) ou le plus bas (SHORT) des 20 dernières bougies 15 min."""
     b = r["b15"][-21:-1]
@@ -572,10 +584,7 @@ def plan_cassure(r, d):
     if abs(e - sl) < max(a, e * 0.0008):
         sl = e - d * max(a, e * 0.0008)
     risque = abs(e - sl)
-    cibles = sorted([z for z in r["grosses"] if z[1] in ("4h", "Daily") and d * (z[0] - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
-    t1 = cibles[0] if cibles else (e + d * risque * 2.5, "projection 2,5 x le risque")
-    loin = [z for z in cibles if d * (z[0] - t1[0]) >= 2 * a]
-    t2 = loin[0] if loin else (e + d * risque * 5, "projection 5 x le risque")
+    t1, t2 = objectifs(r, d, e, risque)
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
                 src="cassure 15 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=heure(b[-1]["t"]), sl_ut="15 min")
@@ -666,7 +675,7 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -739,7 +748,7 @@ TRAD = {
 "4️⃣ 💰 TP1 : juste": "4️⃣ 💰 TP1: just", "4️⃣ 💰 TP1 : environ": "4️⃣ 💰 TP1: about", "fois ton risque": "times your risk",
 "5️⃣ 🏁 TP2 : on laisse courir, je te guide": "5️⃣ 🏁 TP2: we let it run, I'll guide you", "5️⃣ 🏁 TP2 :": "5️⃣ 🏁 TP2:",
 "💡 TP1 touché → SL à BE": "💡 TP1 hit → SL to BE", "(regarde en vue": "(look at the chart", "(vue": "(chart",
-"📍 Repère prix (XAUUSD / Kraken BTC) :": "📍 Price guide (XAUUSD / Kraken BTC):", "📍 Repère prix : SL ≈": "📍 Price guide: SL ≈",
+"📍 Repère prix": "📍 Price guide", "📍 Repère prix : SL ≈": "📍 Price guide: SL ≈",
 "📍 Repère prix   ≈": "📍 Price guide   ≈", "PRIX ACTUEL": "CURRENT PRICE", "ENTRÉE haut": "ENTRY top", "ENTRÉE bas": "ENTRY bottom", "ENTRÉE": "ENTRY",
 "Risque": "Risk", "Gain   ": "Reward ",
 "ℹ️ Ma position perso • pas un conseil • risque de perte": "ℹ️ My personal position • not advice • risk of loss",
@@ -2185,7 +2194,7 @@ def fmt_trade(m, tr, p=None):
             + (f"5️⃣ 🏁 TP2 : {tr['n2']} (vue {vue(tr['n2'])})\n" if "projection" not in tr["n2"] else "5️⃣ 🏁 TP2 : on laisse courir, je te guide\n")
             + 
             f"💡 TP1 touché → SL à BE\n\n"
-            f"📍 Repère prix (XAUUSD / Kraken BTC) :\n{echelle}\n\n"
+            f"📍 Repère prix {m} ({'XAUUSD spot' if m == 'GOLD' else 'BTC/USD'}) :\n{echelle}\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
 
 def vue(nom_niveau):
@@ -2256,10 +2265,7 @@ def point_entree(r, d, p):
         sl = e - d * max(a, e * 0.0008)
     risque = abs(e - sl)
     # Grands objectifs : niveaux 4h / Daily uniquement (on vise les grosses unités de temps)
-    cibles = sorted([z for z in r["grosses"] if z[1] in ("4h", "Daily") and d * (z[0] - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
-    t1 = cibles[0] if cibles else (e + d * risque * 2.5, "projection 2,5 x le risque")
-    loin = [z for z in cibles if d * (z[0] - t1[0]) >= 2 * a]
-    t2 = loin[0] if loin else (e + d * risque * 5, "projection 5 x le risque")
+    t1, t2 = objectifs(r, d, e, risque)
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     # Zone d'entrée : du retracement 50 % jusqu'au 78,6 %, jamais à moins de 25 % du risque avant le stop
     if d == -1:
@@ -2530,7 +2536,7 @@ def agent(m, r, cle, ferme):
                 out.append(f"🧠 {ICONE.get(m, '')} {m} : cassure vue, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
                 return out
             cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle["parti"] = False; cle.pop("ordre", None)
-            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}"
+            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}"
                         f"🕯 La bougie 15 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
                         f"🛑 SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de cette bougie\n\n"
                         f"{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
@@ -2705,7 +2711,7 @@ def agent(m, r, cle, ferme):
                           ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
@@ -2719,6 +2725,16 @@ def agent(m, r, cle, ferme):
         return out
 
     # ── Trade en cours ──
+    if tr["statut"] == "entree" and tr["d"] * (tr["tp2"] - tr["tp1"]) <= 0 and not tr.get("tp_corrige"):
+        # TP2 avant TP1 (ancienne version) : on remet de l'ordre — TP1 atteignable, TP2 sur le grand niveau
+        (n1v, n1n), (n2v, n2n) = objectifs(r, tr["d"], tr["e"], abs(tr["e"] - tr["sl"]))
+        nm_ = lambda n: (("résistance " if tr["d"] == 1 else "support ") + n) if n in ("1h", "4h", "Daily") else n
+        n1n, n2n = nm_(n1n), nm_(n2n)
+        tr.update(tp1=n1v, n1=n1n, tp2=n2v, n2=n2n, tp_corrige=True, rr=abs(n1v - tr["e"]) / max(abs(tr["e"] - tr["sl"]), 1e-9))
+        for c_, pos in tr.get("qui", {}).items():
+            if isinstance(pos, dict):
+                pos["tp1"] = n1v
+        out.append(f"🎯 {ICONE.get(m, '')} {m} : objectifs remis dans l'ordre\n🚦 🟢 ON RESTE EN POSITION\n💰 TP1 ≈ {px(n1v)} ({n1n})\n🏁 TP2 ≈ {px(n2v)} ({n2n})\n🛑 SL inchangé ≈ {px(tr['sl'])}")
     d, e, sl, t1, t2 = tr["d"], tr["e"], tr["sl"], tr["tp1"], tr["tp2"]
     touche_sl = (lo <= sl) if d == 1 else (hi >= sl)
     touche_t1 = (hi >= t1) if d == 1 else (lo <= t1)
