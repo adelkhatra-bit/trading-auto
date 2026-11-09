@@ -372,7 +372,9 @@ OFFERT_JOURS = int(os.environ.get("OFFERT_JOURS", "7"))   # 1 signal complet off
 POSITIONS_GRATUITES = os.environ.get("POSITIONS_GRATUITES", "1") == "1"   # positions gratuites pour tous, on vend l'indicateur
 LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script TradingView « invite-only » (à remplir après publication)
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
-ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
+ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # (ancien réglage, gardé pour compatibilité)
+DUREE_SEC = int(os.environ.get("DUREE_SEC", str(ECOUTE_SEC)))   # durée d'un lancement (5 h 40 sur GitHub = bot toujours allumé)
+PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "60"))   # une analyse complète BTC + Gold toutes les 60 s
 
 def marche_demande(txt):
     """« Analyse BTC » → BTC, « Analyse Gold » → GOLD, « Analyse » seul → les deux (None)."""
@@ -1258,20 +1260,8 @@ def agent(m, r, cle, ferme):
     return out
 
 # ───────── Programme ─────────
-def main():
-    etat = {}
-    if os.path.exists(ETAT_FICHIER):
-        etat = json.load(open(ETAT_FICHIER))
-    chats = set(etat.get("chats", []))
-    if os.environ.get("TELEGRAM_CHAT_ID"):
-        chats.add(os.environ["TELEGRAM_CHAT_ID"].strip())
-    if "proprio" not in etat:           # les téléphones déjà inscrits = le propriétaire (accès gratuit et permanent)
-        etat["proprio"] = sorted(chats)
-    if POSITIONS_GRATUITES and etat.get("prospects"):
-        chats |= set(etat["prospects"]); etat["prospects"] = []
-
-    # Messages reçus et boutons
-    debut = time.time()
+def un_tour(etat, chats):
+    """Un tour complet : messages reçus, analyse BTC + Gold, envois, jauges, sauvegarde."""
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
@@ -1380,15 +1370,42 @@ def main():
                 maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
     print(f"{len(envois)} signal(s) envoyé(s) à {len(chats)} téléphone(s)")
     json.dump(dict(etat, chats=sorted(chats)), open(ETAT_FICHIER, "w"))
-    # Écoute en continu jusqu'au prochain lancement : réponses presque immédiates aux boutons
-    while TOKEN and time.time() - debut < ECOUTE_SEC:
-        reste = int(ECOUTE_SEC - (time.time() - debut))
+
+def main():
+    etat = {}
+    if os.path.exists(ETAT_FICHIER):
+        etat = json.load(open(ETAT_FICHIER))
+    chats = set(etat.get("chats", []))
+    if os.environ.get("TELEGRAM_CHAT_ID"):
+        chats.add(os.environ["TELEGRAM_CHAT_ID"].strip())
+    if "proprio" not in etat:           # les téléphones déjà inscrits = le propriétaire (accès gratuit et permanent)
+        etat["proprio"] = sorted(chats)
+    if POSITIONS_GRATUITES and etat.get("prospects"):
+        chats |= set(etat["prospects"]); etat["prospects"] = []
+
+    # Bot toujours allumé : un tour toutes les PAUSE_SEC secondes pendant DUREE_SEC,
+    # et entre deux tours il écoute Telegram en continu (réponse immédiate aux boutons).
+    debut = time.time()
+    while True:
         try:
-            maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=max(1, min(50, reste))).get("result", [])
+            un_tour(etat, chats)
         except Exception as ex:
-            print("ecoute", ex); break
-        for cid, mq in traiter(etat, chats, maj):
-            envoyer_analyse(cid, etat, mq)
+            print("tour", ex)
+        prochain = time.time() + PAUSE_SEC
+        while TOKEN and time.time() < min(prochain, debut + DUREE_SEC):
+            reste = int(min(prochain, debut + DUREE_SEC) - time.time())
+            try:
+                maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=max(1, min(50, reste))).get("result", [])
+            except Exception as ex:
+                print("ecoute", ex); time.sleep(5); continue
+            for cid, mq in traiter(etat, chats, maj):
+                envoyer_analyse(cid, etat, mq)
+            etat["chats"] = sorted(chats)
+            json.dump(etat, open(ETAT_FICHIER, "w"))
+        if time.time() >= debut + DUREE_SEC:
+            break
+        if not TOKEN:
+            time.sleep(max(0, prochain - time.time()))
     etat["chats"] = sorted(chats)
     json.dump(etat, open(ETAT_FICHIER, "w"))
 
