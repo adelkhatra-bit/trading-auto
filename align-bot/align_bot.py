@@ -668,7 +668,16 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "🕯 Vue 15 min : la bougie de": "🕯 15 min view: the candle at",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
+": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
+"🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
+"🔎 Je calcule la zone d'entrée": "🔎 Calculating the entry zone", "⏳ Quelques instants": "⏳ A few moments",
+"🕯 Prix dans la zone : j'attends la mèche de rejet + clôture": "🕯 Price in the zone: waiting for the rejection wick + close", "⚡ Décision à la clôture de la bougie 15 min de": "⚡ Decision at the close of the 15 min candle at",
+"🟨 Le prix approche de la zone": "🟨 Price is approaching the zone", "⏳ Arrivée estimée": "⏳ Estimated arrival", "⏳ Encore loin : ça peut prendre des heures": "⏳ Still far: it may take hours",
+"🕯 Prochaine clôture 15 min dans": "🕯 Next 15 min close in", "⌛ Délai max : encore": "⌛ Max wait: still", "🔄 Mis à jour à": "🔄 Updated at",
+"4 h sans entrée": "4 h without entry", "😎 La position n'est pas venue : pas de mauvaise entrée": "😎 The position didn't come: no bad entry", "🎯 Réappuie sur le bouton pour la prochaine": "🎯 Tap the button again for the next one",
+"⏱ Ton chrono en direct arrive juste en dessous 👇": "⏱ Your live timer is right below 👇", "🔄 Démarrage…": "🔄 Starting…", "🕯 Vue 15 min : la bougie de": "🕯 15 min view: the candle at",
 "a piqué SOUS le dernier plus bas": "spiked BELOW the last low", "a piqué AU-DESSUS du dernier plus haut": "spiked ABOVE the last high",
 "🎣 Les stops viennent d'être pris et le prix revient": "🎣 Stops were just taken and price is coming back", "🙅 N'entre pas maintenant": "🙅 Don't enter now",
 "⏳ J'attends la CLÔTURE de cette bougie": "⏳ Waiting for this candle's CLOSE", "pour confirmer la manipulation": "to confirm the manipulation",
@@ -1166,6 +1175,80 @@ def markup_analyse(etat, m, r):
         return bouton_auto(m)
     return CLAVIER
 
+DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
+CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
+
+def mmss(sec):
+    sec = max(0, int(sec)); return f"{sec // 60} min {sec % 60:02d} s" if sec < 3600 else f"{sec // 3600} h {sec % 3600 // 60:02d}"
+
+def chrono_txt(m, r, cle, t0):
+    """Chronomètre en direct après 🎯 : où on en est, dans combien de temps, et le prochain rendez-vous (clôture 15 min)."""
+    now = time.time(); p = r["m1"][-1]["c"]; d = r["confirme"]; a = r["atr"]
+    cloture = r["b15"][-1]["t"] + 1800 if r["b15"] else now      # fin de la bougie 15 min en cours
+    tr = cle.get("trade"); o = cle.get("ordre")
+    l = [f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}   {px(p)}",
+         f"🎯 Inscrit depuis {mmss(now - t0)}"]
+    if tr:
+        l += [f"✅ ENTRÉ   {SENS[tr['d']]}", "🎯 Le coach te suit jusqu'au TP"]
+        return "\n".join(l)
+    if r.get("annonce"):
+        etape, estim = "⏸ News dans moins de 15 min : pause", "⏳ Reprise juste après la news"
+    elif not d:
+        maj, n_ok = alignement(r)
+        etape, estim = f"1️⃣/4 🧭 Alignement {n_ok}/3 : j'attends 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné"
+    elif etire(r, d):
+        etape, estim = "1️⃣/4 🚀 Le marché est parti : j'attends le repli", f"↩️ Repli visé ≈ {px(r['ema15'])}"
+    elif not o:
+        etape, estim = "2️⃣/4 🔎 Je calcule la zone d'entrée", "⏳ Quelques instants"
+    elif cle.get("attente_rsi") or cle.get("attente_rejet") or cle.get("prep"):
+        etape = "4️⃣/4 🕯 Prix dans la zone : j'attends la mèche de rejet + clôture"
+        estim = f"⚡ Décision à la clôture de la bougie 15 min de {heure(cloture - 900)}"
+    else:
+        dist = abs(p - o["e"]); vit = max(a / 15, 1e-9)            # vitesse moyenne ≈ 1 ATR par 15 min
+        etape = f"3️⃣/4 🟨 Le prix approche de la zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}"
+        estim = f"⏳ Arrivée estimée ≈ {max(1, round(dist / vit))} min" if dist / vit < 240 else "⏳ Encore loin : ça peut prendre des heures"
+    l += [etape, estim,
+          f"🕯 Prochaine clôture 15 min dans {mmss(cloture - now)}",
+          f"⌛ Délai max : encore {mmss(CHRONO_MAX - (now - t0))}",
+          f"🔄 Mis à jour à {heure(now)}:{datetime.datetime.fromtimestamp(now, PARIS).strftime('%S')}"]
+    return "\n".join(l)
+
+def maj_chronos(etat, m, r):
+    """Met à jour chaque chronomètre (1 fois par minute). Fin : entrée, ou délai max dépassé."""
+    ch = etat.setdefault("chrono", {}).setdefault(m, {})
+    cle = etat.get(m, {})
+    for cid, c in list(ch.items()):
+        now = time.time()
+        try:
+            if cle.get("trade") and c.get("fini") is None:
+                c["fini"] = True
+                telegram("editMessageText", chat_id=cid, message_id=c["mid"], text=chrono_txt(m, r, cle, c["t0"]))
+                ch.pop(cid, None); continue
+            if now - c["t0"] > CHRONO_MAX:
+                ch.pop(cid, None)
+                etat.setdefault("auto", {})[m] = [x for x in etat["auto"].get(m, []) if str(x) != str(cid)]
+                telegram("editMessageText", chat_id=cid, message_id=c["mid"],
+                         text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n😎 La position n'est pas venue : pas de mauvaise entrée\n🎯 Réappuie sur le bouton pour la prochaine")
+                continue
+            if now - c.get("maj", 0) >= 60:
+                c["maj"] = now
+                telegram("editMessageText", chat_id=cid, message_id=c["mid"], text=chrono_txt(m, r, cle, c["t0"]))
+        except Exception as ex:
+            if "not modified" not in str(ex):
+                print("chrono", ex)
+
+def lancer_chrono(etat, cid, m, r=None):
+    ch = etat.setdefault("chrono", {}).setdefault(m, {})
+    if str(cid) in ch:
+        return
+    t0 = time.time()
+    txt = chrono_txt(m, r, etat.get(m, {}), t0) if r else f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}\n🔄 Démarrage…"
+    try:
+        res = telegram("sendMessage", chat_id=cid, text=txt, disable_notification="true")
+        ch[str(cid)] = {"mid": res["result"]["message_id"], "t0": t0, "maj": t0}
+    except Exception as ex:
+        print("chrono", ex)
+
 def inscrire_auto(etat, cid, m):
     """L'utilisateur réserve sa place : dès que le bot entre, il est compté dedans au même prix (coach + résultats)."""
     liste = etat.setdefault("auto", {}).setdefault(m, [])
@@ -1179,7 +1262,8 @@ def inscrire_auto(etat, cid, m):
         f"🛑 SL un peu {meche_sl(dict(o or {}, d=d))}\n"
         + (f"📍 Repère prix : zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))} • SL ≈ {px(o['sl'])}\n" if o else "")
         + "🤖 Dès que j'entre, tu es compté dedans automatiquement\n🎯 Le coach te suit : SL à BE, SL remonté, TP\n"
-          "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme"))
+          "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme\n⏱ Ton chrono en direct arrive juste en dessous 👇"))
+    lancer_chrono(etat, cid, m, (DERNIERS or {}).get(m))
 
 def bot_on(etat, cid):
     return cid not in etat.get("bot_off", [])
@@ -2691,7 +2775,7 @@ def un_tour(etat, chats):
                         {"marché": nom_marche, "résultat %": round(gain, 2), "motif": motif, "profil": pr, "bilan de ce type": f"{w_}/{n_}"})
                 if t_:
                     envois.append(f"🧠 La leçon de l'IA ALIGN\n{t_}")
-        derniers[nom_marche] = r
+        derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
                                  f"📍 Prix {zone_txt(r['posD'])} Daily\n🙅 Prudence sur les 🟩 LONG\n👀 Un 🟥 SHORT ⬇️ peut se préparer"),
@@ -2746,6 +2830,10 @@ def un_tour(etat, chats):
         for nom_marche in MARCHES:
             if nom_marche in derniers:
                 maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
+                try:
+                    maj_chronos(etat, nom_marche, derniers[nom_marche])
+                except Exception as ex:
+                    print("chronos", ex)
     print(f"{len(envois)} signal(s) envoyé(s) à {len(chats)} téléphone(s)")
     json.dump(dict(etat, chats=sorted(chats)), open(ETAT_FICHIER, "w"))
 
