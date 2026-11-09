@@ -747,7 +747,7 @@ TRAD = {
 "vers la moitié de la dernière grande bougie rouge": "around the middle of the last big red candle",
 "4️⃣ 💰 TP1 : juste": "4️⃣ 💰 TP1: just", "4️⃣ 💰 TP1 : environ": "4️⃣ 💰 TP1: about", "fois ton risque": "times your risk",
 "5️⃣ 🏁 TP2 : on laisse courir, je te guide": "5️⃣ 🏁 TP2: we let it run, I'll guide you", "5️⃣ 🏁 TP2 :": "5️⃣ 🏁 TP2:",
-"💡 TP1 touché → SL à BE": "💡 TP1 hit → SL to BE", "(regarde en vue": "(look at the chart", "(vue": "(chart",
+"💡 TP1 touché → SL à BE": "💡 TP1 hit → SL to BE", "💡 BE : je te dis quand": "💡 BE: I'll tell you when", "(bougie 15 min clôturée bien au-dessus de l'entrée)": "(15 min candle closed well above the entry)", "(bougie 15 min clôturée bien en dessous de l'entrée)": "(15 min candle closed well below the entry)", "(regarde en vue": "(look at the chart", "(vue": "(chart",
 "📍 Repère prix": "📍 Price guide", "📍 Repère prix : SL ≈": "📍 Price guide: SL ≈",
 "📍 Repère prix   ≈": "📍 Price guide   ≈", "PRIX ACTUEL": "CURRENT PRICE", "ENTRÉE haut": "ENTRY top", "ENTRÉE bas": "ENTRY bottom", "ENTRÉE": "ENTRY",
 "Risque": "Risk", "Gain   ": "Reward ",
@@ -773,7 +773,7 @@ TRAD = {
 "Petite perturbation, c'est normal": "Small wobble, that's normal", "(surcharge)": "(overextended)", "🎯 Cap sur le TP": "🎯 Heading for TP",
 "⏸ Pause normale, patience": "⏸ Normal pause, be patient", "🎯 S'il casse : cap sur le TP": "🎯 If it breaks: heading for TP",
 "Résistance": "Resistance", "Plan annulé": "Plan cancelled", "Les unités de temps se retournent": "Timeframes are turning",
-"✂️ Je coupe ma position": "✂️ I'm closing my position", "News dans": "News in", "🔒 Mets ton SL à BE (prix d'entrée)": "🔒 Move your SL to BE (entry price)",
+"✂️ Je coupe ma position": "✂️ I'm closing my position", "News dans": "News in", "🔒 Mets ton SL à BE (prix d'entrée)": "🔒 Move your SL to BE (entry price)", "🔒 METS-TOI À BE": "🔒 MOVE TO BE", "🚦 🙅 JE NE SUIS PLUS EN POSITION": "🚦 🙅 I'M OUT", ": sorti à BE": ": out at BE", "🛡 Aucune perte": "🛡 No loss", "🔎 Je cherche la prochaine entrée": "🔎 Looking for the next entry", "🛑 Nouveau SL : BE": "🛑 New SL: BE", "(ton prix d'entrée)": "(your entry price)", "(prix d'entrée)": "(entry price)", "🕯 Pourquoi : la bougie 15 min de": "🕯 Why: the 15 min candle at", "a CLÔTURÉ bien au-dessus de l'entrée": "CLOSED well above the entry", "a CLÔTURÉ bien en dessous de l'entrée": "CLOSED well below the entry", "🛡 Résultat : plus aucune perte possible": "🛡 Result: no more loss possible",
 "✂️ Le trade n'avance pas": "✂️ The trade isn't moving", "✂️ Je coupe avant la news": "✂️ Closing before the news",
 "🔁 Mets ton SL à BE (ton prix d'entrée)": "🔁 Move your SL to BE (your entry price)", "a CLÔTURÉ bien au-dessus de ton entrée": "CLOSED well above your entry", "a CLÔTURÉ bien en dessous de ton entrée": "CLOSED well below your entry",
 "🕯 La bougie 15 min de": "🕯 The 15 min candle at", ": MAINTENANT, à la clôture de la bougie de rejet": ": NOW, at the close of the rejection candle", "🕯 Repère la mèche basse": "🕯 Find the low wick", "🕯 Repère la mèche haute": "🕯 Find the high wick",
@@ -965,7 +965,7 @@ def traduire_clavier(kb):
 STATUT_LIB = {"🚦 🟢 J'ENTRE": ("🚦 Statut", "🟢 J'entre"), "🚦 🙅 JE N'ENTRE PAS": ("🚦 Statut", "🙅 Je n'entre pas"),
               "🚦 ⏳ JE N'ENTRE PAS ENCORE": ("🚦 Statut", "⏳ Je n'entre pas encore"), "🚦 🟢 ON RESTE EN POSITION": ("🚦 Statut", "🟢 On reste en position"),
               "🚦 🟢 I'M ENTERING": ("🚦 Status", "🟢 I'm entering"), "🚦 🙅 I'M NOT ENTERING": ("🚦 Status", "🙅 I'm not entering"),
-              "🚦 ⏳ NOT ENTERING YET": ("🚦 Status", "⏳ Not entering yet"), "🚦 🟢 WE STAY IN": ("🚦 Status", "🟢 We stay in")}
+              "🚦 ⏳ NOT ENTERING YET": ("🚦 Status", "⏳ Not entering yet"), "🚦 🙅 JE NE SUIS PLUS EN POSITION": ("🚦 Statut", "🙅 Je ne suis plus en position"), "🚦 🙅 I'M OUT": ("🚦 Status", "🙅 I'm out"), "🚦 🟢 WE STAY IN": ("🚦 Status", "🟢 We stay in")}
 
 def mise_en_forme(t):
     """Tous les messages rangés pareil : le titre au-dessus, l'info en dessous, une ligne vide entre chaque bloc."""
@@ -2218,7 +2218,7 @@ def fmt_trade(m, tr, p=None):
                if "projection" not in tr["n1"] else f"4️⃣ 💰 TP1 : environ {tr['rr']:.1f} fois ton risque\n")
             + (f"5️⃣ 🏁 TP2 : {tr['n2']} (vue {vue(tr['n2'])})\n" if "projection" not in tr["n2"] else "5️⃣ 🏁 TP2 : on laisse courir, je te guide\n")
             + 
-            f"💡 TP1 touché → SL à BE\n\n"
+            f"💡 BE : je te dis quand (bougie 15 min clôturée bien {'au-dessus' if d == 1 else 'en dessous'} de l'entrée)\n\n"
             f"📍 Repère prix {m} ({'XAUUSD spot' if m == 'GOLD' else 'BTC/USD'}) :\n{echelle}\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
 
@@ -2403,11 +2403,11 @@ def gerer_stop(etat, m, r, tr, c):
     if nouveau is not None and d * (nouveau - sl) > 0.3 * a and d * (p - nouveau) > 0.5 * a:
         pos["sl_conseil"] = nouveau
         if pourquoi == "be" or abs(nouveau - e) < 0.2 * a:
-            texte = (f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
-                     "🔁 Mets ton SL à BE (ton prix d'entrée)\n"
-                     f"🕯 La bougie 15 min de {heure(r['b15'][-1]['t'])} a CLÔTURÉ bien {'au-dessus' if d == 1 else 'en dessous'} de ton entrée\n"
-                     "🛡 Comme ça, plus aucune perte possible\n"
-                     "🎯 On laisse courir vers le TP")
+            texte = (f"🔒 METS-TOI À BE — {ICONE.get(m, '')} {m}\n🚦 🟢 ON RESTE EN POSITION\n{SENS[d]}\n"
+                     f"🛑 Nouveau SL : BE ≈ {px(e)} (ton prix d'entrée)\n"
+                     f"🕯 Pourquoi : la bougie 15 min de {heure(r['b15'][-1]['t'])} a CLÔTURÉ bien {'au-dessus' if d == 1 else 'en dessous'} de ton entrée\n"
+                     "🛡 Résultat : plus aucune perte possible\n"
+                     f"💰 TP visé ≈ {px(pos.get('tp1', tr['tp1']))}")
         else:
             texte = (f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
                      "👀 Mets-toi en vue 15 minutes\n"
@@ -2768,12 +2768,23 @@ def agent(m, r, cle, ferme):
 
     if tr["statut"] == "entree":
         if touche_sl:
-            out.append(f"❌ {m} : stop {px(sl)} touché. On coupe, prochain setup bientôt.")
-            cle["fin"] = [tr, sl, "🛑 Stop touché"]; cle["stop_t"] = r["t"]
+            if tr.get("be_dit"):
+                out.append(f"🔒 {ICONE.get(m, '')} {m} : sorti à BE\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n🛡 Aucune perte\n🔎 Je cherche la prochaine entrée")
+            else:
+                out.append(f"❌ {ICONE.get(m, '')} {m} : stop {px(sl)} touché\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n😎 On coupe, prochain setup bientôt")
+            cle["fin"] = [tr, sl, "🔒 Sorti à BE" if tr.get("be_dit") else "🛑 Stop touché"]; cle["stop_t"] = r["t"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
             out.append(f"🎯 {m} : TP1 {px(t1)} touché !\n→ Sécurise une partie\n→ Mets ton SL à BE (prix d'entrée)\n→ On vise TP2 {px(t2)}")
+            return out
+        risque_ = abs(e - sl)
+        if not tr.get("be_dit") and risque_ > 0 and d * (p - e) >= 1.2 * risque_ and d * (r["b15"][-1]["c"] - e) >= r["atr"]:
+            tr["be_dit"] = True; tr["sl"] = e + d * 0.05 * r["atr"]
+            out.append(f"🔒 METS-TOI À BE — {ICONE.get(m, '')} {m}\n🚦 🟢 ON RESTE EN POSITION\n{SENS[d]}\n"
+                       f"🛑 Nouveau SL : BE ≈ {px(e)} (prix d'entrée)\n"
+                       f"🕯 Pourquoi : la bougie 15 min de {heure(r['b15'][-1]['t'])} a CLÔTURÉ bien {'au-dessus' if d == 1 else 'en dessous'} de l'entrée\n"
+                       f"🛡 Résultat : plus aucune perte possible\n💰 TP visé ≈ {px(t1)}")
             return out
         if progres < 0.25:
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
