@@ -569,7 +569,7 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
+"(en cours)": "(now)", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
 " — dans ": " — in ", " jours": " days", " — en cours": " — now", "✅ Rien d'ici": "✅ Nothing within", "✅ Plus aucune annonce ni discours cette semaine": "✅ No more news or speeches this week",
 "lun. ": "Mon ", "mar. ": "Tue ", "mer. ": "Wed ", "jeu. ": "Thu ", "ven. ": "Fri ", "sam. ": "Sat ", "dim. ": "Sun ", ": ÇA RETRACE": ": IT'S PULLING BACK", "😎 Le repli qu'on attend commence": "😎 The pullback we're waiting for is starting",
 "🎯 Zone visée ≈": "🎯 Target zone ≈", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
@@ -805,6 +805,18 @@ def analyse_marche(etat, pair):
     r["annonce"] = annonce_proche(etat or {}, int(time.time()))
     r["news"] = news_txt(etat or {})
     return r
+
+def boutons_canal(etat, texte):
+    """Boutons sous chaque message de la chaîne VIP : ils ouvrent le coach en privé, au bon endroit."""
+    bot = etat.get("bot") or "align_mtf_adel_bot"
+    m = next((x for x in MARCHES if x in texte.split("\n")[0]), None)
+    lien = lambda p: f"https://t.me/{bot}?start={p}"
+    lignes = []
+    if m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "PRÉPARE-TOI", "J'ENTRE MAINTENANT", "REPLI", "RETRACE", "parti")):
+        lignes.append([{"text": "🎯 Je rentre dans la position (coach)", "url": lien(f"auto_{m.lower()}")}])
+    lignes.append([{"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}, {"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}])
+    lignes.append([{"text": "🤖 Mon coach", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}])
+    return json.dumps({"inline_keyboard": lignes})
 
 def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
@@ -1180,7 +1192,17 @@ def traiter(etat, chats, updates):
         if msg.get("chat", {}).get("type") != "private":
             continue
         tx = msg.get("text", "")
-        cmd = tx.split("@")[0].strip().lower() if tx.startswith("/") else ""
+        mots = tx.split() if tx.startswith("/") else []
+        cmd = mots[0].split("@")[0].lower() if mots else ""
+        charge = mots[1].lower() if len(mots) > 1 else ""
+        if cmd == "/start" and charge:
+            if charge.startswith("auto_") and charge[5:].upper() in MARCHES:
+                if cid not in chats and cid not in etat.get("prospects", []) and not autorise(etat, cid, msg.get("from", {}).get("id")):
+                    etat.setdefault("prospects", []).append(cid); refuser(etat, cid)
+                inscrire_auto(etat, cid, charge[5:].upper())
+                continue
+            if "/" + charge in COMMANDES:
+                cmd = "/" + charge
         if cmd in COMMANDES:
             msg["text"] = tx = COMMANDES[cmd]
         if cmd in ("/start", "/boutons"):
@@ -2134,9 +2156,9 @@ def un_tour(etat, chats):
             for cid in destinataires(etat, chats):
                 try:
                     if cid == etat.get("canal"):
-                        # Chaîne VIP : texte seul, le coaching Oui / Non se fait en privé avec le bot
-                        txt = texte.replace("\n\nTu es rentré ?", "") + (f"\n\n👉 Coaching perso : @{etat['bot']}" if clavier and etat.get("bot") else "")
-                        telegram("sendMessage", chat_id=cid, text=txt)
+                        # Chaîne VIP : pas de clavier possible dans une chaîne → boutons sous le message (ils ouvrent le bot)
+                        txt = texte.replace("\n\nTu es rentré ?", "")
+                        telegram("sendMessage", chat_id=cid, text=txt, reply_markup=boutons_canal(etat, texte))
                     elif clavier:
                         telegram("sendMessage", chat_id=cid, text=texte, reply_markup=clavier)
                     else:
