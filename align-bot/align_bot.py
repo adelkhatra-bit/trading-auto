@@ -406,6 +406,8 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🟨 Zone   🔒🔒🔒")
     titre, raison = verdict(r, cle)
     l += ["━━━━━━━━━━━━", titre, raison]
+    if r["confirme"] and not (cle or {}).get("trade") and len(r["b15"]) >= 22:
+        l.append(ligne_cassure(r, r["confirme"]))
     if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
         l.append(prochaine(r, cle))
     return "\n".join(l)
@@ -420,6 +422,40 @@ def bloque_dw(r, d, prix=None):
         posW = (prix - r["basW"]) / max(r["hautW"] - r["basW"], 1e-9)
     return (d == -1 and (posD <= 0.15 or (posW <= 0.15 and posD <= 0.35))) or \
            (d == 1 and (posD >= 0.85 or (posW >= 0.85 and posD >= 0.65)))
+
+def niveau_cassure(r, d):
+    """Niveau à casser (vue 15 min) : le plus haut (LONG) ou le plus bas (SHORT) des 20 dernières bougies 15 min."""
+    b = r["b15"][-21:-1]
+    return max(x["h"] for x in b) if d == 1 else min(x["l"] for x in b)
+
+def plan_cassure(r, d):
+    """Entrée sur CASSURE : une bougie 15 min vient de CLÔTURER au-delà du niveau. Renvoie le plan ou None."""
+    b = r["b15"]; a = r["atr"]
+    if len(b) < 22:
+        return None
+    L = niveau_cassure(r, d)
+    c1, c0 = b[-1]["c"], b[-2]["c"]
+    casse = (c1 > L + 0.05 * a and c0 <= L) if d == 1 else (c1 < L - 0.05 * a and c0 >= L)
+    trop = (r["r15"] >= 78) if d == 1 else (r["r15"] <= 22)
+    if not casse or trop:
+        return None
+    e = r["m1"][-1]["c"]
+    sl = (min(b[-1]["l"], L - 0.5 * a) - 0.2 * a) if d == 1 else (max(b[-1]["h"], L + 0.5 * a) + 0.2 * a)
+    if abs(e - sl) < max(a, e * 0.0008):
+        sl = e - d * max(a, e * 0.0008)
+    risque = abs(e - sl)
+    cibles = sorted([z for z in r["grosses"] if z[1] in ("4h", "Daily") and d * (z[0] - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+    t1 = cibles[0] if cibles else (e + d * risque * 2.5, "projection 2,5 x le risque")
+    loin = [z for z in cibles if d * (z[0] - t1[0]) >= 2 * a]
+    t2 = loin[0] if loin else (e + d * risque * 5, "projection 5 x le risque")
+    nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
+    return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
+                src="cassure 15 min", za=e, zb=e, niveau=L, t15=b[-1]["t"])
+
+def ligne_cassure(r, d):
+    L = niveau_cassure(r, d)
+    return (f"🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(L)}\n"
+            f"   → {SENS[d]} sur la cassure")
 
 def zone_repli(r, d):
     """Point d'entrée du repli (même calcul que l'agent)."""
@@ -605,7 +641,10 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "POINT D'ENTRÉE À VENIR —": "ENTRY POINT COMING —", "👀 ÇA ARRIVE": "👀 IT'S COMING", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
+"(en cours)": "(now)", "la mèche de la bougie de cassure": "the wick of the breakout candle", ": à la clôture de la bougie 15 min qui casse ≈": ": at the close of the 15-min candle breaking ≈", "💥 CASSURE CONFIRMÉE": "💥 BREAKOUT CONFIRMED", "🕯 La bougie 15 min a CLÔTURÉ au-dessus de ≈": "🕯 The 15-min candle CLOSED above ≈",
+"🕯 La bougie 15 min a CLÔTURÉ en dessous de ≈": "🕯 The 15-min candle CLOSED below ≈", "la mèche de cette bougie": "the wick of this candle",
+"🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE au-dessus de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES above ≈", "🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE en dessous de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES below ≈",
+"sur la cassure": "on the breakout", "🅰️ Entrée sur le repli dans la zone 🟨": "🅰️ Entry on the pullback in the zone 🟨", "POINT D'ENTRÉE À VENIR —": "ENTRY POINT COMING —", "👀 ÇA ARRIVE": "👀 IT'S COMING", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
 " — dans ": " — in ", " jours": " days", " — en cours": " — now", "✅ Rien d'ici": "✅ Nothing within", "✅ Plus aucune annonce ni discours cette semaine": "✅ No more news or speeches this week",
 "lun. ": "Mon ", "mar. ": "Tue ", "mer. ": "Wed ", "jeu. ": "Thu ", "ven. ": "Fri ", "sam. ": "Sat ", "dim. ": "Sun ", ": ÇA RETRACE": ": IT'S PULLING BACK", "😎 Le repli qu'on attend commence": "😎 The pullback we're waiting for is starting",
 "🎯 Zone visée ≈": "🎯 Target zone ≈", "🎯 Il devrait revenir vers ≈": "🎯 It should come back to ≈", "🕯 La moitié du dernier grand mouvement (vue 15 min)": "🕯 Half of the last big move (15-min chart)", "👀 Sois patient": "👀 Be patient", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
@@ -1709,8 +1748,11 @@ def fmt_trade(m, tr, p=None):
             f"⏱ Vue 15 minutes\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
             f"1️⃣ 👀 Mets-toi en vue 15 minutes\n"
-            f"2️⃣ 🛑 SL : un tout petit peu {'SOUS' if d == 1 else 'AU-DESSUS de'} {meche}\n"
-            f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n"
+            + (f"2️⃣ 🛑 SL : un tout petit peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de la bougie de cassure\n"
+               f"3️⃣ 🟨 Entrée {SENS[d]} : à la clôture de la bougie 15 min qui casse ≈ {px(tr.get('niveau', tr['e']))}\n"
+               if tr.get("src") == "cassure 15 min" else
+               f"2️⃣ 🛑 SL : un tout petit peu {'SOUS' if d == 1 else 'AU-DESSUS de'} {meche}\n"
+               f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n")
             + (f"4️⃣ 💰 TP1 : juste {'sous la' if d == 1 else 'au-dessus du'} {tr['n1']} (regarde en vue {vue(tr['n1'])})\n"
                if "projection" not in tr["n1"] else f"4️⃣ 💰 TP1 : environ {tr['rr']:.1f} fois ton risque\n")
             + (f"5️⃣ 🏁 TP2 : {tr['n2']} (vue {vue(tr['n2'])})\n" if "projection" not in tr["n2"] else "5️⃣ 🏁 TP2 : on laisse courir, je te guide\n")
@@ -1933,6 +1975,17 @@ def agent(m, r, cle, ferme):
                 out.append(f"⚪ {m} : alignement 15m / 1h / 4h perdu. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
+        # ── Entrée sur CASSURE confirmée (clôture 15 min au-delà du niveau) ──
+        pc = plan_cassure(r, d)
+        if pc and pc["t15"] != cle.get("cassure_t") and not r.get("annonce"):
+            cle["cassure_t"] = pc["t15"]
+            tr = dict(pc, statut="entree", cree=r["t"], encore=0)
+            cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle["parti"] = False; cle.pop("ordre", None)
+            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n"
+                        f"🕯 La bougie 15 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
+                        f"🛑 SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de cette bougie\n\n"
+                        f"{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+            return out
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
         o = point_entree(r, d, p)
         bloque = bloque_dw(r, d, o["e"])      # on juge le prix d'entrée du repli, pas le prix actuel
@@ -1944,7 +1997,8 @@ def agent(m, r, cle, ferme):
                 cle["parti"] = True; cle["attente_rsi"] = False; cle.pop("ordre", None)
                 if time.time() - cle.get("parti_t", 0) > 7200:      # pas de répétition (2 h)
                     cle["parti_t"] = time.time()
-                    out.append(f"🚀 {ICONE.get(m, '')} {m} est déjà parti {'⬆️' if d == 1 else '⬇️'}\n😎 On ne court pas après le prix\n{prochaine(r, cle)}")
+                    out.append(f"🚀 {ICONE.get(m, '')} {m} est déjà parti {'⬆️' if d == 1 else '⬇️'}\n😎 On ne court pas après le prix\n"
+                               f"🅰️ {prochaine(r, cle).replace('🔜 ', '')}\n{ligne_cassure(r, d)}")
             # Le prix commence à revenir (5 min dans l'autre sens) : on le dit, comme si on regardait le graphique ensemble
             recent = r["m1"][-30:]
             recul = (max(x["h"] for x in recent) - p_) if d == 1 else (p_ - min(x["l"] for x in recent))
@@ -1979,7 +2033,8 @@ def agent(m, r, cle, ferme):
                            f"👀 Mets-toi en vue 15 minutes\n"
                            f"🕯 Repère {'le dernier creux (mèche du bas)' if d == 1 else 'le dernier sommet (mèche du haut)'}\n"
                            f"🟨 L'entrée sera à peu près {'au-dessus de ce creux' if d == 1 else 'sous ce sommet'}\n"
-                           f"🚦 Attends mon feu vert 🟢\n\n"
+                           f"🚦 Attends mon feu vert 🟢\n"
+                           f"🅰️ Entrée sur le repli dans la zone 🟨\n{ligne_cassure(r, d)}\n\n"
                            f"{fmt_trade(m, o, p)}\n\n"
                            f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}", bouton_auto(m)))
         if (bloque and not cle.get("ordre")) or o["rr"] < GAIN_MIN:
