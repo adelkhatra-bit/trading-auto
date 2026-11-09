@@ -487,6 +487,24 @@ def qualite(o):
         return f"🔥 BELLE POSITION   +{gain:.1f} % visés (x{rr:.1f})\n"
     return ""
 
+def alerte_repli(out, m, r, cle, d, p):
+    """Le marché commence à revenir contre la tendance : on annonce le repli et jusqu'où il devrait aller (1 fois / 30 min)."""
+    recent = r["m1"][-30:]
+    extreme = max(x["h"] for x in recent) if d == 1 else min(x["l"] for x in recent)
+    recul = d * (extreme - p)
+    if (r["dirs"][2] == -d or (r["dirs"][0] == -d and recul >= 0.3 * r["atr"])) and not cle.get("retrace_vu") \
+            and r["t"] - cle.get("retrace_t", 0) >= 1800:
+        cle["retrace_vu"] = True; cle["retrace_t"] = r["t"]
+        zv = point_entree(r, d, p)
+        src = zv["src"].split(" + ")[0]
+        out.append((f"↩️ {ICONE.get(m, '')} {m} : ÇA RETRACE {'⬇️' if d == 1 else '⬆️'}\n"
+                    f"📉 Repli attendu : de ≈ {px(extreme)} vers ≈ {px(zv['za'])} – {px(zv['zb'])}\n" if d == 1 else
+                    f"↩️ {ICONE.get(m, '')} {m} : ÇA RETRACE {'⬇️' if d == 1 else '⬆️'}\n"
+                    f"📈 Rebond attendu : de ≈ {px(extreme)} vers ≈ {px(zv['za'])} – {px(zv['zb'])}\n")
+                   + f"😎 Le repli qu'on attend commence\n🔜 Prochaine entrée   {SENS[d]} dans cette zone\n"
+                   + f"🕯 La moitié du dernier grand mouvement (vue 15 min){', ' + src if 'Fibonacci' not in src else ''}\n"
+                   + "👀 Sois patient\n🔔 Je te préviens dès qu'on y est")
+
 def niveau_cassure(r, d):
     """Niveau à casser (vue 15 min) : le plus haut (LONG) ou le plus bas (SHORT) des 20 dernières bougies 15 min."""
     b = r["b15"][-21:-1]
@@ -705,7 +723,7 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
+"(en cours)": "(now)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
 "cassure vue, mais je passe mon tour": "breakout seen, but I'm skipping", "prix dans la zone, mais je passe mon tour": "price in the zone, but I'm skipping",
 "📚 Ce type de position a perdu trop souvent": "📚 This type of position lost too often", " gagnés": " won", ": je note ce": ": I'm noting this",
 "en session": "in session", "🧠 Bilan de ce type :": "🧠 Record for this type:", "💡 Leçon : je serai plus prudent sur ce type de position": "💡 Lesson: I'll be more careful with this type of position",
@@ -922,7 +940,7 @@ LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script Tradi
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "2500"))   # abonnement VIP mensuel : 2 500 ⭐ ≈ 49,90 €
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # (ancien réglage, gardé pour compatibilité)
 DUREE_SEC = int(os.environ.get("DUREE_SEC", str(ECOUTE_SEC)))   # durée d'un lancement (5 h 40 sur GitHub = bot toujours allumé)
-PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "30"))   # une analyse complète BTC + Gold toutes les 30 s
+PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "20"))   # une analyse complète BTC + Gold toutes les 20 s
 
 def marche_demande(txt):
     """« Analyse BTC » → BTC, « Analyse Gold » → GOLD, « Analyse » seul → les deux (None)."""
@@ -2083,20 +2101,12 @@ def agent(m, r, cle, ferme):
                 if time.time() - cle.get("parti_t", 0) > 7200:      # pas de répétition (2 h)
                     cle["parti_t"] = time.time()
                     out.append(f"🚀 {ICONE.get(m, '')} {m} est déjà parti {'⬆️' if d == 1 else '⬇️'}\n😎 On ne court pas après le prix\n"
-                               f"🅰️ {prochaine(r, cle).replace('🔜 ', '')}\n{ligne_cassure(r, d)}")
+                               f"🅰️ Repli vers ≈ {px(r['ema15'])} → {SENS[d]}\n{ligne_cassure(r, d)}"
+                               + ("\n⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent → " + SENS[-d] + " possible"
+                                  if "Si 15 min" in prochaine(r, cle) else ""))
             # Le prix commence à revenir (5 min dans l'autre sens) : on le dit, comme si on regardait le graphique ensemble
-            recent = r["m1"][-30:]
-            recul = (max(x["h"] for x in recent) - p_) if d == 1 else (p_ - min(x["l"] for x in recent))
-            if (r["dirs"][2] == -d or (r["dirs"][0] == -d and recul >= 0.3 * r["atr"])) and not cle.get("retrace_vu") \
-                    and r["t"] - cle.get("retrace_t", 0) >= 1800:        # 1 alerte « ça retrace » par 30 min maximum
-                cle["retrace_vu"] = True; cle["retrace_t"] = r["t"]
-                zv = point_entree(r, d, p_)
-                out.append(f"↩️ {ICONE.get(m, '')} {m} : ÇA RETRACE {'⬇️' if d == 1 else '⬆️'}\n😎 Le repli qu'on attend commence\n"
-                           f"🔜 Prochaine entrée   {SENS[d]}\n"
-                           f"🎯 Il devrait revenir vers ≈ {px(zv['za'])} – {px(zv['zb'])}\n"
-                           f"🕯 La moitié du dernier grand mouvement (vue 15 min){', ' + zv['src'].split(' + ')[0] if 'Fibonacci' not in zv['src'].split(' + ')[0] else ''}\n"
-                           f"👀 Sois patient\n🔔 Je te préviens dès qu'on y est")
-            elif r["dirs"][2] == d:
+            alerte_repli(out, m, r, cle, d, p_)
+            if r["dirs"][2] == d and r["dirs"][0] == d:
                 cle["retrace_vu"] = False
             cle["aligne"] = d
             return out
@@ -2124,6 +2134,11 @@ def agent(m, r, cle, ferme):
                            f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}", bouton_auto(m)))
         if (bloque and not cle.get("ordre")) or o["rr"] < GAIN_MIN:
             return out
+        # Petit repli en cours avant d'arriver dans la zone : on le dit tout de suite
+        if not cle.get("prep") and d * (p - o["e"]) > 0:
+            alerte_repli(out, m, r, cle, d, p)
+        elif r["dirs"][2] == d:
+            cle["retrace_vu"] = False
         # On ajuste le point tant que le prix n'est pas encore arrivé (les niveaux bougent)
         if not cle.get("prep"):
             cle["ordre"] = o
