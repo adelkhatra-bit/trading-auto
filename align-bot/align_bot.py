@@ -28,7 +28,19 @@ def http_json(url, data=None):
                 raise
             time.sleep(2 * (essai + 1))
 
+TTL_KRAKEN = {1: 15, 5: 30, 15: 45, 30: 90, 60: 120, 240: 300, 1440: 900, 10080: 1800}
+
 def kraken(pair, interval):
+    c = _CACHE_K.get((pair, interval))
+    if c and time.time() - c[0] < TTL_KRAKEN.get(interval, 60):
+        return c[1]
+    rows = _kraken(pair, interval)
+    _CACHE_K[(pair, interval)] = (time.time(), rows)
+    return rows
+
+_CACHE_K = {}
+
+def _kraken(pair, interval):
     j = http_json(f"https://api.kraken.com/0/public/OHLC?pair={pair}&interval={interval}")
     if j.get("error"):
         raise RuntimeError(j["error"])
@@ -216,8 +228,22 @@ def pivots(b, g=5):
     return (hs[-1] if hs else None, ls[-1] if ls else None, hs[-2] if len(hs) > 1 else None, ls[-2] if len(ls) > 1 else None)
 
 # ───────── Analyse complète d'un marché ─────────
+def direct_btc(m1, pair):
+    """Ajoute la minute en cours au prix réel du moment (pas d'attente de la clôture de la bougie)."""
+    try:
+        j = http_json(f"https://api.kraken.com/0/public/Ticker?pair={pair}")
+        v = float(next(iter(j["result"].values()))["c"][0])
+        t = int(time.time()) // 60 * 60
+        if m1 and t > m1[-1]["t"]:
+            return m1 + [dict(t=t, o=m1[-1]["c"], h=max(m1[-1]["c"], v), l=min(m1[-1]["c"], v), c=v)]
+    except Exception as ex:
+        print("direct", ex)
+    return m1
+
 def analyser(pair):
     m1, m5, m15, h1, h4, d1 = (bougies(pair, i) for i in (1, 5, 15, 60, 240, 1440))
+    if pair != "XAUUSD":
+        m1 = direct_btc(m1, pair)
     series = {"1": m1, "2": regrouper(m1, 2, 60), "5": m5, "10": regrouper(m5, 2, 300), "15": m15,
               "30": bougies(pair, 30), "45": regrouper(m15, 3, 900), "1h": h1, "2h": regrouper(h1, 2, 3600), "4h": h4, "D": d1}
     et = {k: etat_ut(v) for k, v in series.items()}
@@ -776,7 +802,7 @@ LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script Tradi
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "2500"))   # abonnement VIP mensuel : 2 500 ⭐ ≈ 49,90 €
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # (ancien réglage, gardé pour compatibilité)
 DUREE_SEC = int(os.environ.get("DUREE_SEC", str(ECOUTE_SEC)))   # durée d'un lancement (5 h 40 sur GitHub = bot toujours allumé)
-PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "60"))   # une analyse complète BTC + Gold toutes les 60 s
+PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "30"))   # une analyse complète BTC + Gold toutes les 30 s
 
 def marche_demande(txt):
     """« Analyse BTC » → BTC, « Analyse Gold » → GOLD, « Analyse » seul → les deux (None)."""
@@ -1910,8 +1936,11 @@ def agent(m, r, cle, ferme):
                     cle["parti_t"] = time.time()
                     out.append(f"🚀 {ICONE.get(m, '')} {m} est déjà parti {'⬆️' if d == 1 else '⬇️'}\n😎 On ne court pas après le prix\n{prochaine(r, cle)}")
             # Le prix commence à revenir (5 min dans l'autre sens) : on le dit, comme si on regardait le graphique ensemble
-            if r["dirs"][2] == -d and not cle.get("retrace_vu"):
-                cle["retrace_vu"] = True
+            recent = r["m1"][-30:]
+            recul = (max(x["h"] for x in recent) - p_) if d == 1 else (p_ - min(x["l"] for x in recent))
+            if (r["dirs"][2] == -d or (r["dirs"][0] == -d and recul >= 0.3 * r["atr"])) and not cle.get("retrace_vu") \
+                    and r["t"] - cle.get("retrace_t", 0) >= 1800:        # 1 alerte « ça retrace » par 30 min maximum
+                cle["retrace_vu"] = True; cle["retrace_t"] = r["t"]
                 out.append(f"↩️ {ICONE.get(m, '')} {m} : ÇA RETRACE {'⬇️' if d == 1 else '⬆️'}\n😎 Le repli qu'on attend commence\n"
                            f"🔜 Prochaine entrée   {SENS[d]}\n🎯 Zone visée ≈ {px(r['ema15'])}\n👀 Vue 15 min, sois patient\n🔔 Je te préviens dès qu'on y est")
             elif r["dirs"][2] == d:
