@@ -325,7 +325,17 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     D, R = r["dirs"], r["rsis"]
     maj, n_ok = alignement(r)
     ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
-    l = [f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(r['prix'])}", "━━━━━━━━━━━━"]
+    prix = r["m1"][-1]["c"]
+    sens_txt = ("📈 Le marché MONTE" if maj == 1 else "📉 Le marché DESCEND" if maj == -1 else "➖ Le marché hésite")
+    coches = " ".join("✅" if x == maj and maj else "⏳" for x in (D[4], D[7], D[9]))
+    if not vip:
+        return "\n".join([f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(prix)}",
+                          f"{sens_txt}   ({coches})", r.get("news") or "",
+                          "━━━━━━━━━━━━",
+                          "🔒 Entrée : VIP", "🔒 SL : VIP", "🔒 TP : VIP", "🔒 Prochaine entrée : VIP",
+                          "━━━━━━━━━━━━",
+                          "👀 Les VIP savent déjà où rentrer", "😬 Tu vas louper le prochain move ?", "💎 VIP 49,90 € / mois 👇"])
+    l = [f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(prix)}", f"{sens_txt}   ({coches})", "━━━━━━━━━━━━"]
     l += [f"{nom:<7} {fl(D[i])}   RSI {R[i]:.0f}" for nom, i in ut]
     l += ["━━━━━━━━━━━━",
           f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
@@ -530,6 +540,18 @@ TRAD = {
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
 "(en cours)": "(now)",
+"📈 Le marché MONTE": "📈 The market is RISING", "📉 Le marché DESCEND": "📉 The market is FALLING", "➖ Le marché hésite": "➖ The market is hesitating",
+"🔒 Entrée : VIP": "🔒 Entry: VIP", "🔒 SL : VIP": "🔒 SL: VIP", "🔒 TP : VIP": "🔒 TP: VIP", "🔒 Prochaine entrée : VIP": "🔒 Next entry: VIP",
+"👀 Les VIP savent déjà où rentrer": "👀 VIPs already know where to enter", "😬 Tu vas louper le prochain move ?": "😬 Gonna miss the next move?",
+"💎 VIP 49,90 € / mois 👇": "💎 VIP €49.90 / month 👇", "👀👀 ÇA ARRIVE —": "👀👀 IT'S COMING —", "🟨 Le prix entre dans la zone": "🟨 Price is entering the zone",
+"⚡ Tiens-toi prêt": "⚡ Get ready", "🚦 Feu vert 🟢 très bientôt": "🚦 Green light 🟢 very soon", "📍 Zone ≈": "📍 Zone ≈",
+": TP1 TOUCHÉ 🔥🔥🔥": ": TP1 HIT 🔥🔥🔥", "pour les VIP": "for VIPs", "😬 Tu n'étais pas dedans ?": "😬 You weren't in?", "💎 Les prochaines : VIP 👇": "💎 Next ones: VIP 👇",
+": OBJECTIF ATTEINT 🔥🔥🔥": ": TARGET REACHED 🔥🔥🔥", "😬 Tu as loupé ça": "😬 You missed this", "💎 Rejoins le VIP 👇": "💎 Join VIP 👇",
+": SL touché": ": SL hit", "🛡 Risque maîtrisé, on repart": "🛡 Risk under control, we go again", "💎 Toutes les positions et les résultats : VIP 👇": "💎 All positions and results: VIP 👇",
+": une position VIP arrive 🔥": ": a VIP position is coming 🔥", "🔒 Zone cachée": "🔒 Zone hidden", "😬 Tu vas la louper ?": "😬 Gonna miss it?", "💎 VIP 👇": "💎 VIP 👇",
+": les VIP viennent de recevoir une position": ": VIPs just got a position", "🟩 LONG ⬆️ ou 🟥 SHORT ⬇️ ? 🤫": "🟩 LONG ⬆️ or 🟥 SHORT ⬇️ ? 🤫", "👀 Elle se prépare 🤫": "👀 It's building 🤫",
+"😬 Tu vas louper ce move ?": "😬 Gonna miss this move?", "💎 VIP 49,90 € / mois : toutes les positions + le coach 👇": "💎 VIP €49.90 / month: all positions + the coach 👇",
+"🔒 Réservé aux VIP 💎": "🔒 VIP only 💎",
 "🎁🎁 POSITION DE BIENVENUE OFFERTE 🎁🎁": "🎁🎁 FREE WELCOME POSITION 🎁🎁",
 "👀 Suis-la en vue 15 minutes, tout est expliqué en bougies": "👀 Follow it on the 15-min chart, everything is explained in candles",
 "💎 C'est ta position offerte. Les suivantes + le coach : VIP 49,90 € / mois": "💎 This is your free position. Next ones + the coach: VIP €49.90 / month",
@@ -1013,16 +1035,15 @@ def bouton_payer(etat):
     return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (49,90 € / mois)", "url": lien}]]}) if lien else None
 
 def analyse_visiteur(etat, cid, mq=None):
-    """Analyse gratuite pour les visiteurs : tendance visible, plan de trade réservé VIP."""
+    """Analyse visiteur : il voit si le marché monte ou descend (preuve que ça marche), le reste est caché."""
+    kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}
     for nom_marche, pair in MARCHES.items():
         if mq and mq != nom_marche:
             continue
         try:
-            _envoi_sur(cid, text=texte_etat(nom_marche, analyse_marche(etat, pair), etat.get(nom_marche), vip=False), reply_markup=CLAVIER_VISITEUR)
+            _envoi_sur(cid, text=texte_etat(nom_marche, analyse_marche(etat, pair), etat.get(nom_marche), vip=False), **kw)
         except Exception as ex:
             print("analyse visiteur", ex)
-    kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
-    _envoi_sur(cid, text="🔒 Entrée, stop, TP et coaching en direct : réservés aux VIP 💎", **kw)
 
 def refuser(etat, cid):
     _envoi_sur(cid, text="👋 ALIGN Signaux — BTC + Gold\n⬆️⬇️ Les positions arrivent ici en direct", reply_markup=CLAVIER_VISITEUR)
@@ -1042,13 +1063,29 @@ def masquer(texte):
     return re.sub(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", "🔒🔒🔒", texte).replace("\n\nTu es rentré ?", "")
 
 def envoyer_prospects(etat, texte, signal, clavier=None):
-    """Visiteurs : news en clair ; UNE position de bienvenue complète (expliquée en bougies + coach) ;
-    ensuite les positions arrivent masquées avec le bouton VIP."""
+    """Visiteurs : news en clair ; UNE position de bienvenue complète (bougies + coach) ;
+    ensuite tout est caché, avec des messages courts « tu loupes ça » et le bouton VIP."""
     entree = signal and "J'ENTRE MAINTENANT" in texte
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
     deja = etat.setdefault("bienvenue", {})
-    m = next((x for x in MARCHES if x in texte.split("\n")[0]), None)
+    tete = texte.split("\n")[0]
+    m = next((x for x in MARCHES if x in tete), None)
+    chiffres = bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte))
+    news = tete.startswith(("📅", "⚠️⚠️", "🚨", "✅ News", "🔔 Ouverture")) or "NEWS" in tete
+    tr = etat.get(m, {}).get("trade") if m else None
+    pct_tp = (tr["d"] * (tr["tp1"] - tr["e"]) / tr["e"] * 100) if tr else None
+    fomo = None
+    if m and ("TP1" in tete and "touché" in tete) and pct_tp:
+        fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : TP1 TOUCHÉ 🔥🔥🔥\n💰 +{pct_tp:.2f} % pour les VIP\n😬 Tu n'étais pas dedans ?\n💎 Les prochaines : VIP 👇"
+    elif m and ("objectif final" in tete or "TP2 touché" in tete):
+        g = etat.get(m, {}).get("dernier")
+        fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : OBJECTIF ATTEINT 🔥🔥🔥\n" + (f"💰 +{g:.2f} % pour les VIP\n" if g else "") + "😬 Tu as loupé ça\n💎 Rejoins le VIP 👇"
+    elif m and "stop" in tete.lower() and "touché" in tete:
+        fomo = f"❌ {ICONE.get(m, '')} {m} : SL touché pour les VIP\n🛡 Risque maîtrisé, on repart\n💎 Toutes les positions et les résultats : VIP 👇"
+    elif m and "ÇA ARRIVE" in tete:
+        fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
     for cid in list(etat.get("prospects", [])):
+        sa_bienvenue = m and deja.get(cid) == m and tr is not None
         if signal and cid not in deja:
             txt = ("🎁🎁 POSITION DE BIENVENUE OFFERTE 🎁🎁\n"
                    "👀 Suis-la en vue 15 minutes, tout est expliqué en bougies\n\n" + texte)
@@ -1056,12 +1093,19 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
             if entree:
                 deja[cid] = m
                 txt += "\n\n💎 C'est ta position offerte. Les suivantes + le coach : VIP 49,90 € / mois"
+        elif sa_bienvenue and not signal:
+            txt, k = texte, {}          # sa position offerte est en cours : il suit tout en clair
         elif signal:
-            txt = (masquer(texte) + "\n\n🔒 Position réservée aux VIP\n"
-                   "🎁 Ta position de bienvenue est déjà utilisée\n💎 VIP 49,90 € / mois : toutes les positions + le coach en direct")
+            txt = (f"🔒 {ICONE.get(m, '')} {m} : les VIP viennent de recevoir une position\n"
+                   + ("🟩 LONG ⬆️ ou 🟥 SHORT ⬇️ ? 🤫\n" if entree else "👀 Elle se prépare 🤫\n")
+                   + "😬 Tu vas louper ce move ?\n💎 VIP 49,90 € / mois : toutes les positions + le coach 👇")
             k = kw
-        else:
+        elif fomo:
+            txt, k = fomo, kw
+        elif news or not chiffres:
             txt, k = texte, {}
+        else:
+            txt, k = masquer(texte) + "\n🔒 Réservé aux VIP 💎", kw
         try:
             telegram("sendMessage", chat_id=cid, text=txt, **k)
         except Exception as ex:
@@ -1534,7 +1578,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append(f"🟡🟡 TIENS-TOI PRÊT — {m} arrive dans la zone 🟨\n{SENS[d]}\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Je prépare mon ordre {SENS[d]}, stop {px(o['sl'])}\n⏳ J'attends le signal 🟢")
+            out.append(f"👀👀 ÇA ARRIVE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}")
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
@@ -1693,6 +1737,7 @@ def un_tour(etat, chats):
                 gain = trf["d"] * (sortie - trf["e"]) / trf["e"] * 100
                 bil["tp" if gain > 0 else "sl"] += 1
                 bil["pct"] += gain
+                cle["dernier"] = round(gain, 2)
         derniers[nom_marche] = r
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
