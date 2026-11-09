@@ -294,7 +294,7 @@ def verdict(r, cle):
         sens = "⬆️ ACHAT" if tr["d"] == 1 else "⬇️ VENTE"
         prog = tr["d"] * (p - tr["e"]) / max(abs(tr["tp1"] - tr["e"]), 1e-9)
         if tr["statut"] == "entree" and prog < 0.25 and not tr.get("tard"):
-            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"🛑 Stop   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
+            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {'SOUS la mèche du dernier creux' if tr['d'] == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n🙅 Jamais pile sur la mèche\n📍 Repère Kraken : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
         return ("🔴🔴 N'ENTRE PAS", f"⏰ Trop tard : la position {sens} est déjà partie\n⏳ J'attends le prochain setup")
     if r.get("annonce"):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
@@ -922,7 +922,7 @@ def fmt_trade(m, tr, p=None):
             f"📍 Prix de référence (Kraken) :\n{echelle}\n\n"
             f"📐 Sur TA plateforme (les prix peuvent être différents) :\n"
             f"🟨 Entrée : {'repli' if d == 1 else 'rebond'} vers la moitié du dernier mouvement\n"
-            f"🛑 Stop : juste {'sous' if d == 1 else 'au-dessus de'} {meche} ({pct(tr['sl'])})\n"
+            f"🛑 SL : un peu {'sous' if d == 1 else 'au-dessus de'} {meche}, jamais pile dessus ({pct(tr['sl'])})\n"
             f"💰 TP1 : {tr['n1']} ({pct(tr['tp1'])}) → stop à l'entrée\n"
             f"🏁 TP2 : {tr['n2']} ({pct(tr['tp2'])})\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
@@ -1057,7 +1057,7 @@ def coach(etat, m, r, cle):
         if 0 <= reste <= 30 * 60 and f"news{ev['t']}" not in vu:
             vu.append(f"news{ev['t']}")
             msgs.append(f"📰 {m}\nNews dans   {round(reste / 60)} min\n"
-                        + (f"🔒 Stop à l'entrée   {px(e)}" if prog > 0.2 else "✂️ Le trade n'avance pas\n✂️ Je coupe avant la news"))
+                        + ("🔒 Mets ton SL à BE (prix d'entrée)" if prog > 0.2 else "✂️ Le trade n'avance pas\n✂️ Je coupe avant la news"))
     for c in dedans:
         for t in msgs:
             _envoi_sur(c, text=t, reply_markup=CLAVIER)
@@ -1083,17 +1083,25 @@ def gerer_stop(etat, m, r, tr, c):
     if murs:
         v = max(murs) if d == 1 else min(murs)
         n = next(n for vv, n in r["niveaux"] if vv == v)
-        nouveau, pourquoi = v - d * 0.3 * a, f"🧱 Juste {'sous le support' if d == 1 else 'au-dessus de la résistance'} {n}   {px(v)}"
+        nouveau, pourquoi = v - d * 0.3 * a, "mèche"
     if gain >= 0.8 * risque and (nouveau is None or d * (nouveau - e) < 0) and not any(abs(v - e) < 0.6 * a for v in murs):
-        nouveau, pourquoi = e + d * 0.05 * a, "😎 Trade sans risque maintenant"
+        nouveau, pourquoi = e + d * 0.05 * a, "be"
     if nouveau is not None and d * (nouveau - sl) > 0.3 * a and d * (p - nouveau) > 0.5 * a:
         pos["sl_conseil"] = nouveau
-        protege = d * (nouveau - e)
-        _envoi_sur(c, reply_markup=CLAVIER, text=(
-            f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
-            f"{'⬆️ Monte' if d == 1 else '⬇️ Descends'} ton stop à   {px(nouveau)}\n{pourquoi}\n"
-            + (f"💰 Gain protégé   {protege / e * 100:+.2f} %" if protege > 0 else
-               "🔁 Stop à ton prix d'entrée" if abs(protege) < 0.2 * a else f"🛡 Perte réduite : {abs(protege) / risque * 100:.0f} % du risque")))
+        if pourquoi == "be" or abs(nouveau - e) < 0.2 * a:
+            texte = (f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
+                     "🔁 Mets ton SL à BE (ton prix d'entrée)\n"
+                     "🛡 Comme ça, plus aucune perte possible\n"
+                     "🎯 On laisse courir vers le TP")
+        else:
+            texte = (f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
+                     "👀 Mets-toi en vue 15 minutes\n"
+                     f"🕯 Repère la mèche du dernier {'creux' if d == 1 else 'sommet'}\n"
+                     f"{'⬆️ Monte' if d == 1 else '⬇️ Descends'} ton SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} cette mèche\n"
+                     "🙅 Jamais pile sur la mèche : elle peut être retouchée\n"
+                     + ("💰 Ton gain est protégé" if d * (nouveau - e) > 0 else "🛡 Ta perte possible est réduite")
+                     + f"\n📍 Repère Kraken   ≈ {px(nouveau)}")
+        _envoi_sur(c, reply_markup=CLAVIER, text=texte)
         return
     # Le marché respire : petit retour vers l'entrée, on ne bouge rien
     r5 = r["r5"][-1]
@@ -1102,9 +1110,9 @@ def gerer_stop(etat, m, r, tr, c):
     if excès and time.time() - tps >= 45 * 60:
         pos["cool_t"] = time.time()
         _envoi_sur(c, reply_markup=CLAVIER, text=(
-            f"😎 {ICONE.get(m, '')} {m} : reste cool\n🌬 Le marché respire (RSI 5 min {r5:.0f})\n"
-            + (f"↩️ Il peut revenir un peu vers ton entrée   {px(e)}\n" if d * (sl - e) < 0 else "↩️ Petit retour possible, c'est normal\n")
-            + f"🛑 Ton stop reste à   {px(sl)}\n🎯 Cap sur le TP"))
+            f"😎 {ICONE.get(m, '')} {m} : reste cool\n🌬 Le marché respire\n"
+            "🕯 Il peut revenir un peu, c'est normal\n"
+            "🛑 Ne touche pas ton SL\n🎯 Cap sur le TP"))
 
 def agent(m, r, cle, ferme):
     """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
@@ -1215,7 +1223,7 @@ def agent(m, r, cle, ferme):
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
-            out.append(f"🎯 {m} : TP1 {px(t1)} touché !\n→ Sécurise une partie\n→ Stop à l'entrée {px(e)}\n→ On vise TP2 {px(t2)}")
+            out.append(f"🎯 {m} : TP1 {px(t1)} touché !\n→ Sécurise une partie\n→ Mets ton SL à BE (prix d'entrée)\n→ On vise TP2 {px(t2)}")
             return out
         if progres < 0.25:
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
