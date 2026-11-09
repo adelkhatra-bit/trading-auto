@@ -539,7 +539,20 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)",
+"(en cours)": "(now)", "🎯 Je rentre dans la prochaine position": "🎯 I'm in for the next position",
+"✅ Noté ! Prochaine position": "✅ Got it! Next position", "📲 Place ton ordre limite dans la zone 🟨 (vue 15 min)": "📲 Place your limit order in the zone 🟨 (15-min chart)",
+"🤖 Dès que j'entre, tu es compté dedans automatiquement": "🤖 As soon as I enter, you're counted in automatically", "🎯 Le coach te suit : SL à BE, SL remonté, TP": "🎯 The coach follows you: SL to BE, raised SL, TP",
+"ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme": "ℹ️ The bot doesn't place orders on your platform for you", ": TU ES DEDANS": ": YOU'RE IN",
+"🎯 Coach activé jusqu'au TP": "🎯 Coach on until TP", "📈 Résultat compté dans Mes résultats": "📈 Result counted in My results", "📍 Repère prix : zone ≈": "📍 Price guide: zone ≈",
+"🔒 Réservé aux VIP": "🔒 VIP only", "🎁 Ta position offerte est déjà utilisée": "🎁 Your free position is already used", "📸 Partager mon gain": "📸 Share my profit",
+"📸 Envoie la capture de ton gain": "📸 Send a screenshot of your profit", "🖼 Une image seulement": "🖼 One image only", "🙅 Que du trading, rien d'autre": "🙅 Trading only, nothing else",
+"✅ Je la vérifie avant de la publier": "✅ I check it before publishing", "🙅 Seulement une image de ton gain (capture d'écran)": "🙅 Only an image of your profit (screenshot)",
+"⏳ 3 captures max par jour. Reviens demain 🙏": "⏳ 3 screenshots max per day. Come back tomorrow 🙏", "👌 Capture reçue": "👌 Screenshot received",
+"👀 Je la vérifie avant de la publier": "👀 I'm checking it before publishing", "🙏 Merci !": "🙏 Thanks!",
+"🙏 Merci ! Cette capture ne sera pas publiée": "🙏 Thanks! This screenshot won't be published", "📸 Envoie une capture claire de ton gain de trading": "📸 Send a clear screenshot of your trading profit",
+"✅ Ton gain est publié 🔥": "✅ Your profit is published 🔥", "🙏 Merci, ça motive tout le monde !": "🙏 Thanks, it motivates everyone!",
+"🔥🔥 GAIN D'UN MEMBRE ALIGN 🔥🔥": "🔥🔥 ALIGN MEMBER PROFIT 🔥🔥", "📈 Positions BTC + Gold": "📈 BTC + Gold positions", "🎁 Ta 1re position est offerte": "🎁 Your 1st position is free",
+"📸 Partage ton gain : bouton 📸 en bas": "📸 Share your profit: 📸 button below",
 "🎁 TON ANALYSE GRATUITE DU JOUR": "🎁 YOUR FREE ANALYSIS OF THE DAY", "⏳ Attends que le prix vienne dans la zone 🟨": "⏳ Wait for price to reach the zone 🟨",
 "✅ Analyse gratuite du jour utilisée": "✅ Free analysis of the day used", "⏰ Une nouvelle demain": "⏰ A new one tomorrow",
 "💎 En VIP, plus besoin d'appuyer sur Analyse": "💎 With VIP, no need to tap Analysis", "🤖 Les positions arrivent toutes seules": "🤖 Positions arrive automatically",
@@ -624,7 +637,7 @@ TRAD = {
 
 LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
 _CLES = sorted(TRAD, key=len, reverse=True)
-BOUTONS_FR = ["🟠 Analyse BTC", "🥇 Analyse Gold", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
+BOUTONS_FR = ["📸 Partager mon gain", "🟠 Analyse BTC", "🥇 Analyse Gold", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
               "🧩 Indicateur TradingView", "💎 Devenir VIP", "❌ Non"]
 INVERSE = {TRAD[b]: b for b in BOUTONS_FR}        # bouton anglais reçu → même action qu'en français
 
@@ -649,8 +662,11 @@ def traduire_clavier(kb):
     return json.dumps(j)
 
 def telegram(methode, **params):
-    if methode in ("sendMessage", "editMessageText") and str(params.get("chat_id")) in LANG_EN:
-        params["text"] = traduire(params.get("text", ""))
+    if methode in ("sendMessage", "editMessageText", "sendPhoto") and str(params.get("chat_id")) in LANG_EN:
+        if "text" in params:
+            params["text"] = traduire(params["text"])
+        if "caption" in params:
+            params["caption"] = traduire(params["caption"])
         if params.get("reply_markup"):
             params["reply_markup"] = traduire_clavier(params["reply_markup"])
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
@@ -658,9 +674,9 @@ def telegram(methode, **params):
 
 # ───────── Boutons et jauge ─────────
 CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
-                                   [{"text": "📈 Mes résultats"}, {"text": "🧩 Indicateur TradingView"}], [{"text": "🌐 English"}]],
+                                   [{"text": "📈 Mes résultats"}, {"text": "🧩 Indicateur TradingView"}], [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}], [{"text": "🌐 English"}]],
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}], [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
@@ -729,12 +745,51 @@ def analyse_marche(etat, pair):
     r["news"] = news_txt(etat or {})
     return r
 
+def bouton_auto(m):
+    return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
+
+def markup_analyse(etat, m, r):
+    """Sous l'analyse : bouton « Je rentre dans la prochaine position » quand une entrée se prépare."""
+    cle = etat.get(m, {}); d = r["confirme"]
+    if d and not cle.get("trade") and cle.get("ordre") and not etire(r, d) and not bloque_dw(r, d):
+        return bouton_auto(m)
+    return CLAVIER
+
+def inscrire_auto(etat, cid, m):
+    """L'utilisateur réserve sa place : dès que le bot entre, il est compté dedans au même prix (coach + résultats)."""
+    liste = etat.setdefault("auto", {}).setdefault(m, [])
+    if cid not in liste:
+        liste.append(cid)
+    o = etat.get(m, {}).get("ordre")
+    d = (o or {}).get("d") or etat.get(m, {}).get("aligne") or 1
+    _envoi_sur(cid, reply_markup=CLAVIER, text=(
+        f"✅ Noté ! Prochaine position {ICONE.get(m, '')} {m}\n{SENS[d]}\n"
+        "📲 Place ton ordre limite dans la zone 🟨 (vue 15 min)\n"
+        f"🛑 SL un peu {'SOUS la mèche du dernier creux' if d == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n"
+        + (f"📍 Repère prix : zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))} • SL ≈ {px(o['sl'])}\n" if o else "")
+        + "🤖 Dès que j'entre, tu es compté dedans automatiquement\n🎯 Le coach te suit : SL à BE, SL remonté, TP\n"
+          "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme"))
+
+def entrer_inscrits(etat, m, tr):
+    """Le bot vient d'entrer : tous ceux qui ont réservé sont mis dans la position au prix d'entrée du bot."""
+    for cid in etat.get("auto", {}).pop(m, []):
+        if isinstance(tr.setdefault("qui", {}).get(cid), dict):
+            continue
+        tr["qui"][cid] = {"e": tr["e"], "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
+        if cid in etat.get("prospects", []):
+            etat.setdefault("bienvenue", {}).setdefault(cid, m)
+        _envoi_sur(cid, reply_markup=CLAVIER, text=(
+            f"🤖 {ICONE.get(m, '')} {m} : TU ES DEDANS\n{SENS[tr['d']]}\n"
+            f"📌 Entrée   {px(tr['e'])}\n🛑 SL   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n"
+            "🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"))
+
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
         if mq and mq != nom_marche:
             continue
         try:
-            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, analyse_marche(etat, pair), (etat or {}).get(nom_marche)), reply_markup=CLAVIER)
+            r = analyse_marche(etat, pair)
+            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r, (etat or {}).get(nom_marche)), reply_markup=markup_analyse(etat or {}, nom_marche, r))
         except Exception as ex:
             print("analyse", ex)
 
@@ -765,7 +820,7 @@ def noter(etat, cid, m, pos, sortie, motif):
         f"🚪 Sortie   {px(sortie)}\n"
         f"{'⬆️' if pts > 0 else '⬇️'} {pts:+,.2f} pts\n".replace(",", " ")
         + f"📊 {pct:+.2f} %\n"
-        + ("🎉 Bravo !" if pts > 0 else "💪 On repart au prochain")))
+        + ("🎉 Bravo !\n📸 Partage ton gain : bouton 📸 en bas" if pts > 0 else "💪 On repart au prochain")))
 
 def texte_bilan(etat):
     b = etat.get("bilan")
@@ -862,6 +917,62 @@ def changer_langue(etat, cid, anglais, membre_ok):
     except Exception as ex:
         print("regles langue", ex)
 
+def recevoir_gain(etat, cid, msg):
+    """📸 Partager mon gain : seulement une IMAGE, vérifiée par le propriétaire avant publication. Renvoie True si traité."""
+    tx = (msg.get("text") or "").lower()
+    if "partager mon gain" in tx:
+        etat.setdefault("attente_photo", {})[cid] = time.time()
+        _envoi_sur(cid, text="📸 Envoie la capture de ton gain\n🖼 Une image seulement\n🙅 Que du trading, rien d'autre\n✅ Je la vérifie avant de la publier")
+        return True
+    autre = any(k in msg for k in ("video", "document", "sticker", "animation", "video_note", "voice", "audio"))
+    if not msg.get("photo") and not (autre and cid in etat.get("attente_photo", {})):
+        return False
+    if autre:
+        _envoi_sur(cid, text="🙅 Seulement une image de ton gain (capture d'écran)")
+        return True
+    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
+    compte = etat.setdefault("photos_jour", {})
+    if compte.get(cid, [None, 0])[0] == jour and compte[cid][1] >= 3:
+        _envoi_sur(cid, text="⏳ 3 captures max par jour. Reviens demain 🙏")
+        return True
+    compte[cid] = [jour, (compte.get(cid, [jour, 0])[1] if compte.get(cid, [None])[0] == jour else 0) + 1]
+    etat.get("attente_photo", {}).pop(cid, None)
+    fr = msg.get("from", {})
+    nom = fr.get("first_name", "Membre")
+    pid = str(msg.get("message_id", int(time.time())))
+    etat.setdefault("photos", {})[pid] = {"cid": cid, "file": msg["photo"][-1]["file_id"], "nom": nom}
+    for p in proprio(etat):
+        try:
+            telegram("sendPhoto", chat_id=p, photo=msg["photo"][-1]["file_id"],
+                     caption=f"📸 Gain envoyé par {nom}" + (f" @{fr['username']}" if fr.get("username") else "") + "\n👀 Vérifie l'image avant de publier",
+                     reply_markup=json.dumps({"inline_keyboard": [[{"text": "✅ Publier", "callback_data": f"pub:{pid}"},
+                                                                   {"text": "❌ Refuser", "callback_data": f"refus:{pid}"}]]}))
+        except Exception as ex:
+            print("photo proprio", ex)
+    _envoi_sur(cid, text="👌 Capture reçue\n👀 Je la vérifie avant de la publier\n🙏 Merci !")
+    return True
+
+def valider_gain(etat, chats, pid, publier, cb):
+    ph = etat.get("photos", {}).pop(pid, None)
+    try:
+        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Publié" if publier else "❌ Refusé")
+    except Exception:
+        pass
+    if not ph:
+        return
+    if not publier:
+        _envoi_sur(ph["cid"], text="🙏 Merci ! Cette capture ne sera pas publiée\n📸 Envoie une capture claire de ton gain de trading")
+        return
+    legende = f"🔥🔥 GAIN D'UN MEMBRE ALIGN 🔥🔥\n👤 {ph['nom']}\n📈 Positions BTC + Gold\n🎁 Ta 1re position est offerte\n👉 @{etat.get('bot') or 'align_mtf_adel_bot'}"
+    cibles = [etat["canal_preuves"]] if etat.get("canal_preuves") else list(etat.get("prospects", []))
+    for c in cibles:
+        try:
+            telegram("sendPhoto", chat_id=c, photo=ph["file"], caption=legende,
+                     **({"reply_markup": bouton_payer(etat)} if etat.get("lien") and c != etat.get("canal_preuves") else {}))
+        except Exception as ex:
+            print("publier gain", ex)
+    _envoi_sur(ph["cid"], text="✅ Ton gain est publié 🔥\n🙏 Merci, ça motive tout le monde !")
+
 def traiter(etat, chats, updates):
     """Boutons cliqués et messages reçus. Renvoie la liste des téléphones qui demandent une analyse."""
     demandes = []
@@ -890,6 +1001,20 @@ def traiter(etat, chats, updates):
                         "✅ Accès indicateur ouvert !\n📍 TradingView → Indicateurs → Sur invitation\n🧩 ALIGN MTF PRO\n"
                         + (f"🔗 {LIEN_INDICATEUR}\n" if LIEN_INDICATEUR else "") + "⏱ Mets-toi en vue 15 minutes"))
                     _envoi_sur(qui, text="👍 Abonné prévenu.")
+                continue
+            if choix == "auto":
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Noté")
+                except Exception:
+                    pass
+                if autorise(etat, qui, cb["from"]["id"]) or qui not in etat.get("bienvenue", {}):
+                    inscrire_auto(etat, qui, mk)
+                else:
+                    _envoi_sur(qui, text="🔒 Réservé aux VIP\n🎁 Ta position offerte est déjà utilisée\n💎 VIP 49,90 € / mois 👇",
+                               **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
+                continue
+            if choix in ("pub", "refus") and qui in proprio(etat):
+                valider_gain(etat, chats, mk, choix == "pub", cb)
                 continue
             if choix in ("offrir", "retirer") and qui in proprio(etat):
                 try:
@@ -927,6 +1052,8 @@ def traiter(etat, chats, updates):
         if tx in INVERSE:
             msg["text"] = tx = INVERSE[tx]
         bas = tx.lower()
+        if recevoir_gain(etat, cid, msg):
+            continue
         if "english" in bas or "français" in bas or "francais" in bas:
             changer_langue(etat, cid, "english" in bas, autorise(etat, cid, msg.get("from", {}).get("id")))
             continue
@@ -1153,6 +1280,15 @@ def connecter_canal(etat, mcm):
     """Le bot vient d'être ajouté (ou retiré) comme administrateur d'une chaîne : il la prend comme chaîne VIP."""
     chat, st = mcm["chat"], mcm["new_chat_member"]["status"]
     cid = str(chat["id"])
+    titre = chat.get("title", "")
+    if st == "administrator" and any(k in titre.lower() for k in ("résultat", "resultat", "preuve", "gain", "result")):
+        etat["canal_preuves"] = cid; etat["canal_preuves_nom"] = titre
+        etat["lien_preuves"] = f"https://t.me/{chat['username']}" if chat.get("username") else etat.get("lien_preuves", "")
+        for p in proprio(etat):
+            _envoi_sur(p, text=f"✅ Chaîne publique « {titre} » connectée.\n📸 Les gains que tu valides y seront publiés.")
+        return
+    if etat.get("canal_preuves") == cid and st in ("left", "kicked", "member"):
+        etat.pop("canal_preuves", None); return
     if st == "administrator":
         etat["canal"] = cid; etat["canal_nom"] = chat.get("title", "")
         texte = f"✅ Bot connecté à la chaîne « {etat['canal_nom']} ». Les signaux y seront publiés automatiquement."
@@ -1590,14 +1726,14 @@ def agent(m, r, cle, ferme):
                            f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
-                out.append(f"🔔 JE PRÉPARE UNE POSITION — {m} {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
+                out.append((f"🔔 JE PRÉPARE UNE POSITION — {m} {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n"
                            f"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨\n"
                            f"👀 Mets-toi en vue 15 minutes\n"
                            f"🕯 Repère {'le dernier creux (mèche du bas)' if d == 1 else 'le dernier sommet (mèche du haut)'}\n"
                            f"🟨 L'entrée sera à peu près {'au-dessus de ce creux' if d == 1 else 'sous ce sommet'}\n"
                            f"🚦 Attends mon feu vert 🟢\n\n"
                            f"{fmt_trade(m, o, p)}\n\n"
-                           f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}")
+                           f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}", bouton_auto(m)))
         if bloque or o["rr"] < GAIN_MIN:
             return out
         # On ajuste le point tant que le prix n'est pas encore arrivé (les niveaux bougent)
@@ -1608,7 +1744,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append(f"👀👀 ÇA ARRIVE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}")
+            out.append((f"👀👀 ÇA ARRIVE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🚦 Feu vert 🟢 très bientôt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}", bouton_auto(m)))
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
@@ -1702,12 +1838,12 @@ def un_tour(etat, chats):
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 6:
+        if etat.get("clavier") != 7:
             for cid in chats:
-                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas\n🌐 English : le bot en anglais", reply_markup=CLAVIER)
+                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas\n🌐 English : le bot en anglais\n📸 Partager mon gain : ta capture publiée", reply_markup=CLAVIER)
             for cid in etat.get("prospects", []):
                 _envoi_sur(cid, text="🆕 Boutons : 🟠 Analyse BTC • 🥇 Analyse Gold • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 6
+            etat["clavier"] = 7
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
@@ -1757,6 +1893,9 @@ def un_tour(etat, chats):
         r["news"] = news_txt(etat)
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
+        if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
+            cle["trade"]["auto_fait"] = True
+            entrer_inscrits(etat, nom_marche, cle["trade"])
         if TOKEN:
             coach(etat, nom_marche, r, cle)
             if cle.get("fin"):
@@ -1781,7 +1920,7 @@ def un_tour(etat, chats):
         cle["vu"] = r["t"]
         for cid, mq in demandes:
             if mq in (None, nom_marche):
-                _envoi_sur(cid, text=texte_etat(nom_marche, r, cle), reply_markup=CLAVIER)
+                _envoi_sur(cid, text=texte_etat(nom_marche, r, cle), reply_markup=markup_analyse(etat, nom_marche, r))
         print(texte_etat(nom_marche, r), "\n")
 
     try:
