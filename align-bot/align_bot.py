@@ -91,14 +91,41 @@ def yahoo_or(interval):
             out.append(dict(t=t, o=out[-1]["c"], h=max(out[-1]["c"], spot), l=min(out[-1]["c"], spot), c=spot))
     return out
 
+def paxg_or(interval):
+    """Bougies de l'or : PAXG (Kraken, fiable, sans limite) recalées sur le prix spot XAUUSD (Swissquote).
+    Mêmes mouvements, mêmes mèches, au prix du graphique XAUUSD."""
+    c = _CACHE.get(("paxg", interval))
+    if not c or time.time() - c[0] > 50:
+        rows = kraken("PAXGUSD", interval)
+        _CACHE[("paxg", interval)] = c = (time.time(), rows)
+        if interval == 1 and rows:
+            _CACHE["paxg_dernier"] = rows[-1]["c"]
+    spot = None
+    try:
+        spot = or_spot()
+        if "paxg_dernier" not in _CACHE:
+            _CACHE["paxg_dernier"] = kraken("PAXGUSD", 1)[-1]["c"]
+        brut = spot - _CACHE["paxg_dernier"]
+        ancien = _CACHE.get("ecart_paxg")
+        _CACHE["ecart_paxg"] = brut if ancien is None or abs(brut - ancien) > 60 else ancien * 0.8 + brut * 0.2
+    except Exception as ex:
+        print("spot or", ex)
+    e = _CACHE.get("ecart_paxg", 0.0)
+    out = [dict(t=b["t"], o=b["o"] + e, h=b["h"] + e, l=b["l"] + e, c=b["c"] + e) for b in c[1]]
+    if interval == 1 and spot and out:
+        t = int(time.time()) // 60 * 60 - 60
+        if t > out[-1]["t"]:
+            out.append(dict(t=t, o=out[-1]["c"], h=max(out[-1]["c"], spot), l=min(out[-1]["c"], spot), c=spot))
+    return out
+
 def bougies(pair, interval):
-    """Source des bougies : Kraken pour le BTC, XAUUSD spot pour le Gold (secours : Kraken PAXG)."""
+    """Source des bougies : Kraken pour le BTC ; pour le Gold, PAXG recalé sur le spot XAUUSD (secours : bougies COMEX)."""
     if pair == "XAUUSD":
         try:
-            return yahoo_or(interval)
+            return paxg_or(interval)
         except Exception as ex:
-            print("or -> secours PAXG", ex)
-            return kraken("PAXGUSD", interval)
+            print("or PAXG -> secours COMEX", ex)
+            return yahoo_or(interval)
     return kraken(pair, interval)
 
 def regrouper(bars, n, base_sec):
@@ -342,6 +369,8 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
           f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
           f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
           r.get("news") or "📰 News : calendrier indisponible"]
+    if r.get("repli"):
+        l.append(f"↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer {SENS[r['confirme']]}")
     if r.get("distrib"):
         l.append("⚠️ Distribution possible : le haut s'essouffle (divergence RSI)")
     if r.get("accum"):
@@ -540,7 +569,7 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
+"(en cours)": "(now)", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
 " — dans ": " — in ", " jours": " days", " — en cours": " — now", "✅ Rien d'ici": "✅ Nothing within", "✅ Plus aucune annonce ni discours cette semaine": "✅ No more news or speeches this week",
 "lun. ": "Mon ", "mar. ": "Tue ", "mer. ": "Wed ", "jeu. ": "Thu ", "ven. ": "Fri ", "sam. ": "Sat ", "dim. ": "Sun ", ": ÇA RETRACE": ": IT'S PULLING BACK", "😎 Le repli qu'on attend commence": "😎 The pullback we're waiting for is starting",
 "🎯 Zone visée ≈": "🎯 Target zone ≈", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
@@ -754,8 +783,25 @@ def marche_demande(txt):
     t = txt.lower()
     return "BTC" if "btc" in t else "GOLD" if ("gold" in t or "or" in t.split()) else None
 
+def tendance_armee(r, cle):
+    """Une fois 15m + 1h + 4h alignés, la tendance reste « armée » pendant le repli :
+    le 15 min peut se retourner (c'est le repli qu'on attend) tant que le 4 h reste dans le sens et que le 1 h n'est pas contre."""
+    d = r["confirme"]
+    if d:
+        cle["arme"] = d
+        return r
+    a = cle.get("arme")
+    if a and r["dirs"][9] == a and r["dirs"][7] != -a:
+        r["confirme"] = a; r["repli"] = True
+    elif a:
+        cle["arme"] = 0
+    return r
+
 def analyse_marche(etat, pair):
     r = analyser(pair)
+    m = next((k for k, v in MARCHES.items() if v == pair), None)
+    if m:
+        tendance_armee(r, (etat or {}).setdefault(m, {}))
     r["annonce"] = annonce_proche(etat or {}, int(time.time()))
     r["news"] = news_txt(etat or {})
     return r
@@ -968,10 +1014,37 @@ def changer_langue(etat, cid, anglais, membre_ok):
     except Exception as ex:
         print("regles langue", ex)
 
+COMMANDES = {"/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
+             "/resultats": "📈 Mes résultats", "/gain": "📸 Partager mon gain", "/vip": "💎 Devenir VIP",
+             "/english": "🌐 English", "/francais": "🌐 Français"}
+
+def installer_menu(etat):
+    """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
+    if etat.get("menu") == 2:
+        return
+    fr = [("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
+          ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
+          ("boutons", "⌨️ Faire revenir les boutons"), ("english", "🌐 English")]
+    en = [("analyse_btc", "🟠 BTC Analysis"), ("analyse_gold", "🥇 Gold Analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
+          ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"),
+          ("boutons", "⌨️ Bring back the buttons"), ("francais", "🌐 Français")]
+    try:
+        telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in fr]))
+        telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in en]), language_code="en")
+        telegram("setChatMenuButton", menu_button=json.dumps({"type": "commands"}))
+        telegram("setMyShortDescription", short_description="📈 Positions BTC & Gold en direct • 🤖 Coach jusqu'au TP • 🎁 1re position offerte")
+        telegram("setMyDescription", description=("🤖 ALIGN Coach — BTC & Gold\n\n🟩 LONG / 🟥 SHORT expliqués en bougies (vue 15 min)\n"
+                                                  "👀 Alertes ÇA ARRIVE • PRÉPARE-TOI • J'ENTRE\n🎯 Coach : SL à BE, SL remonté, TP\n"
+                                                  "📰 News et discours Fed à l'heure de Paris\n🎁 Ta 1re position est offerte\n\n"
+                                                  "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
+        etat["menu"] = 2
+    except Exception as ex:
+        print("menu", ex)
+
 def recevoir_gain(etat, cid, msg):
     """📸 Partager mon gain : seulement une IMAGE, vérifiée par le propriétaire avant publication. Renvoie True si traité."""
     tx = (msg.get("text") or "").lower()
-    if "partager mon gain" in tx:
+    if "partager mon gain" in tx or tx.startswith("/gain"):
         etat.setdefault("attente_photo", {})[cid] = time.time()
         _envoi_sur(cid, text="📸 Envoie la capture de ton gain\n🖼 Une image seulement\n🙅 Que du trading, rien d'autre\n✅ Je la vérifie avant de la publier")
         return True
@@ -1107,6 +1180,15 @@ def traiter(etat, chats, updates):
         if msg.get("chat", {}).get("type") != "private":
             continue
         tx = msg.get("text", "")
+        cmd = tx.split("@")[0].strip().lower() if tx.startswith("/") else ""
+        if cmd in COMMANDES:
+            msg["text"] = tx = COMMANDES[cmd]
+        if cmd in ("/start", "/boutons"):
+            # Les boutons reviennent toujours (si le clavier du téléphone les a cachés)
+            _envoi_sur(cid, text="⬇️ Tes boutons sont là 👇\n💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ",
+                       reply_markup=CLAVIER if autorise(etat, cid, msg.get("from", {}).get("id")) else CLAVIER_VISITEUR)
+            if cid in etat.get("prospects", []) or cid in proprio(etat):
+                continue
         if tx in INVERSE:
             msg["text"] = tx = INVERSE[tx]
         bas = tx.lower()
@@ -1149,7 +1231,7 @@ def traiter(etat, chats, updates):
             etat.setdefault("noms", {})[cid] = nom
             menu_indicateur(etat, cid, nom)
             continue
-        if "mon bot" in txt:
+        if "mon bot" in txt or "mon_bot" in txt:
             menu_bot(etat, cid)
             continue
         if "analyse" in txt or "etat" in txt:
@@ -1797,7 +1879,9 @@ def agent(m, r, cle, ferme):
         bloque = bloque_dw(r, d)
         o = point_entree(r, d, p)
         # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
-        if not cle.get("prep") and etire(r, d):
+        p_ = r["m1"][-1]["c"]
+        calme = ((r["r15"] < 62 and p_ - r["ema15"] < 1.5 * r["atr"]) if d == 1 else (r["r15"] > 38 and r["ema15"] - p_ < 1.5 * r["atr"]))
+        if not cle.get("prep") and (etire(r, d) or (cle.get("parti") and not calme)):   # hystérésis : pas de va-et-vient
             if not cle.get("parti"):
                 cle["parti"] = True; cle["attente_rsi"] = False; cle.pop("ordre", None)
                 if time.time() - cle.get("parti_t", 0) > 7200:      # pas de répétition (2 h)
@@ -1810,12 +1894,14 @@ def agent(m, r, cle, ferme):
                            f"🔜 Prochaine entrée   {SENS[d]}\n🎯 Zone visée ≈ {px(r['ema15'])}\n👀 Vue 15 min, sois patient\n🔔 Je te préviens dès qu'on y est")
             elif r["dirs"][2] == d:
                 cle["retrace_vu"] = False
-            cle["aligne"] = 0
+            cle["aligne"] = d
             return out
         if cle.get("parti"):
-            # Il n'est plus trop loin : le repli est là, l'entrée se prépare
+            # Il n'est plus trop loin : le repli est là, l'entrée se prépare (1 fois / 2 h, et pas si le Daily bloque)
             cle["parti"] = False; cle["retrace_vu"] = False
-            out.append(f"↩️ {ICONE.get(m, '')} {m} : LE REPLI EST LÀ {'⬇️' if d == 1 else '⬆️'}\n{SENS[d]} se prépare\n👀 Vue 15 min, tiens-toi prêt\n🔔 Prochaine alerte : ÇA ARRIVE")
+            if not bloque and time.time() - cle.get("repli_t", 0) > 7200:
+                cle["repli_t"] = time.time()
+                out.append(    f"↩️ {ICONE.get(m, '')} {m} : LE REPLI EST LÀ {'⬇️' if d == 1 else '⬆️'}\n{SENS[d]} se prépare\n👀 Vue 15 min, tiens-toi prêt\n🔔 Prochaine alerte : ÇA ARRIVE")
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
@@ -1855,11 +1941,11 @@ def agent(m, r, cle, ferme):
         if d == 1:
             r5ok = min(r["r5"]) <= 35
             petites = [u for u in ("10", "15", "30") if R[u] <= 40]
-            conf1h = R["1h"] <= 48
+            conf1h = R["1h"] < 65 and r["dirs"][9] == d      # 1 h pas en excès, 4 h toujours dans le sens
         else:
             r5ok = max(r["r5"]) >= 65
             petites = [u for u in ("10", "15", "30") if R[u] >= 60]
-            conf1h = R["1h"] >= 52
+            conf1h = R["1h"] > 35 and r["dirs"][9] == d
         surcharge = r5ok and len(petites) >= 1 and conf1h
         detail = f"RSI 5m {r5:.0f} • " + " • ".join(f"{u}m {R[u]:.0f}" for u in ("10", "15", "30")) + f" • 1h {R['1h']:.0f}"
         if touche and not ((lo <= o["sl"]) if d == 1 else (hi >= o["sl"])):
@@ -1911,11 +1997,8 @@ def agent(m, r, cle, ferme):
                     out.append((f"👍 {m} : tu peux encore rentrer ({px(p)}). Stop {px(sl)} • TP1 {px(t1)}\n\nTu es rentré ?", boutons(m)))
         elif not tr.get("tard"):
             tr["tard"] = True
-            if not any(isinstance(v, dict) for v in tr.get("qui", {}).values()):
-                out.append(f"⛔ {m} : trop tard pour rentrer. On attend le prochain setup.")
-                cle.pop("trade"); cle["aligne"] = 0
-            else:
-                out.append(f"⛔ {m} : trop tard pour rentrer maintenant. Ceux qui sont dedans : on continue vers le TP1 {px(t1)}.")
+            # Le bot reste en position jusqu'au TP ou au SL (son bilan compte toutes ses positions)
+            out.append(f"⛔ {m} : trop tard pour rentrer maintenant. Ceux qui sont dedans : on continue vers le TP1 {px(t1)}.")
         return out
 
     if tr["statut"] == "tp1":
@@ -1940,6 +2023,8 @@ def agent(m, r, cle, ferme):
 def un_tour(etat, chats):
     """Un tour complet : messages reçus, analyse BTC + Gold, envois, jauges, sauvegarde."""
     LANG_EN.clear(); LANG_EN.update(etat.get("en", []))
+    if TOKEN:
+        installer_menu(etat)
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
@@ -1994,6 +2079,7 @@ def un_tour(etat, chats):
         except Exception as ex:
             print(nom_marche, "erreur", ex); continue
         cle = etat.setdefault(nom_marche, {})
+        tendance_armee(r, cle)
         r["annonce"] = annonce_proche(etat, int(time.time()))
         r["news"] = news_txt(etat)
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
