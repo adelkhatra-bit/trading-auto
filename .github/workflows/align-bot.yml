@@ -1,13 +1,16 @@
 name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
 
 on:
+  push:                     # chaque mise à jour du bot le redémarre tout seul avec la nouvelle version
+    branches: [main]
+    paths: ["align-bot/**", ".github/workflows/align-bot.yml"]
   schedule:
     - cron: "*/5 * * * *"   # relance de secours : si le bot s'arrête, il repart en moins de 5 min
   workflow_dispatch:        # bouton « Run workflow » pour tester à la main
 
 concurrency:
   group: align-bot
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}   # mise à jour ou lancement manuel = remplace l'ancien bot ; la relance de secours attend son tour
 
 jobs:
   signaux:
