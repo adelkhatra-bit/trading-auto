@@ -9,7 +9,7 @@ PARIS = ZoneInfo("Europe/Paris")
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 ETAT_FICHIER = os.environ.get("STATE_FILE", "state.json")
 MARCHES = {"BTC": "XBTUSD", "GOLD": "PAXGUSD"}  # BTC → FTMO (CFD 24/7) • GOLD → Topstep (MGC) / FTMO
-MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 1.5
+MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 2.0
 UT = ["1", "2", "5", "10", "15", "30", "45", "1h", "2h", "4h", "D"]
 POIDS = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
 
@@ -258,12 +258,32 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🟨 Zone   🔒🔒🔒")
     titre, raison = verdict(r, cle)
     l += ["━━━━━━━━━━━━", titre, raison]
+    if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
+        l.append(prochaine(r, cle))
     return "\n".join(l)
 
 def bloque_dw(r, d):
     """Daily / Weekly : pas de short tout en bas, pas de long tout en haut."""
     return (d == -1 and (r["posD"] <= 0.15 or (r["posW"] <= 0.15 and r["posD"] <= 0.35))) or \
            (d == 1 and (r["posD"] >= 0.85 or (r["posW"] >= 0.85 and r["posD"] >= 0.65)))
+
+def etire(r, d):
+    """Le prix est déjà parti loin (RSI 15 min en excès ou trop loin de l'EMA 20) : entrée loupée."""
+    p = r["m1"][-1]["c"]
+    return (r["r15"] >= 70 or p - r["ema15"] > 2 * r["atr"]) if d == 1 else (r["r15"] <= 30 or r["ema15"] - p > 2 * r["atr"])
+
+def prochaine(r, cle):
+    """Prochaine entrée attendue, avec la flèche et la couleur."""
+    d = r["confirme"]; R = dict(zip(UT, r["rsis"]))
+    if d and etire(r, d):
+        # Grosses UT en excès : le retournement est possible
+        if (d == 1 and R["1h"] >= 70 and R["4h"] >= 65) or (d == -1 and R["1h"] <= 30 and R["4h"] <= 35):
+            return f"🔜 Prochaine entrée   {SENS[-d]}\n👀 Si 15 min / 1 h / 4 h se retournent"
+        return f"🔜 Prochaine entrée   {SENS[d]}\n↩️ Sur le repli vers   {px(r['ema15'])}"
+    if d:
+        return f"🔜 Prochaine entrée   {SENS[d]}"
+    maj, n_ok = alignement(r)
+    return f"🔜 Prochaine entrée   {SENS[maj]}   ({n_ok}/3)" if maj else "🔜 Prochaine entrée   ➖ pas encore de sens"
 
 def verdict(r, cle):
     """Réponse claire pour l'utilisateur : peut-il entrer maintenant ou non ?"""
@@ -281,6 +301,8 @@ def verdict(r, cle):
     al = r["confirme"]
     if not al:
         return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
+    if etire(r, al):
+        return ("⛔ TROP TARD — le marché est déjà parti", "😎 Patience, on trouve une autre entrée\n" + prochaine(r, cle))
     if bloque_dw(r, al):
         return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
     zone = bool(cle.get("attente_rsi"))
@@ -388,7 +410,7 @@ def noter(etat, cid, m, pos, sortie, motif):
     st["tp" if pts > 0 else "sl"] += 1
     st["pts"][m] = st["pts"].get(m, 0) + pts
     st["pct"] += pct
-    st["hist"] = (st["hist"] + [[m, round(pts, 2), round(pct, 2), motif, int(time.time())]])[-20:]
+    st["hist"] = (st["hist"] + [[m, round(pts, 2), round(pct, 2), motif, int(time.time()), pos["e"], sortie]])[-20:]
     pos["fini"] = True
     _envoi_sur(cid, reply_markup=CLAVIER, text=(
         f"{'✅' if pts > 0 else '❌'} {m} clôturé\n"
@@ -420,7 +442,8 @@ def _texte_resultats(etat, cid):
          f"🎯 Réussite   {round(100 * st['tp'] / n) if n else 0} %"]
     l += [f"{'⬆️' if v >= 0 else '⬇️'} {k}   {v:+,.2f} pts".replace(",", " ") for k, v in st["pts"].items()]
     l += [f"💰 Total   {st['pct']:+.2f} %", "━━━━━━━━━━━━", "Derniers trades :"]
-    l += [f"{'✅' if h[1] > 0 else '❌'} {h[0]}   {h[2]:+.2f} %" for h in st["hist"][-5:]]
+    l += [f"{'✅ TP' if h[1] > 0 else '❌ SL'} {ICONE.get(h[0], '')} {h[0]}   {h[2]:+.2f} %"
+          + (f"\n     📌 {px(h[5])} → 🚪 {px(h[6])}" if len(h) > 6 else "") for h in st["hist"][-5:]]
     return "\n".join(l)
 
 def controle_entree(etat, m, d):
@@ -752,8 +775,9 @@ def jauge(m, r, cle, cid=None, canal=False):
         return f"{tete}\n🔌 Position ouverte   {SENS[tr['d']]}\n{titre.splitlines()[0]}"
     maj, n_ok = alignement(r)
     if not d:   # étape 1 : l'alignement se charge (0 → 40 %)
-        return (f"{tete}\n🔌 Prochaine position\n{barre_pct(40 * n_ok / 3)}\n"
-                f"🧭 Alignement   {n_ok}/3 ⏳" + (f"   {SENS[maj].split()[-2]} {SENS[maj].split()[-1]}" if maj else ""))
+        return (f"{tete}\n{prochaine(r, cle)}\n{barre_pct(40 * n_ok / 3)}\n🧭 Alignement   {n_ok}/3 ⏳")
+    if etire(r, d):
+        return f"{tete}\n🚀 Déjà parti : patience\n{barre_pct(40)}\n{prochaine(r, cle)}"
     if bloque_dw(r, d):
         return f"{tete}\n🔌 Prochaine position\n{barre_pct(40)}\n⛔ {SENS[d]} bloqué : prix {zone_txt(r['posD'])} Daily"
     o = cle.get("ordre")
@@ -963,10 +987,11 @@ def point_entree(r, d, p):
     if abs(e - sl) < max(a, e * 0.0008):
         sl = e - d * max(a, e * 0.0008)
     risque = abs(e - sl)
-    cibles = sorted([z for z in r["grosses"] if d * (z[0] - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
-    t1 = cibles[0] if cibles else (e + d * risque * 2, "projection 2 x le risque")
-    loin = [z for z in cibles if d * (z[0] - t1[0]) >= a]
-    t2 = loin[0] if loin else (e + d * risque * 3.5, "projection 3,5 x le risque")
+    # Grands objectifs : niveaux 4h / Daily uniquement (on vise les grosses unités de temps)
+    cibles = sorted([z for z in r["grosses"] if z[1] in ("4h", "Daily") and d * (z[0] - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+    t1 = cibles[0] if cibles else (e + d * risque * 2.5, "projection 2,5 x le risque")
+    loin = [z for z in cibles if d * (z[0] - t1[0]) >= 2 * a]
+    t2 = loin[0] if loin else (e + d * risque * 5, "projection 5 x le risque")
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     # Zone d'entrée : du retracement 50 % jusqu'au 78,6 %, jamais à moins de 25 % du risque avant le stop
     if d == -1:
@@ -1104,6 +1129,14 @@ def agent(m, r, cle, ferme):
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
         bloque = bloque_dw(r, d)
         o = point_entree(r, d, p)
+        # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
+        if not cle.get("prep") and etire(r, d):
+            if not cle.get("parti"):
+                cle["parti"] = True; cle["attente_rsi"] = False; cle.pop("ordre", None)
+                out.append(f"🚀 {ICONE.get(m, '')} {m} est déjà parti {'⬆️' if d == 1 else '⬇️'}\n😎 On ne court pas après le prix\n{prochaine(r, cle)}")
+            cle["aligne"] = 0
+            return out
+        cle["parti"] = False
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
@@ -1119,7 +1152,7 @@ def agent(m, r, cle, ferme):
                            f"🚦 Attends mon feu vert 🟢\n\n"
                            f"{fmt_trade(m, o, p)}\n\n"
                            f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}")
-        if bloque or o["rr"] < 1.5:
+        if bloque or o["rr"] < GAIN_MIN:
             return out
         # On ajuste le point tant que le prix n'est pas encore arrivé (les niveaux bougent)
         if not cle.get("prep"):
@@ -1156,7 +1189,7 @@ def agent(m, r, cle, ferme):
                 checks = [("15 min • 1 h • 4 h alignées", True), ("Daily / Weekly favorables", True),
                           ("Zone Fibonacci 50 – 78,6 %", True), ("Niveau 15m / 1h / 4h ou EMA", niveau),
                           (f"RSI en surcharge ({', '.join(['5m'] + [u + 'm' for u in petites])})", True), ("Confirmé en 1 h", True),
-                          ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= 1.5)]
+                          ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
                 out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
