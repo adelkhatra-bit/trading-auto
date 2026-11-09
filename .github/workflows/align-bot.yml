@@ -8,6 +8,10 @@ on:
     - cron: "*/5 * * * *"   # relance de secours : si le bot s'arrête, il repart en moins de 5 min
   workflow_dispatch:        # bouton « Run workflow » pour tester à la main
 
+permissions:
+  contents: read
+  models: read        # IA gratuite GitHub Models (avis, explications d'entrée, leçons)
+
 concurrency:
   group: align-bot
   cancel-in-progress: ${{ github.event_name != 'schedule' }}   # mise à jour ou lancement manuel = remplace l'ancien bot ; la relance de secours attend son tour
@@ -32,6 +36,7 @@ jobs:
       - name: Analyse BTC + Gold et envoi Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DUREE_SEC: "20400"     # 5 h 40 : le bot reste allumé, une analyse BTC + Gold par minute
           PAUSE_SEC: "20"
         run: python3 align_bot.py
