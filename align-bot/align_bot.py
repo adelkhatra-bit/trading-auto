@@ -389,10 +389,12 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     sens_txt = ("📈 Le marché MONTE" if maj == 1 else "📉 Le marché DESCEND" if maj == -1 else "➖ Le marché hésite")
     coches = " ".join("✅" if x == maj and maj else "⏳" for x in (D[4], D[7], D[9]))
     if not vip:
+        etat_pos = ("🔥 Une position VIP est EN COURS" if (cle or {}).get("trade") else
+                    "👀 Une position VIP se PRÉPARE" if (cle or {}).get("ordre") and r["confirme"] else "⏳ Pas de position pour l'instant")
         return "\n".join([f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(prix)}",
-                          f"{sens_txt}   ({coches})", r.get("news") or "",
+                          etat_pos, r.get("news") or "",
                           "━━━━━━━━━━━━",
-                          "🔒 Entrée : VIP", "🔒 SL : VIP", "🔒 TP : VIP", "🔒 Prochaine entrée : VIP",
+                          "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP",
                           "━━━━━━━━━━━━",
                           "👀 Les VIP savent déjà où rentrer", "😬 Tu vas louper le prochain move ?", "💎 VIP 49,90 € / mois 👇"])
     l = [f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(prix)}", f"{sens_txt}   ({coches})", "━━━━━━━━━━━━"]
@@ -675,7 +677,7 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -827,7 +829,7 @@ TRAD = {
 "🕯 Si une bougie 15 min CLÔTURE en dessous → j'entre": "🕯 If a 15-min candle CLOSES below → I enter", "🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture": "🙅 A wick poking through isn't enough: we wait for the close", "🔔 Tiens-toi prêt": "🔔 Get ready", "la mèche de la bougie de cassure": "the wick of the breakout candle", ": à la clôture de la bougie 15 min qui casse ≈": ": at the close of the 15-min candle breaking ≈", "💥 CASSURE CONFIRMÉE": "💥 BREAKOUT CONFIRMED", "🕯 La bougie 15 min a CLÔTURÉ au-dessus de ≈": "🕯 The 15-min candle CLOSED above ≈",
 "🕯 La bougie 15 min a CLÔTURÉ en dessous de ≈": "🕯 The 15-min candle CLOSED below ≈", "la mèche de cette bougie": "the wick of this candle",
 "🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE au-dessus de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES above ≈", "🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE en dessous de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES below ≈",
-"sur la cassure": "on the breakout", "🅰️ Entrée sur le repli dans la zone 🟨": "🅰️ Entry on the pullback in the zone 🟨", "POINT D'ENTRÉE À VENIR —": "ENTRY POINT COMING —", "👀 ÇA ARRIVE": "👀 IT'S COMING", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
+"sur la cassure": "on the breakout", "🅰️ Entrée sur le repli dans la zone 🟨": "🅰️ Entry on the pullback in the zone 🟨", "POINT D'ENTRÉE À VENIR —": "ENTRY POINT COMING —", "👀 ÇA ARRIVE": "👀 IT'S COMING", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "👀 Voir plus": "👀 See more", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
 " — dans ": " — in ", " jours": " days", " — en cours": " — now", "✅ Rien d'ici": "✅ Nothing within", "✅ Plus aucune annonce ni discours cette semaine": "✅ No more news or speeches this week",
 "lun. ": "Mon ", "mar. ": "Tue ", "mer. ": "Wed ", "jeu. ": "Thu ", "ven. ": "Fri ", "sam. ": "Sat ", "dim. ": "Sun ", ": ÇA RETRACE": ": IT'S PULLING BACK", "😎 Le repli qu'on attend commence": "😎 The pullback we're waiting for is starting",
 "🎯 Zone visée ≈": "🎯 Target zone ≈", "🎯 Il devrait revenir vers ≈": "🎯 It should come back to ≈", "🕯 La moitié du dernier grand mouvement (vue 15 min)": "🕯 Half of the last big move (15-min chart)", "👀 Sois patient": "👀 Be patient", "👀 Vue 15 min, sois patient": "👀 15-min chart, be patient", "🔔 Je te préviens dès qu'on y est": "🔔 I'll tell you as soon as we're there",
@@ -861,7 +863,7 @@ TRAD = {
 "🔒 Ton analyse gratuite du jour est déjà utilisée": "🔒 Your free analysis of the day is already used", "⏰ Reviens demain": "⏰ Come back tomorrow",
 "💎 VIP 49,90 € / mois : plus besoin d'appuyer sur Analyse": "💎 VIP €49.90 / month: no need to tap Analysis", "🔔 Active la cloche pour ne rien louper": "🔔 Turn on the bell so you miss nothing",
 "🔔 Cloche activée ? Ne rate pas le feu vert": "🔔 Bell on? Don't miss the green light", "🔔 Active la cloche (notifications) pour ne rien louper": "🔔 Turn on the bell (notifications) so you miss nothing",
-"🔍 + 1 analyse complète GRATUITE par jour (bouton Analyse)": "🔍 + 1 FREE full analysis per day (Analysis button)",
+"🔒 Ensuite : tu sais qu'une position arrive, mais sans le sens ni les niveaux": "🔒 Then: you know a position is coming, but without direction or levels", "👉 Bouton ci-dessous : tu paies et tu entres directement dans le canal ALIGN VIP 💎": "👉 Button below: you pay and go straight into the ALIGN VIP channel 💎",
 "📈 Le marché MONTE": "📈 The market is RISING", "📉 Le marché DESCEND": "📉 The market is FALLING", "➖ Le marché hésite": "➖ The market is hesitating",
 "🔒 Entrée : VIP": "🔒 Entry: VIP", "🔒 SL : VIP": "🔒 SL: VIP", "🔒 TP : VIP": "🔒 TP: VIP", "🔒 Prochaine entrée : VIP": "🔒 Next entry: VIP",
 "👀 Les VIP savent déjà où rentrer": "👀 VIPs already know where to enter", "😬 Tu vas louper le prochain move ?": "😬 Gonna miss the next move?",
@@ -874,7 +876,7 @@ TRAD = {
 ": les VIP viennent de recevoir une position": ": VIPs just got a position", "🟩 LONG ⬆️ ou 🟥 SHORT ⬇️ ? 🤫": "🟩 LONG ⬆️ or 🟥 SHORT ⬇️ ? 🤫", "👀 Elle se prépare 🤫": "👀 It's building 🤫",
 "😬 Tu vas louper ce move ?": "😬 Gonna miss this move?", "💎 VIP 49,90 € / mois : toutes les positions + le coach 👇": "💎 VIP €49.90 / month: all positions + the coach 👇",
 "🔒 Réservé aux VIP 💎": "🔒 VIP only 💎",
-"🎁🎁 POSITION DE BIENVENUE OFFERTE 🎁🎁": "🎁🎁 FREE WELCOME POSITION 🎁🎁",
+"🎁🎁 POSITION DE BIENVENUE OFFERTE 🎁🎁": "🎁🎁 FREE WELCOME POSITION 🎁🎁", "🎁🎁 TA POSITION GRATUITE DU JOUR 🎁🎁": "🎁🎁 YOUR FREE POSITION OF THE DAY 🎁🎁", "💎 C'est ta position gratuite du jour. Toutes les autres + le coach : VIP 49,90 € / mois": "💎 This is your free position of the day. All the others + the coach: VIP €49.90 / month", "🎁 Ta position gratuite du jour est déjà utilisée": "🎁 Your free position of the day is already used", "🎁 1 POSITION OFFERTE CHAQUE JOUR": "🎁 1 FREE POSITION EVERY DAY", "👋 Bienvenue sur ALIGN Gratuit 🎁 (BTC + Gold)": "👋 Welcome to ALIGN Free 🎁 (BTC + Gold)", "🎁 1 position offerte chaque jour": "🎁 1 free position every day",
 "👀 Suis-la en vue 15 minutes, tout est expliqué en bougies": "👀 Follow it on the 15-min chart, everything is explained in candles",
 "💎 C'est ta position offerte. Les suivantes + le coach : VIP 49,90 € / mois": "💎 This is your free position. Next ones + the coach: VIP €49.90 / month",
 "🔒 Position réservée aux VIP": "🔒 VIP-only position", "🎁 Ta position de bienvenue est déjà utilisée": "🎁 Your welcome position is already used",
@@ -883,7 +885,7 @@ TRAD = {
 "🎁 Ta 1re POSITION est OFFERTE": "🎁 Your 1st POSITION is FREE", "🕯 Expliquée en bougies (vue 15 min) + coach jusqu'au TP": "🕯 Explained in candles (15-min chart) + coach to TP",
 "📰 Alertes news et discours gratuites": "📰 Free news and speech alerts", "🔔 Ouvertures de marché gratuites": "🔔 Free market-open alerts",
 "🔒 Ensuite les positions arrivent MASQUÉES": "🔒 After that, positions arrive HIDDEN", "👉 Bouton ci-dessous, puis reviens ici et tape /start": "👉 Button below, then come back and type /start",
-"🔒 Les positions en direct sont réservées aux VIP": "🔒 Live positions are VIP-only", "🎁 Ta position de bienvenue reste offerte": "🎁 Your welcome position is still free",
+"🔒 Les positions en direct sont réservées aux VIP": "🔒 Live positions are VIP-only", "🎁 Ta position gratuite du jour est encore dispo": "🎁 Your free position of the day is still available", "🎁 Ta position de bienvenue reste offerte": "🎁 Your welcome position is still free",
 "⚠️ Distribution possible : le haut s'essouffle (divergence RSI)": "⚠️ Possible distribution: the top is fading (RSI divergence)",
 "⚠️ Accumulation possible : le bas se charge (divergence RSI)": "⚠️ Possible accumulation: the bottom is loading (RSI divergence)",
 ": DISTRIBUTION possible": ": possible DISTRIBUTION", ": ACCUMULATION possible": ": possible ACCUMULATION",
@@ -1128,10 +1130,13 @@ def boutons_canal(etat, texte):
     m = next((x for x in MARCHES if x in texte.split("\n")[0]), None)
     lien = lambda p: f"https://t.me/{bot}?start={p}"
     lignes = []
-    if m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "CASSURE", "PRÉPARE-TOI", "J'ENTRE MAINTENANT", "REPLI", "RETRACE", "parti")):
-        lignes.append([{"text": "🎯 Je rentre dans la position (coach)", "url": lien(f"auto_{m.lower()}")}])
+    if m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "CASSURE", "PRÉPARE-TOI", "J'ENTRE MAINTENANT", "REPLI", "RETRACE", "parti", "MANIPULATION", "zone")):
+        lignes.append([{"text": "🎯 Je rentre dans la prochaine position", "url": lien(f"auto_{m.lower()}")}])
+    # Mêmes boutons, même ordre que le clavier du bot ALIGN Coach
     lignes.append([{"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}, {"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}])
-    lignes.append([{"text": "🤖 Mon coach", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}])
+    lignes.append([{"text": "✅ Je suis rentré", "url": lien("rentre")}, {"text": "🚪 Je suis sorti", "url": lien("sorti")}])
+    lignes.append([{"text": "🤖 Mon bot", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}])
+    lignes.append([{"text": "📸 Partager mon gain", "url": lien("gain")}, {"text": "🧩 Indicateur TradingView", "url": lien("indicateur")}])
     return json.dumps({"inline_keyboard": lignes})
 
 # ───────── IA (GitHub Models, gratuite avec le jeton GitHub du workflow) ─────────
@@ -1545,11 +1550,12 @@ def changer_langue(etat, cid, anglais, membre_ok):
 
 COMMANDES = {"/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
              "/resultats": "📈 Mes résultats", "/gain": "📸 Partager mon gain", "/vip": "💎 Devenir VIP",
-             "/english": "🌐 English", "/francais": "🌐 Français"}
+             "/english": "🌐 English", "/francais": "🌐 Français", "/rentre": "✅ Je suis rentré", "/sorti": "🚪 Je suis sorti",
+             "/indicateur": "🧩 Indicateur TradingView"}
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
-    if etat.get("menu") == 2:
+    if etat.get("menu") == 3:
         return
     fr = [("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
           ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
@@ -1561,12 +1567,16 @@ def installer_menu(etat):
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in fr]))
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in en]), language_code="en")
         telegram("setChatMenuButton", menu_button=json.dumps({"type": "commands"}))
-        telegram("setMyShortDescription", short_description="📈 Positions BTC & Gold en direct • 🤖 Coach jusqu'au TP • 🎁 1re position offerte")
-        telegram("setMyDescription", description=("🤖 ALIGN Coach — BTC & Gold\n\n🟩 LONG / 🟥 SHORT expliqués en bougies (vue 15 min)\n"
-                                                  "👀 Alertes ÇA ARRIVE • PRÉPARE-TOI • J'ENTRE\n🎯 Coach : SL à BE, SL remonté, TP\n"
-                                                  "📰 News et discours Fed à l'heure de Paris\n🎁 Ta 1re position est offerte\n\n"
+        try:
+            telegram("setMyName", name="ALIGN Gratuit 🎁 BTC & Gold")
+        except Exception as ex:
+            print("nom", ex)
+        telegram("setMyShortDescription", short_description="🎁 1 position BTC / Gold offerte chaque jour • 💎 Tout le reste dans ALIGN VIP")
+        telegram("setMyDescription", description=("🎁 ALIGN Gratuit — BTC & Gold\n\n🎁 1 position offerte chaque jour, expliquée en bougies\n"
+                                                  "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n📰 News et discours Fed gratuits\n\n"
+                                                  "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux, le coach (BE, TP)\n\n"
                                                   "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
-        etat["menu"] = 2
+        etat["menu"] = 3
     except Exception as ex:
         print("menu", ex)
 
@@ -1616,7 +1626,7 @@ def valider_gain(etat, chats, pid, publier, cb):
     if not publier:
         _envoi_sur(ph["cid"], text="🙏 Merci ! Cette capture ne sera pas publiée\n📸 Envoie une capture claire de ton gain de trading")
         return
-    legende = f"🔥🔥 GAIN D'UN MEMBRE ALIGN 🔥🔥\n👤 {ph['nom']}\n📈 Positions BTC + Gold\n🎁 Ta 1re position est offerte\n👉 @{etat.get('bot') or 'align_mtf_adel_bot'}"
+    legende = f"🔥🔥 GAIN D'UN MEMBRE ALIGN 🔥🔥\n👤 {ph['nom']}\n📈 Positions BTC + Gold\n🎁 1 position offerte chaque jour\n👉 @{etat.get('bot') or 'align_mtf_adel_bot'}"
     cibles = [etat["canal_preuves"]] if etat.get("canal_preuves") else list(etat.get("prospects", []))
     for c in cibles:
         try:
@@ -1670,7 +1680,7 @@ def traiter(etat, chats, updates):
                 if autorise(etat, qui, cb["from"]["id"]) or qui not in etat.get("bienvenue", {}):
                     inscrire_auto(etat, qui, mk)
                 else:
-                    _envoi_sur(qui, text="🔒 Réservé aux VIP\n🎁 Ta position offerte est déjà utilisée\n💎 VIP 49,90 € / mois 👇",
+                    _envoi_sur(qui, text="🔒 Réservé aux VIP\n🎁 Ta position gratuite du jour est déjà utilisée\n⏰ Une nouvelle demain\n💎 VIP 49,90 € / mois 👇",
                                **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
                 continue
             if choix in ("pub", "refus") and qui in proprio(etat):
@@ -1849,52 +1859,31 @@ def recevoir_pseudo(etat, cid, pseudo):
 
 def bouton_payer(etat):
     lien = etat.get("lien")
-    return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (49,90 € / mois)", "url": lien}]]}) if lien else None
+    return json.dumps({"inline_keyboard": [[{"text": "👀 Voir plus", "url": lien}], [{"text": "🔓 Débloquer les positions (49,90 € / mois)", "url": lien}]]}) if lien else None
 
 def analyse_visiteur(etat, cid, mq=None):
-    """Visiteur : 1 analyse COMPLÈTE gratuite par jour (sens, verdict, point d'entrée en bougies).
-    Les suivantes du même jour : sens du marché seulement + invitation au VIP (positions automatiques)."""
+    """Visiteur : jamais le sens ni les niveaux. Juste l'état (position en cours / en préparation) + bouton VIP."""
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}
-    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
-    utilise = etat.setdefault("analyse_gratuite", {}).get(cid) == jour
     for nom_marche, pair in MARCHES.items():
         if mq and mq != nom_marche:
             continue
         try:
             r = analyse_marche(etat, pair); cle = etat.get(nom_marche, {})
-            if utilise:
-                _envoi_sur(cid, text=texte_etat(nom_marche, r, cle, vip=False), **kw)
-                continue
-            txt = "🎁 TON ANALYSE GRATUITE DU JOUR\n\n" + texte_etat(nom_marche, r, cle)
-            d = r["confirme"]; p = r["m1"][-1]["c"]
-            if not cle.get("trade") and d and not etire(r, d) and not bloque_dw(r, d, zone_repli(r, d)["e"]) and not r.get("annonce"):
-                o = cle.get("ordre") or point_entree(r, d, p)
-                txt += "\n\n" + fmt_trade(nom_marche, o, p) + "\n⏳ Attends que le prix vienne dans la zone 🟨"
-            _envoi_sur(cid, text=txt, reply_markup=CLAVIER_VISITEUR)
+            _envoi_sur(cid, text=texte_etat(nom_marche, r, cle, vip=False), **kw)
         except Exception as ex:
             print("analyse visiteur", ex)
-    if not utilise:
-        etat["analyse_gratuite"][cid] = jour
-        _envoi_sur(cid, text=("✅ Analyse gratuite du jour utilisée\n⏰ Une nouvelle demain\n━━━━━━━━━━━━\n"
-                              "💎 En VIP, plus besoin d'appuyer sur Analyse\n🤖 Les positions arrivent toutes seules\n"
-                              "👀 Alerte « ÇA ARRIVE » juste avant chaque entrée\n🔔 Active la cloche du bot pour ne rien louper"), **kw)
-    else:
-        _envoi_sur(cid, text=("🔒 Ton analyse gratuite du jour est déjà utilisée\n⏰ Reviens demain\n━━━━━━━━━━━━\n"
-                              "💎 VIP 49,90 € / mois : plus besoin d'appuyer sur Analyse\n🤖 Les positions arrivent toutes seules\n"
-                              "👀 Alerte « ÇA ARRIVE » juste avant chaque entrée\n🔔 Active la cloche pour ne rien louper"), **kw)
 
 def refuser(etat, cid):
     _envoi_sur(cid, text="👋 ALIGN Signaux — BTC + Gold\n⬆️⬇️ Les positions arrivent ici en direct", reply_markup=CLAVIER_VISITEUR)
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
-    _envoi_sur(cid, text=("👋 Bienvenue sur ALIGN Signaux (BTC + Gold)\n\n"
-                          "🎁 Ta 1re POSITION est OFFERTE\n"
-                          "🔍 + 1 analyse complète GRATUITE par jour (bouton Analyse)\n"
+    _envoi_sur(cid, text=("👋 Bienvenue sur ALIGN Gratuit 🎁 (BTC + Gold)\n\n"
+                          "🎁 1 POSITION OFFERTE CHAQUE JOUR\n"
                           "🕯 Expliquée en bougies (vue 15 min) + coach jusqu'au TP\n"
                           "📰 Alertes news et discours gratuites\n"
                           "🔔 Ouvertures de marché gratuites\n\n"
-                          "🔒 Ensuite les positions arrivent MASQUÉES\n"
+                          "🔒 Ensuite : tu sais qu'une position arrive, mais sans le sens ni les niveaux\n"
                           "💎 VIP 49,90 € / mois : toutes les positions + le coach en direct\n"
-                          "👉 Bouton ci-dessous, puis reviens ici et tape /start\n\n" + AVERTISSEMENT), **kw)
+                          "👉 Bouton ci-dessous : tu paies et tu entres directement dans le canal ALIGN VIP 💎\n\n" + AVERTISSEMENT), **kw)
 
 def masquer(texte):
     """Cache tous les prix (entrée, stop, TP) pour les visiteurs non abonnés."""
@@ -1906,6 +1895,10 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
     ensuite tout est caché, avec des messages courts « tu loupes ça » et le bouton VIP."""
     entree = signal and "J'ENTRE MAINTENANT" in texte
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
+    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
+    if etat.get("offerte_jour") != jour:           # 1 position GRATUITE par jour : on remet les compteurs à zéro
+        etat["bienvenue"] = {c: mk for c, mk in etat.get("bienvenue", {}).items() if etat.get(mk, {}).get("trade")}
+        etat["offerte_jour"] = jour
     deja = etat.setdefault("bienvenue", {})
     tete = texte.split("\n")[0]
     m = next((x for x in MARCHES if x in tete), None)
@@ -1926,12 +1919,12 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
     for cid in list(etat.get("prospects", [])):
         sa_bienvenue = m and deja.get(cid) == m and tr is not None
         if signal and cid not in deja:
-            txt = ("🎁🎁 POSITION DE BIENVENUE OFFERTE 🎁🎁\n"
+            txt = ("🎁🎁 TA POSITION GRATUITE DU JOUR 🎁🎁\n"
                    "👀 Suis-la en vue 15 minutes, tout est expliqué en bougies\n\n" + texte)
             k = {"reply_markup": clavier} if (entree and clavier) else {}
             if entree:
                 deja[cid] = m
-                txt += "\n\n💎 C'est ta position offerte. Les suivantes + le coach : VIP 49,90 € / mois"
+                txt += "\n\n💎 C'est ta position gratuite du jour. Toutes les autres + le coach : VIP 49,90 € / mois"
         elif sa_bienvenue and not signal:
             txt, k = texte, {}          # sa position offerte est en cours : il suit tout en clair
         elif signal:
@@ -1941,10 +1934,16 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
             k = kw
         elif fomo:
             txt, k = fomo, kw
-        elif news or not chiffres:
+        elif news:
             txt, k = texte, {}
         else:
-            txt, k = masquer(texte) + "\n🔒 Réservé aux VIP 💎", kw
+            # Jamais le sens ni les niveaux : un simple teaser, 1 fois / 30 min / marché
+            tz = etat.setdefault("teaser_t", {})
+            cle_t = f"{cid}_{m}"
+            if not m or time.time() - tz.get(cle_t, 0) < 1800:
+                continue
+            tz[cle_t] = time.time()
+            txt, k = (f"🔒 {ICONE.get(m, '')} {m}\nNouvelle info pour les VIP\n🤫 Sens et niveaux cachés\n💎 VIP 49,90 € / mois 👇"), kw
         try:
             telegram("sendMessage", chat_id=cid, text=txt, **k)
         except Exception as ex:
@@ -2864,7 +2863,7 @@ def un_tour(etat, chats):
                         etat["prospects"].append(cid)
                     _envoi_sur(cid, reply_markup=CLAVIER_VISITEUR, text=(
                         "🔒 Les positions en direct sont réservées aux VIP\n"
-                        + ("🎁 Ta position de bienvenue reste offerte\n" if cid not in etat.get("bienvenue", {}) else "")
+                        + ("🎁 Ta position gratuite du jour est encore dispo\n" if cid not in etat.get("bienvenue", {}) else "")
                         + "💎 VIP 49,90 € / mois : toutes les positions + le coach"
                         + (f"\n👉 {etat['lien']}" if etat.get("lien") else "")))
 
