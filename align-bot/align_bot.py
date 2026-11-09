@@ -77,6 +77,7 @@ def or_spot():
     q = j[0]["spreadProfilePrices"][0]
     v = (q["bid"] + q["ask"]) / 2
     _CACHE["spot"] = (time.time(), v)
+    h = _CACHE.setdefault("spot_hist", []); h.append((time.time(), v)); del h[:-300]
     return v
 
 def yahoo_or(interval):
@@ -372,7 +373,24 @@ def analyser(pair):
         fvg = fvgs(m15, "15m") + fvgs(h1, "1h")
     except Exception:
         fvg = []
-    return dict(fvg=fvg, distrib=distrib, accum=accum, div4h=div4h, b5=m5[-12:], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
+    # Niveaux clés que tous les pros regardent : plus haut / plus bas d'hier et de la semaine dernière
+    niv_cles = []
+    try:
+        niv_cles = [(d1[-1]["h"], "plus haut d'hier"), (d1[-1]["l"], "plus bas d'hier"),
+                    (w1[-1]["h"], "plus haut de la semaine dernière"), (w1[-1]["l"], "plus bas de la semaine dernière")]
+    except Exception:
+        pass
+    # Range de la session Asie (00:00 → 08:00 heure de Paris, aujourd'hui)
+    asie = None
+    try:
+        auj = datetime.datetime.now(PARIS).replace(hour=0, minute=0, second=0, microsecond=0)
+        a0, a1 = auj.timestamp(), auj.timestamp() + 8 * 3600
+        za = [x for x in m15 if a0 <= x["t"] < a1]
+        if len(za) >= 16:
+            asie = (max(x["h"] for x in za), min(x["l"] for x in za))
+    except Exception:
+        pass
+    return dict(fvg=fvg, niv_cles=niv_cles, asie=asie, distrib=distrib, accum=accum, div4h=div4h, b5=m5[-12:], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
                 grosses=grosses, b15=b[-30:], ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
@@ -434,6 +452,14 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
           f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
           f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
           r.get("news") or "📰 News : calendrier indisponible", "━━━━━━━━━━━━"] + strategie_mtf(r)
+    nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
+    ph_, pb_ = nc.get("plus haut d'hier"), nc.get("plus bas d'hier")
+    if ph_ and pb_:
+        l.append(f"📏 Hier : haut ≈ {px(ph_)} • bas ≈ {px(pb_)}")
+    if r.get("asie"):
+        l.append(f"🌏 Range Asie : haut ≈ {px(r['asie'][0])} • bas ≈ {px(r['asie'][1])}")
+    for lm in r.get("macro") or []:
+        l.append(lm)
     p_ = r["m1"][-1]["c"]
     proches = sorted([f for f in r.get("fvg", []) if abs((f[0] + f[1]) / 2 - p_) <= 3 * r["atr"]], key=lambda f: abs((f[0] + f[1]) / 2 - p_))
     for lo, hi, ut, dd in proches[:2]:
@@ -712,7 +738,7 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "💵 Dollar (DXY)": "💵 Dollar (DXY)", "favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -1157,6 +1183,10 @@ def analyse_marche(etat, pair):
         tendance_armee(r, (etat or {}).setdefault(m, {}))
     r["annonce"] = annonce_proche(etat or {}, int(time.time()))
     r["news"] = news_txt(etat or {})
+    try:
+        r["macro"] = contexte_macro(etat or {}, m)
+    except Exception:
+        pass
     return r
 
 def boutons_canal(etat, texte):
@@ -2234,6 +2264,21 @@ def annonces_et_sessions(etat, maintenant, derniers):
     for e in ev:
         reste = e["t"] - maintenant
         fin = heure(e["t"] + 15 * 60)
+        if 55 * 60 < reste <= 60 * 60 and f"ev60{e['t']}{e['titre']}" not in vus:
+            vus.append(f"ev60{e['t']}{e['titre']}")
+            out.append(f"📰 NEWS USA DANS 1 H — {heure(e['t'])}\n🗞 {e['titre']}\n🚦 ⏳ JE N'ENTRE PAS ENCORE\n"
+                       f"🛑 Pas de nouvelle position à partir de {heure(e['t'] - 15 * 60)}\n🔒 En position ? Mets-toi à BE si tu es en gain\n"
+                       f"📊 Prévu : {e.get('prev') or '?'} • avant : {e.get('avant') or '?'}")
+        if 5 * 60 <= -reste <= 8 * 60 and f"evr{e['t']}{e['titre']}" not in vus:
+            vus.append(f"evr{e['t']}{e['titre']}")
+            lr = []
+            for mk, rr in (derniers or {}).items():
+                apres = [x for x in rr.get("m1", []) if x["t"] >= e["t"]]
+                if apres:
+                    o0 = apres[0]["o"]; c1 = apres[-1]["c"]; hh = max(x["h"] for x in apres); ll = min(x["l"] for x in apres)
+                    lr.append(f"{ICONE.get(mk, '')} {mk} : {c1 - o0:+.1f} $ en {len(apres)} min {'⬆️' if c1 > o0 else '⬇️'} (écart haut-bas {hh - ll:.1f} $)")
+            if lr:
+                out.append(f"📰 RÉACTION À LA NEWS — {e['titre']}\n" + "\n".join(lr) + "\n⏳ J'attends la clôture de la bougie 15 min avant de reprendre")
         if 6 * 60 < reste <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev{e['t']}{e['titre']}")
             avis = ia(etat, "Explique en 2 lignes très simples ce que cette annonce peut faire au Gold et au BTC (sans donner de sens à trader, juste le risque).",
@@ -2542,6 +2587,8 @@ def gerer_stop(etat, m, r, tr, c):
     # Stop conseillé touché : on clôture le résultat de l'abonné à ce niveau
     if pos.get("sl_conseil") is not None:
         extreme = min(x["l"] for x in r["m1"][-6:]) if d == 1 else max(x["h"] for x in r["m1"][-6:])
+        if m == "GOLD" and r.get("spot_lo") is not None:     # même règle que le bot : le vrai prix spot fait foi
+            extreme = min(r["spot_lo"], extreme + 0.3 * a) if d == 1 else max(r["spot_hi"], extreme - 0.3 * a)
         if d * (extreme - sl) <= 0:
             noter(etat, c, m, pos, sl, "🔒 Stop protégé touché" if d * (sl - e) >= 0 else "🛡 Stop remonté touché")
             return
@@ -2625,6 +2672,83 @@ def meche_suspecte(out, m, r, cle):
                f"🎣 Les stops viennent d'être pris et le prix revient\n"
                f"🙅 N'entre pas maintenant\n⏳ J'attends la CLÔTURE de cette bougie ({heure(debut + 900)}) pour confirmer la manipulation")
 
+def macro(etat):
+    """Contexte macro GRATUIT : Dollar (DXY recalculé depuis 6 paires Swissquote, toutes les 4 min)
+    et taux US 10 ans (Trésor américain, 1 fois / 3 h). Le Gold bouge souvent à l'INVERSE des deux."""
+    mc = etat.setdefault("macro", {"dxy": [], "us10": None, "us10_t": 0})
+    now = time.time()
+    if not mc["dxy"] or now - mc["dxy"][-1][0] >= 240:
+        try:
+            v = {}
+            for a_, b_ in (("EUR", "USD"), ("USD", "JPY"), ("GBP", "USD"), ("USD", "CAD"), ("USD", "SEK"), ("USD", "CHF")):
+                q = http_json(f"https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/{a_}/{b_}")[0]["spreadProfilePrices"][0]
+                v[a_ + b_] = (q["bid"] + q["ask"]) / 2
+            dx = (50.14348112 * v["EURUSD"] ** -0.576 * v["USDJPY"] ** 0.136 * v["GBPUSD"] ** -0.119
+                  * v["USDCAD"] ** 0.091 * v["USDSEK"] ** 0.042 * v["USDCHF"] ** 0.036)
+            mc["dxy"].append((now, round(dx, 3)))
+            mc["dxy"] = [x for x in mc["dxy"] if now - x[0] <= 3 * 3600 + 600]
+        except Exception as ex:
+            print("dxy", ex)
+    if now - mc.get("us10_t", 0) >= 3 * 3600:
+        mc["us10_t"] = now
+        try:
+            an = datetime.datetime.now(PARIS).year
+            req = urllib.request.Request(f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{an}/all?type=daily_treasury_yield_curve&field_tdr_date_value={an}&page&_format=csv",
+                                         headers={"User-Agent": "align-bot"})
+            lignes = urllib.request.urlopen(req, timeout=30).read().decode().splitlines()
+            tete = [x.strip('"') for x in lignes[0].split(",")]; i10 = tete.index("10 Yr")
+            l0, l1 = lignes[1].split(","), lignes[2].split(",")
+            mc["us10"] = (float(l0[i10]), float(l1[i10]), l0[0])
+        except Exception as ex:
+            print("taux US", ex)
+    return mc
+
+def dxy_info(etat):
+    h = (etat.get("macro") or {}).get("dxy") or []
+    if len(h) < 2:
+        return None
+    now_t, v = h[-1]
+    ref = min(h, key=lambda x: abs((now_t - x[0]) - 3600))
+    return v, (v - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
+
+def contexte_macro(etat, m):
+    """Lignes « contexte » propres à CHAQUE marché (Gold et BTC bien séparés)."""
+    l = []
+    di = dxy_info(etat)
+    if di:
+        v, ch, mn = di
+        fl = "⬆️" if ch > 0.03 else "⬇️" if ch < -0.03 else "➖"
+        effet = ("favorable au 🟩 LONG" if ch < -0.03 else "frein pour le 🟩 LONG" if ch > 0.03 else "neutre")
+        l.append(f"💵 Dollar (DXY) {v:.2f} {fl} {ch:+.2f} % en {mn} min → {effet} {m}")
+    us = (etat.get("macro") or {}).get("us10")
+    if us and m == "GOLD":
+        dv = us[0] - us[1]
+        l.append(f"🏦 Taux US 10 ans {us[0]:.2f} % {'⬆️' if dv > 0 else '⬇️' if dv < 0 else '➖'} {dv:+.2f} sur la journée → "
+                 + ("frein pour le Gold" if dv > 0 else "favorable au Gold" if dv < 0 else "neutre"))
+    return l
+
+def niveaux_cles(out, m, r, cle):
+    """Plus haut / plus bas d'hier et de la semaine + range Asie : approche, puis cassure (clôture 15 min)."""
+    p = r["m1"][-1]["c"]; a = r["atr"]; x15 = r["b15"][-1]; prev = r["b15"][-2]["c"] if len(r["b15"]) > 1 else x15["c"]
+    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
+    vu = cle.setdefault("nivc", {})
+    for k in [k for k in vu if not k.endswith(jour)]:
+        vu.pop(k)
+    niv = list(r.get("niv_cles") or [])
+    h_ = datetime.datetime.now(PARIS).hour
+    if r.get("asie") and 8 <= h_ < 14:
+        niv += [(r["asie"][0], "plus haut du range Asie"), (r["asie"][1], "plus bas du range Asie")]
+    for v, nom in niv:
+        haut = "haut" in nom
+        casse = (x15["c"] > v + 0.05 * a and prev <= v) if haut else (x15["c"] < v - 0.05 * a and prev >= v)
+        if casse and f"c{nom}{jour}" not in vu:
+            vu[f"c{nom}{jour}"] = 1
+            out.append(f"💥 CASSURE — {ICONE.get(m, '')} {m}\n🕯 La bougie 15 min de {heure(x15['t'])} a CLÔTURÉ {'au-dessus du' if haut else 'sous le'} {nom} ≈ {px(v)}\n"
+                       f"{'⬆️ Le mouvement peut continuer vers le haut' if haut else '⬇️ Le mouvement peut continuer vers le bas'}\n👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer")
+        elif abs(p - v) <= 0.3 * a and f"a{nom}{jour}" not in vu and f"c{nom}{jour}" not in vu:
+            vu[f"a{nom}{jour}"] = 1
+            out.append(f"🧲 NIVEAU CLÉ — {ICONE.get(m, '')} {m}\n📍 Le prix approche le {nom} ≈ {px(v)}\n🕯 Vue 15 min : ça peut rebondir OU casser\n⏳ J'attends la clôture de la bougie 15 min")
+
 def manipulation(out, m, r, cle):
     """MANIPULATION (chasse aux stops) vue 15 min : une grosse bougie pique AU-DELÀ du dernier plus bas / plus haut
     des 20 bougies 15 min (elle prend les stops) puis CLÔTURE en revenant à l'intérieur. 1 message par bougie."""
@@ -2701,6 +2825,7 @@ def agent(m, r, cle, ferme):
     try:
         manipulation(out, m, r, cle)
         meche_suspecte(out, m, r, cle)
+        niveaux_cles(out, m, r, cle)
     except Exception as ex:
         print("manipulation", ex)
 
@@ -2920,6 +3045,11 @@ def agent(m, r, cle, ferme):
         return out
 
     # ── Trade en cours ──
+    # GOLD : les mèches PAXG (marché 24/7, peu liquide le soir) peuvent dépasser le vrai prix XAUUSD.
+    # Le SL / TP ne compte que si le VRAI prix spot l'a touché (ou si PAXG l'a nettement dépassé).
+    if m == "GOLD" and r.get("spot_lo") is not None:
+        lo = min(r["spot_lo"], lo + 0.3 * r["atr"])
+        hi = max(r["spot_hi"], hi - 0.3 * r["atr"])
     if tr["statut"] == "entree" and tr["d"] * (tr["tp2"] - tr["tp1"]) <= 0 and not tr.get("tp_corrige"):
         # TP2 avant TP1 (ancienne version) : on remet de l'ordre — TP1 atteignable, TP2 sur le grand niveau
         (n1v, n1n), (n2v, n2n) = objectifs(r, tr["d"], tr["e"], abs(tr["e"] - tr["sl"]))
@@ -3042,6 +3172,10 @@ def un_tour(etat, chats):
 
     envois, derniers = [], {}
     calendrier(etat, int(time.time()))
+    try:
+        macro(etat)
+    except Exception as ex:
+        print("macro", ex)
     for nom_marche, pair in MARCHES.items():
         try:
             r = analyser(pair)
@@ -3050,9 +3184,18 @@ def un_tour(etat, chats):
         cle = etat.setdefault(nom_marche, {})
         tendance_armee(r, cle)
         r["annonce"] = annonce_proche(etat, int(time.time()))
+        if nom_marche == "GOLD":
+            ech = [v for t_, v in _CACHE.get("spot_hist", []) if t_ > cle.get("spot_t", 0)]
+            cle["spot_t"] = time.time()
+            if ech:
+                r["spot_lo"], r["spot_hi"] = min(ech), max(ech)
         f_ = minutes_avant_fermeture_gold()
         r["fermeture"] = nom_marche == "GOLD" and (0 < f_ <= 35 or -120 <= f_ <= 0)   # jusqu'à 10 min après la réouverture
         r["news"] = news_txt(etat)
+        try:
+            r["macro"] = contexte_macro(etat, nom_marche)
+        except Exception:
+            pass
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
@@ -3103,6 +3246,17 @@ def un_tour(etat, chats):
                 envoyer_analyse_a(etat, cid, nom_marche, r, cle)
         print(texte_etat(nom_marche, r), "\n")
 
+    try:
+        di = dxy_info(etat)
+        if di and abs(di[1]) >= 0.25 and time.time() - etat.get("dxy_alerte_t", 0) > 7200:
+            etat["dxy_alerte_t"] = time.time()
+            bas_ = di[1] < 0
+            envois.append(f"💵 DOLLAR EN FORTE {'BAISSE' if bas_ else 'HAUSSE'} — DXY {di[0]:.2f} ({di[1]:+.2f} % en {di[2]} min)\n"
+                          f"🥇 GOLD : {'vent favorable au 🟩 LONG' if bas_ else 'frein pour le 🟩 LONG, prudence'}\n"
+                          f"🟠 BTC : {'vent favorable au 🟩 LONG' if bas_ else 'frein pour le 🟩 LONG, prudence'}\n"
+                          "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées")
+    except Exception as ex:
+        print("alerte dxy", ex)
     try:
         envois += annonces_et_sessions(etat, int(time.time()), derniers)
         if TOKEN:
