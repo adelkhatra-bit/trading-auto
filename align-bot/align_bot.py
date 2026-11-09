@@ -671,9 +671,9 @@ TRAD = {
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
 "🔎 Je calcule la zone d'entrée": "🔎 Calculating the entry zone", "⏳ Quelques instants": "⏳ A few moments",
-"🕯 Prix dans la zone : j'attends la mèche de rejet + clôture": "🕯 Price in the zone: waiting for the rejection wick + close", "⚡ Décision à la clôture de la bougie 15 min de": "⚡ Decision at the close of the 15 min candle at", "(clôture à": "(closes at",
+"🟨 Prix dans la zone : j'entre dès qu'une bougie clôture": "🟨 Price in the zone: I enter as soon as a candle closes", "⚡ Décision à la clôture de la bougie 15 min de": "⚡ Decision at the close of the 15 min candle at", "(clôture à": "(closes at",
 "🟨 Le prix approche de la zone": "🟨 Price is approaching the zone", "⏳ Arrivée estimée": "⏳ Estimated arrival", "⏳ Encore loin : ça peut prendre des heures": "⏳ Still far: it may take hours",
-"🕯 Prochaine clôture 15 min dans": "🕯 Next 15 min close in", "⌛ Délai max : encore": "⌛ Max wait: still", "🔄 Mis à jour à": "🔄 Updated at",
+"🕯 Prochaine clôture 15 min dans": "🕯 Next 15 min close in", "⌛ Si rien avant": "⌛ If nothing before", ": j'annule ta réservation (pas d'entrée forcée)": ": I cancel your booking (no forced entry)", "😎 RIEN N'A BOUGÉ": "😎 NOTHING HAS CHANGED", "👆 Mon analyse de": "👆 My analysis from", "est juste au-dessus : elle est toujours bonne": "is just above: it's still valid", "🔔 Je te préviens dès que ça change": "🔔 I'll tell you as soon as it changes", "🟨 Le prix est DANS la zone": "🟨 Price is IN the zone", "🕯 J'entre dès qu'une bougie clôture": "🕯 I enter as soon as a candle closes", "⏱ Prochaine décision : clôture de": "⏱ Next decision: close at", "🔔 Tiens-toi prêt, ça peut être tout de suite": "🔔 Get ready, it can be right now", "en remontant": "going up", "en redescendant": "going down", "🔄 Mis à jour à": "🔄 Updated at",
 "4 h sans entrée": "4 h without entry", "😎 La position n'est pas venue : pas de mauvaise entrée": "😎 The position didn't come: no bad entry", "🎯 Réappuie sur le bouton pour la prochaine": "🎯 Tap the button again for the next one",
 "⏱ Ton chrono en direct arrive juste en dessous 👇": "⏱ Your live timer is right below 👇", "🔄 Démarrage…": "🔄 Starting…", "🕯 Vue 15 min : la bougie de": "🕯 15 min view: the candle at",
 "a piqué SOUS le dernier plus bas": "spiked BELOW the last low", "a piqué AU-DESSUS du dernier plus haut": "spiked ABOVE the last high",
@@ -1224,7 +1224,7 @@ def chrono_txt(m, r, cle, t0):
     elif not o:
         etape, estim = "2️⃣/4 🔎 Je calcule la zone d'entrée", "⏳ Quelques instants"
     elif cle.get("attente_rsi") or cle.get("attente_rejet") or cle.get("prep"):
-        etape = "4️⃣/4 🕯 Prix dans la zone : j'attends la mèche de rejet + clôture"
+        etape = f"4️⃣/4 🟨 Prix dans la zone : j'entre dès qu'une bougie clôture {'en remontant' if (o or {}).get('d', d) == 1 else 'en redescendant'}"
         estim = f"⚡ Décision à la clôture de la bougie 15 min de {heure(cloture - 900)} (clôture à {heure(cloture)})"
     else:
         dist = abs(p - o["e"]); vit = max(a / 15, 1e-9)            # vitesse moyenne ≈ 1 ATR par 15 min
@@ -1232,7 +1232,7 @@ def chrono_txt(m, r, cle, t0):
         estim = f"⏳ Arrivée estimée ≈ {max(1, round(dist / vit))} min" if dist / vit < 240 else "⏳ Encore loin : ça peut prendre des heures"
     l += [etape, estim,
           f"🕯 Prochaine clôture 15 min dans {mmss(cloture - now)}",
-          f"⌛ Délai max : encore {mmss(CHRONO_MAX - (now - t0))}",
+          f"⌛ Si rien avant {heure(t0 + CHRONO_MAX)} : j'annule ta réservation (pas d'entrée forcée)",
           f"🔄 Mis à jour à {heure(now)}:{datetime.datetime.fromtimestamp(now, PARIS).strftime('%S')}"]
     return "\n".join(l)
 
@@ -1337,16 +1337,36 @@ def entrer_inscrits(etat, m, tr, chats=()):
             "🛑 Mets ton SL TOUT DE SUITE\n🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"),
             reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]]}))
 
+def signature_analyse(m, r, cle):
+    """Ce qui compte pour l'utilisateur : verdict, sens, zone. Si rien de tout ça n'a changé, inutile de tout renvoyer."""
+    titre, _ = verdict(r, cle)
+    o = cle.get("ordre") or {}
+    return "|".join([titre, str(r["confirme"]), str(bool(cle.get("trade"))), str(round(o.get("e", 0) / max(r["atr"], 1e-9)))])
+
+def envoyer_analyse_a(etat, cid, m, r, cle):
+    """Analyse à la demande. Rien n'a bougé depuis la dernière (moins de 20 min) → message court : regarde au-dessus + estimation."""
+    vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
+    sig = signature_analyse(m, r, cle); der = vu.get(str(cid))
+    if der and der["sig"] == sig and time.time() - der["t"] < 1200:
+        lignes = chrono_txt(m, r, cle, time.time()).split("\n")
+        utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
+        _envoi_sur(cid, reply_markup=CLAVIER, text="\n".join(
+            [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
+             f"👆 Mon analyse de {heure(der['t'])} est juste au-dessus : elle est toujours bonne"] + utile + ["🔔 Je te préviens dès que ça change"]))
+        return
+    vu[str(cid)] = {"sig": sig, "t": time.time()}
+    _envoi_sur(cid, text=texte_etat(m, r, cle), reply_markup=markup_analyse(etat, m, r))
+    a_ = avis_ia(etat, m, r, cle)
+    if a_:
+        _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
+
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
         if mq and mq != nom_marche:
             continue
         try:
             r = analyse_marche(etat, pair)
-            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r, (etat or {}).get(nom_marche)), reply_markup=markup_analyse(etat or {}, nom_marche, r))
-            a_ = avis_ia(etat or {}, nom_marche, r, (etat or {}).get(nom_marche))
-            if a_:
-                _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
+            envoyer_analyse_a(etat if etat is not None else {}, cid, nom_marche, r, (etat or {}).get(nom_marche) or {})
         except Exception as ex:
             print("analyse", ex)
 
@@ -2423,7 +2443,7 @@ def manipulation(out, m, r, cle):
         dm, niv, meche = -1, H, x["h"]         # stops pris AU-DESSUS du plus haut → les gros vendeurs entrent
     if not dm:
         return
-    cle["manip_t"] = x["t"]; cle["manip"] = {"d": dm, "t": r["t"], "niv": niv}
+    cle["manip_t"] = x["t"]; cle["manip"] = {"d": dm, "t": r["t"], "niv": niv, "meche": meche, "t15": x["t"]}
     l = [f"🌀🌀 MANIPULATION EN COURS — {ICONE.get(m, '')} {m}",
          f"🕯 Vue 15 min : grosse mèche {'SOUS le dernier plus bas' if dm == 1 else 'AU-DESSUS du dernier plus haut'} ≈ {px(niv)}",
          "🎣 Les stops ont été pris, puis la bougie a CLÔTURÉ en revenant",
@@ -2623,22 +2643,34 @@ def agent(m, r, cle, ferme):
                 cle["pause"] = True
                 return out
             cle["pause"] = False
-            bj = rejet(r, d, o["e"], r["atr"]) if surcharge else None
-            if surcharge and not bj and not cle.get("attente_rejet"):
+            # Entrée DIRECTE dès qu'un de ces 3 signaux apparaît dans la zone (plus d'attente dans le vide) :
+            # 1) mèche de rejet + clôture  2) manipulation confirmée dans notre sens  3) bougie 15 min qui clôture dans le bon sens
+            a_ = r["atr"]; bj = rejet(r, d, o["e"], a_); raison = "Mèche de rejet + clôture"
+            mp = cle.get("manip")
+            if not bj and mp and mp.get("d") == d and r["t"] - mp["t"] <= 1800 and mp.get("meche"):
+                bj = {"t": mp["t15"], "l": mp["meche"], "h": mp["meche"]}; raison = "Manipulation : stops pris puis clôture"
+            x15 = r["b15"][-1]; rg = max(x15["h"] - x15["l"], 1e-9)
+            if not bj and x15["t"] != cle.get("conf_t") and (
+                    (d == 1 and x15["l"] <= o["zb"] + 0.1 * a_ and x15["c"] > x15["o"] and x15["c"] >= x15["l"] + 0.55 * rg and x15["c"] > o["za"] and r5 > r5p) or
+                    (d == -1 and x15["h"] >= o["za"] - 0.1 * a_ and x15["c"] < x15["o"] and x15["c"] <= x15["h"] - 0.55 * rg and x15["c"] < o["zb"] and r5 < r5p)):
+                bj = x15; raison = f"Bougie 15 min qui clôture {'en remontant' if d == 1 else 'en redescendant'}"
+            if bj and r["t"] - cle.get("stop_t", 0) < 2700:
+                bj = None                          # 45 min de calme après un stop : pas de revanche sur le marché
+            if bj:
+                cle["conf_t"] = x15["t"]
+            if False and surcharge and not bj and not cle.get("attente_rejet"):
                 cle["attente_rejet"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
                     out.append(f"🕯 {ICONE.get(m, '')} {m} : RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳\n"
                            f"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture {'en remontant' if d == 1 else 'en redescendant'}")
-            if surcharge and bj:
+            if bj:
                 cle.pop("attente_rejet", None); cle.pop("touche_t", None); cle.pop("traverse", None)
                 sl_m = (bj["l"] - 0.2 * r["atr"]) if d == 1 else (bj["h"] + 0.2 * r["atr"])   # SL juste derrière la mèche de rejet
-                sl_m = min(sl_m, p - 0.6 * r["atr"]) if d == 1 else max(sl_m, p + 0.6 * r["atr"])   # jamais trop collé : le marché respire
-                if abs(p - sl_m) > RISQUE_MAX * r["atr"]:
-                    out.append(f"🛑 {ICONE.get(m, '')} {m} : la mèche de rejet est trop grande (SL trop loin)\n😎 Je ne prends pas ce risque, j'attends mieux")
-                    cle.pop("touche_t", None)
-                    return out
+                # SL derrière la mèche ET derrière le bas de la zone (le marché respire dans la zone), jamais plus de 1,5 ATR
+                sl_m = min(sl_m, o["sl"], p - 0.8 * r["atr"]) if d == 1 else max(sl_m, o["sl"], p + 0.8 * r["atr"])
+                sl_m = max(sl_m, p - RISQUE_MAX * r["atr"]) if d == 1 else min(sl_m, p + RISQUE_MAX * r["atr"])
                 o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True,
-                         sl_h=heure(bj["t"]), sl_ut="15 min" if bj is r["b15"][-1] else "5 min")
+                         sl_h=heure(bj["t"]), sl_ut="5 min" if r["b5"] and bj is r["b5"][-1] else "15 min")
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 tr["profil"] = profil_trade(m, tr, r)
                 non, n_, w_ = memoire_refuse(tr["profil"])
@@ -2650,18 +2682,21 @@ def agent(m, r, cle, ferme):
                 niveau = "Fibonacci" not in o["src"] or "+" in o["src"]   # confluence avec un niveau 15m / 1h / 4h ou l'EMA
                 checks = [("15 min • 1 h • 4 h alignées", True), ("Daily / Weekly favorables", True),
                           ("Zone Fibonacci 50 – 78,6 %", True), ("Niveau 15m / 1h / 4h ou EMA", niveau),
-                          (f"RSI en surcharge ({', '.join(['5m'] + [u + 'm' for u in petites])})", True), ("Confirmé en 1 h", True),
-                          ("Mèche de rejet + clôture (5 / 15 min)", True),
+                          ("RSI en surcharge (repli bien chargé)", surcharge), ("Confirmé en 1 h", conf1h),
+                          (raison, True),
                           ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
                 out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
-            elif not surcharge and not cle.get("attente_rsi"):
+            elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                    out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
+                    fin = r["b15"][-1]["t"] + 1800
+                    out.append(f"🟨 {ICONE.get(m, '')} {m} : prix DANS la zone\n{SENS[d]}\n"
+                               f"🕯 J'entre dès qu'une bougie clôture {'en remontant' if d == 1 else 'en redescendant'}\n"
+                               f"⏱ Prochaine décision : clôture de {heure(fin)}\n🔔 Tiens-toi prêt, ça peut être tout de suite")
         elif d * (p - o["e"]) > 0.35 * abs(o["tp1"] - o["e"]) and cle.get("prep"):
-            out.append(f"⛔ {m} : le prix est parti sans toucher le point d'entrée. Trop tard, je recalcule le prochain point.")
+            out.append(f"⛔ {ICONE.get(m, '')} {m} : le prix est reparti {'⬆️' if d == 1 else '⬇️'} sans signal d'entrée\n😎 Pas de position forcée\n🔎 Je calcule le prochain point")
             cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
         return out
 
@@ -2675,7 +2710,7 @@ def agent(m, r, cle, ferme):
     if tr["statut"] == "entree":
         if touche_sl:
             out.append(f"❌ {m} : stop {px(sl)} touché. On coupe, prochain setup bientôt.")
-            cle["fin"] = [tr, sl, "🛑 Stop touché"]
+            cle["fin"] = [tr, sl, "🛑 Stop touché"]; cle["stop_t"] = r["t"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
@@ -2820,10 +2855,7 @@ def un_tour(etat, chats):
         cle["vu"] = r["t"]
         for cid, mq in demandes:
             if mq in (None, nom_marche):
-                _envoi_sur(cid, text=texte_etat(nom_marche, r, cle), reply_markup=markup_analyse(etat, nom_marche, r))
-                a_ = avis_ia(etat, nom_marche, r, cle)
-                if a_:
-                    _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
+                envoyer_analyse_a(etat, cid, nom_marche, r, cle)
         print(texte_etat(nom_marche, r), "\n")
 
     try:
