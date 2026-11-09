@@ -425,7 +425,7 @@ def verdict(r, cle):
         return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
     if etire(r, al):
         return ("⛔ TROP TARD — le marché est déjà parti", "😎 Patience, on trouve une autre entrée\n" + prochaine(r, cle))
-    if bloque_dw(r, al):
+    if bloque_dw(r, al) and not cle.get("ordre"):      # une position déjà préparée n'est pas annulée par un petit va-et-vient du Daily
         return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
     zone = bool(cle.get("attente_rsi"))
     return (f"🟡 PATIENCE   {SENS[al]} bientôt",
@@ -824,7 +824,7 @@ def bouton_auto(m):
 def markup_analyse(etat, m, r):
     """Sous l'analyse : bouton « Je rentre dans la prochaine position » quand une entrée se prépare."""
     cle = etat.get(m, {}); d = r["confirme"]
-    if d and not cle.get("trade") and cle.get("ordre") and not etire(r, d) and not bloque_dw(r, d):
+    if d and not cle.get("trade") and cle.get("ordre") and not etire(r, d):
         return bouton_auto(m)
     return CLAVIER
 
@@ -1505,7 +1505,7 @@ def jauge(m, r, cle, cid=None, canal=False):
         return (f"{tete}\n{prochaine(r, cle)}\n{barre_pct(40 * n_ok / 3)}\n🧭 Alignement   {n_ok}/3 ⏳")
     if etire(r, d):
         return f"{tete}\n🚀 Déjà parti : patience\n{barre_pct(40)}\n{prochaine(r, cle)}"
-    if bloque_dw(r, d):
+    if bloque_dw(r, d) and not cle.get("ordre"):
         return f"{tete}\n🔌 Prochaine position\n{barre_pct(40)}\n⛔ {SENS[d]} bloqué : prix {zone_txt(r['posD'])} Daily"
     o = cle.get("ordre")
     if not o:
@@ -1939,7 +1939,7 @@ def agent(m, r, cle, ferme):
                            f"🚦 Attends mon feu vert 🟢\n\n"
                            f"{fmt_trade(m, o, p)}\n\n"
                            f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}", bouton_auto(m)))
-        if bloque or o["rr"] < GAIN_MIN:
+        if (bloque and not cle.get("ordre")) or o["rr"] < GAIN_MIN:
             return out
         # On ajuste le point tant que le prix n'est pas encore arrivé (les niveaux bougent)
         if not cle.get("prep"):
