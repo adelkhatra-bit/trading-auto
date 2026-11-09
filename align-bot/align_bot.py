@@ -275,18 +275,44 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(f"🔜 Prochaine position   {'⬆️ ACHAT' if al == 1 else '⬇️ VENTE'}")
         l.append(f"🟨 Zone   {zone}")
     l.append(f"📡 Radar   {barre_pct(100 * n_ok / 3, 6)}")
-    l.append("✅ Position possible" if al else f"⏳ Attendre l'alignement ({3 - n_ok} UT à confirmer)")
+    titre, raison = verdict(r, cle)
+    l += ["━━━━━━━━━━━━", titre, raison]
     return "\n".join(l)
+
+def bloque_dw(r, d):
+    """Daily / Weekly : pas de short tout en bas, pas de long tout en haut."""
+    return (d == -1 and (r["posD"] <= 0.15 or (r["posW"] <= 0.15 and r["posD"] <= 0.35))) or \
+           (d == 1 and (r["posD"] >= 0.85 or (r["posW"] >= 0.85 and r["posD"] >= 0.65)))
+
+def verdict(r, cle):
+    """Réponse claire pour l'utilisateur : peut-il entrer maintenant ou non ?"""
+    cle = cle or {}
+    tr = cle.get("trade")
+    if tr:
+        p = r["m1"][-1]["c"]
+        sens = "⬆️ ACHAT" if tr["d"] == 1 else "⬇️ VENTE"
+        prog = tr["d"] * (p - tr["e"]) / max(abs(tr["tp1"] - tr["e"]), 1e-9)
+        if tr["statut"] == "entree" and prog < 0.25 and not tr.get("tard"):
+            return ("🟢🟢 TU PEUX ENTRER", f"{sens}\n🛑 Stop   {px(tr['sl'])}\n💰 TP1   {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
+        return ("🔴🔴 N'ENTRE PAS", f"⏰ Trop tard : la position {sens} est déjà partie\n⏳ J'attends le prochain setup")
+    if r.get("annonce"):
+        return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
+    al = r["confirme"]
+    if not al:
+        return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
+    if bloque_dw(r, al):
+        return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
+    return ("🟡🟡 PAS ENCORE", f"✅ Aligné {'⬆️ ACHAT' if al == 1 else '⬇️ VENTE'}\n🟨 J'attends que le prix vienne dans la zone\n🚦 Je t'envoie 🟢 J'ENTRE MAINTENANT")
 
 def telegram(methode, **params):
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "📈 Mes résultats"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
-                                   [{"text": "🧩 Indicateur TradingView"}]],
+CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
+                                   [{"text": "📈 Mes résultats"}, {"text": "🧩 Indicateur TradingView"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}], [{"text": "💎 Devenir VIP"}]],
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
@@ -342,10 +368,22 @@ LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script Tradi
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "500"))   # abonnement mensuel de la chaîne VIP (≈ 10 €)
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # le bot reste à l'écoute entre deux analyses
 
-def envoyer_analyse(cid, etat=None):
+def marche_demande(txt):
+    """« Analyse BTC » → BTC, « Analyse Gold » → GOLD, « Analyse » seul → les deux (None)."""
+    t = txt.lower()
+    return "BTC" if "btc" in t else "GOLD" if ("gold" in t or "or" in t.split()) else None
+
+def analyse_marche(etat, pair):
+    r = analyser(pair)
+    r["annonce"] = annonce_proche(etat or {}, int(time.time()))
+    return r
+
+def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
+        if mq and mq != nom_marche:
+            continue
         try:
-            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, analyser(pair), (etat or {}).get(nom_marche)), reply_markup=CLAVIER)
+            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, analyse_marche(etat, pair), (etat or {}).get(nom_marche)), reply_markup=CLAVIER)
         except Exception as ex:
             print("analyse", ex)
 
@@ -406,7 +444,10 @@ def repondre(etat, cid, oui, mk=None):
     if oui:
         cands = [m for m in trades if not isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict)]
         if not cands:
-            _envoi_sur(cid, text="⏳ Aucune position en cours pour le moment.\n🔔 Je te préviens dès qu'il y en a une.", reply_markup=CLAVIER)
+            _envoi_sur(cid, text=("🔴 Le bot n'a pas de position ouverte\n"
+                                  "👉 Attends 🟢 J'ENTRE MAINTENANT\n"
+                                  "🟠 / 🥇 Ou appuie sur Analyse BTC / Gold\n"
+                                  "🔔 Je te préviens dès qu'il y en a une"), reply_markup=CLAVIER)
             return
         m = cands[0]; tr = etat[m]["trade"]
         e = prix_actuel(m) or tr["e"]
@@ -416,8 +457,11 @@ def repondre(etat, cid, oui, mk=None):
             f"📌 Entrée   {px(e)}\n"
             f"🛑 Stop   {px(tr['sl'])}\n"
             f"💰 TP1   {px(tr['tp1'])}\n"
+            f"━━━━━━━━━━━━\n"
             f"🤖 Coach IA activé jusqu'au TP\n"
-            f"📰 Alertes news activées\n"
+            f"🔎 Je vérifie toutes les 5 min :\n"
+            f"🧭 15 min / 1 h / 4 h\n⚡ Surcharge RSI\n🧱 Résistances et supports\n"
+            f"📰 {prochaine_news(etat)}\n"
             f"📈 Résultat calculé tout seul"))
         return
     ouverts = [m for m in trades if isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict) and not etat[m]["trade"]["qui"][cid].get("fini")]
@@ -508,7 +552,7 @@ def traiter(etat, chats, updates):
                     _envoi_sur(p, text=f"👤 Nouveau visiteur : {nom}",
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'accès VIP", "callback_data": f"offrir:{cid}"}]]}))
             elif "analyse" in txtv:
-                analyse_visiteur(etat, cid)
+                analyse_visiteur(etat, cid, marche_demande(txtv))
             elif "vip" in txtv or "/start" in txtv:
                 refuser(etat, cid)
             else:
@@ -530,7 +574,7 @@ def traiter(etat, chats, updates):
             menu_indicateur(etat, cid, nom)
             continue
         if "analyse" in txt or "etat" in txt:
-            demandes.append(cid)
+            demandes.append((cid, marche_demande(txt)))
         elif "rentre" in txt or txt.strip() == "oui":
             repondre(etat, cid, True)
         elif "sorti" in txt or "non" in txt:
@@ -579,7 +623,7 @@ def menu_indicateur(etat, cid, user):
         etat.setdefault("attente_tv", [])
         if cid not in etat["attente_tv"]:
             etat["attente_tv"].append(cid)
-        _envoi_sur(cid, reply_markup=json.dumps({"force_reply": True, "input_field_placeholder": "Ton pseudo TradingView"}), text=(
+        _envoi_sur(cid, reply_markup=CLAVIER, text=(
             "🧩 Indicateur ALIGN MTF PRO\n✅ Tu y as droit\n✍️ Écris ton pseudo TradingView\n(exemple : adel_khatra)"))
         return
     kw = {"reply_markup": bouton_indicateur(etat)} if etat.get("lien") else {}
@@ -607,11 +651,13 @@ def bouton_payer(etat):
     lien = etat.get("lien")
     return json.dumps({"inline_keyboard": [[{"text": "🔓 Débloquer les positions (≈ 10 € / mois)", "url": lien}]]}) if lien else None
 
-def analyse_visiteur(etat, cid):
+def analyse_visiteur(etat, cid, mq=None):
     """Analyse gratuite pour les visiteurs : tendance visible, plan de trade réservé VIP."""
     for nom_marche, pair in MARCHES.items():
+        if mq and mq != nom_marche:
+            continue
         try:
-            _envoi_sur(cid, text=texte_etat(nom_marche, analyser(pair), etat.get(nom_marche), vip=False), reply_markup=CLAVIER_VISITEUR)
+            _envoi_sur(cid, text=texte_etat(nom_marche, analyse_marche(etat, pair), etat.get(nom_marche), vip=False), reply_markup=CLAVIER_VISITEUR)
         except Exception as ex:
             print("analyse visiteur", ex)
     kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
@@ -786,6 +832,16 @@ def annonces_et_sessions(etat, maintenant, derniers):
                            + (f"\n⚡ {', '.join(comp)} comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction." if comp else ""))
     del vus[:-200]
     return out
+
+def prochaine_news(etat):
+    """Prochaine annonce ou discours USA à fort impact (BTC et Gold y réagissent)."""
+    maintenant = time.time()
+    ev = sorted((e for e in etat.get("cal", {}).get("ev", []) if e["t"] >= maintenant - 15 * 60), key=lambda e: e["t"])
+    if not ev:
+        return "Pas de news majeure prévue cette semaine"
+    e = ev[0]
+    jour = datetime.datetime.fromtimestamp(e["t"], PARIS).strftime("%d/%m")
+    return f"Prochaine news   {jour} {heure(e['t'])} {e['titre']}"
 
 def annonce_proche(etat, maintenant):
     return any(abs(e["t"] - maintenant) <= 15 * 60 for e in etat.get("cal", {}).get("ev", []))
@@ -972,8 +1028,7 @@ def agent(m, r, cle, ferme):
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
-        bloque = (d == -1 and (r["posD"] <= 0.15 or (r["posW"] <= 0.15 and r["posD"] <= 0.35))) or \
-                 (d == 1 and (r["posD"] >= 0.85 or (r["posW"] >= 0.85 and r["posD"] >= 0.65)))
+        bloque = bloque_dw(r, d)
         o = point_entree(r, d, p)
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
@@ -1105,12 +1160,12 @@ def main():
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 4:
+        if etat.get("clavier") != 5:
             for cid in chats:
-                _envoi_sur(cid, text="🆕 Nouveau bouton : 🧩 Indicateur TradingView", reply_markup=CLAVIER)
+                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas", reply_markup=CLAVIER)
             for cid in etat.get("prospects", []):
-                _envoi_sur(cid, text="🆕 Boutons : 📊 Analyse • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 4
+                _envoi_sur(cid, text="🆕 Boutons : 🟠 Analyse BTC • 🥇 Analyse Gold • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
+            etat["clavier"] = 5
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
@@ -1166,8 +1221,9 @@ def main():
                 bil["pct"] += gain
         derniers[nom_marche] = r
         cle["vu"] = r["t"]
-        for cid in demandes:
-            telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r, cle), reply_markup=CLAVIER)
+        for cid, mq in demandes:
+            if mq in (None, nom_marche):
+                _envoi_sur(cid, text=texte_etat(nom_marche, r, cle), reply_markup=CLAVIER)
         print(texte_etat(nom_marche, r), "\n")
 
     try:
@@ -1215,8 +1271,8 @@ def main():
             maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=max(1, min(50, reste))).get("result", [])
         except Exception as ex:
             print("ecoute", ex); break
-        for cid in traiter(etat, chats, maj):
-            envoyer_analyse(cid, etat)
+        for cid, mq in traiter(etat, chats, maj):
+            envoyer_analyse(cid, etat, mq)
     etat["chats"] = sorted(chats)
     json.dump(etat, open(ETAT_FICHIER, "w"))
 
