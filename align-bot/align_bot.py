@@ -673,7 +673,7 @@ TRAD = {
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
 "🔎 Je calcule la zone d'entrée": "🔎 Calculating the entry zone", "⏳ Quelques instants": "⏳ A few moments",
-"🕯 Prix dans la zone : j'attends la mèche de rejet + clôture": "🕯 Price in the zone: waiting for the rejection wick + close", "⚡ Décision à la clôture de la bougie 15 min de": "⚡ Decision at the close of the 15 min candle at",
+"🕯 Prix dans la zone : j'attends la mèche de rejet + clôture": "🕯 Price in the zone: waiting for the rejection wick + close", "⚡ Décision à la clôture de la bougie 15 min de": "⚡ Decision at the close of the 15 min candle at", "(clôture à": "(closes at",
 "🟨 Le prix approche de la zone": "🟨 Price is approaching the zone", "⏳ Arrivée estimée": "⏳ Estimated arrival", "⏳ Encore loin : ça peut prendre des heures": "⏳ Still far: it may take hours",
 "🕯 Prochaine clôture 15 min dans": "🕯 Next 15 min close in", "⌛ Délai max : encore": "⌛ Max wait: still", "🔄 Mis à jour à": "🔄 Updated at",
 "4 h sans entrée": "4 h without entry", "😎 La position n'est pas venue : pas de mauvaise entrée": "😎 The position didn't come: no bad entry", "🎯 Réappuie sur le bouton pour la prochaine": "🎯 Tap the button again for the next one",
@@ -955,7 +955,32 @@ def traduire_clavier(kb):
         j["input_field_placeholder"] = traduire(j["input_field_placeholder"])
     return json.dumps(j)
 
+def mise_en_forme(t):
+    """Tous les messages rangés pareil : titre seul en haut, puis UNE info par ligne, sans espaces en trop."""
+    if not isinstance(t, str) or not t:
+        return t
+    lignes = t.split("\n")
+    if " — " in lignes[0] and len(lignes[0]) > 22:
+        g, d_ = lignes[0].split(" — ", 1)
+        lignes = [g.strip() + " —", d_.strip()] + lignes[1:]
+    out = []
+    for l in lignes:
+        l = re.sub(r" {2,}", " ", l.strip())
+        if " • " in l and l.count("≈") >= 2:          # « entrée ≈ X • SL ≈ Y • TP1 ≈ Z » → une info par ligne
+            parts = [x.strip() for x in l.split(" • ") if x.strip()]
+            out += [parts[0]] + [("🛑 " if x.startswith("SL") else "💰 " if x.startswith("TP") else "🟨 " if x.lower().startswith(("entrée", "zone")) else "") + x
+                                 for x in parts[1:]]
+        elif l or (out and out[-1]):
+            out.append(l)
+    while out and not out[-1]:
+        out.pop()
+    return "\n".join(out)
+
 def telegram(methode, **params):
+    if methode in ("sendMessage", "editMessageText", "sendPhoto"):
+        for k in ("text", "caption"):
+            if k in params:
+                params[k] = mise_en_forme(params[k])
     if methode in ("sendMessage", "editMessageText", "sendPhoto") and str(params.get("chat_id")) in LANG_EN:
         if "text" in params:
             params["text"] = traduire(params["text"])
@@ -1202,7 +1227,7 @@ def chrono_txt(m, r, cle, t0):
         etape, estim = "2️⃣/4 🔎 Je calcule la zone d'entrée", "⏳ Quelques instants"
     elif cle.get("attente_rsi") or cle.get("attente_rejet") or cle.get("prep"):
         etape = "4️⃣/4 🕯 Prix dans la zone : j'attends la mèche de rejet + clôture"
-        estim = f"⚡ Décision à la clôture de la bougie 15 min de {heure(cloture - 900)}"
+        estim = f"⚡ Décision à la clôture de la bougie 15 min de {heure(cloture - 900)} (clôture à {heure(cloture)})"
     else:
         dist = abs(p - o["e"]); vit = max(a / 15, 1e-9)            # vitesse moyenne ≈ 1 ATR par 15 min
         etape = f"3️⃣/4 🟨 Le prix approche de la zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}"
