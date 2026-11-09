@@ -661,7 +661,16 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🏔 Fond 4 h + Daily": "🏔 Trend 4 h + Daily", "🔁 Confirmation 1 h": "🔁 Confirmation 1 h",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "🕯 Vue 15 min : grosse mèche SOUS le dernier plus bas": "🕯 15 min view: big wick BELOW the last low",
+"🕯 Vue 15 min : grosse mèche AU-DESSUS du dernier plus haut": "🕯 15 min view: big wick ABOVE the last high", "🎣 Les stops ont été pris, puis la bougie a CLÔTURÉ en revenant": "🎣 Stops were hunted, then the candle CLOSED back inside",
+"🙅 On ne court pas après la bougie": "🙅 We don't chase the candle", "📰 C'est l'effet de la news : encore plus de prudence": "📰 It's the news effect: extra caution",
+"🧘 Tu es en position : reste cool, ton SL est en place": "🧘 You're in a trade: stay cool, your SL is set", "⚠️ C'est CONTRE ta position : ne bouge pas ton SL, je surveille": "⚠️ It's AGAINST your trade: don't move your SL, I'm watching",
+"✅ Dans le sens de la tendance :": "✅ With the trend:", "🎯 Point d'entrée visé : retour vers": "🎯 Target entry: back to", "ancien plus bas": "previous low", "ancien plus haut": "previous high",
+"⭐ Encore mieux : milieu de la mèche": "⭐ Even better: middle of the wick", "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE (5 / 15 min)": "⏳ Patience: I only enter on a rejection wick + CLOSE (5 / 15 min)",
+"🔔 Je t'envoie 🟢 J'ENTRE MAINTENANT au bon moment": "🔔 I'll send 🟢 I'M ENTERING NOW at the right time", "⚠️ CONTRE la tendance de fond": "⚠️ AGAINST the main trend",
+"tant que 15 min / 1 h / 4 h ne se retournent pas": "while 15 min / 1 h / 4 h don't turn", "🔔 Je te préviens si ça se retourne": "🔔 I'll tell you if it turns",
+"✅ Validé quand 15 min + 1 h + 4 h vont dans le même sens": "✅ Validated when 15 min + 1 h + 4 h agree",
+"🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens": "🌀 After the manipulation: stops were taken, we enter the right way", "🏔 Fond 4 h + Daily": "🏔 Trend 4 h + Daily", "🔁 Confirmation 1 h": "🔁 Confirmation 1 h",
 "🎯 Déclencheur 15 min": "🎯 Trigger 15 min", "⏱ Timing 5 min": "⏱ Timing 5 min", "✅ VALIDÉ": "✅ VALIDATED",
 "➖ Pas de tendance de fond en 4 h": "➖ No 4 h trend", "⛔ Rien de validé : on ne trade pas": "⛔ Nothing validated: no trade",
 "⚖️ 4 h et Daily en désaccord": "⚖️ 4 h and Daily disagree", "⛔ Rien de validé : on attend": "⛔ Nothing validated: we wait",
@@ -2171,6 +2180,58 @@ def gerer_stop(etat, m, r, tr, c):
             "🕯 Il peut revenir un peu, c'est normal\n"
             "🛑 Ne touche pas ton SL\n🎯 Cap sur le TP"))
 
+def manipulation(out, m, r, cle):
+    """MANIPULATION (chasse aux stops) vue 15 min : une grosse bougie pique AU-DELÀ du dernier plus bas / plus haut
+    des 20 bougies 15 min (elle prend les stops) puis CLÔTURE en revenant à l'intérieur. 1 message par bougie."""
+    b = r["b15"]; a = r["atr"]
+    if len(b) < 22 or b[-1]["t"] == cle.get("manip_t"):
+        return
+    x = b[-1]; z = b[-21:-1]
+    if a < 0.0005 * x["c"]:
+        return                                 # marché endormi (week-end / nuit) : pas de fausse alerte
+    H = max(y["h"] for y in z); L = min(y["l"] for y in z)
+    rng = max(x["h"] - x["l"], 1e-9)
+    bas = min(x["o"], x["c"]) - x["l"]; haut = x["h"] - max(x["o"], x["c"])
+    dm = 0
+    if x["l"] < L - 0.15 * a and x["c"] > L and bas >= 0.5 * rng and rng >= 1.3 * a:
+        dm, niv, meche = 1, L, x["l"]          # stops pris SOUS le plus bas → les gros acheteurs entrent
+    elif x["h"] > H + 0.15 * a and x["c"] < H and haut >= 0.5 * rng and rng >= 1.3 * a:
+        dm, niv, meche = -1, H, x["h"]         # stops pris AU-DESSUS du plus haut → les gros vendeurs entrent
+    if not dm:
+        return
+    cle["manip_t"] = x["t"]; cle["manip"] = {"d": dm, "t": r["t"], "niv": niv}
+    l = [f"🌀🌀 MANIPULATION EN COURS — {ICONE.get(m, '')} {m}",
+         f"🕯 Vue 15 min : grosse mèche {'SOUS le dernier plus bas' if dm == 1 else 'AU-DESSUS du dernier plus haut'} ≈ {px(niv)}",
+         "🎣 Les stops ont été pris, puis la bougie a CLÔTURÉ en revenant",
+         "🙅 On ne court pas après la bougie"]
+    if r.get("annonce"):
+        l.append("📰 C'est l'effet de la news : encore plus de prudence")
+    tr = cle.get("trade")
+    if tr:
+        l.append("🧘 Tu es en position : reste cool, ton SL est en place" if tr["d"] == dm else
+                 "⚠️ C'est CONTRE ta position : ne bouge pas ton SL, je surveille")
+    elif r["confirme"] == dm:
+        mid = (niv + meche) / 2
+        l += [f"✅ Dans le sens de la tendance : {SENS[dm]}",
+              f"🎯 Point d'entrée visé : retour vers ≈ {px(niv)} ({'ancien plus bas' if dm == 1 else 'ancien plus haut'} 15 min)",
+              f"⭐ Encore mieux : milieu de la mèche ≈ {px(mid)}",
+              f"🛑 SL un peu {'SOUS' if dm == 1 else 'AU-DESSUS de'} la mèche ≈ {px(meche - dm * 0.2 * a)}",
+              "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE (5 / 15 min)",
+              "🔔 Je t'envoie 🟢 J'ENTRE MAINTENANT au bon moment"]
+    elif r["confirme"] == -dm:
+        l += [f"⚠️ CONTRE la tendance de fond ({SENS[-dm]})",
+              f"⛔ Pas de {SENS[dm]} tant que 15 min / 1 h / 4 h ne se retournent pas",
+              "🔔 Je te préviens si ça se retourne"]
+    else:
+        l += [f"⏳ {SENS[dm]} possible — ⛔ PAS ENCORE VALIDÉ",
+              "✅ Validé quand 15 min + 1 h + 4 h vont dans le même sens",
+              "🔔 Je te préviens dès que c'est bon"]
+    out.append(("\n".join(l), bouton_auto(m)) if not tr else "\n".join(l))
+
+def manip_txt(cle, d, r):
+    mp = cle.get("manip")
+    return "🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens\n" if mp and mp["d"] == d and r["t"] - mp["t"] <= 10800 else ""
+
 def agent(m, r, cle, ferme):
     """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
     out = []
@@ -2183,6 +2244,10 @@ def agent(m, r, cle, ferme):
     d = r["confirme"]
     r5, r5p = r["r5"][-1], r["r5"][-2]
     ctx = f"Contexte : {zone_txt(r['posD'])} de la zone Daily, {zone_txt(r['posW'])} de la zone Weekly."
+    try:
+        manipulation(out, m, r, cle)
+    except Exception as ex:
+        print("manipulation", ex)
 
     # ── Pas de trade : alignement 15m + 1h + 4h obligatoire, puis ordre limite au point précis ──
     if not tr:
@@ -2202,7 +2267,7 @@ def agent(m, r, cle, ferme):
                 out.append(f"🧠 {ICONE.get(m, '')} {m} : cassure vue, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
                 return out
             cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle["parti"] = False; cle.pop("ordre", None)
-            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{avis_memoire(tr['profil'])}"
+            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}"
                         f"🕯 La bougie 15 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
                         f"🛑 SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de cette bougie\n\n"
                         f"{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
@@ -2359,7 +2424,7 @@ def agent(m, r, cle, ferme):
                           ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}\n{qualite(tr)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not surcharge and not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
