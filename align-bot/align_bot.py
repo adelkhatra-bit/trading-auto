@@ -335,7 +335,7 @@ def analyser(pair):
     div1h, div4h = divergence(h1), divergence(h4)
     distrib = (div1h[0] or div4h[0]) and (posD >= 0.65 or posW >= 0.75)
     accum = (div1h[1] or div4h[1]) and (posD <= 0.35 or posW <= 0.25)
-    return dict(distrib=distrib, accum=accum, div4h=div4h,m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
+    return dict(distrib=distrib, accum=accum, div4h=div4h, b5=m5[-12:], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
                 grosses=grosses, b15=b[-30:], ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
@@ -504,6 +504,21 @@ def alerte_repli(out, m, r, cle, d, p):
                    + f"😎 Le repli qu'on attend commence\n🔜 Prochaine entrée   {SENS[d]} dans cette zone\n"
                    + f"🕯 La moitié du dernier grand mouvement (vue 15 min){', ' + src if 'Fibonacci' not in src else ''}\n"
                    + "👀 Sois patient\n🔔 Je te préviens dès qu'on y est")
+
+def rejet(r, d, e, a):
+    """Mèche de rejet + clôture : la dernière bougie 5 min (ou 15 min) terminée a piqué dans la zone
+    puis CLÔTURÉ en repartant dans le sens (grande mèche du côté de la zone, clôture du bon côté)."""
+    for b in (r["b5"][-1:] + r["b15"][-1:]):
+        rng = max(b["h"] - b["l"], 1e-9)
+        if d == 1:
+            meche = min(b["o"], b["c"]) - b["l"]
+            if b["l"] <= e + 0.2 * a and meche >= 0.4 * rng and b["c"] >= b["l"] + 0.6 * rng:
+                return b
+        else:
+            meche = b["h"] - max(b["o"], b["c"])
+            if b["h"] >= e - 0.2 * a and meche >= 0.4 * rng and b["c"] <= b["h"] - 0.6 * rng:
+                return b
+    return None
 
 def niveau_cassure(r, d):
     """Niveau à casser (vue 15 min) : le plus haut (LONG) ou le plus bas (SHORT) des 20 dernières bougies 15 min."""
@@ -723,7 +738,10 @@ TRAD = {
 "min). Volatilité forte attendue.": "min). Strong volatility expected.", "(dans": "(in", "Londres": "London",
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
-"(en cours)": "(now)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
+"(en cours)": "(now)", "🧠 L'avis de l'IA ALIGN": "🧠 ALIGN AI's view", "🧠 L'IA ALIGN sur cette entrée": "🧠 ALIGN AI on this entry", "🧠 La leçon de l'IA ALIGN": "🧠 ALIGN AI's lesson", ": RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳": ": RSI overextended ✅ — waiting for the REJECTION WICK and the CLOSE ⏳",
+"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en remontant": "👀 5 / 15-min chart: a candle that dips into the zone then closes back up",
+"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en redescendant": "👀 5 / 15-min chart: a candle that spikes into the zone then closes back down",
+"Mèche de rejet + clôture (5 / 15 min)": "Rejection wick + close (5 / 15 min)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
 "cassure vue, mais je passe mon tour": "breakout seen, but I'm skipping", "prix dans la zone, mais je passe mon tour": "price in the zone, but I'm skipping",
 "📚 Ce type de position a perdu trop souvent": "📚 This type of position lost too often", " gagnés": " won", ": je note ce": ": I'm noting this",
 "en session": "in session", "🧠 Bilan de ce type :": "🧠 Record for this type:", "💡 Leçon : je serai plus prudent sur ce type de position": "💡 Lesson: I'll be more careful with this type of position",
@@ -982,6 +1000,64 @@ def boutons_canal(etat, texte):
     lignes.append([{"text": "🤖 Mon coach", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}])
     return json.dumps({"inline_keyboard": lignes})
 
+# ───────── IA (GitHub Models, gratuite avec le jeton GitHub du workflow) ─────────
+IA_JETON = os.environ.get("GITHUB_TOKEN", "")
+IA_MODELE = os.environ.get("IA_MODELE", "openai/gpt-4o-mini")
+IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "120"))
+IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style jeune et simple, "
+             "avec quelques emojis. Tu parles en bougies (vue 15 min, mèches, clôtures). Tu t'appuies UNIQUEMENT sur les données fournies : "
+             "aucun prix inventé, jamais de contradiction avec le verdict du bot (si le bot dit d'attendre, tu dis d'attendre). "
+             "Pas de promesse de gain, ce n'est pas un conseil financier.")
+
+def ia(etat, consigne, donnees, cle_cache=None, duree=600):
+    """Commentaire court d'une vraie IA. Renvoie '' si l'IA n'est pas disponible (le bot marche sans)."""
+    if not IA_JETON:
+        return ""
+    cache = etat.setdefault("ia_cache", {})
+    if cle_cache and cle_cache in cache and time.time() - cache[cle_cache][0] < duree:
+        return cache[cle_cache][1]
+    jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
+    compte = etat.setdefault("ia_jour", {})
+    if compte.get(jour, 0) >= IA_MAX_JOUR:
+        return ""
+    corps = json.dumps({"model": IA_MODELE, "temperature": 0.4, "max_tokens": 220,
+                        "messages": [{"role": "system", "content": IA_REGLES},
+                                     {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]}).encode()
+    try:
+        req = urllib.request.Request("https://models.github.ai/inference/chat/completions", data=corps,
+                                     headers={"Authorization": f"Bearer {IA_JETON}", "Content-Type": "application/json",
+                                              "Accept": "application/json", "User-Agent": "align-bot"})
+        with urllib.request.urlopen(req, timeout=25) as rep_:
+            txt = json.loads(rep_.read().decode())["choices"][0]["message"]["content"].strip()
+    except Exception as ex:
+        print("ia", ex); return ""
+    for k in list(compte):
+        if k != jour:
+            compte.pop(k)
+    compte[jour] = compte.get(jour, 0) + 1
+    if cle_cache:
+        cache[cle_cache] = (time.time(), txt)
+        for k in [k for k, v in cache.items() if time.time() - v[0] > 3600]:
+            cache.pop(k)
+    return txt
+
+def donnees_ia(m, r, cle):
+    titre, raison = verdict(r, cle)
+    o = (cle or {}).get("ordre") or {}
+    return {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
+            "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
+            "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
+            "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
+            "verdict du bot": titre + " / " + raison.replace("\n", " "),
+            "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
+            "niveau de cassure 15 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b15"]) >= 22 else None,
+            "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
+
+def avis_ia(etat, m, r, cle):
+    t = ia(etat, "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer.", donnees_ia(m, r, cle),
+           cle_cache=f"analyse_{m}_{int(time.time() // 600)}")
+    return f"🧠 L'avis de l'IA ALIGN\n{t}" if t else ""
+
 def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
 
@@ -1057,6 +1133,9 @@ def envoyer_analyse(cid, etat=None, mq=None):
         try:
             r = analyse_marche(etat, pair)
             telegram("sendMessage", chat_id=cid, text=texte_etat(nom_marche, r, (etat or {}).get(nom_marche)), reply_markup=markup_analyse(etat or {}, nom_marche, r))
+            a_ = avis_ia(etat or {}, nom_marche, r, (etat or {}).get(nom_marche))
+            if a_:
+                _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
         except Exception as ex:
             print("analyse", ex)
 
@@ -2168,14 +2247,28 @@ def agent(m, r, cle, ferme):
             conf1h = R["1h"] > 35 and r["dirs"][9] == d
         surcharge = r5ok and len(petites) >= 1 and conf1h
         detail = f"RSI 5m {r5:.0f} • " + " • ".join(f"{u}m {R[u]:.0f}" for u in ("10", "15", "30")) + f" • 1h {R['1h']:.0f}"
-        if touche and not ((lo <= o["sl"]) if d == 1 else (hi >= o["sl"])):
+        if touche:
+            cle["touche_t"] = r["t"]
+        sl_touche = (lo <= o["sl"]) if d == 1 else (hi >= o["sl"])
+        recent_zone = cle.get("touche_t") and r["t"] - cle["touche_t"] <= 1800 and d * (p - o["e"]) <= 0.6 * r["atr"]
+        if sl_touche:
+            cle.pop("touche_t", None)
+        if (touche or recent_zone) and not sl_touche:
             if r.get("annonce"):
                 if not cle.get("pause"):
                     out.append(f"⏸ {m} : prix sur le point d'entrée, mais annonce économique dans moins de 15 min. On ne rentre pas.")
                 cle["pause"] = True
                 return out
             cle["pause"] = False
-            if surcharge:
+            bj = rejet(r, d, o["e"], r["atr"]) if surcharge else None
+            if surcharge and not bj and not cle.get("attente_rejet"):
+                cle["attente_rejet"] = True
+                out.append(f"🕯 {ICONE.get(m, '')} {m} : RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳\n"
+                           f"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture {'en remontant' if d == 1 else 'en redescendant'}")
+            if surcharge and bj:
+                cle.pop("attente_rejet", None); cle.pop("touche_t", None)
+                sl_m = min(o["sl"], bj["l"] - 0.2 * r["atr"]) if d == 1 else max(o["sl"], bj["h"] + 0.2 * r["atr"])
+                o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True)
                 tr = dict(o, statut="entree", cree=r["t"], encore=0)
                 tr["profil"] = profil_trade(m, tr, r)
                 non, n_, w_ = memoire_refuse(tr["profil"])
@@ -2188,11 +2281,12 @@ def agent(m, r, cle, ferme):
                 checks = [("15 min • 1 h • 4 h alignées", True), ("Daily / Weekly favorables", True),
                           ("Zone Fibonacci 50 – 78,6 %", True), ("Niveau 15m / 1h / 4h ou EMA", niveau),
                           (f"RSI en surcharge ({', '.join(['5m'] + [u + 'm' for u in petites])})", True), ("Confirmé en 1 h", True),
+                          ("Mèche de rejet + clôture (5 / 15 min)", True),
                           ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
                 out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {m} 🟢🟢🟢\n{SENS[d]}\n{qualite(tr)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
-            elif not cle.get("attente_rsi"):
+            elif not surcharge and not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 out.append(f"👀 {m} : prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳\n{detail}")
         elif d * (p - o["e"]) > 0.35 * abs(o["tp1"] - o["e"]) and cle.get("prep"):
@@ -2313,6 +2407,12 @@ def un_tour(etat, chats):
         envois += agent(nom_marche, r, cle, ferme)
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
             cle["trade"]["auto_fait"] = True
+            trx = cle["trade"]
+            t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite.",
+                    dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
+                                                                    "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}))
+            if t_:
+                envois.append(f"🧠 L'IA ALIGN sur cette entrée {ICONE.get(nom_marche, '')} {nom_marche}\n{t_}")
             entrer_inscrits(etat, nom_marche, cle["trade"], chats)
         if TOKEN:
             coach(etat, nom_marche, r, cle)
@@ -2332,6 +2432,10 @@ def un_tour(etat, chats):
                               f"📚 {pr.get('type', 'position')} {'LONG' if pr.get('d') == 1 else 'SHORT'} en session {pr.get('session', '?')}\n"
                               f"🧠 Bilan de ce type : {w_}/{n_} gagnés\n"
                               + ("💡 Leçon : je serai plus prudent sur ce type de position" if gain <= 0 else "💪 Je garde ce type de position"))
+                t_ = ia(etat, "La position est terminée. Tire UNE leçon simple et utile pour la prochaine fois (pourquoi TP ou pourquoi SL).",
+                        {"marché": nom_marche, "résultat %": round(gain, 2), "motif": motif, "profil": pr, "bilan de ce type": f"{w_}/{n_}"})
+                if t_:
+                    envois.append(f"🧠 La leçon de l'IA ALIGN\n{t_}")
         derniers[nom_marche] = r
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
@@ -2346,6 +2450,9 @@ def un_tour(etat, chats):
         for cid, mq in demandes:
             if mq in (None, nom_marche):
                 _envoi_sur(cid, text=texte_etat(nom_marche, r, cle), reply_markup=markup_analyse(etat, nom_marche, r))
+                a_ = avis_ia(etat, nom_marche, r, cle)
+                if a_:
+                    _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
         print(texte_etat(nom_marche, r), "\n")
 
     try:
