@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
-Prix gratuits Kraken (BTC = XBTUSD, Gold = PAXGUSD), signaux envoyés sur Telegram.
+Prix gratuits : BTC = Kraken XBTUSD, Gold = XAUUSD spot (bougies COMEX Yahoo recalées sur le prix spot Swissquote).
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
 import json, os, re, time, urllib.request, urllib.error, urllib.parse, datetime
 from zoneinfo import ZoneInfo
@@ -8,7 +8,7 @@ PARIS = ZoneInfo("Europe/Paris")
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 ETAT_FICHIER = os.environ.get("STATE_FILE", "state.json")
-MARCHES = {"BTC": "XBTUSD", "GOLD": "PAXGUSD"}  # BTC → FTMO (CFD 24/7) • GOLD → Topstep (MGC) / FTMO
+MARCHES = {"BTC": "XBTUSD", "GOLD": "XAUUSD"}  # BTC → FTMO (CFD 24/7) • GOLD → Topstep (MGC) / FTMO
 MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 2.0
 UT = ["1", "2", "5", "10", "15", "30", "45", "1h", "2h", "4h", "D"]
 POIDS = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
@@ -35,6 +35,71 @@ def kraken(pair, interval):
     rows = next(v for k, v in j["result"].items() if k != "last")
     rows = rows[:-1]  # on enlève la bougie en cours : calcul à la clôture, comme l'alerte TradingView
     return [dict(t=int(r[0]), o=float(r[1]), h=float(r[2]), l=float(r[3]), c=float(r[4])) for r in rows]
+
+# ───────── Gold = XAUUSD spot (même prix que FOREXCOM:XAUUSD sur TradingView) ─────────
+_CACHE = {}
+YAHOO = {1: ("1m", "5d", 50), 5: ("5m", "1mo", 50), 15: ("15m", "1mo", 50), 30: ("30m", "1mo", 120),
+         60: ("60m", "3mo", 300), 1440: ("1d", "2y", 1800), 10080: ("1wk", "10y", 3600)}
+
+def or_spot():
+    """Prix spot XAUUSD en direct (Swissquote, gratuit) : milieu achat / vente."""
+    c = _CACHE.get("spot")
+    if c and time.time() - c[0] < 20:
+        return c[1]
+    j = http_json("https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD")
+    q = j[0]["spreadProfilePrices"][0]
+    v = (q["bid"] + q["ask"]) / 2
+    _CACHE["spot"] = (time.time(), v)
+    return v
+
+def yahoo_or(interval):
+    """Bougies de l'or (COMEX GC=F) recalées sur le spot XAUUSD : mêmes mèches, mêmes prix que le graphique XAUUSD."""
+    if interval == 240:
+        return regrouper(yahoo_or(60), 4, 3600)
+    ui, rg, ttl = YAHOO[interval]
+    c = _CACHE.get(("gc", interval))
+    if not c or time.time() - c[0] > ttl:
+        j = None
+        for hote in ("query1", "query2"):
+            try:
+                j = http_json(f"https://{hote}.finance.yahoo.com/v8/finance/chart/GC=F?interval={ui}&range={rg}")
+                break
+            except Exception as ex:
+                print("yahoo", hote, ex)
+        if j is None:
+            raise RuntimeError("Yahoo indisponible")
+        res = j["chart"]["result"][0]; q = res["indicators"]["quote"][0]
+        rows = [dict(t=int(t), o=o, h=h, l=l, c=cl) for t, o, h, l, cl in zip(res["timestamp"], q["open"], q["high"], q["low"], q["close"])
+                if None not in (o, h, l, cl)]
+        _CACHE[("gc", interval)] = (time.time(), rows[:-1][-720:], res["meta"].get("regularMarketPrice") or rows[-1]["c"])
+        c = _CACHE[("gc", interval)]
+    # Écart futures / spot (les futures Yahoo ont ~10 min de retard) : moyenne lissée pour rester stable
+    spot = None
+    try:
+        spot = or_spot()
+        brut = spot - _CACHE.get(("gc", 1), c)[2]
+        ancien = _CACHE.get("ecart")
+        _CACHE["ecart"] = brut if ancien is None or abs(brut - ancien) > 40 else ancien * 0.9 + brut * 0.1
+    except Exception as ex:
+        print("spot or", ex)
+    ecart = _CACHE.get("ecart", 0.0)
+    out = [dict(t=b["t"], o=b["o"] + ecart, h=b["h"] + ecart, l=b["l"] + ecart, c=b["c"] + ecart) for b in c[1]]
+    if interval == 1 and spot and out:
+        # Dernière minute = prix spot EN DIRECT (comme le graphique XAUUSD), pour ne pas avoir 10 min de retard
+        t = int(time.time()) // 60 * 60 - 60
+        if t > out[-1]["t"]:
+            out.append(dict(t=t, o=out[-1]["c"], h=max(out[-1]["c"], spot), l=min(out[-1]["c"], spot), c=spot))
+    return out
+
+def bougies(pair, interval):
+    """Source des bougies : Kraken pour le BTC, XAUUSD spot pour le Gold (secours : Kraken PAXG)."""
+    if pair == "XAUUSD":
+        try:
+            return yahoo_or(interval)
+        except Exception as ex:
+            print("or -> secours PAXG", ex)
+            return kraken("PAXGUSD", interval)
+    return kraken(pair, interval)
 
 def regrouper(bars, n, base_sec):
     """Construit une UT plus grande (ex : 2m depuis 1m) en respectant les bornes horaires."""
@@ -116,9 +181,9 @@ def pivots(b, g=5):
 
 # ───────── Analyse complète d'un marché ─────────
 def analyser(pair):
-    m1, m5, m15, h1, h4, d1 = (kraken(pair, i) for i in (1, 5, 15, 60, 240, 1440))
+    m1, m5, m15, h1, h4, d1 = (bougies(pair, i) for i in (1, 5, 15, 60, 240, 1440))
     series = {"1": m1, "2": regrouper(m1, 2, 60), "5": m5, "10": regrouper(m5, 2, 300), "15": m15,
-              "30": kraken(pair, 30), "45": regrouper(m15, 3, 900), "1h": h1, "2h": regrouper(h1, 2, 3600), "4h": h4, "D": d1}
+              "30": bougies(pair, 30), "45": regrouper(m15, 3, 900), "1h": h1, "2h": regrouper(h1, 2, 3600), "4h": h4, "D": d1}
     et = {k: etat_ut(v) for k, v in series.items()}
     dirs = [et[k][0] for k in UT]; sqzs = [et[k][1] for k in UT]; rsis = [et[k][2] or 50 for k in UT]
     bull, bear, comp = dirs.count(1), dirs.count(-1), sum(sqzs)
@@ -196,7 +261,7 @@ def analyser(pair):
     d15, d1h, d4h = dirs[4], dirs[7], dirs[9]
     confirme = d15 if d15 != 0 and d15 == d1h == d4h else 0
     # Contexte Daily / Weekly : où est le prix dans sa zone (0 = tout en bas, 1 = tout en haut)
-    w1 = kraken(pair, 10080)
+    w1 = bougies(pair, 10080)
     def position(bars, n):
         z = bars[-n:]; haut = max(x["h"] for x in z); bas = min(x["l"] for x in z)
         return (cl - bas) / max(haut - bas, 1e-9), haut, bas
@@ -294,7 +359,7 @@ def verdict(r, cle):
         sens = "⬆️ ACHAT" if tr["d"] == 1 else "⬇️ VENTE"
         prog = tr["d"] * (p - tr["e"]) / max(abs(tr["tp1"] - tr["e"]), 1e-9)
         if tr["statut"] == "entree" and prog < 0.25 and not tr.get("tard"):
-            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {'SOUS la mèche du dernier creux' if tr['d'] == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n🙅 Jamais pile sur la mèche\n📍 Repère Kraken : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
+            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {'SOUS la mèche du dernier creux' if tr['d'] == 1 else 'AU-DESSUS de la mèche du dernier sommet'}\n🙅 Jamais pile sur la mèche\n📍 Repère prix : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
         return ("🔴🔴 N'ENTRE PAS", f"⏰ Trop tard : la position {sens} est déjà partie\n⏳ J'attends le prochain setup")
     if r.get("annonce"):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
@@ -397,8 +462,10 @@ def envoyer_analyse(cid, etat=None, mq=None):
             print("analyse", ex)
 
 def prix_actuel(m):
-    """Dernier prix Kraken du marché (pour figer l'entrée ou la sortie d'un abonné)."""
+    """Dernier prix du marché (pour figer l'entrée ou la sortie d'un abonné) : XAUUSD spot pour le Gold, Kraken pour le BTC."""
     try:
+        if MARCHES[m] == "XAUUSD":
+            return or_spot()
         j = http_json(f"https://api.kraken.com/0/public/Ticker?pair={MARCHES[m]}")
         return float(next(iter(j["result"].values()))["c"][0])
     except Exception as ex:
@@ -921,13 +988,24 @@ def fmt_trade(m, tr, p=None):
     meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
     return (f"{tete}\n"
             f"⏱ Vue 15 minutes\n\n"
-            f"📍 Prix de référence (Kraken) :\n{echelle}\n\n"
-            f"📐 Sur TA plateforme (les prix peuvent être différents) :\n"
-            f"🟨 Entrée : {'repli' if d == 1 else 'rebond'} vers la moitié du dernier mouvement\n"
-            f"🛑 SL : un peu {'sous' if d == 1 else 'au-dessus de'} {meche}, jamais pile dessus ({pct(tr['sl'])})\n"
-            f"💰 TP1 : {tr['n1']} ({pct(tr['tp1'])}) → stop à l'entrée\n"
-            f"🏁 TP2 : {tr['n2']} ({pct(tr['tp2'])})\n\n"
+            f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
+            f"1️⃣ 👀 Mets-toi en vue 15 minutes\n"
+            f"2️⃣ 🛑 SL : un tout petit peu {'SOUS' if d == 1 else 'AU-DESSUS de'} {meche}\n"
+            f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n"
+            + (f"4️⃣ 💰 TP1 : juste {'sous la' if d == 1 else 'au-dessus du'} {tr['n1']} (regarde en vue {vue(tr['n1'])})\n"
+               if "projection" not in tr["n1"] else f"4️⃣ 💰 TP1 : environ {tr['rr']:.1f} fois ton risque\n")
+            + (f"5️⃣ 🏁 TP2 : {tr['n2']} (vue {vue(tr['n2'])})\n" if "projection" not in tr["n2"] else "5️⃣ 🏁 TP2 : on laisse courir, je te guide\n")
+            + 
+            f"💡 TP1 touché → SL à BE\n\n"
+            f"📍 Repère prix (XAUUSD / Kraken BTC) :\n{echelle}\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
+
+def vue(nom_niveau):
+    """Unité de temps à regarder pour voir le niveau (4h, Daily, 1h…)."""
+    for u, t in (("Daily", "Daily"), ("4h", "4 heures"), ("1h", "1 heure"), ("15m", "15 minutes")):
+        if u in nom_niveau:
+            return t
+    return "4 heures"
 
 def zone_txt(pos):
     return "tout en HAUT" if pos >= 0.85 else "en haut" if pos >= 0.65 else "tout en BAS" if pos <= 0.15 else "en bas" if pos <= 0.35 else "au milieu"
@@ -1102,7 +1180,7 @@ def gerer_stop(etat, m, r, tr, c):
                      f"{'⬆️ Monte' if d == 1 else '⬇️ Descends'} ton SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} cette mèche\n"
                      "🙅 Jamais pile sur la mèche : elle peut être retouchée\n"
                      + ("💰 Ton gain est protégé" if d * (nouveau - e) > 0 else "🛡 Ta perte possible est réduite")
-                     + f"\n📍 Repère Kraken   ≈ {px(nouveau)}")
+                     + f"\n📍 Repère prix   ≈ {px(nouveau)}")
         _envoi_sur(c, reply_markup=CLAVIER, text=texte)
         return
     # Le marché respire : petit retour vers l'entrée, on ne bouge rien
