@@ -33,7 +33,7 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           DUREE_SEC: "20400"     # 5 h 40 : le bot reste allumé, une analyse BTC + Gold par minute
-          PAUSE_SEC: "30"
+          PAUSE_SEC: "20"
         run: python3 align_bot.py
       - name: Sauver la mémoire du robot
         if: always()
