@@ -233,7 +233,7 @@ def texte_plan(nom_marche, r, p, d):
             f"Stop : {px(p['sl'])}\nGain/risque ≈ {p['rr']:.1f}")
 
 ICONE = {"BTC": "🟠", "GOLD": "🥇"}
-SENS = {1: "🟩🟩 TRÈS LONG ⬆️", -1: "🟥🟥 TRÈS SHORT ⬇️"}
+SENS = {1: "🟩 LONG ⬆️", -1: "🟥 SHORT ⬇️"}
 
 def alignement(r):
     """Sens majoritaire sur 15m / 1h / 4h et nombre d'UT d'accord (0 à 3)."""
@@ -283,7 +283,10 @@ def verdict(r, cle):
         return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
     if bloque_dw(r, al):
         return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
-    return (f"🟡 PAS ENCORE — bientôt\n{SENS[al]}", "🟨 J'attends le prix dans la zone\n🚦 Je t'envoie 🟢 J'ENTRE MAINTENANT")
+    zone = bool(cle.get("attente_rsi"))
+    return (f"🟡 PATIENCE   {SENS[al]} bientôt",
+            f"✅ 15 min / 1 h / 4 h alignées\n{'✅' if zone else '⏳'} Prix dans la zone 🟨\n⏳ Surcharge RSI 5 min\n✅ Pas de news proche\n"
+            "🚦 Attends mon 🟢 J'ENTRE MAINTENANT")
 
 def telegram(methode, **params):
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
@@ -742,6 +745,7 @@ def jauge(m, r, cle, cid=None, canal=False):
         reste = abs(cible - p) / vit if vit > 0 else None
         return (f"{tete}\n🔌 EN POSITION   {SENS[tr['d']]}\n{barre_pct(pct)}\n"
                 f"🎯 {'TP2' if tr['statut'] == 'tp1' else 'TP1'}   {px(cible)}" + (f"   ⏱ ≈ {reste:.0f} min" if reste and reste < 600 else "")
+                + (f"\n🛑 Ton stop   {px(pos.get('sl_conseil', pos['sl']))}" if isinstance(pos, dict) else "")
                 + f"\n{r.get('news', '')}")
     if tr:
         titre, _ = verdict(r, cle)
@@ -876,7 +880,7 @@ def annonce_proche(etat, maintenant):
 def fmt_trade(m, tr, p=None):
     """Carte visuelle pour débutant : couleurs + échelle des prix dessinée de haut en bas."""
     d = tr["d"]
-    tete = ("🟩🟩🟩  TRÈS LONG " if d == 1 else "🟥🟥🟥  TRÈS SHORT ") + m + ("  🟩🟩🟩" if d == 1 else "  🟥🟥🟥")
+    tete = ("🟩🟩🟩  LONG ⬆️  " if d == 1 else "🟥🟥🟥  SHORT ⬇️  ") + m
     za, zb = tr.get("za", tr["e"]), tr.get("zb", tr["e"])
     bougie = "en dessous de la dernière bougie basse" if d == 1 else "au-dessus de la dernière bougie haute"
     risque = abs(tr["e"] - tr["sl"]); gain = abs(tr["tp1"] - tr["e"])
@@ -1032,6 +1036,50 @@ def coach(etat, m, r, cle):
     for c in dedans:
         for t in msgs:
             _envoi_sur(c, text=t, reply_markup=CLAVIER)
+        gerer_stop(etat, m, r, tr, c)
+
+def gerer_stop(etat, m, r, tr, c):
+    """Vrai agent : monte le stop de l'abonné derrière chaque support (long) / résistance (short) franchi,
+    stop à l'entrée dès que le trade avance, et « reste cool » quand le marché respire."""
+    pos = tr["qui"][c]; d = tr["d"]; a = r["atr"]; p = r["m1"][-1]["c"]
+    e = pos["e"]; sl = pos.get("sl_conseil", pos["sl"]); risque = max(abs(e - pos["sl"]), 1e-9)
+    # Stop conseillé touché : on clôture le résultat de l'abonné à ce niveau
+    if pos.get("sl_conseil") is not None:
+        extreme = min(x["l"] for x in r["m1"][-6:]) if d == 1 else max(x["h"] for x in r["m1"][-6:])
+        if d * (extreme - sl) <= 0:
+            noter(etat, c, m, pos, sl, "🔒 Stop protégé touché" if d * (sl - e) >= 0 else "🛡 Stop remonté touché")
+            return
+    gain = d * (p - e)
+    if gain <= 0:
+        return
+    # Niveaux franchis entre l'entrée et le prix : le stop se cache juste derrière le plus proche du prix
+    murs = [v for v, n in r["niveaux"] if n in ("15m", "1h", "4h") and d * (p - v) > 0.6 * a and d * (v - (e - d * 0.6 * a)) > 0]
+    nouveau, pourquoi = None, ""
+    if murs:
+        v = max(murs) if d == 1 else min(murs)
+        n = next(n for vv, n in r["niveaux"] if vv == v)
+        nouveau, pourquoi = v - d * 0.3 * a, f"🧱 Juste {'sous le support' if d == 1 else 'au-dessus de la résistance'} {n}   {px(v)}"
+    if gain >= 0.8 * risque and (nouveau is None or d * (nouveau - e) < 0) and not any(abs(v - e) < 0.6 * a for v in murs):
+        nouveau, pourquoi = e + d * 0.05 * a, "😎 Trade sans risque maintenant"
+    if nouveau is not None and d * (nouveau - sl) > 0.3 * a and d * (p - nouveau) > 0.5 * a:
+        pos["sl_conseil"] = nouveau
+        protege = d * (nouveau - e)
+        _envoi_sur(c, reply_markup=CLAVIER, text=(
+            f"🔒 {ICONE.get(m, '')} {m}   {SENS[d]}\n"
+            f"{'⬆️ Monte' if d == 1 else '⬇️ Descends'} ton stop à   {px(nouveau)}\n{pourquoi}\n"
+            + (f"💰 Gain protégé   {protege / e * 100:+.2f} %" if protege > 0 else
+               "🔁 Stop à ton prix d'entrée" if abs(protege) < 0.2 * a else f"🛡 Perte réduite : {abs(protege) / risque * 100:.0f} % du risque")))
+        return
+    # Le marché respire : petit retour vers l'entrée, on ne bouge rien
+    r5 = r["r5"][-1]
+    excès = (r5 >= 70) if d == 1 else (r5 <= 30)
+    tps = pos.setdefault("cool_t", 0)
+    if excès and time.time() - tps >= 45 * 60:
+        pos["cool_t"] = time.time()
+        _envoi_sur(c, reply_markup=CLAVIER, text=(
+            f"😎 {ICONE.get(m, '')} {m} : reste cool\n🌬 Le marché respire (RSI 5 min {r5:.0f})\n"
+            + (f"↩️ Il peut revenir un peu vers ton entrée   {px(e)}\n" if d * (sl - e) < 0 else "↩️ Petit retour possible, c'est normal\n")
+            + f"🛑 Ton stop reste à   {px(sl)}\n🎯 Cap sur le TP"))
 
 def agent(m, r, cle, ferme):
     """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
@@ -1081,7 +1129,7 @@ def agent(m, r, cle, ferme):
         touche = (lo <= o["e"]) if d == 1 else (hi >= o["e"])
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
-            out.append(f"🟡🟡 BIENTÔT — {m} approche de la zone 🟨\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Je prépare mon ordre {SENS[d]}, stop {px(o['sl'])}\n⏳ J'attends le signal 🟢")
+            out.append(f"🟡🟡 TIENS-TOI PRÊT — {m} arrive dans la zone 🟨\n{SENS[d]}\n👉 Prix {px(p)}  →  zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n📲 Je prépare mon ordre {SENS[d]}, stop {px(o['sl'])}\n⏳ J'attends le signal 🟢")
         # Surcharge sur PLUSIEURS UT : 5m obligatoire + au moins 1 parmi 10m/15m/30m + confirmation 1h
         R = dict(zip(UT, r["rsis"]))
         if d == 1:
