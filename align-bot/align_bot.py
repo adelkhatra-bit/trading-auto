@@ -3004,9 +3004,7 @@ def agent(m, r, cle, ferme):
             # Entrée DIRECTE dès qu'un de ces 3 signaux apparaît dans la zone (plus d'attente dans le vide) :
             # 1) mèche de rejet + clôture  2) manipulation confirmée dans notre sens  3) bougie 15 min qui clôture dans le bon sens
             a_ = r.get("atr5", r["atr"]); bj = rejet(r, d, o["e"], a_); raison = "Mèche de rejet + clôture 5 min"
-            mp = cle.get("manip")
-            if not bj and mp and mp.get("d") == d and r["t"] - mp["t"] <= 1800 and mp.get("meche"):
-                bj = {"t": mp["t15"], "l": mp["meche"], "h": mp["meche"]}; raison = "Manipulation : stops pris puis clôture"
+            # Une manipulation repérée en 15m reste informative ; elle ne déclenche jamais une entrée.
             x5 = r["b5"][-1]; rg = max(x5["h"] - x5["l"], 1e-9)
             if not bj and x5["t"] != cle.get("conf_t") and (
                     (d == 1 and x5["l"] <= o["zb"] + 0.1 * a_ and x5["c"] > x5["o"] and x5["c"] >= x5["l"] + 0.55 * rg and x5["c"] > o["za"] and r5 > r5p) or
