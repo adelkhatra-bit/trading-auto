@@ -1286,12 +1286,19 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
         try:
             txt = _appel_ia(url, modele, cle, messages)
             etat.setdefault("ia_ok", {})[nom] = int(time.time())
+            etat["ia_dernier_fournisseur"] = nom
+            etat["ia_dernier_modele"] = modele
+            etat["ia_dernier_statut"] = "CONNECTED"
+            print(f"AI_PROVIDER_USED={nom} model={modele}", flush=True)
             break
         except Exception as ex:
             erreurs.append(f"{nom}: {str(ex)[:80]}")
             etat.setdefault("ia_pause", {})[nom] = time.time() + 300   # on la laisse souffler 5 min
             print("ia", nom, ex, flush=True)
     if not txt:
+        etat["ia_dernier_fournisseur"] = "INTERNAL_FALLBACK"
+        etat["ia_dernier_statut"] = "ALL_EXTERNAL_PROVIDERS_FAILED"
+        print("AI_PROVIDER_USED=INTERNAL_FALLBACK", flush=True)
         etat["ia_err"] = " | ".join(erreurs)
         if time.time() - etat.get("ia_err_t", 0) > 21600:        # le propriétaire est prévenu (1 fois / 6 h)
             etat["ia_err_t"] = time.time()
