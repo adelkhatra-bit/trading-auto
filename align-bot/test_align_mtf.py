@@ -114,5 +114,40 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("🛑 Stop Loss : 102.00", message)
         self.assertIn("🏁 TP2 : 92.00", message)
 
+    def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
+        from unittest.mock import patch
+        r = {
+            "dirs": [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+            "rsis": [55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
+            "m1": [candle(1, c=67500.0)],
+            "confirme": 1, "posD": 0.55, "posW": 0.60,
+            "news": "📰 Calendrier : aucun événement majeur imminent",
+            "niv_cles": [(68000.0, "plus haut d'hier"), (66000.0, "plus bas d'hier")],
+            "asie": (67800.0, 67000.0), "macro": [], "fvg": [],
+            "atr": 100.0, "distrib": False, "accum": False,
+            "b5": [candle(i) for i in range(22)]
+        }
+        with patch.object(align_bot, "zone_txt", side_effect=lambda x: "milieu"), \\
+             patch.object(align_bot, "strategie_mtf", return_value=["🏔 Tendance 4 h", "🔁 Confirmation 1 h"]), \\
+             patch.object(align_bot, "verdict", return_value=("🟢 SETUP VALIDÉ", "Attendre la clôture 5 min.")), \\
+             patch.object(align_bot, "ligne_cassure", return_value="🎯 Déclencheur : clôture 5 min"), \\
+             patch.object(align_bot, "prochaine", return_value="⏳ Prochaine entrée : attendre le signal"):
+            for market in ("BTC", "GOLD"):
+                message = align_bot.texte_etat(market, r, {})
+                self.assertIn(f"ALIGN • {market}", message)
+                self.assertIn("📡 LECTURE DU MARCHÉ", message)
+                self.assertIn("📊 INDICATEURS PAR UNITÉ DE TEMPS", message)
+                self.assertIn("🧭 CONFIRMATION DE TENDANCE", message)
+                self.assertIn("🚦 DÉCISION ALIGN", message)
+                self.assertIn("67500.00", message)
+                self.assertLess(len(message), 4096)
+
+    def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
+        r = {"m1": [candle(1, c=67500.0)], "news": "📰 Calendrier économique"}
+        message = align_bot.texte_etat("BTC", r, {}, vip=False)
+        self.assertIn("ALIGN • BTC", message)
+        self.assertIn("POINT DE MARCHÉ", message)
+        self.assertIn("Direction et niveaux de trading réservés aux VIP", message)
+
 if __name__ == "__main__":
     unittest.main()
