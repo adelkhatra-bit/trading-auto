@@ -1991,8 +1991,8 @@ def traiter(etat, chats, updates):
         if cid in etat.get("prospects", []):
             etat["prospects"].remove(cid)
         if cid not in chats:
+            # Inscription silencieuse : aucun message d'activation n'est envoyé.
             chats.add(cid)
-            telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.\n🔔 Active la cloche (notifications) pour ne rien louper\n⬇️ Utilise les boutons en bas.\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
         txt = msg.get("text", "").lower().replace("é", "e")
         if cid in etat.get("attente_tv", []) and msg.get("text") and not any(k in txt for k in ("analyse", "resultat", "rentre", "sorti", "indicateur")):
             recevoir_pseudo(etat, cid, msg["text"])
