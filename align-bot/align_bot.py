@@ -474,9 +474,9 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     ut_labels = [("1m", 0), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("D", 10)]
     ligne_ut = "  ".join(f"{nom} {fl(D[i])}" for nom, i in ut_labels)
     ligne_rsi = "RSI  " + " | ".join(f"{nom} {R[i]:.0f}" for nom, i in ut_labels)
-    l = [entete, "━━━━━━━━━━━━━━━━━━",
+    l = [entete, "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS / UNITÉS DE TEMPS",
          f"📊 {ligne_ut}", ligne_rsi,
-         f"🧭 Tendance 4h {fl(D[9])}  |  Confirmation 1h {fl(D[7])}  |  {n_ok}/2 {'✅' if r['confirme'] else '⏳'}",
+         f"🧭 CONFIRMATION 4h {fl(D[9])} + 1h {fl(D[7])} : {n_ok}/2 {'✅' if r['confirme'] else '⏳'}",
          f"🌐 Daily {zone_txt(r['posD'])}  |  Weekly {zone_txt(r['posW'])}"]
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
     ph_, pb_ = nc.get("plus haut d'hier"), nc.get("plus bas d'hier")
