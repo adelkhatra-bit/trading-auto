@@ -420,7 +420,8 @@ def analyser(pair):
 
 # ───────── Messages ─────────
 def px(v):
-    return f"{v:,.2f}".replace(",", " ")
+    # Prix sans séparateur de milliers pour éviter les coupures visuelles sur mobile.
+    return f"{v:.2f}"
 
 def cme_ouvert(ts):
     ct = datetime.datetime.fromtimestamp(ts, datetime.timezone(datetime.timedelta(hours=-6)))  # heure de Chicago (approx. hiver)
@@ -452,33 +453,34 @@ def alignement(r):
     return maj, (2 if maj else 0)
 
 def texte_etat(nom_marche, r, cle=None, vip=True):
-    """Telegram : une information par ligne, lisible sur mobile, sans modifier les règles de trading."""
+    """Carte Telegram complète : mise en page uniquement, aucune rubrique d'analyse supprimée."""
     fl = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
     prix = r["m1"][-1]["c"]
-    entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\n💹 Prix actuel : {px(prix)}"
+    entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\\n💹 Prix actuel : {px(prix)}"
     if not vip:
         etat_pos = ("🟢 Une position VIP est actuellement ouverte" if (cle or {}).get("trade") else
                     "🟡 Une opportunité VIP se prépare" if (cle or {}).get("ordre") and r["confirme"] else
                     "⚪ Aucune position VIP pour le moment")
-        return "\n".join([entete, "━━━━━━━━━━━━━━━━━━", "📡 POINT DE MARCHÉ",
-                          etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
-                          "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
-                          "💎 Accès VIP : 49,90 € / mois"])
+        return "\\n".join([entete, "━━━━━━━━━━━━━━━━━━", "📡 POINT DE MARCHÉ",
+                            etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
+                            "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
+                            "💎 Accès VIP : 49,90 € / mois"])
     D, R = r["dirs"], r["rsis"]
     maj, n_ok = alignement(r)
-    ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
+    ut = [("1m", 0), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("Daily", 10)]
     biais = ("🟢 Biais haussier confirmé" if maj == 1 else
              "🔴 Biais baissier confirmé" if maj == -1 else
-             "🟠 Pas de biais confirmé en 1 h / 4 h")
+             "🟠 Pas de biais confirmé en 1h / 4h")
+    ligne_ut = "  |  ".join(f"{nom} {fl(D[i])}" for nom, i in ut)
+    ligne_rsi = "  |  ".join(f"{nom} {R[i]:.0f}" for nom, i in ut)
     l = [entete, "━━━━━━━━━━━━━━━━━━", "📡 LECTURE DU MARCHÉ", biais,
-         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS"]
-    l += [f"{nom} : {fl(D[i])}" for nom, i in ut]
-    l += [f"RSI {nom} : {R[i]:.0f}" for nom, i in ut]
-    l += ["━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
-          f"Alignement 1 h + 4 h : {n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
-          f"Zone Daily : {zone_txt(r['posD'])}",
-          f"Zone Weekly : {zone_txt(r['posW'])}",
-          "━━━━━━━━━━━━━━━━━━", "🧭 PLAN MULTI-TIMEFRAME"] + strategie_mtf(r)
+         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS",
+         f"🕒 {ligne_ut}", f"📈 RSI : {ligne_rsi}",
+         "━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
+         f"Alignement 1h + 4h : {n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
+         f"Zone Daily : {zone_txt(r['posD'])}",
+         f"Zone Weekly : {zone_txt(r['posW'])}",
+         "━━━━━━━━━━━━━━━━━━", "🧭 PLAN MULTI-TIMEFRAME"] + strategie_mtf(r)
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
     ph_, pb_ = nc.get("plus haut d'hier"), nc.get("plus bas d'hier")
     contexte = []
@@ -494,9 +496,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     proches = sorted([f for f in r.get("fvg", []) if abs((f[0] + f[1]) / 2 - p_) <= 3 * r["atr"]],
                      key=lambda f: abs((f[0] + f[1]) / 2 - p_))
     for lo, hi, ut_fvg, dd in proches[:2]:
-        contexte.append(f"🧲 FVG {ut_fvg} : {'haussière' if dd == 1 else 'baissière'}")
-        contexte.append(f"   Borne basse : {px(lo)}")
-        contexte.append(f"   Borne haute : {px(hi)}")
+        contexte.append(f"🧲 FVG {ut_fvg} : {'haussière' if dd == 1 else 'baissière'} | Basse {px(lo)} | Haute {px(hi)}")
     if r.get("distrib"):
         contexte.append("⚠️ Distribution possible : essoufflement en zone haute (divergence RSI)")
     if r.get("accum"):
@@ -509,13 +509,25 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
               f"Limite basse : {px(o.get('za', o['e']))}",
               f"Limite haute : {px(o.get('zb', o['e']))}"]
     titre, raison = verdict(r, cle)
-    l += ["━━━━━━━━━━━━━━━━━━", "🚦 DÉCISION ALIGN", titre, raison]
-    if r["confirme"] and not (cle or {}).get("trade") and len(r["b5"]) >= 22:
+    l += ["┏━━━━━━━━ 🚦 DÉCISION ALIGN ━━━━━━━━┓", titre, raison,
+          "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"]
+    tr = (cle or {}).get("trade")
+    if tr:
+        sens = "🟩 LONG" if tr["d"] == 1 else "🟥 SHORT"
+        l.append(f"🎯 POSITION EN COURS : {sens} | Entrée {px(tr['e'])} | SL {px(tr['sl'])} | TP1 {px(tr['tp1'])} | TP2 {px(tr['tp2'])}")
+    elif o:
+        sens = "🟩 LONG" if o.get("d", r["confirme"]) == 1 else "🟥 SHORT"
+        l.append(f"🎯 POINT VISÉ : {sens} | Entrée ≈ {px(o['e'])} | TP1 {px(o['tp1'])} | SL {px(o['sl'])}")
+    elif r["confirme"]:
+        sens = "🟩 LONG" if r["confirme"] == 1 else "🟥 SHORT"
+        l.append(f"🎯 DIRECTION À SURVEILLER : {sens} | Point d'entrée après validation du déclencheur")
+    else:
+        l.append("🎯 POINT VISÉ : aucun tant que le biais 1h / 4h n'est pas confirmé")
+    if r["confirme"] and not tr and len(r["b5"]) >= 22:
         l.append(ligne_cassure(r, r["confirme"]))
-    if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
+    if "Prochaine entrée" not in raison and not tr:
         l.append(prochaine(r, cle))
-    return "\n".join(l)
-
+    return "\\n".join(l)
 def strategie_mtf(r):
     """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
     fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
