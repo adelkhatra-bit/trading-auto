@@ -65,9 +65,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_live_telegram_chrono_refreshes_every_15_seconds(self):
         from unittest.mock import patch
         state = {"BTC": {}, "chrono": {"BTC": {"123": {"mid": 7, "t0": 0, "maj": 85}}}}
-        with patch.object(align_bot.time, "time", return_value=100), \\
-             patch.object(align_bot, "chrono_txt", return_value="⏱ test"), \\
-             patch.object(align_bot, "telegram") as send:
+        with patch.object(align_bot.time, "time", return_value=100), patch.object(align_bot, "chrono_txt", return_value="⏱ test"), patch.object(align_bot, "telegram") as send:
             align_bot.maj_chronos(state, "BTC", {"m1": [candle(1, c=100.0)]})
         send.assert_called_once_with("editMessageText", chat_id="123", message_id=7, text="⏱ test")
 
