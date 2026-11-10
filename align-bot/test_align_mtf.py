@@ -79,5 +79,40 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(align_bot.regrouper(bars, 2, 60, now_ts=180), [])
 
 
+    def test_trade_card_repeats_clear_long_levels_at_start_and_end(self):
+        from unittest.mock import patch
+        trade = {
+            "d": 1, "e": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": 108.0,
+            "n1": "résistance 4h", "n2": "Daily", "rr": 2.0,
+            "za": 99.5, "zb": 100.5, "src": "cassure 5 min"
+        }
+        with patch.object(align_bot, "meche_sl", return_value="sous la mèche"), \
+             patch.object(align_bot, "vue", return_value="4h"), \
+             patch.object(align_bot, "duree_txt", return_value=""):
+            message = align_bot.fmt_trade("BTC", trade, 101.0)
+        self.assertIn("🟩🟩🟩  LONG", message)
+        self.assertIn("📌 PLAN D'EXÉCUTION — 🟩 LONG", message)
+        self.assertIn("🟨 Entrée : 100.00", message)
+        self.assertIn("🛑 Stop Loss : 98.00", message)
+        self.assertIn("💰 TP1 : 104.00", message)
+        self.assertIn("🏁 TP2 : 108.00", message)
+        self.assertIn("📍 RÉCAPITULATIF — BTC", message)
+
+    def test_trade_card_marks_short_in_red(self):
+        from unittest.mock import patch
+        trade = {
+            "d": -1, "e": 100.0, "sl": 102.0, "tp1": 96.0, "tp2": 92.0,
+            "n1": "support 4h", "n2": "Daily", "rr": 2.0,
+            "za": 99.5, "zb": 100.5, "src": "cassure 5 min"
+        }
+        with patch.object(align_bot, "meche_sl", return_value="au-dessus de la mèche"), \
+             patch.object(align_bot, "vue", return_value="4h"), \
+             patch.object(align_bot, "duree_txt", return_value=""):
+            message = align_bot.fmt_trade("GOLD", trade, 99.0)
+        self.assertIn("🟥🟥🟥  SHORT", message)
+        self.assertIn("📌 PLAN D'EXÉCUTION — 🟥 SHORT", message)
+        self.assertIn("🛑 Stop Loss : 102.00", message)
+        self.assertIn("🏁 TP2 : 92.00", message)
+
 if __name__ == "__main__":
     unittest.main()

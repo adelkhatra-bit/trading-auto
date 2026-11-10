@@ -2441,7 +2441,19 @@ def fmt_trade(m, tr, p=None):
     echelle = "\n".join(f"{ic} {px(v)}  {nom}" for v, ic, nom in sorted(pts, key=lambda z: -z[0]))
     pct = lambda v: f"{(v - tr['e']) / tr['e'] * 100:+.2f} %".replace(".", ",")
     meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
+    resume = (f"📌 PLAN D'EXÉCUTION — {'🟩 LONG' if d == 1 else '🟥 SHORT'}\n"
+              f"🟨 Entrée : {px(tr['e'])}\n"
+              f"🛑 Stop Loss : {px(tr['sl'])}\n"
+              f"💰 TP1 : {px(tr['tp1'])}\n"
+              f"🏁 TP2 : {px(tr['tp2'])}\n"
+              f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n")
+    decision = (f"\n━━━━━━━━━━━━\n📍 RÉCAPITULATIF — {m}\n"
+                f"{'🟩 LONG ⬆️' if d == 1 else '🟥 SHORT ⬇️'}\n"
+                f"Entrée {px(tr['e'])} • SL {px(tr['sl'])}\n"
+                f"TP1 {px(tr['tp1'])} • TP2 {px(tr['tp2'])}\n"
+                "⛔ Ne pas anticiper la clôture de confirmation. Le SL reste obligatoire.\n")
     return (f"{tete}\n"
+            + resume +
             f"🧭 Tendance 4H • confirmation 1H • déclencheur 5M clôturé\n"
             f"⏱ Vue d'entrée : 5 minutes (15M = contexte)\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
@@ -2460,7 +2472,8 @@ def fmt_trade(m, tr, p=None):
             f"🛑 SL obligatoire : ne jamais l'élargir ni l'enlever. Respecte le niveau indiqué.\n"
             f"💡 BE : alerte après confirmation de clôture, pas sur une mèche\n\n"
             f"📍 Repère prix {m} ({'XAUUSD spot' if m == 'GOLD' else 'BTC/USD'}) :\n{echelle}\n\n"
-            f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
+            f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n"
+            + decision + f"\n{MINI_AVERT}")
 
 def vue(nom_niveau):
     """Unité de temps à regarder pour voir le niveau (4h, Daily, 1h…)."""
