@@ -39,6 +39,15 @@ class AlignMtfRulesTest(unittest.TestCase):
         }
         self.assertIsNone(align_bot.rejet(r, 1, 100.0, 1.0))
 
+    def test_long_is_blocked_at_daily_weekly_extreme(self):
+        r = {
+            "posD": 0.95, "posW": 0.90,
+            "basD": 90.0, "hautD": 110.0,
+            "basW": 80.0, "hautW": 120.0
+        }
+        self.assertTrue(align_bot.bloque_dw(r, 1, 109.0))
+        self.assertFalse(align_bot.bloque_dw(r, -1, 109.0))
+
     def test_15m_rsi_does_not_mark_entry_as_overextended(self):
         r = {
             "m1": [candle(1, c=100.0)], "atr5": 1.0, "ema5": 100.0,
