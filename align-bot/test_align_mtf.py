@@ -56,5 +56,28 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertFalse(align_bot.etire(r, 1))
 
 
+    def test_regrouping_accepts_only_a_fully_closed_bucket(self):
+        bars = [candle(0), candle(60, o=100.0, h=103.0, l=98.0, c=102.0)]
+        self.assertEqual(align_bot.regrouper(bars, 2, 60, now_ts=119), [])
+        grouped = align_bot.regrouper(bars, 2, 60, now_ts=120)
+        self.assertEqual(len(grouped), 1)
+        self.assertEqual(grouped[0]["t"], 0)
+        self.assertEqual(grouped[0]["h"], 103.0)
+        self.assertEqual(grouped[0]["l"], 98.0)
+        self.assertEqual(grouped[0]["c"], 102.0)
+
+    def test_regrouping_rejects_a_missing_source_candle(self):
+        bars = [candle(0), candle(120)]
+        self.assertEqual(align_bot.regrouper(bars, 2, 60, now_ts=180), [])
+
+    def test_regrouping_rejects_duplicate_source_timestamps(self):
+        bars = [candle(0), candle(0), candle(60)]
+        self.assertEqual(align_bot.regrouper(bars, 2, 60, now_ts=120), [])
+
+    def test_regrouping_rejects_misaligned_source_timestamps(self):
+        bars = [candle(1), candle(61)]
+        self.assertEqual(align_bot.regrouper(bars, 2, 60, now_ts=180), [])
+
+
 if __name__ == "__main__":
     unittest.main()
