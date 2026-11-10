@@ -127,10 +127,10 @@ class AlignMtfRulesTest(unittest.TestCase):
             "atr": 100.0, "distrib": False, "accum": False,
             "b5": [candle(i) for i in range(22)]
         }
-        with patch.object(align_bot, "zone_txt", side_effect=lambda x: "milieu"), \\
-             patch.object(align_bot, "strategie_mtf", return_value=["🏔 Tendance 4 h", "🔁 Confirmation 1 h"]), \\
-             patch.object(align_bot, "verdict", return_value=("🟢 SETUP VALIDÉ", "Attendre la clôture 5 min.")), \\
-             patch.object(align_bot, "ligne_cassure", return_value="🎯 Déclencheur : clôture 5 min"), \\
+        with patch.object(align_bot, "zone_txt", side_effect=lambda x: "milieu"), \
+             patch.object(align_bot, "strategie_mtf", return_value=["🏔 Tendance 4 h", "🔁 Confirmation 1 h"]), \
+             patch.object(align_bot, "verdict", return_value=("🟢 SETUP VALIDÉ", "Attendre la clôture 5 min.")), \
+             patch.object(align_bot, "ligne_cassure", return_value="🎯 Déclencheur : clôture 5 min"), \
              patch.object(align_bot, "prochaine", return_value="⏳ Prochaine entrée : attendre le signal"):
             for market in ("BTC", "GOLD"):
                 message = align_bot.texte_etat(market, r, {})
@@ -139,7 +139,10 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("📊 INDICATEURS PAR UNITÉ DE TEMPS", message)
                 self.assertIn("🧭 CONFIRMATION DE TENDANCE", message)
                 self.assertIn("🚦 DÉCISION ALIGN", message)
-                self.assertIn("67500.00", message)
+                self.assertIn("67 500.00", message)
+                self.assertIn("\n💹 Prix actuel", message)
+                self.assertNotIn("\\n", message)
+                self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None
                 self.assertLess(len(message), 4096)
 
     def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
