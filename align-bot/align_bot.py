@@ -522,8 +522,9 @@ def strategie_mtf(r):
     D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
     fond = d4h
     l = ["🧭 STRATÉGIE MULTI-UT",
-         f"🏔 Tendance principale 4 h   {fl(d4h)} • Daily {fl(dD)}",
-         f"🔁 Confirmation 1 h   {fl(d1h)}",
+         f"🏔 Tendance principale 4 h : {fl(d4h)}",
+         f"📅 Tendance Daily : {fl(dD)}",
+         f"🔁 Confirmation 1 h : {fl(d1h)}",
          f"ℹ️ Contexte 15 min   {fl(d15)}",
          f"🎯 Déclencheur 5 min   {fl(d5)}"]
     if r["confirme"] and r.get("repli"):
