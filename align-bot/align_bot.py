@@ -1494,7 +1494,7 @@ def chrono_txt(m, r, cle, t0):
     return "\n".join(l)
 
 def maj_chronos(etat, m, r):
-    """Met à jour chaque chronomètre (1 fois par minute). Fin : entrée, ou délai max dépassé."""
+    """Met à jour chaque chronomètre toutes les 15 s. Fin : entrée, ou délai max dépassé."""
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
     cle = etat.get(m, {})
     for cid, c in list(ch.items()):
