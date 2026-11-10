@@ -438,7 +438,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
     prix = r["m1"][-1]["c"]
     sens_txt = ("📈 Le marché MONTE" if maj == 1 else "📉 Le marché DESCEND" if maj == -1 else "➖ Le marché hésite")
-    coches = " ".join("✅" if x == maj and maj else "⏳" for x in (D[4], D[7], D[9]))
+    coches = " ".join("✅" if x == maj and maj else "⏳" for x in (D[7], D[9]))
     if not vip:
         etat_pos = ("🔥 Une position VIP est EN COURS" if (cle or {}).get("trade") else
                     "👀 Une position VIP se PRÉPARE" if (cle or {}).get("ordre") and r["confirme"] else "⏳ Pas de position pour l'instant")
@@ -451,7 +451,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     l = [f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(prix)}", f"{sens_txt}   ({coches})", "━━━━━━━━━━━━"]
     l += [f"{nom:<7} {fl(D[i])}   RSI {R[i]:.0f}" for nom, i in ut]
     l += ["━━━━━━━━━━━━",
-          f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
+          f"🧭 Alignement 1h/4h   {n_ok}/2 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
           f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
           r.get("news") or "📰 News : calendrier indisponible", "━━━━━━━━━━━━"] + strategie_mtf(r)
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
@@ -475,7 +475,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🟨 Zone   🔒🔒🔒")
     titre, raison = verdict(r, cle)
     l += ["━━━━━━━━━━━━", titre, raison]
-    if r["confirme"] and not (cle or {}).get("trade") and len(r["b15"]) >= 22:
+    if r["confirme"] and not (cle or {}).get("trade") and len(r["b5"]) >= 22:
         l.append(ligne_cassure(r, r["confirme"]))
     if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
         l.append(prochaine(r, cle))
@@ -486,26 +486,22 @@ def strategie_mtf(r):
     15 min = le DÉCLENCHEUR, 5 min = le TIMING. Une position n'est VALIDÉE que si 15 min + 1 h + 4 h vont dans le même sens."""
     fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
     D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
-    fond = d4h if d4h and dD != -d4h else 0
+    fond = d4h
     l = ["🧭 STRATÉGIE MULTI-UT",
          f"🏔 Fond 4 h + Daily   {fl(d4h)} {fl(dD)}",
          f"🔁 Confirmation 1 h   {fl(d1h)}",
-         f"🎯 Déclencheur 15 min   {fl(d15)}",
-         f"⏱ Timing 5 min   {fl(d5)}"]
+         f"ℹ️ Contexte 15 min   {fl(d15)}",
+         f"🎯 Déclencheur 5 min   {fl(d5)}"]
     if r["confirme"] and r.get("repli"):
         l.append(f"✅ Tendance VALIDÉE   {SENS[r['confirme']]}\n⏳ Le 15 min fait son repli : l'entrée n'est PAS encore là")
     elif r["confirme"]:
         l.append(f"✅ VALIDÉ   {SENS[r['confirme']]}")
     elif not d4h:
         l.append("➖ Pas de tendance de fond en 4 h\n⛔ Rien de validé : on ne trade pas")
-    elif dD == -d4h:
-        l.append("⚖️ 4 h et Daily en désaccord\n⛔ Rien de validé : on attend")
-    elif d15 == -fond or d1h == -fond:
-        l.append(("↩️ Repli contre la tendance de fond" if fond == 1 else "↩️ Rebond contre la tendance de fond") + f" ({'15 min' if d15 == -fond else '1 h'})\n"
-                 f"⏳ {SENS[fond]} possible PLUS TARD — ⛔ PAS ENCORE VALIDÉ\n"
-                 f"✅ Validé quand le 1 h PUIS le 15 min repassent {fl(fond)}")
+    elif d1h == -fond:
+        l.append("↩️ 1 h en opposition à la tendance de fond\n⛔ On attend la confirmation 1 h")
     else:
-        l.append(f"⏳ {SENS[fond]} en préparation — ⛔ PAS ENCORE VALIDÉ\n✅ Il manque {'le 1 h' if d1h != fond else 'le 15 min'} {fl(fond)}")
+        l.append(f"⏳ {SENS[fond]} en préparation — ⛔ PAS ENCORE VALIDÉ\n✅ Il manque la confirmation 1 h {fl(fond)}")
     return l
 
 def bloque_dw(r, d, prix=None):
