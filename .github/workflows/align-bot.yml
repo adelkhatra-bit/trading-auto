@@ -78,6 +78,12 @@ jobs:
           print("TELEGRAM_HEARTBEAT_DELIVERED recipients=" + str(delivered))
           PY
 
+      - name: Contrôler la connexion réelle à Gemini (sans exposer la clé)
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python3 ai_healthcheck.py
+
       - name: Analyse BTC + Gold et envoi Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
