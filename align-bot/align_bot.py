@@ -482,13 +482,12 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     return "\n".join(l)
 
 def strategie_mtf(r):
-    """Stratégie multi-unités de temps : 4 h + Daily = le FOND, 1 h = la CONFIRMATION,
-    15 min = le DÉCLENCHEUR, 5 min = le TIMING. Une position n'est VALIDÉE que si 15 min + 1 h + 4 h vont dans le même sens."""
+    """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
     fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
     D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
     fond = d4h
     l = ["🧭 STRATÉGIE MULTI-UT",
-         f"🏔 Fond 4 h + Daily   {fl(d4h)} {fl(dD)}",
+         f"🏔 Tendance principale 4 h   {fl(d4h)} • Daily {fl(dD)}",
          f"🔁 Confirmation 1 h   {fl(d1h)}",
          f"ℹ️ Contexte 15 min   {fl(d15)}",
          f"🎯 Déclencheur 5 min   {fl(d5)}"]
@@ -688,10 +687,10 @@ def prochaine(r, cle):
     if d:
         return f"🔜 Prochaine entrée   {SENS[d]}"
     maj, n_ok = alignement(r)
-    fond = r["dirs"][9] if r["dirs"][9] and r["dirs"][10] != -r["dirs"][9] else 0
+    fond = r["dirs"][9]
     if not maj and fond:
-        return f"🔜 Prochaine entrée   {SENS[fond]}   (⛔ pas encore validée)"
-    return f"🔜 Prochaine entrée   {SENS[maj]}   ({n_ok}/3 • ⛔ pas encore validée)" if maj else "🔜 Prochaine entrée   ➖ pas encore de sens"
+        return f"🔜 Prochaine entrée   {SENS[fond]}   (⛔ 1h non confirmée)"
+    return f"🔜 Prochaine entrée   {SENS[maj]}   ({n_ok}/2 • ⛔ pas encore validée)" if maj else "🔜 Prochaine entrée   ➖ pas encore de sens"
 
 def verdict(r, cle):
     """Réponse claire pour l'utilisateur : peut-il entrer maintenant ou non ?"""
@@ -708,14 +707,14 @@ def verdict(r, cle):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
     al = r["confirme"]
     if not al:
-        return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
+        return ("🔴🔴 N'ENTRE PAS", "⏳ Le 1h ne confirme pas la tendance 4h\n🔔 Je te préviens dès que c'est validé")
     if etire(r, al):
         return ("⛔ TROP TARD — le marché est déjà parti", "😎 Patience, on trouve une autre entrée\n" + prochaine(r, cle))
-    if not cle.get("ordre") and bloque_dw(r, al, zone_repli(r, al)["e"]):      # une position déjà préparée n'est pas annulée par un petit va-et-vient du Daily
-        return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
+    if bloque_dw(r, al, r["m1"][-1]["c"]) or (not cle.get("ordre") and bloque_dw(r, al, zone_repli(r, al)["e"])):
+        return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Pas de poursuite du {'LONG' if al == 1 else 'SHORT'} en zone extrême. Attendre le repli ou une inversion confirmée.")
     zone = bool(cle.get("attente_rsi"))
     return (f"🟡 PATIENCE   {SENS[al]} bientôt\n🚦 ⏳ JE N'ENTRE PAS ENCORE" + (f"\n💰 TP visé ≈ {px(cle['ordre']['tp1'])}" if cle.get("ordre") else ""),
-            f"✅ 15 min / 1 h / 4 h alignées\n{'✅' if zone else '⏳'} Prix dans la zone 🟨\n⏳ Surcharge RSI 5 min\n✅ Pas de news proche\n"
+            f"✅ Tendance 4h + confirmation 1h\n{'✅' if zone else '⏳'} Prix dans la zone 🟨\n⏳ Rejet / clôture 5 min requis\n✅ Pas de news proche\n"
             "🚦 Attends mon 🟢 J'ENTRE MAINTENANT")
 
 # ───────── Langue : chaque utilisateur choisit 🇫🇷 / 🇬🇧, tout le système suit ─────────
@@ -2859,6 +2858,16 @@ def agent(m, r, cle, ferme):
             if cle.get("aligne"):
                 out.append(f"⚪ {m} : confirmation 1h / tendance 4h perdue. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
+            return out
+        # Extrême Daily/Weekly : aucune poursuite dans le sens de la tendance.
+        # On attend une correction ou un retournement confirmé ; on ne vend pas à découvert sans signal opposé validé.
+        if bloque_dw(r, d, p):
+            cle["prep"] = False
+            cle.pop("ordre", None)
+            if r["t"] - cle.get("extreme_warn_t", 0) >= 1800:
+                cle["extreme_warn_t"] = r["t"]
+                out.append(f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')}.\n⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
+            cle["aligne"] = d
             return out
         # ── Entrée sur CASSURE confirmée (clôture 5 min au-delà du niveau) ──
         pc = plan_cassure(r, d)
