@@ -30,10 +30,10 @@ jobs:
 
       - name: Start backend for smoke tests
         run: |
-          npm start > /tmp/trading-auto-server.log 2>&1 &
+          PORT=4400 npm start > /tmp/trading-auto-server.log 2>&1 &
           echo $! > /tmp/trading-auto-server.pid
           for i in $(seq 1 30); do
-            if curl --silent --fail http://127.0.0.1:4000/health > /tmp/trading-auto-health.json; then
+            if curl --silent --fail http://127.0.0.1:4400/health > /tmp/trading-auto-health.json; then
               cat /tmp/trading-auto-health.json
               exit 0
             fi
@@ -43,7 +43,7 @@ jobs:
           exit 1
 
       - name: Run backend smoke tests
-        run: bash tests/integration/backend-smoke.test.sh
+        run: BASE_URL=http://127.0.0.1:4400 bash tests/integration/backend-smoke.test.sh
 
       - name: Health check
         run: |
