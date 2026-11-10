@@ -156,19 +156,40 @@ def bougies(pair, interval):
             return yahoo_or(interval)
     return kraken(pair, interval)
 
-def regrouper(bars, n, base_sec):
-    """Construit une UT plus grande (ex : 2m depuis 1m) en respectant les bornes horaires."""
-    out, cur = [], None
-    for b in bars:
-        debut = b["t"] - (b["t"] % (n * base_sec))
-        if cur is None or cur["t"] != debut:
-            if cur and cur["k"] == n:
-                out.append(cur)
-            cur = dict(t=debut, o=b["o"], h=b["h"], l=b["l"], c=b["c"], k=1)
-        else:
-            cur["h"] = max(cur["h"], b["h"]); cur["l"] = min(cur["l"], b["l"]); cur["c"] = b["c"]; cur["k"] += 1
-    if cur and cur["k"] == n:
-        out.append(cur)
+def regrouper(bars, n, base_sec, now_ts=None):
+    """Construit uniquement des bougies agrégées complètes, continues et déjà clôturées.
+
+    Les bougies sources sont horodatées à leur ouverture. Une bougie manquante,
+    dupliquée, désalignée ou encore en formation invalide son groupe : on ne
+    fabrique jamais une clôture à partir de données partielles.
+    """
+    if n < 1 or base_sec < 1:
+        raise ValueError("n et base_sec doivent être positifs")
+    now_ts = time.time() if now_ts is None else float(now_ts)
+    buckets = {}
+    for b in sorted(bars, key=lambda x: x["t"]):
+        ts = int(b["t"])
+        if ts % base_sec:
+            continue
+        debut = ts - (ts % (n * base_sec))
+        fin = debut + n * base_sec
+        if fin > now_ts:
+            continue
+        buckets.setdefault(debut, []).append(b)
+
+    out = []
+    for debut, groupe in sorted(buckets.items()):
+        attendu = [debut + i * base_sec for i in range(n)]
+        horodatages = [int(x["t"]) for x in groupe]
+        if horodatages != attendu:
+            continue
+        out.append({
+            "t": debut,
+            "o": groupe[0]["o"],
+            "h": max(x["h"] for x in groupe),
+            "l": min(x["l"] for x in groupe),
+            "c": groupe[-1]["c"],
+        })
     return out
 
 # ───────── Indicateurs (identiques à Pine) ─────────
