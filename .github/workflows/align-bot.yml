@@ -36,6 +36,7 @@ jobs:
           restore-keys: align-etat-
 
       - name: Vérifier Telegram et envoyer un accusé de démarrage
+        working-directory: align-bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -75,6 +76,7 @@ jobs:
               call("sendMessage", {"chat_id": chat_id, "text": message, "disable_notification": "true"})
               delivered += 1
           print("TELEGRAM_HEARTBEAT_DELIVERED recipients=" + str(delivered))
+          PY
 
       - name: Analyse BTC + Gold et envoi Telegram
         env:
