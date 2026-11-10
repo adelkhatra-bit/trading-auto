@@ -456,12 +456,12 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     """Carte Telegram complète : mise en page uniquement, aucune rubrique d'analyse supprimée."""
     fl = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
     prix = r["m1"][-1]["c"]
-    entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\\n💹 Prix actuel : {px(prix)}"
+    entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\n💹 Prix actuel : {px(prix)}"
     if not vip:
         etat_pos = ("🟢 Une position VIP est actuellement ouverte" if (cle or {}).get("trade") else
                     "🟡 Une opportunité VIP se prépare" if (cle or {}).get("ordre") and r["confirme"] else
                     "⚪ Aucune position VIP pour le moment")
-        return "\\n".join([entete, "━━━━━━━━━━━━━━━━━━", "📡 POINT DE MARCHÉ",
+        return "\n".join([entete, "━━━━━━━━━━━━━━━━━━", "📡 POINT DE MARCHÉ",
                             etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
                             "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
                             "💎 Accès VIP : 49,90 € / mois"])
@@ -527,7 +527,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(ligne_cassure(r, r["confirme"]))
     if "Prochaine entrée" not in raison and not tr:
         l.append(prochaine(r, cle))
-    return "\\n".join(l)
+    return "\n".join(l)
 def strategie_mtf(r):
     """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
     fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
