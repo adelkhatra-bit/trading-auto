@@ -452,18 +452,18 @@ def alignement(r):
     return maj, (2 if maj else 0)
 
 def texte_etat(nom_marche, r, cle=None, vip=True):
-    """Telegram : présentation hiérarchisée, lisible sur mobile, sans modifier les règles de trading."""
+    """Telegram : une information par ligne, lisible sur mobile, sans modifier les règles de trading."""
     fl = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
     D, R = r["dirs"], r["rsis"]
     maj, n_ok = alignement(r)
     ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
     prix = r["m1"][-1]["c"]
-    entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\\n💹 Prix actuel : {px(prix)}"
+    entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\n💹 Prix actuel : {px(prix)}"
     if not vip:
         etat_pos = ("🟢 Une position VIP est actuellement ouverte" if (cle or {}).get("trade") else
                     "🟡 Une opportunité VIP se prépare" if (cle or {}).get("ordre") and r["confirme"] else
                     "⚪ Aucune position VIP pour le moment")
-        return "\\n".join([entete, "━━━━━━━━━━━━━━━━━━", "📡 POINT DE MARCHÉ",
+        return "\n".join([entete, "━━━━━━━━━━━━━━━━━━", "📡 POINT DE MARCHÉ",
                           etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
                           "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
                           "💎 Accès VIP : 49,90 € / mois"])
@@ -472,24 +472,31 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
              "🟠 Pas de biais confirmé en 1 h / 4 h")
     l = [entete, "━━━━━━━━━━━━━━━━━━", "📡 LECTURE DU MARCHÉ", biais,
          "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS"]
-    l += [f"{nom:<7} {fl(D[i])}   RSI {R[i]:.0f}" for nom, i in ut]
+    l += [f"{nom} : {fl(D[i])}" for nom, i in ut]
+    l += [f"RSI {nom} : {R[i]:.0f}" for nom, i in ut]
     l += ["━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
           f"Alignement 1 h + 4 h : {n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
-          f"Zones de marché : Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
+          f"Zone Daily : {zone_txt(r['posD'])}",
+          f"Zone Weekly : {zone_txt(r['posW'])}",
           "━━━━━━━━━━━━━━━━━━", "🧭 PLAN MULTI-TIMEFRAME"] + strategie_mtf(r)
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
     ph_, pb_ = nc.get("plus haut d'hier"), nc.get("plus bas d'hier")
     contexte = []
-    if ph_ and pb_:
-        contexte.append(f"📏 Niveaux d'hier : haut {px(ph_)} • bas {px(pb_)}")
+    if ph_:
+        contexte.append(f"📏 Plus haut d'hier : {px(ph_)}")
+    if pb_:
+        contexte.append(f"📏 Plus bas d'hier : {px(pb_)}")
     if r.get("asie"):
-        contexte.append(f"🌏 Range Asie : haut {px(r['asie'][0])} • bas {px(r['asie'][1])}")
+        contexte.append(f"🌏 Range Asie - plus haut : {px(r['asie'][0])}")
+        contexte.append(f"🌏 Range Asie - plus bas : {px(r['asie'][1])}")
     contexte.extend(r.get("macro") or [])
     p_ = r["m1"][-1]["c"]
     proches = sorted([f for f in r.get("fvg", []) if abs((f[0] + f[1]) / 2 - p_) <= 3 * r["atr"]],
                      key=lambda f: abs((f[0] + f[1]) / 2 - p_))
     for lo, hi, ut_fvg, dd in proches[:2]:
-        contexte.append(f"🧲 FVG {ut_fvg} {'haussière' if dd == 1 else 'baissière'} : {px(lo)} – {px(hi)}")
+        contexte.append(f"🧲 FVG {ut_fvg} : {'haussière' if dd == 1 else 'baissière'}")
+        contexte.append(f"   Borne basse : {px(lo)}")
+        contexte.append(f"   Borne haute : {px(hi)}")
     if r.get("distrib"):
         contexte.append("⚠️ Distribution possible : essoufflement en zone haute (divergence RSI)")
     if r.get("accum"):
@@ -499,14 +506,15 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     o = (cle or {}).get("ordre")
     if r["confirme"] and o and not (cle or {}).get("trade"):
         l += ["━━━━━━━━━━━━━━━━━━", "🟨 ZONE DE PRÉPARATION",
-              f"Zone surveillée : {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}"]
+              f"Limite basse : {px(o.get('za', o['e']))}",
+              f"Limite haute : {px(o.get('zb', o['e']))}"]
     titre, raison = verdict(r, cle)
     l += ["━━━━━━━━━━━━━━━━━━", "🚦 DÉCISION ALIGN", titre, raison]
     if r["confirme"] and not (cle or {}).get("trade") and len(r["b5"]) >= 22:
         l.append(ligne_cassure(r, r["confirme"]))
     if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
         l.append(prochaine(r, cle))
-    return "\\n".join(l)
+    return "\n".join(l)
 
 def strategie_mtf(r):
     """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
