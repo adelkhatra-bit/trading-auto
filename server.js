@@ -6,7 +6,7 @@ const path    = require('path');
 const fs      = require('fs');
 const os      = require('os');
 const { spawn, execSync } = require('child_process');
-const PORT    = 4000;
+const PORT    = Number(process.env.PORT || 4000);
 if (!process.env.BROKER_MODE) process.env.BROKER_MODE = 'live';
 if (!process.env.SAFE_MODE) process.env.SAFE_MODE = '0';
 const SAFE_MODE = process.env.SAFE_MODE !== '0';
@@ -146,7 +146,7 @@ _portGuard.once('error', (err) => {
 _portGuard.once('listening', () => {
   _portGuard.close(); // port libre confirmé — on peut continuer
 });
-_portGuard.listen(4000, '127.0.0.1');
+_portGuard.listen(PORT, '127.0.0.1');
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ...existing code...
