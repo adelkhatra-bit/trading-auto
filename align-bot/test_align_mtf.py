@@ -135,11 +135,12 @@ class AlignMtfRulesTest(unittest.TestCase):
             for market in ("BTC", "GOLD"):
                 message = align_bot.texte_etat(market, r, {})
                 self.assertIn(f"ALIGN • {market}", message)
-                self.assertIn("📡 LECTURE DU MARCHÉ", message)
-                self.assertIn("📊 INDICATEURS PAR UNITÉ DE TEMPS", message)
-                self.assertIn("🧭 CONFIRMATION DE TENDANCE", message)
+                self.assertIn("📊 INDICATEURS / UNITÉS DE TEMPS", message)
+                self.assertIn("1m ⬆️", message)
+                self.assertIn("🧭 CONFIRMATION 4h", message)
                 self.assertIn("🚦 DÉCISION ALIGN", message)
-                self.assertIn("67 500.00", message)
+                self.assertIn("🎯 DIRECTION : 🟩 LONG", message)
+                self.assertIn("67500.00", message)
                 self.assertIn("\n💹 Prix actuel", message)
                 self.assertNotIn("\\n", message)
                 self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None
