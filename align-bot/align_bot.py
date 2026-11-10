@@ -3047,11 +3047,14 @@ def agent(m, r, cle, ferme):
                     return out
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
                 niveau = "Fibonacci" not in o["src"] or "+" in o["src"]   # confluence avec un niveau 15m / 1h / 4h ou l'EMA
-                checks = [("4 h + 1 h alignées", True), ("Daily / Weekly favorables", True),
-                          ("Zone Fibonacci 50 – 78,6 %", True), ("Niveau 15m / 1h / 4h ou EMA", niveau),
-                          ("RSI en surcharge (repli bien chargé)", surcharge), ("Confirmé en 1 h", conf1h),
-                          (raison, True),
-                          ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
+                checks = [("4 h + 1 h alignées", bool(r["confirme"] == d)),
+                          ("Daily / Weekly hors zone extrême", not bloque_dw(r, d, p)),
+                          ("Zone Fibonacci 50 – 78,6 %", "Fibonacci" in o["src"]),
+                          ("Niveau 15m / 1h / 4h ou EMA", niveau),
+                          ("RSI de repli confirmé", surcharge), ("Contexte 1 h cohérent", conf1h),
+                          (raison, bool(bj)),
+                          ("Pas de news proche", not bool(r.get("annonce"))),
+                          (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
                 pct_conf = round(100 * score / len(checks))
