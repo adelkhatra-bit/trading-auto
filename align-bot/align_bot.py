@@ -527,7 +527,7 @@ def session_de(ts):
     return "Asie" if h < 8 else "Londres" if h < 14 else "New York" if h < 22 else "Asie"
 
 def profil_trade(m, tr, r):
-    return {"m": m, "type": "cassure" if tr.get("src") == "cassure 15 min" else "repli",
+    return {"m": m, "type": "cassure" if tr.get("src") == "cassure 5 min" else "repli",
             "d": tr["d"], "session": session_de(time.time()), "haut": bool(r["posD"] >= 0.75 if tr["d"] == 1 else r["posD"] <= 0.25)}
 
 def stats_profil(p, cles=("m", "type", "d", "session")):
