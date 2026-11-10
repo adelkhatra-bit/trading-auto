@@ -392,7 +392,7 @@ def analyser(pair):
     except Exception:
         pass
     atr5 = atr(m5, 14)[-1] if len(m5) >= 15 else a
-    return dict(fvg=fvg, niv_cles=niv_cles, asie=asie, distrib=distrib, accum=accum, div4h=div4h, b5=m5[-30:], atr5=atr5, m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
+    return dict(fvg=fvg, niv_cles=niv_cles, asie=asie, distrib=distrib, accum=accum, div4h=div4h, b5=m5[-30:], atr5=atr5, ema5=ema([x["c"] for x in m5], 20)[-1], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
                 grosses=grosses, b15=b[-30:], ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
@@ -676,9 +676,10 @@ def zone_repli(r, d):
     return point_entree(r, d, r["m1"][-1]["c"])
 
 def etire(r, d):
-    """Le prix est déjà parti loin (RSI 15 min en excès ou trop loin de l'EMA 20) : entrée loupée."""
-    p = r["m1"][-1]["c"]
-    return (r["r15"] >= 70 or p - r["ema15"] > 2 * r["atr"]) if d == 1 else (r["r15"] <= 30 or r["ema15"] - p > 2 * r["atr"])
+    """Évite de poursuivre un mouvement déjà étiré selon le timing 5m, jamais selon le 15m."""
+    p = r["m1"][-1]["c"]; a = r.get("atr5", r["atr"]); e = r.get("ema5", r["ema15"])
+    r5 = r["r5"][-1]
+    return (r5 >= 80 or p - e > 2 * a) if d == 1 else (r5 <= 20 or e - p > 2 * a)
 
 def prochaine(r, cle):
     """Prochaine entrée attendue, avec la flèche et la couleur."""
@@ -1177,8 +1178,7 @@ def marche_demande(txt):
     return "BTC" if "btc" in t else "GOLD" if ("gold" in t or "or" in t.split()) else None
 
 def tendance_armee(r, cle):
-    """Une fois 15m + 1h + 4h alignés, la tendance reste « armée » pendant le repli :
-    le 15 min peut se retourner (c'est le repli qu'on attend) tant que le 4 h reste dans le sens et que le 1 h n'est pas contre."""
+    """Une fois 4h + 1h alignées, la tendance reste armée pendant le repli 5m tant que les deux UT ne s'inversent pas."""
     d = r["confirme"]
     if d:
         cle["arme"] = d
@@ -2843,7 +2843,7 @@ def agent(m, r, cle, ferme):
     except Exception as ex:
         print("manipulation", ex)
 
-    # ── Pas de trade : alignement 15m + 1h + 4h obligatoire, puis ordre limite au point précis ──
+    # ── Pas de trade : tendance 4h confirmée par 1h, puis timing d'entrée en 5m ──
     if not tr and r.get("fermeture"):
         if r["t"] - cle.get("ferm_dit", 0) > 3 * 3600:
             cle["ferm_dit"] = r["t"]
@@ -2856,7 +2856,7 @@ def agent(m, r, cle, ferme):
     if not tr:
         if not d:
             if cle.get("aligne"):
-                out.append(f"⚪ {m} : alignement 15m / 1h / 4h perdu. Ordre annulé, j'attends.")
+                out.append(f"⚪ {m} : confirmation 1h / tendance 4h perdue. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
         # ── Entrée sur CASSURE confirmée (clôture 5 min au-delà du niveau) ──
@@ -2891,7 +2891,7 @@ def agent(m, r, cle, ferme):
         bloque = bloque_dw(r, d, o["e"])      # on juge le prix d'entrée du repli, pas le prix actuel
         # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
         p_ = r["m1"][-1]["c"]
-        calme = ((r["r15"] < 62 and p_ - r["ema15"] < 1.5 * r["atr"]) if d == 1 else (r["r15"] > 38 and r["ema15"] - p_ < 1.5 * r["atr"]))
+        calme = ((r["r5"][-1] < 70 and p_ - r.get("ema5", r["ema15"]) < 1.5 * r.get("atr5", r["atr"])) if d == 1 else (r["r5"][-1] > 30 and r.get("ema5", r["ema15"]) - p_ < 1.5 * r.get("atr5", r["atr"])))
         if not cle.get("prep") and (etire(r, d) or (cle.get("parti") and not calme)):   # hystérésis : pas de va-et-vient
             if not cle.get("parti"):
                 cle["parti"] = True; cle["attente_rsi"] = False; cle.pop("ordre", None)
@@ -2916,7 +2916,7 @@ def agent(m, r, cle, ferme):
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
-                out.append(f"🧭 {m} aligné {'▲' if d == 1 else '▼'} sur 15m/1h/4h, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
+                out.append(f"🧭 {m} : 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
                            f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
