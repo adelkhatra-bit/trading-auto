@@ -420,7 +420,8 @@ def analyser(pair):
 
 # ───────── Messages ─────────
 def px(v):
-    return f"{v:,.2f}".replace(",", " ")
+    # Les prix restent compacts : 4036.45, jamais 4 036.45.
+    return f"{v:.2f}"
 
 def cme_ouvert(ts):
     ct = datetime.datetime.fromtimestamp(ts, datetime.timezone(datetime.timedelta(hours=-6)))  # heure de Chicago (approx. hiver)
@@ -507,11 +508,30 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
               f"Limite basse : {px(o.get('za', o['e']))}",
               f"Limite haute : {px(o.get('zb', o['e']))}"]
     titre, raison = verdict(r, cle)
-    l += ["━━━━━━━━━━━━━━━━━━", "🚦 DÉCISION ALIGN", titre, raison]
-    if r["confirme"] and not (cle or {}).get("trade") and len(r["b5"]) >= 22:
+    # Bloc décision compact, puis un repère de prix explicite sans présenter
+    # une zone indicative comme un ordre d'entrée validé.
+    l += ["┏━━━━━━━━ 🚦 DÉCISION ALIGN ━━━━━━━━┓", titre, raison,
+          "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"]
+    tr = (cle or {}).get("trade")
+    if tr:
+        sens = "🟩 LONG" if tr["d"] == 1 else "🟥 SHORT"
+        l.append(f"🎯 POSITION : {sens}  |  Entrée {px(tr['e'])}  |  TP1 {px(tr['tp1'])}")
+    elif o:
+        sens = "🟩 LONG" if o.get("d", r["confirme"]) == 1 else "🟥 SHORT"
+        entree = o.get("e")
+        cible = f"  |  TP1 {px(o['tp1'])}" if o.get("tp1") is not None else ""
+        l.append(f"🎯 POINT VISÉ : {sens}  |  Entrée ≈ {px(entree)}{cible}")
+    elif r["confirme"]:
+        sens = "🟩 LONG" if r["confirme"] == 1 else "🟥 SHORT"
+        try:
+            zone_cible = zone_repli(r, r["confirme"])
+            l.append(f"🎯 ZONE À SURVEILLER : {sens}  |  ≈ {px(zone_cible['e'])} (indicatif, pas une entrée)")
+        except (KeyError, TypeError, ValueError, IndexError):
+            l.append(f"🎯 DIRECTION : {sens}  |  Point d'entrée en attente du setup")
+    else:
+        l.append("🎯 POINT VISÉ : en attente d'un biais 4h / 1h confirmé")
+    if r["confirme"] and not tr and len(r["b5"]) >= 22:
         l.append(ligne_cassure(r, r["confirme"]))
-    if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
-        l.append(prochaine(r, cle))
     return "\n".join(l)
 
 def strategie_mtf(r):
