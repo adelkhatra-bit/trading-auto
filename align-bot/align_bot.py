@@ -114,7 +114,7 @@ def yahoo_or(interval):
     out = [dict(t=b["t"], o=b["o"] + ecart, h=b["h"] + ecart, l=b["l"] + ecart, c=b["c"] + ecart) for b in c[1]]
     if interval == 1 and spot and out:
         # Dernière minute = prix spot EN DIRECT (comme le graphique XAUUSD), pour ne pas avoir 10 min de retard
-        t = int(time.time()) // 60 * 60 - 60
+        t = int(time.time()) // 60 * 60
         if t > out[-1]["t"]:
             out.append(dict(t=t, o=out[-1]["c"], h=max(out[-1]["c"], spot), l=min(out[-1]["c"], spot), c=spot))
     return out
@@ -141,7 +141,7 @@ def paxg_or(interval):
     e = _CACHE.get("ecart_paxg", 0.0)
     out = [dict(t=b["t"], o=b["o"] + e, h=b["h"] + e, l=b["l"] + e, c=b["c"] + e) for b in c[1]]
     if interval == 1 and spot and out:
-        t = int(time.time()) // 60 * 60 - 60
+        t = int(time.time()) // 60 * 60
         if t > out[-1]["t"]:
             out.append(dict(t=t, o=out[-1]["c"], h=max(out[-1]["c"], spot), l=min(out[-1]["c"], spot), c=spot))
     return out
