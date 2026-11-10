@@ -767,7 +767,7 @@ TRAD = {
 "🙅 On ne court pas après la bougie": "🙅 We don't chase the candle", "📰 C'est l'effet de la news : encore plus de prudence": "📰 It's the news effect: extra caution",
 "🧘 Tu es en position : reste cool, ton SL est en place": "🧘 You're in a trade: stay cool, your SL is set", "⚠️ C'est CONTRE ta position : ne bouge pas ton SL, je surveille": "⚠️ It's AGAINST your trade: don't move your SL, I'm watching",
 "✅ Dans le sens de la tendance :": "✅ With the trend:", "🎯 Point d'entrée visé : retour vers": "🎯 Target entry: back to", "ancien plus bas": "previous low", "ancien plus haut": "previous high",
-"⭐ Encore mieux : milieu de la mèche": "⭐ Even better: middle of the wick", "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE (5 / 15 min)": "⏳ Patience: I only enter on a rejection wick + CLOSE (5 / 15 min)",
+"⭐ Encore mieux : milieu de la mèche": "⭐ Even better: middle of the wick", "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE 5 min": "⏳ Patience: I only enter on a rejection wick + CLOSE (5 / 15 min)",
 "🔔 Je t'envoie 🟢 J'ENTRE MAINTENANT au bon moment": "🔔 I'll send 🟢 I'M ENTERING NOW at the right time", "⚠️ CONTRE la tendance de fond": "⚠️ AGAINST the main trend",
 "tant que 15 min / 1 h / 4 h ne se retournent pas": "while 15 min / 1 h / 4 h don't turn", "🔔 Je te préviens si ça se retourne": "🔔 I'll tell you if it turns",
 "✅ Validé quand 15 min + 1 h + 4 h vont dans le même sens": "✅ Validated when 15 min + 1 h + 4 h agree",
@@ -888,9 +888,9 @@ TRAD = {
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
 "(en cours)": "(now)", ": la zone a été traversée sans rejet": ": the zone was crossed with no rejection", "🙅 Pas d'entrée, heureusement": "🙅 No entry, luckily", "🔎 Je recalcule le prochain point plus bas": "🔎 Recalculating the next point lower", "🔎 Je recalcule le prochain point plus haut": "🔎 Recalculating the next point higher", ": la mèche de rejet est trop grande (SL trop loin)": ": the rejection wick is too big (SL too far)", "😎 Je ne prends pas ce risque, j'attends mieux": "😎 I'm not taking that risk, waiting for better", "🧠 L'avis de l'IA ALIGN": "🧠 ALIGN AI's view", "🧠 L'IA ALIGN sur cette entrée": "🧠 ALIGN AI on this entry", "🧠 La leçon de l'IA ALIGN": "🧠 ALIGN AI's lesson", ": RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳": ": RSI overextended ✅ — waiting for the REJECTION WICK and the CLOSE ⏳",
-"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en remontant": "👀 5 / 15-min chart: a candle that dips into the zone then closes back up",
-"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en redescendant": "👀 5 / 15-min chart: a candle that spikes into the zone then closes back down",
-"Mèche de rejet + clôture (5 / 15 min)": "Rejection wick + close (5 / 15 min)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
+"👀 Vue 5 min : une bougie qui pique dans la zone puis clôture en remontant": "👀 5 / 15-min chart: a candle that dips into the zone then closes back up",
+"👀 Vue 5 min : une bougie qui pique dans la zone puis clôture en redescendant": "👀 5 / 15-min chart: a candle that spikes into the zone then closes back down",
+"Mèche de rejet + clôture (5 min)": "Rejection wick + close (5 / 15 min)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
 "cassure vue, mais je passe mon tour": "breakout seen, but I'm skipping", "prix dans la zone, mais je passe mon tour": "price in the zone, but I'm skipping",
 "📚 Ce type de position a perdu trop souvent": "📚 This type of position lost too often", " gagnés": " won", ": je note ce": ": I'm noting this",
 "en session": "in session", "🧠 Bilan de ce type :": "🧠 Record for this type:", "💡 Leçon : je serai plus prudent sur ce type de position": "💡 Lesson: I'll be more careful with this type of position",
@@ -1315,9 +1315,9 @@ def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
 
 def markup_analyse(etat, m, r):
-    """Sous l'analyse : bouton « Je rentre dans la prochaine position » quand une entrée se prépare."""
-    cle = etat.get(m, {}); d = r["confirme"]
-    if d and not cle.get("trade") and cle.get("ordre") and not etire(r, d):
+    """Après chaque analyse, proposer le suivi de la prochaine position, même si le setup n'est pas encore prêt."""
+    cle = etat.get(m, {})
+    if not cle.get("trade"):
         return bouton_auto(m)
     return CLAVIER
 
@@ -1328,9 +1328,9 @@ def mmss(sec):
     sec = max(0, int(sec)); return f"{sec // 60} min {sec % 60:02d} s" if sec < 3600 else f"{sec // 3600} h {sec % 3600 // 60:02d}"
 
 def chrono_txt(m, r, cle, t0):
-    """Chronomètre en direct après 🎯 : où on en est, dans combien de temps, et le prochain rendez-vous (clôture 15 min)."""
+    """Chronomètre en direct : tendance 4h, confirmation 1h, déclencheur à la clôture 5m."""
     now = time.time(); p = r["m1"][-1]["c"]; d = r["confirme"]; a = r["atr"]
-    cloture = r["b15"][-1]["t"] + 1800 if r["b15"] else now      # fin de la bougie 15 min en cours
+    cloture = r["b5"][-1]["t"] + 300 if r.get("b5") else now      # prochaine échéance 5 min
     tr = cle.get("trade"); o = cle.get("ordre")
     l = [f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}   {px(p)}",
          f"🎯 Inscrit depuis {mmss(now - t0)}"]
@@ -1341,21 +1341,21 @@ def chrono_txt(m, r, cle, t0):
         etape, estim = "⏸ News dans moins de 15 min : pause", "⏳ Reprise juste après la news"
     elif not d:
         maj, n_ok = alignement(r)
-        etape, estim = f"1️⃣/4 🧭 Alignement {n_ok}/3 : j'attends 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné"
+        etape, estim = f"1️⃣/3 🧭 Tendance 4 h + confirmation 1 h : {n_ok}/2", "⏳ Pas d'entrée tant que le 1 h ne confirme pas le 4 h"
     elif etire(r, d):
         etape, estim = "1️⃣/4 🚀 Le marché est parti : j'attends le repli", f"↩️ Repli visé ≈ {px(r['ema15'])}"
     elif not o:
         etape, estim = "2️⃣/4 🔎 Je calcule la zone d'entrée", "⏳ Quelques instants"
     elif cle.get("attente_rsi") or cle.get("attente_rejet") or cle.get("prep"):
         etape = f"4️⃣/4 🟨 Prix dans la zone : j'entre dès qu'une bougie clôture {'en remontant' if (o or {}).get('d', d) == 1 else 'en redescendant'}"
-        estim = f"⚡ Décision à la clôture de la bougie 15 min de {heure(cloture - 900)} (clôture à {heure(cloture)})"
+        estim = f"⚡ Décision à la clôture de la bougie 5 min (à {heure(cloture)})"
     else:
         dist = abs(p - o["e"]); vit = max(a / 15, 1e-9)            # vitesse moyenne ≈ 1 ATR par 15 min
         etape = f"3️⃣/4 🟨 Le prix approche de la zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}"
         estim = f"⏳ Arrivée estimée ≈ {max(1, round(dist / vit))} min" if dist / vit < 240 else "⏳ Encore loin : ça peut prendre des heures"
     l += [etape, estim,
           statut_txt(0, o).strip(),
-          f"🕯 Prochaine clôture 15 min dans {mmss(cloture - now)}",
+          f"🕯 Prochaine clôture 5 min dans {mmss(cloture - now)}",
           f"⌛ Si rien avant {heure(t0 + CHRONO_MAX)} : j'annule ta réservation (pas d'entrée forcée)",
           f"🔄 Mis à jour à {heure(now)}:{datetime.datetime.fromtimestamp(now, PARIS).strftime('%S')}"]
     return "\n".join(l)
@@ -2799,7 +2799,7 @@ def manipulation(out, m, r, cle):
               f"🎯 Point d'entrée visé : retour vers ≈ {px(niv)} ({'ancien plus bas' if dm == 1 else 'ancien plus haut'} 15 min)",
               f"⭐ Encore mieux : milieu de la mèche ≈ {px(mid)}",
               f"🛑 SL un peu {'SOUS' if dm == 1 else 'AU-DESSUS de'} la mèche ≈ {px(meche - dm * 0.2 * a)} • bougie 15 min de {heure(x['t'])}",
-              "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE (5 / 15 min)",
+              "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE 5 min",
               "🔔 Je t'envoie 🟢 J'ENTRE MAINTENANT au bon moment"]
     elif r["confirme"] == -dm:
         l += [f"⚠️ CONTRE la tendance de fond ({SENS[-dm]})",
