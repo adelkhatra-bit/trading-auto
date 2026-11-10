@@ -2470,9 +2470,8 @@ def plan_entree(r, d, p):
                 rr=abs(t1[0] - p) / risque)
 
 def point_entree(r, d, p):
-    """Ordre limite au point le plus précis : confluence retracement 50-61,8 % du dernier mouvement 15m
-    + résistance/support 15m/1h/4h + EMA 20 (15m). Stop derrière le sommet/creux du mouvement."""
-    a = r["atr"]; b = r["b15"][-24:]
+    """Zone limite basée sur le dernier mouvement 5m ; niveaux 1h/4h et FVG restent des confluences."""
+    a = r.get("atr5", r["atr"]); b = r["b5"][-24:]
     H = max(x["h"] for x in b); L = min(x["l"] for x in b)
     if d == -1:   # SHORT : on vend un rebond vers une résistance
         z50, z618, z786 = L + 0.5 * (H - L), L + 0.618 * (H - L), L + 0.786 * (H - L)
@@ -2480,8 +2479,8 @@ def point_entree(r, d, p):
         cand += [((lo + hi) / 2, "FVG " + ut) for lo, hi, ut, dd in r.get("fvg", []) if dd == -1 and z50 - 0.3 * a <= (lo + hi) / 2 <= z786 + 0.3 * a]
         if cand:
             e, src = min(cand, key=lambda z: abs(z[0] - z618)); src = f"résistance {src} + retracement Fibonacci"
-        elif z50 <= r["ema15"] <= z786:
-            e, src = r["ema15"], "EMA 20 (15m) + retracement Fibonacci"
+        elif z50 <= r.get("ema5", r["ema15"]) <= z786:
+            e, src = r.get("ema5", r["ema15"]), "EMA 20 (5m) + retracement Fibonacci"
         else:
             e, src = z618, "retracement Fibonacci 61,8 %"
         e = max(e, p)
@@ -2494,8 +2493,8 @@ def point_entree(r, d, p):
         cand += [((lo + hi) / 2, "FVG " + ut) for lo, hi, ut, dd in r.get("fvg", []) if dd == 1 and z786 - 0.3 * a <= (lo + hi) / 2 <= z50 + 0.3 * a]
         if cand:
             e, src = min(cand, key=lambda z: abs(z[0] - z618)); src = f"support {src} + retracement Fibonacci"
-        elif z786 <= r["ema15"] <= z50:
-            e, src = r["ema15"], "EMA 20 (15m) + retracement Fibonacci"
+        elif z786 <= r.get("ema5", r["ema15"]) <= z50:
+            e, src = r.get("ema5", r["ema15"]), "EMA 20 (5m) + retracement Fibonacci"
         else:
             e, src = z618, "retracement Fibonacci 61,8 %"
         e = min(e, p)
@@ -2525,7 +2524,7 @@ def point_entree(r, d, p):
         else: za = min(zb, max(za, e))
     risque = max(abs(e - sl), 1e-9)
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
-                za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(b, d, sl), sl_ut="15 min")
+                za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(b, d, sl), sl_ut="5 min")
 
 def coach(etat, m, r, cle):
     """Agent individuel : messages courts envoyés UNIQUEMENT aux abonnés qui ont dit « Je suis rentré »."""
