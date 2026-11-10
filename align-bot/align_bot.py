@@ -1227,10 +1227,12 @@ IA_FOURNISSEURS = [
     ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", "", False),
 ]
 IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "300"))
-IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style jeune et simple, "
-             "avec quelques emojis. Tu parles en bougies (vue 15 min, mèches, clôtures). Tu t'appuies UNIQUEMENT sur les données fournies : "
-             "aucun prix inventé, jamais de contradiction avec le verdict du bot (si le bot dit d'attendre, tu dis d'attendre). "
-             "Pas de promesse de gain, ce n'est pas un conseil financier.")
+IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style simple. "
+             "Architecture: 4h tendance principale, 1h confirmation, 15m contexte, 5m déclencheur après clôture; 1m sert au prix/monitoring. "
+             "Tu t'appuies UNIQUEMENT sur les données fournies : aucun prix inventé, jamais de contradiction avec le verdict du bot. "
+             "Si le prix est en haut de sa zone Daily/Weekly, près d'une résistance, avec divergence ou essoufflement, déconseille de poursuivre un LONG; "
+             "ne propose un SHORT que si le retournement est confirmé par les clôtures et le contexte 1h. "
+             "Une confluence en % n'est pas une probabilité de gain. Rappelle le SL et le risque. Pas de promesse de gain.")
 
 def _appel_ia(url, modele, cle, messages):
     corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 700, "messages": messages}).encode()
@@ -1298,7 +1300,7 @@ def donnees_ia(m, r, cle):
             "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
-            "niveau de cassure 15 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b15"]) >= 22 else None,
+            "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
 
 def avis_ia(etat, m, r, cle):
@@ -2319,7 +2321,7 @@ def annonces_et_sessions(etat, maintenant, derniers):
                            + ("💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains" if week else "💥 À la réouverture le prix peut sauter (écart)"))
     # Ouvertures de marché (jours de semaine)
     if jour.weekday() < 5:
-        for nom, zone, h, mn in (("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
+        for nom, zone, h, mn in (("Sydney", "Australia/Sydney", 10, 0), ("Tokyo", "Asia/Tokyo", 9, 0), ("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
             loc = datetime.datetime.now(ZoneInfo(zone)).replace(hour=h, minute=mn, second=0, microsecond=0)
             t_ouv = int(loc.timestamp())
             if 0 <= t_ouv - maintenant <= 15 * 60 and f"ouv{nom}{cle_j}" not in vus:
@@ -2834,7 +2836,7 @@ def agent(m, r, cle, ferme):
     hi = max(x["h"] for x in bougies); lo = min(x["l"] for x in bougies)
     d = r["confirme"]
     r5, r5p = r["r5"][-1], r["r5"][-2]
-    ctx = f"Contexte : {zone_txt(r['posD'])} de la zone Daily, {zone_txt(r['posW'])} de la zone Weekly."
+    ctx = f"Contexte : {zone_txt(r['posD'])} Daily, {zone_txt(r['posW'])} Weekly."
     try:
         manipulation(out, m, r, cle)
         meche_suspecte(out, m, r, cle)
