@@ -454,9 +454,6 @@ def alignement(r):
 def texte_etat(nom_marche, r, cle=None, vip=True):
     """Telegram : une information par ligne, lisible sur mobile, sans modifier les règles de trading."""
     fl = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
-    D, R = r["dirs"], r["rsis"]
-    maj, n_ok = alignement(r)
-    ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
     prix = r["m1"][-1]["c"]
     entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\n💹 Prix actuel : {px(prix)}"
     if not vip:
@@ -467,6 +464,9 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
                           etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
                           "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
                           "💎 Accès VIP : 49,90 € / mois"])
+    D, R = r["dirs"], r["rsis"]
+    maj, n_ok = alignement(r)
+    ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
     biais = ("🟢 Biais haussier confirmé" if maj == 1 else
              "🔴 Biais baissier confirmé" if maj == -1 else
              "🟠 Pas de biais confirmé en 1 h / 4 h")
