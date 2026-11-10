@@ -28,21 +28,22 @@ jobs:
         run: npm run lint || echo "No lint script defined"
         continue-on-error: true
 
-      - name: Make integration tests executable
-        run: chmod +x tests/integration/*.sh || true
-
-      - name: Run integration tests
-        env:
-          TEST_FILE_URL: ${{ secrets.TEST_FILE_URL }}
-          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
-          BROKER_API_KEY: ${{ secrets.BROKER_API_KEY }}
-          BROKER_API_SECRET: ${{ secrets.BROKER_API_SECRET }}
+      - name: Start backend for smoke tests
         run: |
-          if [ -f "tests/integration/fetch-file.test.sh" ]; then
-            bash tests/integration/fetch-file.test.sh
-          else
-            echo "No integration tests found, skipping"
-          fi
+          npm start > /tmp/trading-auto-server.log 2>&1 &
+          echo $! > /tmp/trading-auto-server.pid
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:4000/health > /tmp/trading-auto-health.json; then
+              cat /tmp/trading-auto-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/trading-auto-server.log
+          exit 1
+
+      - name: Run backend smoke tests
+        run: bash tests/integration/backend-smoke.test.sh
 
       - name: Health check
         run: |
