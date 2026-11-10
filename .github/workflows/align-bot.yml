@@ -35,47 +35,24 @@ jobs:
           key: align-etat-${{ github.run_id }}
           restore-keys: align-etat-
 
-      - name: Vérifier Telegram et envoyer un accusé de démarrage
+      - name: Vérifier la connexion à Telegram sans envoyer de message
         working-directory: align-bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request, urllib.parse
+          import json, os, urllib.request
           token = os.environ.get("TELEGRAM_TOKEN", "").strip()
           if not token:
               raise SystemExit("ÉCHEC: secret TELEGRAM_TOKEN absent")
-          state = {}
-          try:
-              with open("state.json", encoding="utf-8") as f:
-                  state = json.load(f)
-          except FileNotFoundError:
-              pass
-          recipients = state.get("proprio") or []
-          fallback = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-          if fallback:
-              recipients = list(recipients) + [fallback]
-          recipients = list(dict.fromkeys(str(x).strip() for x in recipients if str(x).strip()))
-          if not recipients:
-              raise SystemExit("ÉCHEC: aucun propriétaire Telegram connu. Ajouter le secret TELEGRAM_CHAT_ID dans GitHub Actions.")
-          base = "https://api.telegram.org/bot" + token + "/"
-          def call(method, data=None):
-              body = urllib.parse.urlencode(data or {}).encode()
-              req = urllib.request.Request(base + method, data=body)
-              with urllib.request.urlopen(req, timeout=20) as response:
-                  payload = json.loads(response.read().decode())
-              if not payload.get("ok"):
-                  raise RuntimeError(method + ": Telegram a répondu ok=false")
-              return payload["result"]
-          bot = call("getMe")
-          print("TELEGRAM_API_OK bot=@" + bot.get("username", "unknown"))
-          message = "✅ ALIGN : démarrage de production confirmé. API Telegram joignable. Vérification du processus d’analyse BTC + Gold en cours."
-          delivered = 0
-          for chat_id in recipients:
-              call("sendMessage", {"chat_id": chat_id, "text": message, "disable_notification": "true"})
-              delivered += 1
-          print("TELEGRAM_HEARTBEAT_DELIVERED recipients=" + str(delivered))
+          url = "https://api.telegram.org/bot" + token + "/getMe"
+          req = urllib.request.Request(url)
+          with urllib.request.urlopen(req, timeout=20) as response:
+              payload = json.loads(response.read().decode())
+          if not payload.get("ok"):
+              raise SystemExit("ÉCHEC: API Telegram indisponible")
+          print("TELEGRAM_API_OK bot=@" + payload["result"].get("username", "unknown"))
+          print("Aucun message de démarrage envoyé aux utilisateurs.")
           PY
 
       - name: Contrôler la connexion réelle à Gemini (sans exposer la clé)
