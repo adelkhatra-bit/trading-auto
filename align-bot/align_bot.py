@@ -453,7 +453,7 @@ def alignement(r):
     return maj, (2 if maj else 0)
 
 def texte_etat(nom_marche, r, cle=None, vip=True):
-    """Telegram : une information par ligne, lisible sur mobile, sans modifier les règles de trading."""
+    """Carte Telegram complète : mise en page uniquement, aucune rubrique d'analyse supprimée."""
     fl = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
     prix = r["m1"][-1]["c"]
     entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\n💹 Prix actuel : {px(prix)}"
@@ -462,23 +462,25 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
                     "🟡 Une opportunité VIP se prépare" if (cle or {}).get("ordre") and r["confirme"] else
                     "⚪ Aucune position VIP pour le moment")
         return "\n".join([entete, "━━━━━━━━━━━━━━━━━━", "📡 POINT DE MARCHÉ",
-                          etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
-                          "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
-                          "💎 Accès VIP : 49,90 € / mois"])
+                            etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
+                            "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
+                            "💎 Accès VIP : 49,90 € / mois"])
     D, R = r["dirs"], r["rsis"]
     maj, n_ok = alignement(r)
-    ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
+    ut = [("1m", 0), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("Daily", 10)]
     biais = ("🟢 Biais haussier confirmé" if maj == 1 else
              "🔴 Biais baissier confirmé" if maj == -1 else
-             "🟠 Pas de biais confirmé en 1 h / 4 h")
-    # Lecture compacte : les six UT et leurs RSI tiennent sur deux lignes.
-    ut_labels = [("1m", 0), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("D", 10)]
-    ligne_ut = "  ".join(f"{nom} {fl(D[i])}" for nom, i in ut_labels)
-    ligne_rsi = "RSI  " + " | ".join(f"{nom} {R[i]:.0f}" for nom, i in ut_labels)
-    l = [entete, "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS / UNITÉS DE TEMPS",
-         f"📊 {ligne_ut}", ligne_rsi,
-         f"🧭 CONFIRMATION 4h {fl(D[9])} + 1h {fl(D[7])} : {n_ok}/2 {'✅' if r['confirme'] else '⏳'}",
-         f"🌐 Daily {zone_txt(r['posD'])}  |  Weekly {zone_txt(r['posW'])}"]
+             "🟠 Pas de biais confirmé en 1h / 4h")
+    ligne_ut = "  |  ".join(f"{nom} {fl(D[i])}" for nom, i in ut)
+    ligne_rsi = "  |  ".join(f"{nom} {R[i]:.0f}" for nom, i in ut)
+    l = [entete, "━━━━━━━━━━━━━━━━━━", "📡 LECTURE DU MARCHÉ", biais,
+         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS",
+         f"🕒 {ligne_ut}", f"📈 RSI : {ligne_rsi}",
+         "━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
+         f"Alignement 1h + 4h : {n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
+         f"Zone Daily : {zone_txt(r['posD'])}",
+         f"Zone Weekly : {zone_txt(r['posW'])}",
+         "━━━━━━━━━━━━━━━━━━", "🧭 PLAN MULTI-TIMEFRAME"] + strategie_mtf(r)
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
     ph_, pb_ = nc.get("plus haut d'hier"), nc.get("plus bas d'hier")
     contexte = []
@@ -494,46 +496,38 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     proches = sorted([f for f in r.get("fvg", []) if abs((f[0] + f[1]) / 2 - p_) <= 3 * r["atr"]],
                      key=lambda f: abs((f[0] + f[1]) / 2 - p_))
     for lo, hi, ut_fvg, dd in proches[:2]:
-        contexte.append(f"🧲 FVG {ut_fvg} {'⬆️' if dd == 1 else '⬇️'} : {px(lo)}–{px(hi)}")
+        contexte.append(f"🧲 FVG {ut_fvg} : {'haussière' if dd == 1 else 'baissière'} | Basse {px(lo)} | Haute {px(hi)}")
     if r.get("distrib"):
         contexte.append("⚠️ Distribution possible : essoufflement en zone haute (divergence RSI)")
     if r.get("accum"):
         contexte.append("⚠️ Accumulation possible : soutien en zone basse (divergence RSI)")
     if contexte:
-        # Contexte et niveaux restent présents, mais sans répétition des mêmes unités de temps.
-        l += ["━━━━━━━━━━━━━━━━━━", "🌍 CONTEXTE"] + contexte
+        l += ["━━━━━━━━━━━━━━━━━━", "🌍 NIVEAUX & CONTEXTE"] + contexte
     o = (cle or {}).get("ordre")
     if r["confirme"] and o and not (cle or {}).get("trade"):
         l += ["━━━━━━━━━━━━━━━━━━", "🟨 ZONE DE PRÉPARATION",
               f"Limite basse : {px(o.get('za', o['e']))}",
               f"Limite haute : {px(o.get('zb', o['e']))}"]
     titre, raison = verdict(r, cle)
-    # Bloc décision compact, puis un repère de prix explicite sans présenter
-    # une zone indicative comme un ordre d'entrée validé.
     l += ["┏━━━━━━━━ 🚦 DÉCISION ALIGN ━━━━━━━━┓", titre, raison,
           "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"]
     tr = (cle or {}).get("trade")
     if tr:
         sens = "🟩 LONG" if tr["d"] == 1 else "🟥 SHORT"
-        l.append(f"🎯 POSITION : {sens}  |  Entrée {px(tr['e'])}  |  TP1 {px(tr['tp1'])}")
+        l.append(f"🎯 POSITION EN COURS : {sens} | Entrée {px(tr['e'])} | SL {px(tr['sl'])} | TP1 {px(tr['tp1'])} | TP2 {px(tr['tp2'])}")
     elif o:
         sens = "🟩 LONG" if o.get("d", r["confirme"]) == 1 else "🟥 SHORT"
-        entree = o.get("e")
-        cible = f"  |  TP1 {px(o['tp1'])}" if o.get("tp1") is not None else ""
-        l.append(f"🎯 POINT VISÉ : {sens}  |  Entrée ≈ {px(entree)}{cible}")
+        l.append(f"🎯 POINT VISÉ : {sens} | Entrée ≈ {px(o['e'])} | TP1 {px(o['tp1'])} | SL {px(o['sl'])}")
     elif r["confirme"]:
         sens = "🟩 LONG" if r["confirme"] == 1 else "🟥 SHORT"
-        try:
-            zone_cible = zone_repli(r, r["confirme"])
-            l.append(f"🎯 ZONE À SURVEILLER : {sens}  |  ≈ {px(zone_cible['e'])} (indicatif, pas une entrée)")
-        except (KeyError, TypeError, ValueError, IndexError):
-            l.append(f"🎯 DIRECTION : {sens}  |  Point d'entrée en attente du setup")
+        l.append(f"🎯 DIRECTION À SURVEILLER : {sens} | Point d'entrée après validation du déclencheur")
     else:
-        l.append("🎯 POINT VISÉ : en attente d'un biais 4h / 1h confirmé")
+        l.append("🎯 POINT VISÉ : aucun tant que le biais 1h / 4h n'est pas confirmé")
     if r["confirme"] and not tr and len(r["b5"]) >= 22:
         l.append(ligne_cassure(r, r["confirme"]))
+    if "Prochaine entrée" not in raison and not tr:
+        l.append(prochaine(r, cle))
     return "\n".join(l)
-
 def strategie_mtf(r):
     """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
     fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
@@ -1061,6 +1055,77 @@ TRAD = {
 "au marché": "at market", "ordre limite": "limit order", "Entrée :": "Entry:", "Stop :": "SL:", "Gain/risque ≈": "Reward/risk ≈",
 "⬆️ ACHAT": "⬆️ BUY", "⬇️ VENTE": "⬇️ SELL", "Prochaine news": "Next news", "📍 Prix": "📍 Price", "👉 Prix": "👉 Price",
 ", stop": ", SL", 
+
+# Analyse Telegram complète — libellés et plan multi-timeframe
+"📡 LECTURE DU MARCHÉ": "📡 MARKET OVERVIEW",
+"🟢 Biais haussier confirmé": "🟢 Bullish bias confirmed",
+"🔴 Biais baissier confirmé": "🔴 Bearish bias confirmed",
+"🟠 Pas de biais confirmé en 1h / 4h": "🟠 No confirmed 1h / 4h bias",
+"📊 INDICATEURS PAR UNITÉ DE TEMPS": "📊 TIMEFRAME INDICATORS",
+"📊 INDICATEURS / UNITÉS DE TEMPS": "📊 INDICATORS / TIMEFRAMES",
+"📈 RSI :": "📈 RSI:",
+"RSI :": "RSI:",
+"🧭 CONFIRMATION DE TENDANCE": "🧭 TREND CONFIRMATION",
+"Alignement 1h + 4h :": "1h + 4h alignment:",
+"CONFIRMÉ": "CONFIRMED",
+"EN ATTENTE": "PENDING",
+"Zone Daily :": "Daily zone:",
+"Zone Weekly :": "Weekly zone:",
+"🧭 PLAN MULTI-TIMEFRAME": "🧭 MULTI-TIMEFRAME PLAN",
+"🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY",
+"🏔 Tendance principale 4 h :": "🏔 Main 4h trend:",
+"📅 Tendance Daily :": "📅 Daily trend:",
+"🔁 Confirmation 1 h :": "🔁 1h confirmation:",
+"ℹ️ Contexte 15 min": "ℹ️ 15m context",
+"🎯 Déclencheur 5 min": "🎯 5m trigger",
+"✅ Tendance VALIDÉE": "✅ Trend CONFIRMED",
+"Le 15 min fait son repli : l'entrée n'est PAS encore là": "The 15m is pulling back: entry is NOT confirmed yet",
+"✅ VALIDÉ": "✅ CONFIRMED",
+"➖ Pas de tendance de fond en 4 h": "➖ No primary 4h trend",
+"⛔ Rien de validé : on ne trade pas": "⛔ Nothing confirmed: no trade",
+"↩️ 1 h en opposition à la tendance de fond": "↩️ 1h conflicts with the main trend",
+"⛔ On attend la confirmation 1 h": "⛔ Waiting for 1h confirmation",
+"en préparation — ⛔ PAS ENCORE VALIDÉ": "preparing — ⛔ NOT CONFIRMED YET",
+"Il manque la confirmation 1 h": "1h confirmation is still missing",
+"━━━━━━━━━━━━━━━━━━": "━━━━━━━━━━━━━━━━━━",
+"🌍 NIVEAUX & CONTEXTE": "🌍 LEVELS & CONTEXT",
+"📏 Plus haut d'hier :": "📏 Yesterday's high:",
+"📏 Plus bas d'hier :": "📏 Yesterday's low:",
+"🌏 Range Asie - plus haut :": "🌏 Asia range - high:",
+"🌏 Range Asie - plus bas :": "🌏 Asia range - low:",
+"🧲 FVG": "🧲 FVG",
+"haussière": "bullish",
+"baissière": "bearish",
+"Basse": "Low",
+"Haute": "High",
+"🟨 ZONE DE PRÉPARATION": "🟨 PREPARATION ZONE",
+"Limite basse :": "Lower limit:",
+"Limite haute :": "Upper limit:",
+"┏━━━━━━━━ 🚦 DÉCISION ALIGN ━━━━━━━━┓": "┏━━━━━━━━ 🚦 ALIGN DECISION ━━━━━━━━┓",
+"🎯 POSITION EN COURS :": "🎯 OPEN POSITION:",
+"🎯 POINT VISÉ :": "🎯 TARGET SETUP:",
+"🎯 DIRECTION À SURVEILLER :": "🎯 DIRECTION TO WATCH:",
+"🎯 POINT D'ENTRÉE": "🎯 ENTRY POINT",
+"aucun tant que le biais 1h / 4h n'est pas confirmé": "none until the 1h / 4h bias is confirmed",
+"Déclencheur : clôture": "Trigger: candle close",
+"Prochaine entrée :": "Next entry:",
+"heure de Paris": "Paris time",
+"Annonces importantes aujourd'hui": "Important announcements today",
+"Aucune annonce majeure US aujourd'hui.": "No major US announcements today.",
+"NEWS USA DANS 1 H": "US NEWS IN 1 HOUR",
+"⚠️⚠️ NEWS USA dans": "⚠️⚠️ US NEWS in",
+"🚨🚨🚨 NEWS DANS": "🚨🚨🚨 NEWS IN",
+"RÉACTION À LA NEWS": "REACTION TO NEWS",
+"Pas de nouvelle position": "No new position",
+"Ne touche à rien": "Do not touch anything",
+"News passée": "News passed",
+"Le bot reprend la recherche d'entrées.": "The bot is resuming its search for entries.",
+"Plus aucune annonce ni discours cette semaine": "No more announcements or speeches this week",
+"Prochaines news": "Upcoming news",
+"Rien d'ici": "Nothing in the next",
+"Calendrier économique indisponible": "Economic calendar unavailable",
+"📰 News : calendrier indisponible": "📰 News: calendar unavailable",
+
 }
 
 LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
@@ -1991,8 +2056,8 @@ def traiter(etat, chats, updates):
         if cid in etat.get("prospects", []):
             etat["prospects"].remove(cid)
         if cid not in chats:
+            # Inscription silencieuse : aucun message d'activation n'est envoyé.
             chats.add(cid)
-            telegram("sendMessage", chat_id=cid, text="✅ ALIGN MTF BOT activé. Mes positions BTC et Gold arrivent ici.\n🔔 Active la cloche (notifications) pour ne rien louper\n⬇️ Utilise les boutons en bas.\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
         txt = msg.get("text", "").lower().replace("é", "e")
         if cid in etat.get("attente_tv", []) and msg.get("text") and not any(k in txt for k in ("analyse", "resultat", "rentre", "sorti", "indicateur")):
             recevoir_pseudo(etat, cid, msg["text"])
