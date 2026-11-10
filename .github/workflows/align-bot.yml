@@ -1,25 +1,25 @@
 name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
 
 on:
-  push:                     # chaque mise à jour du bot le redémarre tout seul avec la nouvelle version
+  push:
     branches: [main]
     paths: ["align-bot/**", ".github/workflows/align-bot.yml"]
   schedule:
-    - cron: "*/5 * * * *"   # relance de secours : si le bot s'arrête, il repart en moins de 5 min
-  workflow_dispatch:        # bouton « Run workflow » pour tester à la main
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
-  models: read        # IA gratuite GitHub Models (avis, explications d'entrée, leçons)
+  models: read
 
 concurrency:
   group: align-bot
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}   # mise à jour ou lancement manuel = remplace l'ancien bot ; la relance de secours attend son tour
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   signaux:
     runs-on: ubuntu-latest
-    timeout-minutes: 355     # chaque lancement tourne 5 h 40 en continu (dépôt public = minutes GitHub gratuites)
+    timeout-minutes: 355
     defaults:
       run:
         working-directory: align-bot
@@ -27,20 +27,64 @@ jobs:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: align-bot
+
       - name: Récupérer la mémoire du robot
         uses: actions/cache/restore@v4
         with:
           path: align-bot/state.json
           key: align-etat-${{ github.run_id }}
           restore-keys: align-etat-
+
+      - name: Vérifier Telegram et envoyer un accusé de démarrage
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.parse
+          token = os.environ.get("TELEGRAM_TOKEN", "").strip()
+          if not token:
+              raise SystemExit("ÉCHEC: secret TELEGRAM_TOKEN absent")
+          state = {}
+          try:
+              with open("state.json", encoding="utf-8") as f:
+                  state = json.load(f)
+          except FileNotFoundError:
+              pass
+          recipients = state.get("proprio") or []
+          fallback = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+          if fallback:
+              recipients = list(recipients) + [fallback]
+          recipients = list(dict.fromkeys(str(x).strip() for x in recipients if str(x).strip()))
+          if not recipients:
+              raise SystemExit("ÉCHEC: aucun propriétaire Telegram connu. Ajouter le secret TELEGRAM_CHAT_ID dans GitHub Actions.")
+          base = "https://api.telegram.org/bot" + token + "/"
+          def call(method, data=None):
+              body = urllib.parse.urlencode(data or {}).encode()
+              req = urllib.request.Request(base + method, data=body)
+              with urllib.request.urlopen(req, timeout=20) as response:
+                  payload = json.loads(response.read().decode())
+              if not payload.get("ok"):
+                  raise RuntimeError(method + ": Telegram a répondu ok=false")
+              return payload["result"]
+          bot = call("getMe")
+          print("TELEGRAM_API_OK bot=@" + bot.get("username", "unknown"))
+          message = "✅ ALIGN : démarrage de production confirmé. API Telegram joignable. Vérification du processus d’analyse BTC + Gold en cours."
+          delivered = 0
+          for chat_id in recipients:
+              call("sendMessage", {"chat_id": chat_id, "text": message, "disable_notification": "true"})
+              delivered += 1
+          print("TELEGRAM_HEARTBEAT_DELIVERED recipients=" + str(delivered))
+
       - name: Analyse BTC + Gold et envoi Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          DUREE_SEC: "20400"     # 5 h 40 : le bot reste allumé, une analyse BTC + Gold par minute
+          DUREE_SEC: "20400"
           PAUSE_SEC: "20"
         run: python3 align_bot.py
+
       - name: Sauver la mémoire du robot
         if: always()
         uses: actions/cache/save@v4
