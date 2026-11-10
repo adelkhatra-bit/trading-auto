@@ -82,7 +82,7 @@ jobs:
         continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python3 align-bot/ai_healthcheck.py
+        run: python3 ai_healthcheck.py
 
       - name: Analyse BTC + Gold et envoi Telegram
         env:
