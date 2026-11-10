@@ -470,15 +470,14 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     biais = ("🟢 Biais haussier confirmé" if maj == 1 else
              "🔴 Biais baissier confirmé" if maj == -1 else
              "🟠 Pas de biais confirmé en 1 h / 4 h")
-    l = [entete, "━━━━━━━━━━━━━━━━━━", "📡 LECTURE DU MARCHÉ", biais,
-         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS"]
-    l += [f"{nom} : {fl(D[i])}" for nom, i in ut]
-    l += [f"RSI {nom} : {R[i]:.0f}" for nom, i in ut]
-    l += ["━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
-          f"Alignement 1 h + 4 h : {n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
-          f"Zone Daily : {zone_txt(r['posD'])}",
-          f"Zone Weekly : {zone_txt(r['posW'])}",
-          "━━━━━━━━━━━━━━━━━━", "🧭 PLAN MULTI-TIMEFRAME"] + strategie_mtf(r)
+    # Lecture compacte : les six UT et leurs RSI tiennent sur deux lignes.
+    ut_labels = [("1m", 0), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("D", 10)]
+    ligne_ut = "  ".join(f"{nom} {fl(D[i])}" for nom, i in ut_labels)
+    ligne_rsi = "RSI  " + " | ".join(f"{nom} {R[i]:.0f}" for nom, i in ut_labels)
+    l = [entete, "━━━━━━━━━━━━━━━━━━",
+         f"📊 {ligne_ut}", ligne_rsi,
+         f"🧭 Tendance 4h {fl(D[9])}  |  Confirmation 1h {fl(D[7])}  |  {n_ok}/2 {'✅' if r['confirme'] else '⏳'}",
+         f"🌐 Daily {zone_txt(r['posD'])}  |  Weekly {zone_txt(r['posW'])}"]
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
     ph_, pb_ = nc.get("plus haut d'hier"), nc.get("plus bas d'hier")
     contexte = []
@@ -494,15 +493,14 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     proches = sorted([f for f in r.get("fvg", []) if abs((f[0] + f[1]) / 2 - p_) <= 3 * r["atr"]],
                      key=lambda f: abs((f[0] + f[1]) / 2 - p_))
     for lo, hi, ut_fvg, dd in proches[:2]:
-        contexte.append(f"🧲 FVG {ut_fvg} : {'haussière' if dd == 1 else 'baissière'}")
-        contexte.append(f"   Borne basse : {px(lo)}")
-        contexte.append(f"   Borne haute : {px(hi)}")
+        contexte.append(f"🧲 FVG {ut_fvg} {'⬆️' if dd == 1 else '⬇️'} : {px(lo)}–{px(hi)}")
     if r.get("distrib"):
         contexte.append("⚠️ Distribution possible : essoufflement en zone haute (divergence RSI)")
     if r.get("accum"):
         contexte.append("⚠️ Accumulation possible : soutien en zone basse (divergence RSI)")
     if contexte:
-        l += ["━━━━━━━━━━━━━━━━━━", "🌍 NIVEAUX & CONTEXTE"] + contexte
+        # Contexte et niveaux restent présents, mais sans répétition des mêmes unités de temps.
+        l += ["━━━━━━━━━━━━━━━━━━", "🌍 CONTEXTE"] + contexte
     o = (cle or {}).get("ordre")
     if r["confirme"] and o and not (cle or {}).get("trade"):
         l += ["━━━━━━━━━━━━━━━━━━", "🟨 ZONE DE PRÉPARATION",
