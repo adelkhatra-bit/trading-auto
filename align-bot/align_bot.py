@@ -353,9 +353,10 @@ def analyser(pair):
     dirPlan = 1 if zoneHaut else -1 if zoneBas else 1 if longT >= 2 else -1 if longT <= -2 else 1 if retHaut else -1 if retBas else sens
     nom = ("★ ACHAT FORT" if fortHaut else "EXPLOSION ▲" if explHaut else "ZONE DE REBOND ▲") if sigHaut else \
           ("★ VENTE FORTE" if fortBas else "EXPLOSION ▼" if explBas else "ZONE DE RETOURNEMENT ▼") if sigBas else ""
-    # ═══ STRATÉGIE : alignement 15m + 1h + 4h ═══
-    d15, d1h, d4h = dirs[4], dirs[7], dirs[9]
-    confirme = d15 if d15 != 0 and d15 == d1h == d4h else 0
+    # ═══ STRATÉGIE : 4h = tendance principale, 1h = confirmation ═══
+    d1h, d4h = dirs[7], dirs[9]
+    # Le 15m reste informatif et ne bloque jamais un signal.
+    confirme = d4h if d4h != 0 and d1h == d4h else 0
     # Contexte Daily / Weekly : où est le prix dans sa zone (0 = tout en bas, 1 = tout en haut)
     w1 = bougies(pair, 10080)
     def position(bars, n):
@@ -390,7 +391,8 @@ def analyser(pair):
             asie = (max(x["h"] for x in za), min(x["l"] for x in za))
     except Exception:
         pass
-    return dict(fvg=fvg, niv_cles=niv_cles, asie=asie, distrib=distrib, accum=accum, div4h=div4h, b5=m5[-12:], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
+    atr5 = atr(m5, 14)[-1] if len(m5) >= 15 else a
+    return dict(fvg=fvg, niv_cles=niv_cles, asie=asie, distrib=distrib, accum=accum, div4h=div4h, b5=m5[-30:], atr5=atr5, ema5=ema([x["c"] for x in m5], 20)[-1], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
                 grosses=grosses, b15=b[-30:], ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
@@ -423,10 +425,10 @@ PIP = {"BTC": 1.0, "GOLD": 0.1}      # 1 pip : 1 $ sur le BTC, 0,10 $ sur l'or
 SENS = {1: "🟩 LONG ⬆️", -1: "🟥 SHORT ⬇️"}
 
 def alignement(r):
-    """Sens majoritaire sur 15m / 1h / 4h et nombre d'UT d'accord (0 à 3)."""
-    trio = [r["dirs"][4], r["dirs"][7], r["dirs"][9]]
-    maj = 1 if trio.count(1) >= 2 else -1 if trio.count(-1) >= 2 else 0
-    return maj, (trio.count(maj) if maj else 0)
+    """Le 1h confirme la tendance 4h ; le 15m n'est pas un filtre."""
+    d1h, d4h = r["dirs"][7], r["dirs"][9]
+    maj = d4h if d4h != 0 and d1h == d4h else 0
+    return maj, (2 if maj else 0)
 
 def texte_etat(nom_marche, r, cle=None, vip=True):
     """Analyse courte : 1 info par ligne, verdict clair à la fin."""
@@ -436,7 +438,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     ut = [("1 min", 0), ("5 min", 2), ("15 min", 4), ("1 h", 7), ("4 h", 9), ("Daily", 10)]
     prix = r["m1"][-1]["c"]
     sens_txt = ("📈 Le marché MONTE" if maj == 1 else "📉 Le marché DESCEND" if maj == -1 else "➖ Le marché hésite")
-    coches = " ".join("✅" if x == maj and maj else "⏳" for x in (D[4], D[7], D[9]))
+    coches = " ".join("✅" if x == maj and maj else "⏳" for x in (D[7], D[9]))
     if not vip:
         etat_pos = ("🔥 Une position VIP est EN COURS" if (cle or {}).get("trade") else
                     "👀 Une position VIP se PRÉPARE" if (cle or {}).get("ordre") and r["confirme"] else "⏳ Pas de position pour l'instant")
@@ -449,7 +451,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     l = [f"{ICONE.get(nom_marche, '📊')} {nom_marche}   {px(prix)}", f"{sens_txt}   ({coches})", "━━━━━━━━━━━━"]
     l += [f"{nom:<7} {fl(D[i])}   RSI {R[i]:.0f}" for nom, i in ut]
     l += ["━━━━━━━━━━━━",
-          f"🧭 Alignement   {n_ok}/3 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
+          f"🧭 Alignement 1h/4h   {n_ok}/2 {'✅' if r['confirme'] else '⏳'} {fl(maj) if maj else ''}".rstrip(),
           f"📍 Daily {zone_txt(r['posD'])} • Weekly {zone_txt(r['posW'])}",
           r.get("news") or "📰 News : calendrier indisponible", "━━━━━━━━━━━━"] + strategie_mtf(r)
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
@@ -473,37 +475,32 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}" if vip else "🟨 Zone   🔒🔒🔒")
     titre, raison = verdict(r, cle)
     l += ["━━━━━━━━━━━━", titre, raison]
-    if r["confirme"] and not (cle or {}).get("trade") and len(r["b15"]) >= 22:
+    if r["confirme"] and not (cle or {}).get("trade") and len(r["b5"]) >= 22:
         l.append(ligne_cassure(r, r["confirme"]))
     if "Prochaine entrée" not in raison and not (cle or {}).get("trade"):
         l.append(prochaine(r, cle))
     return "\n".join(l)
 
 def strategie_mtf(r):
-    """Stratégie multi-unités de temps : 4 h + Daily = le FOND, 1 h = la CONFIRMATION,
-    15 min = le DÉCLENCHEUR, 5 min = le TIMING. Une position n'est VALIDÉE que si 15 min + 1 h + 4 h vont dans le même sens."""
+    """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
     fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
     D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
-    fond = d4h if d4h and dD != -d4h else 0
+    fond = d4h
     l = ["🧭 STRATÉGIE MULTI-UT",
-         f"🏔 Fond 4 h + Daily   {fl(d4h)} {fl(dD)}",
+         f"🏔 Tendance principale 4 h   {fl(d4h)} • Daily {fl(dD)}",
          f"🔁 Confirmation 1 h   {fl(d1h)}",
-         f"🎯 Déclencheur 15 min   {fl(d15)}",
-         f"⏱ Timing 5 min   {fl(d5)}"]
+         f"ℹ️ Contexte 15 min   {fl(d15)}",
+         f"🎯 Déclencheur 5 min   {fl(d5)}"]
     if r["confirme"] and r.get("repli"):
         l.append(f"✅ Tendance VALIDÉE   {SENS[r['confirme']]}\n⏳ Le 15 min fait son repli : l'entrée n'est PAS encore là")
     elif r["confirme"]:
         l.append(f"✅ VALIDÉ   {SENS[r['confirme']]}")
     elif not d4h:
         l.append("➖ Pas de tendance de fond en 4 h\n⛔ Rien de validé : on ne trade pas")
-    elif dD == -d4h:
-        l.append("⚖️ 4 h et Daily en désaccord\n⛔ Rien de validé : on attend")
-    elif d15 == -fond or d1h == -fond:
-        l.append(("↩️ Repli contre la tendance de fond" if fond == 1 else "↩️ Rebond contre la tendance de fond") + f" ({'15 min' if d15 == -fond else '1 h'})\n"
-                 f"⏳ {SENS[fond]} possible PLUS TARD — ⛔ PAS ENCORE VALIDÉ\n"
-                 f"✅ Validé quand le 1 h PUIS le 15 min repassent {fl(fond)}")
+    elif d1h == -fond:
+        l.append("↩️ 1 h en opposition à la tendance de fond\n⛔ On attend la confirmation 1 h")
     else:
-        l.append(f"⏳ {SENS[fond]} en préparation — ⛔ PAS ENCORE VALIDÉ\n✅ Il manque {'le 1 h' if d1h != fond else 'le 15 min'} {fl(fond)}")
+        l.append(f"⏳ {SENS[fond]} en préparation — ⛔ PAS ENCORE VALIDÉ\n✅ Il manque la confirmation 1 h {fl(fond)}")
     return l
 
 def bloque_dw(r, d, prix=None):
@@ -525,7 +522,7 @@ def session_de(ts):
     return "Asie" if h < 8 else "Londres" if h < 14 else "New York" if h < 22 else "Asie"
 
 def profil_trade(m, tr, r):
-    return {"m": m, "type": "cassure" if tr.get("src") == "cassure 15 min" else "repli",
+    return {"m": m, "type": "cassure" if tr.get("src") == "cassure 5 min" else "repli",
             "d": tr["d"], "session": session_de(time.time()), "haut": bool(r["posD"] >= 0.75 if tr["d"] == 1 else r["posD"] <= 0.25)}
 
 def stats_profil(p, cles=("m", "type", "d", "session")):
@@ -602,7 +599,7 @@ def alerte_repli(out, m, r, cle, d, p):
 def rejet(r, d, e, a):
     """Mèche de rejet + clôture : la dernière bougie 5 min (ou 15 min) terminée a piqué dans la zone
     puis CLÔTURÉ en repartant dans le sens (grande mèche du côté de la zone, clôture du bon côté)."""
-    for b in (r["b5"][-1:] + r["b15"][-1:]):
+    for b in r["b5"][-1:]:
         rng = max(b["h"] - b["l"], 1e-9)
         if d == 1:
             meche = min(b["o"], b["c"]) - b["l"]
@@ -627,19 +624,24 @@ def objectifs(r, d, e, risque):
     return t1, t2
 
 def niveau_cassure(r, d):
-    """Niveau à casser (vue 15 min) : le plus haut (LONG) ou le plus bas (SHORT) des 20 dernières bougies 15 min."""
-    b = r["b15"][-21:-1]
+    """Plus haut/bas des 20 dernières bougies 5m clôturées."""
+    b = r["b5"][-21:-1]
+    if len(b) < 20:
+        return None
     return max(x["h"] for x in b) if d == 1 else min(x["l"] for x in b)
 
 def plan_cassure(r, d):
-    """Entrée sur CASSURE : une bougie 15 min vient de CLÔTURER au-delà du niveau. Renvoie le plan ou None."""
-    b = r["b15"]; a = r["atr"]
+    """Entrée sur cassure après clôture d'une bougie 5m au-delà des 20 précédentes."""
+    b = r["b5"]; a = r.get("atr5", r["atr"])
     if len(b) < 22:
         return None
     L = niveau_cassure(r, d)
+    if L is None:
+        return None
     c1, c0 = b[-1]["c"], b[-2]["c"]
     casse = (c1 > L + 0.05 * a and c0 <= L) if d == 1 else (c1 < L - 0.05 * a and c0 >= L)
-    trop = (r["r15"] >= 78) if d == 1 else (r["r15"] <= 22)
+    rsi5 = r["r5"][-1]
+    trop = (rsi5 >= 78) if d == 1 else (rsi5 <= 22)
     if not casse or trop:
         return None
     e = r["m1"][-1]["c"]
@@ -657,21 +659,22 @@ def plan_cassure(r, d):
     t1, t2 = objectifs(r, d, e, risque)
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
-                src="cassure 15 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=bougie_protegee(b[-3:], d, sl), sl_ut="15 min")
+                src="cassure 5 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=bougie_protegee(b[-3:], d, sl), sl_ut="5 min")
 
 def ligne_cassure(r, d):
     L = niveau_cassure(r, d)
-    return (f"🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(L)}\n"
-            f"   → {SENS[d]} sur la cassure")
+    return (f"🅱️ Ou CASSURE : si une bougie 5 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(L)}\n"
+            f"   → {SENS[d]} après confirmation")
 
 def zone_repli(r, d):
     """Point d'entrée du repli (même calcul que l'agent)."""
     return point_entree(r, d, r["m1"][-1]["c"])
 
 def etire(r, d):
-    """Le prix est déjà parti loin (RSI 15 min en excès ou trop loin de l'EMA 20) : entrée loupée."""
-    p = r["m1"][-1]["c"]
-    return (r["r15"] >= 70 or p - r["ema15"] > 2 * r["atr"]) if d == 1 else (r["r15"] <= 30 or r["ema15"] - p > 2 * r["atr"])
+    """Évite de poursuivre un mouvement déjà étiré selon le timing 5m, jamais selon le 15m."""
+    p = r["m1"][-1]["c"]; a = r.get("atr5", r["atr"]); e = r.get("ema5", r["ema15"])
+    r5 = r["r5"][-1]
+    return (r5 >= 80 or p - e > 2 * a) if d == 1 else (r5 <= 20 or e - p > 2 * a)
 
 def prochaine(r, cle):
     """Prochaine entrée attendue, avec la flèche et la couleur."""
@@ -684,10 +687,10 @@ def prochaine(r, cle):
     if d:
         return f"🔜 Prochaine entrée   {SENS[d]}"
     maj, n_ok = alignement(r)
-    fond = r["dirs"][9] if r["dirs"][9] and r["dirs"][10] != -r["dirs"][9] else 0
+    fond = r["dirs"][9]
     if not maj and fond:
-        return f"🔜 Prochaine entrée   {SENS[fond]}   (⛔ pas encore validée)"
-    return f"🔜 Prochaine entrée   {SENS[maj]}   ({n_ok}/3 • ⛔ pas encore validée)" if maj else "🔜 Prochaine entrée   ➖ pas encore de sens"
+        return f"🔜 Prochaine entrée   {SENS[fond]}   (⛔ 1h non confirmée)"
+    return f"🔜 Prochaine entrée   {SENS[maj]}   ({n_ok}/2 • ⛔ pas encore validée)" if maj else "🔜 Prochaine entrée   ➖ pas encore de sens"
 
 def verdict(r, cle):
     """Réponse claire pour l'utilisateur : peut-il entrer maintenant ou non ?"""
@@ -704,14 +707,14 @@ def verdict(r, cle):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
     al = r["confirme"]
     if not al:
-        return ("🔴🔴 N'ENTRE PAS", "⏳ 15 min / 1 h / 4 h pas alignées\n🔔 Je te préviens dès que c'est bon")
+        return ("🔴🔴 N'ENTRE PAS", "⏳ Le 1h ne confirme pas la tendance 4h\n🔔 Je te préviens dès que c'est validé")
     if etire(r, al):
         return ("⛔ TROP TARD — le marché est déjà parti", "😎 Patience, on trouve une autre entrée\n" + prochaine(r, cle))
-    if not cle.get("ordre") and bloque_dw(r, al, zone_repli(r, al)["e"]):      # une position déjà préparée n'est pas annulée par un petit va-et-vient du Daily
-        return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Risque de rebond : pas de {'long' if al == 1 else 'short'} ici")
+    if bloque_dw(r, al, r["m1"][-1]["c"]) or (not cle.get("ordre") and bloque_dw(r, al, zone_repli(r, al)["e"])):
+        return ("🔴🔴 N'ENTRE PAS", f"📍 Prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly\n🔄 Pas de poursuite du {'LONG' if al == 1 else 'SHORT'} en zone extrême. Attendre le repli ou une inversion confirmée.")
     zone = bool(cle.get("attente_rsi"))
     return (f"🟡 PATIENCE   {SENS[al]} bientôt\n🚦 ⏳ JE N'ENTRE PAS ENCORE" + (f"\n💰 TP visé ≈ {px(cle['ordre']['tp1'])}" if cle.get("ordre") else ""),
-            f"✅ 15 min / 1 h / 4 h alignées\n{'✅' if zone else '⏳'} Prix dans la zone 🟨\n⏳ Surcharge RSI 5 min\n✅ Pas de news proche\n"
+            f"✅ Tendance 4h + confirmation 1h\n{'✅' if zone else '⏳'} Prix dans la zone 🟨\n⏳ Rejet / clôture 5 min requis\n✅ Pas de news proche\n"
             "🚦 Attends mon 🟢 J'ENTRE MAINTENANT")
 
 # ───────── Langue : chaque utilisateur choisit 🇫🇷 / 🇬🇧, tout le système suit ─────────
@@ -764,7 +767,7 @@ TRAD = {
 "🙅 On ne court pas après la bougie": "🙅 We don't chase the candle", "📰 C'est l'effet de la news : encore plus de prudence": "📰 It's the news effect: extra caution",
 "🧘 Tu es en position : reste cool, ton SL est en place": "🧘 You're in a trade: stay cool, your SL is set", "⚠️ C'est CONTRE ta position : ne bouge pas ton SL, je surveille": "⚠️ It's AGAINST your trade: don't move your SL, I'm watching",
 "✅ Dans le sens de la tendance :": "✅ With the trend:", "🎯 Point d'entrée visé : retour vers": "🎯 Target entry: back to", "ancien plus bas": "previous low", "ancien plus haut": "previous high",
-"⭐ Encore mieux : milieu de la mèche": "⭐ Even better: middle of the wick", "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE (5 / 15 min)": "⏳ Patience: I only enter on a rejection wick + CLOSE (5 / 15 min)",
+"⭐ Encore mieux : milieu de la mèche": "⭐ Even better: middle of the wick", "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE 5 min": "⏳ Patience: I only enter on a rejection wick + CLOSE (5 / 15 min)",
 "🔔 Je t'envoie 🟢 J'ENTRE MAINTENANT au bon moment": "🔔 I'll send 🟢 I'M ENTERING NOW at the right time", "⚠️ CONTRE la tendance de fond": "⚠️ AGAINST the main trend",
 "tant que 15 min / 1 h / 4 h ne se retournent pas": "while 15 min / 1 h / 4 h don't turn", "🔔 Je te préviens si ça se retourne": "🔔 I'll tell you if it turns",
 "✅ Validé quand 15 min + 1 h + 4 h vont dans le même sens": "✅ Validated when 15 min + 1 h + 4 h agree",
@@ -885,9 +888,9 @@ TRAD = {
 "comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction.": "compressed on several timeframes: likely breakout at the open, wait for direction.",
 "⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif.": "⚠️ CME futures closed right now (Topstep): signal for information only.",
 "(en cours)": "(now)", ": la zone a été traversée sans rejet": ": the zone was crossed with no rejection", "🙅 Pas d'entrée, heureusement": "🙅 No entry, luckily", "🔎 Je recalcule le prochain point plus bas": "🔎 Recalculating the next point lower", "🔎 Je recalcule le prochain point plus haut": "🔎 Recalculating the next point higher", ": la mèche de rejet est trop grande (SL trop loin)": ": the rejection wick is too big (SL too far)", "😎 Je ne prends pas ce risque, j'attends mieux": "😎 I'm not taking that risk, waiting for better", "🧠 L'avis de l'IA ALIGN": "🧠 ALIGN AI's view", "🧠 L'IA ALIGN sur cette entrée": "🧠 ALIGN AI on this entry", "🧠 La leçon de l'IA ALIGN": "🧠 ALIGN AI's lesson", ": RSI en surcharge ✅ — j'attends la MÈCHE DE REJET et la CLÔTURE ⏳": ": RSI overextended ✅ — waiting for the REJECTION WICK and the CLOSE ⏳",
-"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en remontant": "👀 5 / 15-min chart: a candle that dips into the zone then closes back up",
-"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture en redescendant": "👀 5 / 15-min chart: a candle that spikes into the zone then closes back down",
-"Mèche de rejet + clôture (5 / 15 min)": "Rejection wick + close (5 / 15 min)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
+"👀 Vue 5 min : une bougie qui pique dans la zone puis clôture en remontant": "👀 5 / 15-min chart: a candle that dips into the zone then closes back up",
+"👀 Vue 5 min : une bougie qui pique dans la zone puis clôture en redescendant": "👀 5 / 15-min chart: a candle that spikes into the zone then closes back down",
+"Mèche de rejet + clôture (5 min)": "Rejection wick + close (5 / 15 min)", "🅰️ Repli vers ≈": "🅰️ Pullback to ≈", "⚠️ Grosses unités en excès : si 15 min / 1 h / 4 h se retournent →": "⚠️ Big timeframes overextended: if 15 min / 1 h / 4 h turn →", " possible": " possible", "📉 Repli attendu : de ≈": "📉 Expected pullback: from ≈", "📈 Rebond attendu : de ≈": "📈 Expected bounce: from ≈", " vers ≈ ": " to ≈ ", "dans cette zone": "in this zone", "🧠 Mémoire du bot : ce type de position a gagné": "🧠 Bot memory: this type of position won",
 "cassure vue, mais je passe mon tour": "breakout seen, but I'm skipping", "prix dans la zone, mais je passe mon tour": "price in the zone, but I'm skipping",
 "📚 Ce type de position a perdu trop souvent": "📚 This type of position lost too often", " gagnés": " won", ": je note ce": ": I'm noting this",
 "en session": "in session", "🧠 Bilan de ce type :": "🧠 Record for this type:", "💡 Leçon : je serai plus prudent sur ce type de position": "💡 Lesson: I'll be more careful with this type of position",
@@ -1118,17 +1121,17 @@ REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
           "❗ Pas un conseil en investissement\n"
           "2️⃣ Les prix changent selon la plateforme (FTMO, Topstep, broker…)\n"
           "👉 Suis les mèches et les %, pas le prix exact\n"
-          "3️⃣ ⏱ Mets-toi en vue 15 minutes\n"
-          "4️⃣ 🛑 Toujours un stop, derrière la mèche indiquée\n"
-          "5️⃣ 📰 Pas de trade 15 min avant et après une news\n"
+          "3️⃣ ⏱ Tendance 4h • confirmation 1h • entrée après clôture 5m\n"
+          "4️⃣ 🛑 Toujours un SL, derrière la mèche indiquée. Ne jamais l'élargir\n"
+          "5️⃣ 📰 Pas de nouvelle entrée 15 min avant/après une news majeure détectée\n"
           "6️⃣ 💰 TP1 touché → stop à l'entrée\n"
-          "7️⃣ ⚖️ Petit risque : 1 à 2 % du compte maximum par position\n"
+          "7️⃣ ⚖️ Risque conseillé : 0,5 à 1 % du compte par position ; jamais sans SL\n"
           "8️⃣ ⚠️ Le trading peut faire perdre tout le capital\n"
           "━━━━━━━━━━━━\n"
           "📰 Je t'envoie les news : pas de trade juste avant ni juste après\n"
           "🤖 Appuie sur ✅ Je suis rentré : ton coach te suit jusqu'au TP\n"
           "📈 Tes gains et tes pertes sont calculés tout seuls\n"
-          "🧩 L'indicateur TradingView : bouton 🧩 en bas\n"
+          "🧩 Indicateur TradingView : bouton 🧩 en bas (ne signifie pas que ses signaux sont reçus automatiquement)\n"
           "━━━━━━━━━━━━\n"
           "🤝 Partage à tes amis :\n"
           "👉 https://t.me/align_mtf_adel_bot")
@@ -1170,8 +1173,7 @@ def marche_demande(txt):
     return "BTC" if "btc" in t else "GOLD" if ("gold" in t or "or" in t.split()) else None
 
 def tendance_armee(r, cle):
-    """Une fois 15m + 1h + 4h alignés, la tendance reste « armée » pendant le repli :
-    le 15 min peut se retourner (c'est le repli qu'on attend) tant que le 4 h reste dans le sens et que le 1 h n'est pas contre."""
+    """Une fois 4h + 1h alignées, la tendance reste armée pendant le repli 5m tant que les deux UT ne s'inversent pas."""
     d = r["confirme"]
     if d:
         cle["arme"] = d
@@ -1224,10 +1226,12 @@ IA_FOURNISSEURS = [
     ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", "", False),
 ]
 IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "300"))
-IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style jeune et simple, "
-             "avec quelques emojis. Tu parles en bougies (vue 15 min, mèches, clôtures). Tu t'appuies UNIQUEMENT sur les données fournies : "
-             "aucun prix inventé, jamais de contradiction avec le verdict du bot (si le bot dit d'attendre, tu dis d'attendre). "
-             "Pas de promesse de gain, ce n'est pas un conseil financier.")
+IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style simple. "
+             "Architecture: 4h tendance principale, 1h confirmation, 15m contexte, 5m déclencheur après clôture; 1m sert au prix/monitoring. "
+             "Tu t'appuies UNIQUEMENT sur les données fournies : aucun prix inventé, jamais de contradiction avec le verdict du bot. "
+             "Si le prix est en haut de sa zone Daily/Weekly, près d'une résistance, avec divergence ou essoufflement, déconseille de poursuivre un LONG; "
+             "ne propose un SHORT que si le retournement est confirmé par les clôtures et le contexte 1h. "
+             "Une confluence en % n'est pas une probabilité de gain. Rappelle le SL et le risque. Pas de promesse de gain.")
 
 def _appel_ia(url, modele, cle, messages):
     corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 700, "messages": messages}).encode()
@@ -1295,7 +1299,7 @@ def donnees_ia(m, r, cle):
             "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
-            "niveau de cassure 15 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b15"]) >= 22 else None,
+            "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
 
 def avis_ia(etat, m, r, cle):
@@ -1311,9 +1315,9 @@ def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
 
 def markup_analyse(etat, m, r):
-    """Sous l'analyse : bouton « Je rentre dans la prochaine position » quand une entrée se prépare."""
-    cle = etat.get(m, {}); d = r["confirme"]
-    if d and not cle.get("trade") and cle.get("ordre") and not etire(r, d):
+    """Après chaque analyse, proposer le suivi de la prochaine position, même si le setup n'est pas encore prêt."""
+    cle = etat.get(m, {})
+    if not cle.get("trade"):
         return bouton_auto(m)
     return CLAVIER
 
@@ -1324,9 +1328,9 @@ def mmss(sec):
     sec = max(0, int(sec)); return f"{sec // 60} min {sec % 60:02d} s" if sec < 3600 else f"{sec // 3600} h {sec % 3600 // 60:02d}"
 
 def chrono_txt(m, r, cle, t0):
-    """Chronomètre en direct après 🎯 : où on en est, dans combien de temps, et le prochain rendez-vous (clôture 15 min)."""
+    """Chronomètre en direct : tendance 4h, confirmation 1h, déclencheur à la clôture 5m."""
     now = time.time(); p = r["m1"][-1]["c"]; d = r["confirme"]; a = r["atr"]
-    cloture = r["b15"][-1]["t"] + 1800 if r["b15"] else now      # fin de la bougie 15 min en cours
+    cloture = r["b5"][-1]["t"] + 300 if r.get("b5") else now      # prochaine échéance 5 min
     tr = cle.get("trade"); o = cle.get("ordre")
     l = [f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}   {px(p)}",
          f"🎯 Inscrit depuis {mmss(now - t0)}"]
@@ -1337,21 +1341,21 @@ def chrono_txt(m, r, cle, t0):
         etape, estim = "⏸ News dans moins de 15 min : pause", "⏳ Reprise juste après la news"
     elif not d:
         maj, n_ok = alignement(r)
-        etape, estim = f"1️⃣/4 🧭 Alignement {n_ok}/3 : j'attends 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné"
+        etape, estim = f"1️⃣/3 🧭 Tendance 4 h + confirmation 1 h : {n_ok}/2", "⏳ Pas d'entrée tant que le 1 h ne confirme pas le 4 h"
     elif etire(r, d):
         etape, estim = "1️⃣/4 🚀 Le marché est parti : j'attends le repli", f"↩️ Repli visé ≈ {px(r['ema15'])}"
     elif not o:
         etape, estim = "2️⃣/4 🔎 Je calcule la zone d'entrée", "⏳ Quelques instants"
     elif cle.get("attente_rsi") or cle.get("attente_rejet") or cle.get("prep"):
         etape = f"4️⃣/4 🟨 Prix dans la zone : j'entre dès qu'une bougie clôture {'en remontant' if (o or {}).get('d', d) == 1 else 'en redescendant'}"
-        estim = f"⚡ Décision à la clôture de la bougie 15 min de {heure(cloture - 900)} (clôture à {heure(cloture)})"
+        estim = f"⚡ Décision à la clôture de la bougie 5 min (à {heure(cloture)})"
     else:
         dist = abs(p - o["e"]); vit = max(a / 15, 1e-9)            # vitesse moyenne ≈ 1 ATR par 15 min
         etape = f"3️⃣/4 🟨 Le prix approche de la zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}"
         estim = f"⏳ Arrivée estimée ≈ {max(1, round(dist / vit))} min" if dist / vit < 240 else "⏳ Encore loin : ça peut prendre des heures"
     l += [etape, estim,
           statut_txt(0, o).strip(),
-          f"🕯 Prochaine clôture 15 min dans {mmss(cloture - now)}",
+          f"🕯 Prochaine clôture 5 min dans {mmss(cloture - now)}",
           f"⌛ Si rien avant {heure(t0 + CHRONO_MAX)} : j'annule ta réservation (pas d'entrée forcée)",
           f"🔄 Mis à jour à {heure(now)}:{datetime.datetime.fromtimestamp(now, PARIS).strftime('%S')}"]
     return "\n".join(l)
@@ -2316,7 +2320,7 @@ def annonces_et_sessions(etat, maintenant, derniers):
                            + ("💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains" if week else "💥 À la réouverture le prix peut sauter (écart)"))
     # Ouvertures de marché (jours de semaine)
     if jour.weekday() < 5:
-        for nom, zone, h, mn in (("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
+        for nom, zone, h, mn in (("Sydney", "Australia/Sydney", 10, 0), ("Tokyo", "Asia/Tokyo", 9, 0), ("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
             loc = datetime.datetime.now(ZoneInfo(zone)).replace(hour=h, minute=mn, second=0, microsecond=0)
             t_ouv = int(loc.timestamp())
             if 0 <= t_ouv - maintenant <= 15 * 60 and f"ouv{nom}{cle_j}" not in vus:
@@ -2406,6 +2410,7 @@ def fmt_trade(m, tr, p=None):
     za, zb = tr.get("za", tr["e"]), tr.get("zb", tr["e"])
     bougie = "en dessous de la dernière bougie basse" if d == 1 else "au-dessus de la dernière bougie haute"
     risque = abs(tr["e"] - tr["sl"]); gain = abs(tr["tp1"] - tr["e"])
+    risque_pct = risque / max(abs(tr["e"]), 1e-9) * 100
     barres = lambda x: "▮" * max(1, min(10, round(x / max(risque, 1e-9) * 2)))
     # Échelle des prix, du plus haut au plus bas
     pts = [(tr["sl"], "🛑", "STOP"), (tr["tp1"], "💰", "TP1"), (tr["tp2"], "🏁", "TP2")]
@@ -2416,12 +2421,13 @@ def fmt_trade(m, tr, p=None):
     pct = lambda v: f"{(v - tr['e']) / tr['e'] * 100:+.2f} %".replace(".", ",")
     meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
     return (f"{tete}\n"
-            f"⏱ Vue 15 minutes\n\n"
+            f"🧭 Tendance 4H • confirmation 1H • déclencheur 5M clôturé\n"
+            f"⏱ Vue d'entrée : 5 minutes (15M = contexte)\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
-            f"1️⃣ 👀 Mets-toi en vue 15 minutes\n"
-            + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (sous la structure 15 min)\n"
-               f"3️⃣ 🟨 Entrée {SENS[d]} : à la clôture de la bougie 15 min qui casse ≈ {px(tr.get('niveau', tr['e']))}\n"
-               if tr.get("src") == "cassure 15 min" else
+            f"1️⃣ 👀 Mets-toi en vue 5 minutes pour l'entrée\n"
+            + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (structure 5 min)\n"
+               f"3️⃣ 🟨 Entrée {SENS[d]} : après clôture 5 min au-delà de ≈ {px(tr.get('niveau', tr['e']))}\n"
+               if tr.get("src") == "cassure 5 min" else
                f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)}\n" +
                (f"3️⃣ 🟨 Entrée {SENS[d]} : MAINTENANT, à la clôture de la bougie de rejet ({tr.get('sl_ut', '5 min')} de {tr.get('sl_h', '')})\n" if tr.get("rejet") else
                 f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n"))
@@ -2429,7 +2435,9 @@ def fmt_trade(m, tr, p=None):
                if "projection" not in tr["n1"] else f"4️⃣ 💰 TP1 : environ {tr['rr']:.1f} fois ton risque\n")
             + (f"5️⃣ 🏁 TP2 : {tr['n2']} (vue {vue(tr['n2'])})\n" if "projection" not in tr["n2"] else "5️⃣ 🏁 TP2 : on laisse courir, je te guide\n")
             + duree_txt(tr) +
-            f"💡 BE : je te dis quand (bougie 15 min clôturée bien {'au-dessus' if d == 1 else 'en dessous'} de l'entrée)\n\n"
+            f"📉 Distance entrée → SL : {risque_pct:.2f} % du prix (pas le % du capital risqué)\n"
+            f"🛑 SL obligatoire : ne jamais l'élargir ni l'enlever. Respecte le niveau indiqué.\n"
+            f"💡 BE : alerte après confirmation de clôture, pas sur une mèche\n\n"
             f"📍 Repère prix {m} ({'XAUUSD spot' if m == 'GOLD' else 'BTC/USD'}) :\n{echelle}\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
 
@@ -2467,9 +2475,8 @@ def plan_entree(r, d, p):
                 rr=abs(t1[0] - p) / risque)
 
 def point_entree(r, d, p):
-    """Ordre limite au point le plus précis : confluence retracement 50-61,8 % du dernier mouvement 15m
-    + résistance/support 15m/1h/4h + EMA 20 (15m). Stop derrière le sommet/creux du mouvement."""
-    a = r["atr"]; b = r["b15"][-24:]
+    """Zone limite basée sur le dernier mouvement 5m ; niveaux 1h/4h et FVG restent des confluences."""
+    a = r.get("atr5", r["atr"]); b = r["b5"][-24:]
     H = max(x["h"] for x in b); L = min(x["l"] for x in b)
     if d == -1:   # SHORT : on vend un rebond vers une résistance
         z50, z618, z786 = L + 0.5 * (H - L), L + 0.618 * (H - L), L + 0.786 * (H - L)
@@ -2477,8 +2484,8 @@ def point_entree(r, d, p):
         cand += [((lo + hi) / 2, "FVG " + ut) for lo, hi, ut, dd in r.get("fvg", []) if dd == -1 and z50 - 0.3 * a <= (lo + hi) / 2 <= z786 + 0.3 * a]
         if cand:
             e, src = min(cand, key=lambda z: abs(z[0] - z618)); src = f"résistance {src} + retracement Fibonacci"
-        elif z50 <= r["ema15"] <= z786:
-            e, src = r["ema15"], "EMA 20 (15m) + retracement Fibonacci"
+        elif z50 <= r.get("ema5", r["ema15"]) <= z786:
+            e, src = r.get("ema5", r["ema15"]), "EMA 20 (5m) + retracement Fibonacci"
         else:
             e, src = z618, "retracement Fibonacci 61,8 %"
         e = max(e, p)
@@ -2491,8 +2498,8 @@ def point_entree(r, d, p):
         cand += [((lo + hi) / 2, "FVG " + ut) for lo, hi, ut, dd in r.get("fvg", []) if dd == 1 and z786 - 0.3 * a <= (lo + hi) / 2 <= z50 + 0.3 * a]
         if cand:
             e, src = min(cand, key=lambda z: abs(z[0] - z618)); src = f"support {src} + retracement Fibonacci"
-        elif z786 <= r["ema15"] <= z50:
-            e, src = r["ema15"], "EMA 20 (15m) + retracement Fibonacci"
+        elif z786 <= r.get("ema5", r["ema15"]) <= z50:
+            e, src = r.get("ema5", r["ema15"]), "EMA 20 (5m) + retracement Fibonacci"
         else:
             e, src = z618, "retracement Fibonacci 61,8 %"
         e = min(e, p)
@@ -2522,7 +2529,7 @@ def point_entree(r, d, p):
         else: za = min(zb, max(za, e))
     risque = max(abs(e - sl), 1e-9)
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
-                za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(b, d, sl), sl_ut="15 min")
+                za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(b, d, sl), sl_ut="5 min")
 
 def coach(etat, m, r, cle):
     """Agent individuel : messages courts envoyés UNIQUEMENT aux abonnés qui ont dit « Je suis rentré »."""
@@ -2792,7 +2799,7 @@ def manipulation(out, m, r, cle):
               f"🎯 Point d'entrée visé : retour vers ≈ {px(niv)} ({'ancien plus bas' if dm == 1 else 'ancien plus haut'} 15 min)",
               f"⭐ Encore mieux : milieu de la mèche ≈ {px(mid)}",
               f"🛑 SL un peu {'SOUS' if dm == 1 else 'AU-DESSUS de'} la mèche ≈ {px(meche - dm * 0.2 * a)} • bougie 15 min de {heure(x['t'])}",
-              "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE (5 / 15 min)",
+              "⏳ Patience : j'entre seulement sur une mèche de rejet + CLÔTURE 5 min",
               "🔔 Je t'envoie 🟢 J'ENTRE MAINTENANT au bon moment"]
     elif r["confirme"] == -dm:
         l += [f"⚠️ CONTRE la tendance de fond ({SENS[-dm]})",
@@ -2818,7 +2825,7 @@ def manip_txt(cle, d, r):
     return "🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens\n" if mp and mp["d"] == d and r["t"] - mp["t"] <= 10800 else ""
 
 def agent(m, r, cle, ferme):
-    """Agent : alignement 15m/1h/4h → repli en surcharge RSI → entrée parfaite → suivi jusqu'au TP2."""
+    """Agent : tendance 4h + confirmation 1h → déclenchement sur bougie 5m clôturée."""
     out = []
     tr = cle.get("trade")
     depuis = cle.get("t1m", 0)
@@ -2828,7 +2835,7 @@ def agent(m, r, cle, ferme):
     hi = max(x["h"] for x in bougies); lo = min(x["l"] for x in bougies)
     d = r["confirme"]
     r5, r5p = r["r5"][-1], r["r5"][-2]
-    ctx = f"Contexte : {zone_txt(r['posD'])} de la zone Daily, {zone_txt(r['posW'])} de la zone Weekly."
+    ctx = f"Contexte : {zone_txt(r['posD'])} Daily, {zone_txt(r['posW'])} Weekly."
     try:
         manipulation(out, m, r, cle)
         meche_suspecte(out, m, r, cle)
@@ -2836,7 +2843,7 @@ def agent(m, r, cle, ferme):
     except Exception as ex:
         print("manipulation", ex)
 
-    # ── Pas de trade : alignement 15m + 1h + 4h obligatoire, puis ordre limite au point précis ──
+    # ── Pas de trade : tendance 4h confirmée par 1h, puis timing d'entrée en 5m ──
     if not tr and r.get("fermeture"):
         if r["t"] - cle.get("ferm_dit", 0) > 3 * 3600:
             cle["ferm_dit"] = r["t"]
@@ -2849,10 +2856,20 @@ def agent(m, r, cle, ferme):
     if not tr:
         if not d:
             if cle.get("aligne"):
-                out.append(f"⚪ {m} : alignement 15m / 1h / 4h perdu. Ordre annulé, j'attends.")
+                out.append(f"⚪ {m} : confirmation 1h / tendance 4h perdue. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
-        # ── Entrée sur CASSURE confirmée (clôture 15 min au-delà du niveau) ──
+        # Extrême Daily/Weekly : aucune poursuite dans le sens de la tendance.
+        # On attend une correction ou un retournement confirmé ; on ne vend pas à découvert sans signal opposé validé.
+        if bloque_dw(r, d, p):
+            cle["prep"] = False
+            cle.pop("ordre", None)
+            if r["t"] - cle.get("extreme_warn_t", 0) >= 1800:
+                cle["extreme_warn_t"] = r["t"]
+                out.append(f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')}.\n⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
+            cle["aligne"] = d
+            return out
+        # ── Entrée sur CASSURE confirmée (clôture 5 min au-delà du niveau) ──
         pc = plan_cassure(r, d)
         if pc and pc["t15"] != cle.get("cassure_t") and not r.get("annonce"):
             cle["cassure_t"] = pc["t15"]
@@ -2864,27 +2881,28 @@ def agent(m, r, cle, ferme):
                 return out
             cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle["parti"] = False; cle.pop("ordre", None)
             out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}"
-                        f"🕯 La bougie 15 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
+                        f"🕯 La bougie 5 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
                         f"🛑 SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de cette bougie\n\n"
                         f"{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             return out
         # Le prix approche du niveau de cassure : on l'annonce AVANT (1 fois par niveau)
-        if len(r["b15"]) >= 22 and not r.get("annonce"):
+        if len(r["b5"]) >= 22 and not r.get("annonce"):
             L = niveau_cassure(r, d)
             nouveau_niv = abs(L - cle.get("cassure_vue", 0)) > 1.0 * r["atr"]
             if 0 <= d * (L - p) <= 0.35 * r["atr"] and (nouveau_niv or (abs(L - cle.get("cassure_vue", 0)) > 0.2 * r["atr"]
                                                                      and time.time() - cle.get("cassure_vue_t", 0) > 1800)):
                 cle["cassure_vue"] = L; cle["cassure_vue_t"] = time.time()
                 out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} CASSURE EN VUE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n"
-                            f"👀 Le prix approche ≈ {px(L)} ({'plus haut' if d == 1 else 'plus bas'} des dernières bougies 15 min)\n"
-                            f"🕯 Si une bougie 15 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} → j'entre {SENS[d]}\n"
+                            f"👀 Le prix approche ≈ {px(L)} ({'plus haut' if d == 1 else 'plus bas'} des 20 dernières bougies 5 min)\n"
+                            f"🕯 Si une bougie 5 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} → confirmation {SENS[d]}\n"
                             f"🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture\n🔔 Tiens-toi prêt", bouton_auto(m)))
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
         o = point_entree(r, d, p)
-        bloque = bloque_dw(r, d, o["e"])      # on juge le prix d'entrée du repli, pas le prix actuel
+        # Refuser de poursuivre un mouvement déjà en haut/bas de sa zone, même si le repli projeté semble acceptable.
+        bloque = bloque_dw(r, d, o["e"]) or bloque_dw(r, d, p)
         # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
         p_ = r["m1"][-1]["c"]
-        calme = ((r["r15"] < 62 and p_ - r["ema15"] < 1.5 * r["atr"]) if d == 1 else (r["r15"] > 38 and r["ema15"] - p_ < 1.5 * r["atr"]))
+        calme = ((r["r5"][-1] < 70 and p_ - r.get("ema5", r["ema15"]) < 1.5 * r.get("atr5", r["atr"])) if d == 1 else (r["r5"][-1] > 30 and r.get("ema5", r["ema15"]) - p_ < 1.5 * r.get("atr5", r["atr"])))
         if not cle.get("prep") and (etire(r, d) or (cle.get("parti") and not calme)):   # hystérésis : pas de va-et-vient
             if not cle.get("parti"):
                 cle["parti"] = True; cle["attente_rsi"] = False; cle.pop("ordre", None)
@@ -2909,7 +2927,7 @@ def agent(m, r, cle, ferme):
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
-                out.append(f"🧭 {m} aligné {'▲' if d == 1 else '▼'} sur 15m/1h/4h, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
+                out.append(f"🧭 {m} : 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
                            f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
@@ -2996,19 +3014,17 @@ def agent(m, r, cle, ferme):
             cle["pause"] = False
             # Entrée DIRECTE dès qu'un de ces 3 signaux apparaît dans la zone (plus d'attente dans le vide) :
             # 1) mèche de rejet + clôture  2) manipulation confirmée dans notre sens  3) bougie 15 min qui clôture dans le bon sens
-            a_ = r["atr"]; bj = rejet(r, d, o["e"], a_); raison = "Mèche de rejet + clôture"
-            mp = cle.get("manip")
-            if not bj and mp and mp.get("d") == d and r["t"] - mp["t"] <= 1800 and mp.get("meche"):
-                bj = {"t": mp["t15"], "l": mp["meche"], "h": mp["meche"]}; raison = "Manipulation : stops pris puis clôture"
-            x15 = r["b15"][-1]; rg = max(x15["h"] - x15["l"], 1e-9)
-            if not bj and x15["t"] != cle.get("conf_t") and (
-                    (d == 1 and x15["l"] <= o["zb"] + 0.1 * a_ and x15["c"] > x15["o"] and x15["c"] >= x15["l"] + 0.55 * rg and x15["c"] > o["za"] and r5 > r5p) or
-                    (d == -1 and x15["h"] >= o["za"] - 0.1 * a_ and x15["c"] < x15["o"] and x15["c"] <= x15["h"] - 0.55 * rg and x15["c"] < o["zb"] and r5 < r5p)):
-                bj = x15; raison = f"Bougie 15 min qui clôture {'en remontant' if d == 1 else 'en redescendant'}"
+            a_ = r.get("atr5", r["atr"]); bj = rejet(r, d, o["e"], a_); raison = "Mèche de rejet + clôture 5 min"
+            # Une manipulation repérée en 15m reste informative ; elle ne déclenche jamais une entrée.
+            x5 = r["b5"][-1]; rg = max(x5["h"] - x5["l"], 1e-9)
+            if not bj and x5["t"] != cle.get("conf_t") and (
+                    (d == 1 and x5["l"] <= o["zb"] + 0.1 * a_ and x5["c"] > x5["o"] and x5["c"] >= x5["l"] + 0.55 * rg and x5["c"] > o["za"] and r5 > r5p) or
+                    (d == -1 and x5["h"] >= o["za"] - 0.1 * a_ and x5["c"] < x5["o"] and x5["c"] <= x5["h"] - 0.55 * rg and x5["c"] < o["zb"] and r5 < r5p)):
+                bj = x5; raison = f"Bougie 5 min qui clôture {'en remontant' if d == 1 else 'en redescendant'}"
             if bj and r["t"] - cle.get("stop_t", 0) < 2700:
                 bj = None                          # 45 min de calme après un stop : pas de revanche sur le marché
             if bj:
-                cle["conf_t"] = x15["t"]
+                cle["conf_t"] = x5["t"]
             if False and surcharge and not bj and not cle.get("attente_rejet"):
                 cle["attente_rejet"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
@@ -3016,13 +3032,13 @@ def agent(m, r, cle, ferme):
                            f"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture {'en remontant' if d == 1 else 'en redescendant'}")
             if bj:
                 cle.pop("attente_rejet", None); cle.pop("touche_t", None); cle.pop("traverse", None)
-                sl_m = (bj["l"] - 0.2 * r["atr"]) if d == 1 else (bj["h"] + 0.2 * r["atr"])   # SL juste derrière la mèche de rejet
+                sl_m = (bj["l"] - 0.2 * a_) if d == 1 else (bj["h"] + 0.2 * a_)   # SL derrière la mèche 5m
                 # SL derrière la mèche ET derrière le bas de la zone (le marché respire dans la zone), jamais plus de 1,5 ATR
-                sl_m = min(sl_m, o["sl"], p - 1.0 * r["atr"]) if d == 1 else max(sl_m, o["sl"], p + 1.0 * r["atr"])
-                sl_m = max(sl_m, p - RISQUE_MAX * r["atr"]) if d == 1 else min(sl_m, p + RISQUE_MAX * r["atr"])
+                sl_m = min(sl_m, o["sl"], p - 1.0 * a_) if d == 1 else max(sl_m, o["sl"], p + 1.0 * a_)
+                sl_m = max(sl_m, p - RISQUE_MAX * a_) if d == 1 else min(sl_m, p + RISQUE_MAX * a_)
                 o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True,
                          sl_h=heure(bj["t"]), sl_ut="5 min" if r["b5"] and bj is r["b5"][-1] else "15 min")
-                tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=r["atr"])
+                tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=a_)
                 tr["profil"] = profil_trade(m, tr, r)
                 non, n_, w_ = memoire_refuse(tr["profil"])
                 if non:
@@ -3031,18 +3047,22 @@ def agent(m, r, cle, ferme):
                     return out
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
                 niveau = "Fibonacci" not in o["src"] or "+" in o["src"]   # confluence avec un niveau 15m / 1h / 4h ou l'EMA
-                checks = [("15 min • 1 h • 4 h alignées", True), ("Daily / Weekly favorables", True),
-                          ("Zone Fibonacci 50 – 78,6 %", True), ("Niveau 15m / 1h / 4h ou EMA", niveau),
-                          ("RSI en surcharge (repli bien chargé)", surcharge), ("Confirmé en 1 h", conf1h),
-                          (raison, True),
-                          ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
+                checks = [("4 h + 1 h alignées", bool(r["confirme"] == d)),
+                          ("Daily / Weekly hors zone extrême", not bloque_dw(r, d, p)),
+                          ("Zone Fibonacci 50 – 78,6 %", "Fibonacci" in o["src"]),
+                          ("Niveau 15m / 1h / 4h ou EMA", niveau),
+                          ("RSI de repli confirmé", surcharge), ("Contexte 1 h cohérent", conf1h),
+                          (raison, bool(bj)),
+                          ("Pas de news proche", not bool(r.get("annonce"))),
+                          (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                pct_conf = round(100 * score / len(checks))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confluence : {pct_conf}% ({score}/{len(checks)} critères, pas une probabilité de gain)\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                    fin = r["b15"][-1]["t"] + 1800
+                    fin = r["b5"][-1]["t"] + 300
                     out.append(f"🟨 {ICONE.get(m, '')} {m} : prix DANS la zone\n{SENS[d]}\n"
                                f"🕯 J'entre dès qu'une bougie clôture {'en remontant' if d == 1 else 'en redescendant'}\n"
                                f"⏱ Prochaine décision : clôture de {heure(fin)}\n🔔 Tiens-toi prêt, ça peut être tout de suite{statut_txt(0, o)}")

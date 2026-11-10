@@ -1,0 +1,29 @@
+name: ALIGN MTF validation
+
+on:
+  push:
+    branches:
+      - "fix/align-*"
+    paths:
+      - "align-bot/**"
+      - ".github/workflows/align-bot-validation.yml"
+  pull_request:
+    paths:
+      - "align-bot/**"
+      - ".github/workflows/align-bot-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile bot
+        run: python -m py_compile align-bot/align_bot.py
+      - name: Run MTF regression tests
+        run: python -m unittest discover -s align-bot -p "test_*.py" -v

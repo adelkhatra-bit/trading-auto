@@ -6,7 +6,7 @@ const path    = require('path');
 const fs      = require('fs');
 const os      = require('os');
 const { spawn, execSync } = require('child_process');
-const PORT    = 4000;
+const PORT    = Number(process.env.PORT || 4000);
 if (!process.env.BROKER_MODE) process.env.BROKER_MODE = 'live';
 if (!process.env.SAFE_MODE) process.env.SAFE_MODE = '0';
 const SAFE_MODE = process.env.SAFE_MODE !== '0';
@@ -133,21 +133,10 @@ function requireLivePrice(symbol, res) {
 
 'use strict';
 
-// ─── SINGLE-INSTANCE GUARD — abort immédiat si port déjà occupé ──────────────
-const _net = require('net');
-const _portGuard = _net.createServer();
-_portGuard.once('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n[ABORT] PORT 4000 DÉJÀ OCCUPÉ — instance en conflit détectée.`);
-    console.error(`[ABORT] Kill avec: taskkill /F /IM node.exe /T   puis relancez.`);
-    process.exit(1);
-  }
-});
-_portGuard.once('listening', () => {
-  _portGuard.close(); // port libre confirmé — on peut continuer
-});
-_portGuard.listen(4000, '127.0.0.1');
-// ─────────────────────────────────────────────────────────────────────────────
+// Le serveur HTTP Express est l'unique arbitre du port.
+// Éviter un bind de pré-vérification suivi d'un second bind (course TOCTOU).
+// Si le port est occupé, l'événement 'error' natif de listen() fait échouer
+// le processus avec EADDRINUSE, sans ouvrir/fermer un socket concurrent.
 
 // ...existing code...
 
