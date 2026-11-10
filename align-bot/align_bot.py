@@ -2409,6 +2409,7 @@ def fmt_trade(m, tr, p=None):
     za, zb = tr.get("za", tr["e"]), tr.get("zb", tr["e"])
     bougie = "en dessous de la dernière bougie basse" if d == 1 else "au-dessus de la dernière bougie haute"
     risque = abs(tr["e"] - tr["sl"]); gain = abs(tr["tp1"] - tr["e"])
+    risque_pct = risque / max(abs(tr["e"]), 1e-9) * 100
     barres = lambda x: "▮" * max(1, min(10, round(x / max(risque, 1e-9) * 2)))
     # Échelle des prix, du plus haut au plus bas
     pts = [(tr["sl"], "🛑", "STOP"), (tr["tp1"], "💰", "TP1"), (tr["tp2"], "🏁", "TP2")]
@@ -2419,12 +2420,13 @@ def fmt_trade(m, tr, p=None):
     pct = lambda v: f"{(v - tr['e']) / tr['e'] * 100:+.2f} %".replace(".", ",")
     meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
     return (f"{tete}\n"
-            f"⏱ Vue 15 minutes\n\n"
+            f"🧭 Tendance 4H • confirmation 1H • déclencheur 5M clôturé\n"
+            f"⏱ Vue d'entrée : 5 minutes (15M = contexte)\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
-            f"1️⃣ 👀 Mets-toi en vue 15 minutes\n"
-            + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (sous la structure 15 min)\n"
-               f"3️⃣ 🟨 Entrée {SENS[d]} : à la clôture de la bougie 15 min qui casse ≈ {px(tr.get('niveau', tr['e']))}\n"
-               if tr.get("src") == "cassure 15 min" else
+            f"1️⃣ 👀 Mets-toi en vue 5 minutes pour l'entrée\n"
+            + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (structure 5 min)\n"
+               f"3️⃣ 🟨 Entrée {SENS[d]} : après clôture 5 min au-delà de ≈ {px(tr.get('niveau', tr['e']))}\n"
+               if tr.get("src") == "cassure 5 min" else
                f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)}\n" +
                (f"3️⃣ 🟨 Entrée {SENS[d]} : MAINTENANT, à la clôture de la bougie de rejet ({tr.get('sl_ut', '5 min')} de {tr.get('sl_h', '')})\n" if tr.get("rejet") else
                 f"3️⃣ 🟨 Entrée {SENS[d]} : sur le {'repli' if d == 1 else 'rebond'}, vers la moitié de la dernière grande bougie {'verte' if d == 1 else 'rouge'}\n"))
@@ -2432,7 +2434,9 @@ def fmt_trade(m, tr, p=None):
                if "projection" not in tr["n1"] else f"4️⃣ 💰 TP1 : environ {tr['rr']:.1f} fois ton risque\n")
             + (f"5️⃣ 🏁 TP2 : {tr['n2']} (vue {vue(tr['n2'])})\n" if "projection" not in tr["n2"] else "5️⃣ 🏁 TP2 : on laisse courir, je te guide\n")
             + duree_txt(tr) +
-            f"💡 BE : je te dis quand (bougie 15 min clôturée bien {'au-dessus' if d == 1 else 'en dessous'} de l'entrée)\n\n"
+            f"📉 Distance entrée → SL : {risque_pct:.2f} % du prix (pas le % du capital risqué)\n"
+            f"🛑 SL obligatoire : ne jamais l'élargir ni l'enlever. Respecte le niveau indiqué.\n"
+            f"💡 BE : alerte après confirmation de clôture, pas sur une mèche\n\n"
             f"📍 Repère prix {m} ({'XAUUSD spot' if m == 'GOLD' else 'BTC/USD'}) :\n{echelle}\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n\n{MINI_AVERT}")
 
@@ -2883,7 +2887,8 @@ def agent(m, r, cle, ferme):
                             f"🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture\n🔔 Tiens-toi prêt", bouton_auto(m)))
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
         o = point_entree(r, d, p)
-        bloque = bloque_dw(r, d, o["e"])      # on juge le prix d'entrée du repli, pas le prix actuel
+        # Refuser de poursuivre un mouvement déjà en haut/bas de sa zone, même si le repli projeté semble acceptable.
+        bloque = bloque_dw(r, d, o["e"]) or bloque_dw(r, d, p)
         # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
         p_ = r["m1"][-1]["c"]
         calme = ((r["r5"][-1] < 70 and p_ - r.get("ema5", r["ema15"]) < 1.5 * r.get("atr5", r["atr"])) if d == 1 else (r["r5"][-1] > 30 and r.get("ema5", r["ema15"]) - p_ < 1.5 * r.get("atr5", r["atr"])))
@@ -3008,7 +3013,7 @@ def agent(m, r, cle, ferme):
             if bj and r["t"] - cle.get("stop_t", 0) < 2700:
                 bj = None                          # 45 min de calme après un stop : pas de revanche sur le marché
             if bj:
-                cle["conf_t"] = x15["t"]
+                cle["conf_t"] = x5["t"]
             if False and surcharge and not bj and not cle.get("attente_rejet"):
                 cle["attente_rejet"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
@@ -3016,13 +3021,13 @@ def agent(m, r, cle, ferme):
                            f"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture {'en remontant' if d == 1 else 'en redescendant'}")
             if bj:
                 cle.pop("attente_rejet", None); cle.pop("touche_t", None); cle.pop("traverse", None)
-                sl_m = (bj["l"] - 0.2 * r["atr"]) if d == 1 else (bj["h"] + 0.2 * r["atr"])   # SL juste derrière la mèche de rejet
+                sl_m = (bj["l"] - 0.2 * a_) if d == 1 else (bj["h"] + 0.2 * a_)   # SL derrière la mèche 5m
                 # SL derrière la mèche ET derrière le bas de la zone (le marché respire dans la zone), jamais plus de 1,5 ATR
-                sl_m = min(sl_m, o["sl"], p - 1.0 * r["atr"]) if d == 1 else max(sl_m, o["sl"], p + 1.0 * r["atr"])
-                sl_m = max(sl_m, p - RISQUE_MAX * r["atr"]) if d == 1 else min(sl_m, p + RISQUE_MAX * r["atr"])
+                sl_m = min(sl_m, o["sl"], p - 1.0 * a_) if d == 1 else max(sl_m, o["sl"], p + 1.0 * a_)
+                sl_m = max(sl_m, p - RISQUE_MAX * a_) if d == 1 else min(sl_m, p + RISQUE_MAX * a_)
                 o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True,
                          sl_h=heure(bj["t"]), sl_ut="5 min" if r["b5"] and bj is r["b5"][-1] else "15 min")
-                tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=r["atr"])
+                tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=a_)
                 tr["profil"] = profil_trade(m, tr, r)
                 non, n_, w_ = memoire_refuse(tr["profil"])
                 if non:
@@ -3031,14 +3036,15 @@ def agent(m, r, cle, ferme):
                     return out
                 cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle.pop("ordre", None)
                 niveau = "Fibonacci" not in o["src"] or "+" in o["src"]   # confluence avec un niveau 15m / 1h / 4h ou l'EMA
-                checks = [("15 min • 1 h • 4 h alignées", True), ("Daily / Weekly favorables", True),
+                checks = [("4 h + 1 h alignées", True), ("Daily / Weekly favorables", True),
                           ("Zone Fibonacci 50 – 78,6 %", True), ("Niveau 15m / 1h / 4h ou EMA", niveau),
                           ("RSI en surcharge (repli bien chargé)", surcharge), ("Confirmé en 1 h", conf1h),
                           (raison, True),
                           ("Pas de news proche", True), (f"Gain / risque x{o['rr']:.1f}", o["rr"] >= GAIN_MIN)]
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confiance   {score}/{len(checks)}\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                pct_conf = round(100 * score / len(checks))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confluence : {pct_conf}% ({score}/{len(checks)} critères, pas une probabilité de gain)\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
