@@ -68,6 +68,32 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python3 ai_healthcheck.py
 
+      - name: Vérifier le bridge TradingView ROBOT V12 (BTC + GOLD)
+        env:
+          ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
+          ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          base = os.environ.get("ALIGN_TV_API_URL", "").strip().rstrip("/")
+          token = os.environ.get("ALIGN_TV_READ_TOKEN", "").strip()
+          if not base or not token:
+              raise SystemExit("ÉCHEC: secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents — bridge indicateur non raccordé au bot.")
+          for symbol in ("BTCUSD", "XAUUSD"):
+              url = base + "/bridge/robot-v12/mtf?symbol=" + urllib.parse.quote(symbol)
+              req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "ALIGN-bridge-preflight"})
+              with urllib.request.urlopen(req, timeout=12) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+              if payload.get("ok") is not True or not isinstance(payload.get("snapshots"), dict):
+                  raise SystemExit("ÉCHEC: réponse bridge invalide pour " + symbol)
+              snapshots = payload["snapshots"]
+              fresh = [tf for tf, snap in snapshots.items() if isinstance(snap, dict) and snap.get("fresh") is True]
+              active = payload.get("activeTimeframe") or "aucune UT active récente"
+              print(f"BRIDGE_API_OK symbol={symbol} active={active} received={','.join(payload.get('receivedTimeframes', [])) or 'aucune'} fresh={','.join(fresh) or 'aucun plan frais'}")
+              if not snapshots:
+                  print(f"ATTENTION: aucun snapshot Pine reçu pour {symbol}; API joignable mais flux indicateur non prouvé.")
+          PY
+
       - name: Analyse BTC + Gold et envoi Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -75,7 +101,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
-          DUREE_SEC: "20400"
+          DUREE_SEC: "21000"
           PAUSE_SEC: "5"
         run: python3 align_bot.py
 
