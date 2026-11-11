@@ -62,7 +62,19 @@ def fetch_tv_mtf(pair):
             payload = json.loads(response.read().decode("utf-8"))
         if not payload.get("ok") or not isinstance(payload.get("snapshots"), dict):
             return {"available": False, "reason": "réponse bridge invalide", "snapshots": {}}
-        return {"available": True, "reason": None, "snapshots": payload["snapshots"]}
+        active_tf = str(payload.get("activeTimeframe") or "").upper()
+        active_fresh = payload.get("activeTimeframeFresh") is True
+        if active_tf not in {"M1", "M5", "M15", "M30", "H1", "H2", "H4", "D1", "W1"} or not active_fresh:
+            active_tf = None
+        return {
+            "available": True,
+            "reason": None,
+            "symbol": payload.get("symbol"),
+            "activeTimeframe": active_tf,
+            "activeTimeframeAgeMs": payload.get("activeTimeframeAgeMs"),
+            "snapshots": payload["snapshots"],
+            "receivedTimeframes": payload.get("receivedTimeframes", [])
+        }
     except Exception as ex:
         print("TradingView MTF bridge:", ex, flush=True)
         return {"available": False, "reason": "bridge inaccessible", "snapshots": {}}
