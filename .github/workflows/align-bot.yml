@@ -80,7 +80,6 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, urllib.parse, urllib.request
-          from datetime import datetime, timezone
           base = os.environ.get("ALIGN_TV_API_URL", "").strip().rstrip("/")
           token = os.environ.get("ALIGN_TV_READ_TOKEN", "").strip()
           status = "CONNECTED"
@@ -113,10 +112,10 @@ jobs:
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
               with open(summary, "a", encoding="utf-8") as f:
-                  f.write("## TradingView ROBOT V12 — état du bridge\\n\\n")
-                  f.write("- **Statut :** " + status + "\\n")
-                  f.write("- **Détail :** " + (" ; ".join(details) if details else "BTCUSD et XAUUSD contrôlés") + "\\n")
-                  f.write("- **Conséquence :** si le bridge est indisponible, ALIGN utilise son moteur interne ; aucune donnée TradingView n'est revendiquée.\\n")
+                  f.write("## TradingView ROBOT V12 — état du bridge\n\n")
+                  f.write("- **Statut :** " + status + "\n")
+                  f.write("- **Détail :** " + (" ; ".join(details) if details else "BTCUSD et XAUUSD contrôlés") + "\n")
+                  f.write("- **Conséquence :** si le bridge est indisponible, ALIGN utilise son moteur interne ; aucune donnée TradingView n'est revendiquée.\n")
           PY
 
       - name: Analyse BTC + Gold et envoi Telegram
