@@ -1222,6 +1222,15 @@ def mise_en_forme(t):
                 out.append(detail)
             out.append("")
             continue
+        mesure = re.match(
+            r"^(?P<label>(?:Basse|Haute|Bas|Haut|Low|High|Support|Résistance|Resistance))\\s+"
+            r"(?P<value>[+-]?(?:\\d{1,3}(?:[ \\u202f]\\d{3})+|\\d+)(?:[.,]\\d+)?%?)$",
+            l, re.IGNORECASE)
+        if mesure:
+            if out and out[-1]:
+                out.append("")
+            out += [mesure.group("label"), mesure.group("value"), ""]
+            continue
         mt = re.search(r" ?: | ≈ ", l)
         if mt and not l.startswith(("ℹ️", "RSI")):
             g, d_ = l[:mt.start()], l[mt.end():]
