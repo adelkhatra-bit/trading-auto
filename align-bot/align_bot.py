@@ -1549,14 +1549,22 @@ def texte_apercu(m, r, cle):
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
+CHRONO_REFRESH_SEC = 5       # édition du compte à rebours toutes les 5 s
 
 def mmss(sec):
     sec = max(0, int(sec)); return f"{sec // 60} min {sec % 60:02d} s" if sec < 3600 else f"{sec // 3600} h {sec % 3600 // 60:02d}"
 
+def prochaine_cloture(ts, interval_sec=300):
+    """Horodatage de la prochaine clôture, strictement après ts (epoch UTC)."""
+    if interval_sec < 1:
+        raise ValueError("interval_sec doit être positif")
+    return (int(ts) // interval_sec + 1) * interval_sec
+
+
 def chrono_txt(m, r, cle, t0):
     """Chronomètre en direct : tendance 4h, confirmation 1h, déclencheur à la clôture 5m."""
     now = time.time(); p = r["m1"][-1]["c"]; d = r["confirme"]; a = r["atr"]
-    cloture = r["b5"][-1]["t"] + 300 if r.get("b5") else now      # prochaine échéance 5 min
+    cloture = prochaine_cloture(now, 300)  # toujours une clôture future
     tr = cle.get("trade"); o = cle.get("ordre")
     l = [f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}   {px(p)}",
          f"🎯 Inscrit depuis {mmss(now - t0)}"]
@@ -1603,9 +1611,7 @@ def maj_chronos(etat, m, r):
                 telegram("editMessageText", chat_id=cid, message_id=c["mid"],
                          text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n😎 La position n'est pas venue : pas de mauvaise entrée\n🎯 Réappuie sur le bouton pour la prochaine")
                 continue
-            seconde = int(now)
-            if c.get("derniere_seconde") != seconde:
-                c["derniere_seconde"] = seconde
+            if now - c.get("maj", 0) >= CHRONO_REFRESH_SEC:
                 c["maj"] = now
                 telegram("editMessageText", chat_id=cid, message_id=c["mid"],
                          text=chrono_txt(m, r, cle, c["t0"]))
