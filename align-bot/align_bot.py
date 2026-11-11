@@ -83,7 +83,7 @@ def fusionne_lectures_tradingview(r):
     bridge = r.get("tv_indicator_mtf") or {}
     snap = (bridge.get("snapshots") or {}).get(bridge.get("activeTimeframe")) or {}
     robot = snap.get("robotV12") or {}
-    if not robot:
+    if not robot or not snap.get("fresh"):
         return r
     for field, index in (("lecture_1m", 0), ("lecture_5m", 2), ("lecture_15m", 4), ("lecture_60m", 7)):
         direction = _direction_tv(robot.get(field))
