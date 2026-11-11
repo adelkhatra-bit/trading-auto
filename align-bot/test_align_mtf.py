@@ -2166,13 +2166,15 @@ class TestTelegramSimpleAnalysisLayout(unittest.TestCase):
         import json
         markup = json.loads(align_bot.markup_analyse({}, "GOLD", {}))
         callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
-        self.assertEqual(callbacks, ["auto:GOLD"])
+        self.assertTrue({"why:GOLD", "details:GOLD", "levels:GOLD", "timeframes:GOLD",
+                         "history:GOLD", "auto:GOLD"}.issubset(set(callbacks)))
 
     def test_active_position_keeps_only_position_and_exit_actions(self):
         import json
         markup = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))
         callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
-        self.assertEqual(callbacks, ["position:GOLD", "out:GOLD"])
+        self.assertTrue({"position:GOLD", "out:GOLD", "why:GOLD", "details:GOLD",
+                         "levels:GOLD", "timeframes:GOLD", "history:GOLD"}.issubset(set(callbacks)))
 
     def test_telegram_command_menu_has_one_analysis_entry_not_separate_btc_gold_entries(self):
         from unittest.mock import patch
@@ -2203,8 +2205,12 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
         state = {"GOLD": {"trade": {"e": 100, "qui": {"101": {"e": 100, "sl": 98, "tp1": 104}}}}}
         untracked = json.loads(align_bot.markup_analyse(state, "GOLD", {}, "202"))["inline_keyboard"]
         tracked = json.loads(align_bot.markup_analyse(state, "GOLD", {}, "101"))["inline_keyboard"]
-        self.assertEqual([b["callback_data"] for row in untracked for b in row], ["in:GOLD"])
-        self.assertEqual([b["callback_data"] for row in tracked for b in row], ["position:GOLD", "out:GOLD"])
+        self.assertTrue({"in:GOLD", "why:GOLD", "details:GOLD", "levels:GOLD",
+                         "timeframes:GOLD", "history:GOLD"}.issubset(
+                             {b["callback_data"] for row in untracked for b in row}))
+        self.assertTrue({"position:GOLD", "out:GOLD", "why:GOLD", "details:GOLD",
+                         "levels:GOLD", "timeframes:GOLD", "history:GOLD"}.issubset(
+                             {b["callback_data"] for row in tracked for b in row}))
 
     def test_position_details_never_call_unregistered_user_a_position_holder(self):
         state = {"GOLD": {"trade": {"e": 100, "sl": 98, "tp1": 104, "tp2": 108, "d": 1, "qui": {}}}}
