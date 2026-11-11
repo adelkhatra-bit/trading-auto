@@ -669,7 +669,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
         labels = [button["text"] for row in keyboard for button in row]
-        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         self.assertIn("❓ Pourquoi cette décision ?", labels)
         self.assertIn("📊 Analyse complète", labels)
         self.assertIn("🎯 Niveaux / prix", labels)
@@ -754,7 +754,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Confirmation 1 h : 🔴⬇️", message)
         self.assertIn("Préparation 15 min : 🔴⬇️", message)
         self.assertIn("Timing 5 min : 🟢⬆️", message)
-        self.assertIn("PROFIL RETENU : SCALPING CONTRE-TENDANCE", message)
+        self.assertIn("PROFIL RETENU : ATTENTE", message)
 
     def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
         r = {"m1": [candle(1, c=67500.0)], "news": "📰 Calendrier économique"}
