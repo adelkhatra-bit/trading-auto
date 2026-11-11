@@ -471,16 +471,19 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     biais = ("🟢 Biais haussier confirmé" if maj == 1 else
              "🔴 Biais baissier confirmé" if maj == -1 else
              "🟠 Pas de biais confirmé en 1h / 4h")
-    ligne_ut = "  |  ".join(f"{nom} {fl(D[i])}" for nom, i in ut)
-    ligne_rsi = "  |  ".join(f"{nom} {R[i]:.0f}" for nom, i in ut)
-    l = [entete, "━━━━━━━━━━━━━━━━━━", "📡 LECTURE DU MARCHÉ", biais,
-         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS",
-         f"🕒 {ligne_ut}", f"📈 RSI : {ligne_rsi}",
-         "━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
-         f"Alignement 1h + 4h : {n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
-         f"Zone Daily : {zone_txt(r['posD'])}",
-         f"Zone Weekly : {zone_txt(r['posW'])}",
-         "━━━━━━━━━━━━━━━━━━", "🧭 PLAN MULTI-TIMEFRAME"] + strategie_mtf(r)
+    l = [entete, "━━━━━━━━━━━━━━━━━━", "📡 LECTURE DU MARCHÉ",
+         "BIAIS GÉNÉRAL", biais,
+         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS"]
+    for nom, i in ut:
+        l += [f"UNITÉ {nom}", fl(D[i])]
+    l += ["━━━━━━━━━━━━━━━━━━", "📈 RSI PAR UNITÉ DE TEMPS"]
+    for nom, i in ut:
+        l += [f"RSI {nom}", f"{R[i]:.0f}"]
+    l += ["━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
+          "ALIGNEMENT 1H + 4H", f"{n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
+          "ZONE DAILY", zone_txt(r['posD']),
+          "ZONE WEEKLY", zone_txt(r['posW']),
+          "━━━━━━━━━━━━━━━━━━", "🧭 PLAN MULTI-TIMEFRAME"] + strategie_mtf(r)
     nc = dict((n, v) for v, n in (r.get("niv_cles") or []))
     ph_, pb_ = nc.get("plus haut d'hier"), nc.get("plus bas d'hier")
     contexte = []
@@ -1171,10 +1174,16 @@ def mise_en_forme(t):
     plat = []
     for l in lignes:
         l = re.sub(r" {2,}", " ", l.strip())
-        if " • " in l and l.count("≈") >= 2:          # « entrée ≈ X • SL ≈ Y • TP1 ≈ Z » → une info par ligne
+        # Une ligne ne doit jamais contenir plusieurs informations indépendantes.
+        if " • " in l:
             parts = [x.strip() for x in l.split(" • ") if x.strip()]
-            plat += [parts[0]] + [("🛑 " if x.startswith("SL") else "💰 " if x.startswith("TP") else "🟨 " if x.lower().startswith(("entrée", "zone")) else "") + x
-                                  for x in parts[1:]]
+            if len(parts) > 1:
+                plat.extend(parts)
+            else:
+                plat.append(l)
+        elif " | " in l and not l.startswith(("http", "🔗")):
+            parts = [x.strip() for x in l.split(" | ") if x.strip()]
+            plat.extend(parts if len(parts) > 1 else [l])
         else:
             plat.append(l)
     # Le statut (j'entre / je n'entre pas + TP visé) passe TOUT EN HAUT, juste sous le titre
