@@ -136,7 +136,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1}}}, "GOLD": {}}
         with patch.object(align_bot.time, "time", side_effect=[100.1, 101.1]), \
-             patch.object(align_bot, "chrono_txt", side_effect=lambda m, r, cle, t0: f"tick-{int(align_bot.time.time())}"), \
+             patch.object(align_bot, "chrono_txt", side_effect=["tick-100", "tick-101"]), \
              patch.object(align_bot, "telegram") as send:
             align_bot.maj_chronos(state, "GOLD", {})
             align_bot.maj_chronos(state, "GOLD", {})
