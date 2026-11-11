@@ -1874,18 +1874,19 @@ def texte_cloture(m, tf, bougie, r, cle):
     couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
     titre, details = verdict(r, cle)
     titre = str(titre).upper()
-    if "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTENDS" in titre or "PATIENCE" in titre:
+    if cle.get("trade"):
+        decision = "🟢 SIGNAL DÉJÀ DÉCLENCHÉ — NE RAJOUTE PAS UNE ENTRÉE"
+    elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTENDS" in titre or "PATIENCE" in titre:
         decision = "🚫 N'ENTRE PAS — ATTENDS LE PROCHAIN SIGNAL"
     elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
         decision = "🟢 SIGNAL D'ENTRÉE VALIDÉ — VÉRIFIE LES NIVEAUX"
-    elif cle.get("trade"):
-        decision = "🟢 POSITION DÉJÀ OUVERTE — NE RAJOUTE PAS UNE ENTRÉE"
     else:
         decision = "⏸ PAS D'ENTRÉE POUR LE MOMENT — ATTENDS"
     dirs = r.get("dirs", [0] * 11)
     d4h, d1h = dirs[9], dirs[7]
     sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
-    confirmation = "2/2 — confirmée" if r.get("confirme") else "0/2 — non confirmée"
+    _, n_ok = alignement(r)
+    confirmation = "2/2 — confirmée" if n_ok == 2 else "0/2 — non confirmée"
     lignes = [
         decision,
         "━━━━━━━━━━━━━━━━━━━━",
