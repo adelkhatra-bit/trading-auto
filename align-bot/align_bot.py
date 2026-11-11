@@ -1194,6 +1194,25 @@ def mise_en_forme(t):
         if l in STATUT_LIB:
             out += (["", *STATUT_LIB[l], ""] if out and out[-1] else [*STATUT_LIB[l], ""])
             continue
+        # Les niveaux chiffrés sont toujours présentés en carte :
+        # intitulé, valeur seule, puis explication (mèche / structure / unité de temps).
+        niveau = re.match(
+            r"^(?P<label>.*?\\b(?:TP\\s*[12]|SL|STOP(?: LOSS)?|ENTR[ÉE]E?|ENTRY|SORTIE|EXIT|OBJECTIF(?: FINAL)?|TARGET|BREAK EVEN|BE)\\b[^:：]*?)"
+            r"\\s*(?::|：|≈|=)\\s*(?P<value>[+-]?(?:\\d{1,3}(?:[ \\u202f]\\d{3})+|\\d+)(?:[.,]\\d+)?%?)"
+            r"(?:\\s*(?P<detail>.*))?$", l, re.IGNORECASE)
+        if niveau and len(niveau.group("label").strip()) <= 48:
+            label = niveau.group("label").strip().rstrip(" :：≈=")
+            value = niveau.group("value").strip()
+            detail = (niveau.group("detail") or "").strip()
+            detail = re.sub(r"^[()\\[\\]—–,:; ]+|[()\\[\\] ]+$", "", detail)
+            if out and out[-1]:
+                out.append("")
+            out.append(label)
+            out.append(value)
+            if detail:
+                out.append(detail)
+            out.append("")
+            continue
         mt = re.search(r" ?: | ≈ ", l)
         if mt and not l.startswith(("ℹ️", "RSI")):
             g, d_ = l[:mt.start()], l[mt.end():]
