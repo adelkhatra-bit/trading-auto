@@ -120,9 +120,9 @@ class AlignMtfRulesTest(unittest.TestCase):
             "🛑 Stop Loss : 4 020,00 (sous la mèche basse — bougie 15 minutes)\n"
             "📌 Entrée : 4 050,00"
         )
-        self.assertIn("💰 TP1\\n4 075,50\\nancienne mèche haute — bougie 15 minutes", message)
-        self.assertIn("🛑 Stop Loss\\n4 020,00\\nsous la mèche basse — bougie 15 minutes", message)
-        self.assertIn("📌 Entrée\\n4 050,00", message)
+        self.assertIn("💰 TP1\n4 075,50\nancienne mèche haute — bougie 15 minutes", message)
+        self.assertIn("🛑 Stop Loss\n4 020,00\nsous la mèche basse — bougie 15 minutes", message)
+        self.assertIn("📌 Entrée\n4 050,00", message)
 
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
