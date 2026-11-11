@@ -340,7 +340,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertTrue(send.call_args.kwargs["text"].startswith("⏸ PAS D'ENTRÉE POUR LE MOMENT — ATTENDS"))
+        self.assertTrue(send.call_args.kwargs["text"].startswith("🔴 CLÔTURE — SIGNAL NON CONFIRMÉ"))
+        self.assertIn("N'ENTRE PAS", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
     def test_candle_alert_puts_clear_no_entry_verdict_before_market_details(self):
@@ -1172,7 +1173,9 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🟢 SIGNAL D'ENTRÉE VALIDÉ — VÉRIFIE LES NIVEAUX")
+        self.assertEqual(message.splitlines()[0], "🟢 CLÔTURE — SIGNAL CONFIRMÉ")
+        self.assertIn("Signal validé", message)
+        self.assertNotIn("SIGNAL NON CONFIRMÉ", message)
 
 if __name__ == "__main__":
     unittest.main()
