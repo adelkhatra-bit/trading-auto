@@ -2122,16 +2122,37 @@ def texte_cloture(m, tf, bougie, r, cle):
     titre, raison = verdict(r, cle)
     maj, n_ok = alignement(r)
     confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (4 h + 1 h)"
+    tendance_4h = 'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'
+    tendance_1h = 'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'
     lignes = [
-        f"🕯 CLÔTURE CONFIRMÉE — BOUGIE {tf} — {ICONE.get(m, '📊')} {m}",
+        "🕯 CLÔTURE CONFIRMÉE",
+        f"{tf} — {ICONE.get(m, '📊')} {m}",
         f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
-        f"📊 Résultat : bougie {couleur} — ouverture {px(bougie['o'])}, clôture {px(bougie['c'])}",
-        f"🧭 Tendance : 4 h {'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'} ; confirmation 1 h {'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'}",
-        f"✅ Alignement : {confirmation}",
-        f"🚦 Décision ALIGN : {titre}",
-        f"⏳ Pourquoi : {raison_attente(r, cle)}",
-        f"➡️ Prochaine étape : {prochaine(r, cle)}",
-        "ℹ️ Une clôture seule ne déclenche pas une entrée. Aucun ordre n'est envoyé à ton broker."
+        "",
+        "📊 RÉSULTAT DE LA BOUGIE",
+        f"Bougie {couleur}",
+        f"Ouverture : {px(bougie['o'])}",
+        f"Clôture : {px(bougie['c'])}",
+        "",
+        "🧭 TENDANCE MULTI-UNITÉS",
+        f"4 h : {tendance_4h}",
+        f"Confirmation 1 h : {tendance_1h}",
+        "",
+        "✅ ALIGNEMENT",
+        confirmation,
+        "",
+        "🚦 DÉCISION ALIGN",
+        titre,
+        "",
+        "⏳ POURQUOI",
+        raison_attente(r, cle),
+        "",
+        "➡️ PROCHAINE ÉTAPE",
+        prochaine(r, cle),
+        "",
+        "ℹ️ À RETENIR",
+        "Une clôture seule ne déclenche pas une entrée.",
+        "Aucun ordre n'est envoyé à ton broker."
     ]
     return "\n".join(lignes)
 
