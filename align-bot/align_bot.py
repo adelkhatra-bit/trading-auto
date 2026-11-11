@@ -469,7 +469,8 @@ def alignement(r):
 
 def texte_etat(nom_marche, r, cle=None, vip=True):
     """Carte Telegram complète : mise en page uniquement, aucune rubrique d'analyse supprimée."""
-    fl = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
+    # Codes visuels constants dans toutes les cartes : vert = hausse, rouge = baisse, orange = neutre.
+    fl = lambda d: "🟢⬆️" if d == 1 else "🔴⬇️" if d == -1 else "🟠➖"
     prix = r["m1"][-1]["c"]
     entete = f"{ICONE.get(nom_marche, '📊')}  ALIGN • {nom_marche}\n💹 Prix actuel : {px(prix)}"
     if not vip:
@@ -488,12 +489,10 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
              "🟠 Pas de biais confirmé en 1h / 4h")
     l = [entete, "━━━━━━━━━━━━━━━━━━", "📡 LECTURE DU MARCHÉ",
          "BIAIS GÉNÉRAL", biais,
-         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS"]
-    for nom, i in ut:
-        l += [f"UNITÉ {nom}", fl(D[i])]
-    l += ["━━━━━━━━━━━━━━━━━━", "📈 RSI PAR UNITÉ DE TEMPS"]
-    for nom, i in ut:
-        l += [f"RSI {nom}", f"{R[i]:.0f}"]
+         "━━━━━━━━━━━━━━━━━━", "📊 INDICATEURS PAR UNITÉ DE TEMPS",
+         "  /  ".join(f"{nom} {fl(D[i])}" for nom, i in ut),
+         "━━━━━━━━━━━━━━━━━━", "📈 RSI PAR UNITÉ DE TEMPS",
+         "  /  ".join(f"{nom} {R[i]:.0f}" for nom, i in ut)]
     l += ["━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
           "ALIGNEMENT 1H + 4H", f"{n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
           "ZONE DAILY", zone_txt(r['posD']),
@@ -796,6 +795,8 @@ TRAD = {
 "🔓 Débloquer les positions (49,90 € / mois)": "🔓 Unlock positions (€49.90 / month)",
 "🧩 Obtenir l'indicateur (49,90 € / mois)": "🧩 Get the indicator (€49.90 / month)",
 # Verdicts / analyse
+"📊 INDICATEURS PAR UNITÉ DE TEMPS": "📊 TIMEFRAME INDICATORS",
+"📈 RSI PAR UNITÉ DE TEMPS": "📈 RSI BY TIMEFRAME",
 "🔴🔴 N'ENTRE PAS": "🔴🔴 DON'T ENTER", "🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
 "⛔ TROP TARD — le marché est déjà parti": "⛔ TOO LATE — the market has already moved",
 "😎 Patience, on trouve une autre entrée": "😎 Be patient, we'll find another entry",
