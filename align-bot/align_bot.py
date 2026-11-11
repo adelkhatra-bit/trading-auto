@@ -3500,6 +3500,8 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
     elif m and ("ÇA ARRIVE" in tete or "POINT D'ENTRÉE À VENIR" in tete or "CASSURE EN VUE" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
         fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
     for cid in list(etat.get("prospects", [])):
+        if m and not marche_autorise(etat, cid, m):
+            continue
         sa_bienvenue = m and deja.get(cid) == m and tr is not None
         if signal and cid not in deja:
             txt = ("🎁🎁 TA POSITION GRATUITE DU JOUR 🎁🎁\n"
@@ -3582,16 +3584,23 @@ def marche_autorise(etat, cid, marche):
 
 def menu_marches(etat, cid):
     choix = marche_selection(etat, cid)
-    labels = {
+    anglais = str(cid) in LANG_EN
+    labels = ({
+        "BTC": "🟠 BTC only",
+        "GOLD": "🥇 GOLD only",
+        "BOTH": "🟠 BTC + 🥇 GOLD",
+    } if anglais else {
         "BTC": "🟠 BTC uniquement",
         "GOLD": "🥇 GOLD uniquement",
         "BOTH": "🟠 BTC + 🥇 GOLD",
-    }
+    })
     lignes = [[{"text": ("✅ " if choix == "BTC" else "") + labels["BTC"], "callback_data": "markets:BTC"}],
               [{"text": ("✅ " if choix == "GOLD" else "") + labels["GOLD"], "callback_data": "markets:GOLD"}],
               [{"text": ("✅ " if choix == "BOTH" else "") + labels["BOTH"], "callback_data": "markets:BOTH"}]]
-    _envoi_sur(cid, text="📡 CHOISIS LES MARCHÉS QUE TU SOUHAITES SUIVRE\n\nLes analyses et alertes privées seront filtrées selon ton choix.\nLes positions déjà ouvertes restent suivies jusqu'à leur clôture.",
-               reply_markup=json.dumps({"inline_keyboard": lignes}))
+    texte = ("📡 CHOOSE THE MARKETS YOU WANT TO FOLLOW\n\nPrivate analyses and alerts will follow your choice.\nAlready-open positions will continue to be monitored until they close."
+             if anglais else
+             "📡 CHOISIS LES MARCHÉS QUE TU SOUHAITES SUIVRE\n\nLes analyses et alertes privées seront filtrées selon ton choix.\nLes positions déjà ouvertes restent suivies jusqu'à leur clôture.")
+    _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
 
 def marche_du_message(texte):
     """Détecte le marché dans l'en-tête d'une notification ; les messages macro mixtes exigent BOTH."""
