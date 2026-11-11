@@ -1115,8 +1115,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertTrue(state.get("ia_err"))
 
     def test_openai_is_configured_as_primary_external_ai_provider(self):
-        # Claude (moments clés, premium) passe avant ; OpenAI reste le premier fournisseur « classique ».
-        provider = next(p for p in align_bot.IA_FOURNISSEURS if p[0] != "Anthropic")
+        # Chaîne gratuite d'abord (Gemini, Groq, IA sans clé) ; OpenAI (payant) n'est jamais avant elles.
+        provider = next(p for p in align_bot.IA_FOURNISSEURS if p[0] == "OpenAI")
         self.assertEqual(provider[0], "OpenAI")
         self.assertEqual(provider[1], "https://api.openai.com/v1/chat/completions")
         self.assertEqual(provider[2], "chat-latest")
@@ -2086,47 +2086,145 @@ class AlignSoundAndAiBudgetTest(unittest.TestCase):
 
 
 
-class AlignClaudeProviderTest(unittest.TestCase):
+class AlignAiChainTest(unittest.TestCase):
+    """Chaîne IA : Gemini -> Groq -> IA sans clé -> payants -> Claude en dernier recours (moments clés VIP, plafond, sans crédit)."""
     CLE = "sk-ant-api03-FAKEKEYFAKEKEYFAKEKEY123456"
+    GKEY = "AIzaSyFAKEKEYFAKEKEYFAKEKEY1234567"
 
-    def _patch_chaine(self, cle, appels, echec_claude=False):
+    def _chaine(self, **cles):
+        return [("Gemini", align_bot.GEMINI_BASE, "gemini-3.6-flash", cles.get("gemini", ""), True),
+                ("Gemini 2.5", align_bot.GEMINI_BASE, "gemini-2.5-flash", cles.get("gemini", ""), True),
+                ("Groq", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b", cles.get("groq", ""), True),
+                ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta", "", False),
+                ("Anthropic", "https://api.anthropic.com/v1/messages", "claude-haiku-5-5", cles.get("claude", ""), True)]
+
+    def _ia(self, etat, echecs=(), credit=False, chaine=None, **kw):
         from unittest.mock import patch
-        def faux_appel(url, modele, k, messages):
-            nom = "Anthropic" if "anthropic" in url else "OVH" if "ovh" in url else "autre"
-            appels.append((nom, modele))
-            if nom == "Anthropic" and echec_claude:
-                raise RuntimeError("HTTP 529")
-            return "🧠 réponse de test " + nom
-        chaine = [("Anthropic", "https://api.anthropic.com/v1/messages", "claude-haiku-5-5", cle, True),
-                  ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta", "", False)]
-        return patch.object(align_bot, "IA_FOURNISSEURS", chaine), patch.object(align_bot, "_appel_ia", side_effect=faux_appel)
-
-    def test_claude_first_for_key_moments_only(self):
+        import io
+        import urllib.error
         appels = []
-        p1, p2 = self._patch_chaine(self.CLE, appels)
-        with p1, p2:
-            etat = {}
-            self.assertIn("Anthropic", align_bot.ia(etat, "c", {}, premium=True))
-            self.assertIn("OVH", align_bot.ia(etat, "c", {}))            # hors moment clé : IA gratuites
-        self.assertEqual([a[0] for a in appels], ["Anthropic", "OVH"])
-        self.assertEqual(sum(etat["ia_claude_jour"].values()), 1)
+        def faux(url, modele, cle, messages, recherche=False):
+            nom = "Anthropic" if "anthropic" in url else "Gemini" if "googleapis" in url else "Groq" if "groq" in url else "OVH"
+            nom_cle = "Gemini 2.5" if nom == "Gemini" and "2.5" in modele else nom
+            appels.append((nom_cle, recherche, messages))
+            if nom == "Anthropic" and credit:
+                raise urllib.error.HTTPError(url, 400, "x", {}, io.BytesIO(b'{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API"}}'))
+            if nom_cle in echecs or nom in echecs:
+                raise RuntimeError("HTTP 503")
+            return "🧠 réponse " + nom_cle
+        with patch.object(align_bot, "IA_FOURNISSEURS", chaine or self._chaine(gemini=self.GKEY, groq="gsk_fake", claude=self.CLE)), \
+             patch.object(align_bot, "_appel_ia", side_effect=faux):
+            txt = align_bot.ia(etat, "consigne", kw.pop("donnees", {}), **kw)
+        return txt, appels
 
-    def test_claude_absent_or_failing_or_capped_falls_back_to_free(self):
-        for cle, echec, plafond in (("", False, 300), (self.CLE, True, 300), (self.CLE, False, 0)):
-            appels = []
-            p1, p2 = self._patch_chaine(cle, appels, echec_claude=echec)
-            with p1, p2, unittest.mock.patch.object(align_bot, "ANTHROPIC_MAX_JOUR", plafond):
-                txt = align_bot.ia({}, "c", {}, premium=True)
-            self.assertIn("OVH", txt, f"clé={bool(cle)} échec={echec} plafond={plafond}")
-            self.assertEqual(any(a[0] == "Anthropic" for a in appels), bool(cle) and echec)
+    def test_order_free_first_claude_last(self):
+        self.assertEqual([p[0] for p in align_bot.IA_FOURNISSEURS],
+                         ["Gemini", "Gemini 2.5", "Groq", "OVH Llama", "OVH Mistral", "Pollinations", "LLM7", "OpenAI", "Anthropic"])
+        self.assertEqual(align_bot.ANTHROPIC_MAX_JOUR, 100)
+        self.assertEqual(align_bot.ANTHROPIC_MAX_TOKENS, 300)
 
-    def test_daily_cap_counts_and_switches(self):
-        appels = []
-        p1, p2 = self._patch_chaine(self.CLE, appels)
-        with p1, p2, unittest.mock.patch.object(align_bot, "ANTHROPIC_MAX_JOUR", 2):
-            etat = {}
-            textes = [align_bot.ia(etat, "c", {}, premium=True) for _ in range(4)]
-        self.assertEqual([("Anthropic" in t) for t in textes], [True, True, False, False])
+    def test_free_ai_answers_first_and_claude_is_not_called(self):
+        txt, appels = self._ia({}, premium=True)
+        self.assertEqual([a[0] for a in appels], ["Gemini"]); self.assertIn("Gemini", txt)
+
+    def test_fallback_gemini_then_groq_then_free_then_claude_last_resort(self):
+        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), premium=True)
+        self.assertEqual([a[0] for a in appels], ["Gemini", "Gemini 2.5", "Groq", "OVH", "Anthropic"]); self.assertIn("Anthropic", txt)
+        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 2.5", "Groq"))
+        self.assertIn("OVH", txt)
+
+    def test_claude_never_called_outside_key_moments(self):
+        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), premium=False)
+        self.assertEqual(txt, ""); self.assertNotIn("Anthropic", [a[0] for a in appels])
+
+    def test_no_credit_is_silent_then_not_retried_for_hours(self):
+        etat = {}
+        txt, appels = self._ia(etat, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), credit=True, premium=True, cle_cache="moment:GOLD:tp")
+        self.assertEqual(txt, ""); self.assertEqual(etat["ia_claude_credit"], "NO_CREDIT")
+        self.assertGreaterEqual(etat["ia_pause"]["Anthropic"] - __import__("time").time(), 5 * 3600)
+        _, appels2 = self._ia(etat, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), credit=True, premium=True, cle_cache="moment:GOLD:tp2")
+        self.assertNotIn("Anthropic", [a[0] for a in appels2])
+        self.assertTrue(align_bot.erreur_sans_credit("HTTP 400 invalid_request_error Your credit balance is too low"))
+
+    def test_claude_cap_per_day_and_10_minute_cache_per_moment(self):
+        from unittest.mock import patch
+        etat = {}
+        tout_echoue = ("Gemini", "Gemini 2.5", "Groq", "OVH")
+        with patch.object(align_bot, "ANTHROPIC_MAX_JOUR", 2):
+            r = [self._ia(etat, echecs=tout_echoue, premium=True, cle_cache=f"moment:GOLD:{k}")[0] for k in ("a", "b", "c")]
+        self.assertEqual([("Anthropic" in t) for t in r], [True, True, False])
+        etat2, t0 = {}, 1_000_000.0
+        with patch.object(align_bot.time, "time", side_effect=[t0] * 40):
+            _, a1 = self._ia(etat2, echecs=tout_echoue, premium=True, cle_cache="moment:BTC:prep", duree=0)
+            _, a2 = self._ia(etat2, echecs=tout_echoue, premium=True, cle_cache="moment:BTC:prep", duree=0)     # < 10 min : pas de 2e appel Claude
+        self.assertIn("Anthropic", [a[0] for a in a1]); self.assertNotIn("Anthropic", [a[0] for a in a2])
+
+    def test_google_search_only_for_more_info_and_news(self):
+        txt, appels = self._ia({}, premium=True, recherche=True, cle_cache="analyse_GOLD_fr_x")
+        self.assertEqual(appels[0][0], "Gemini 2.5"); self.assertTrue(appels[0][1])            # grounding gratuit : Gemini 2.5
+        _, appels = self._ia({}, premium=True)
+        self.assertFalse(any(a[1] for a in appels))                                          # moments clés : jamais de recherche
+        import inspect
+        src = inspect.getsource(align_bot)
+        self.assertEqual(src.count("premium=True, recherche=True)"), 3)                       # En savoir plus + 2 news
+        self.assertEqual(src.count(", premium=True)"), 2)                                      # moments clés (prépare-toi, TP, turbulence) + entrée
+
+    def test_gemini_native_request_grounding_and_sources(self):
+        from unittest.mock import patch, MagicMock
+        rep = MagicMock()
+        rep.__enter__.return_value.read.return_value = json.dumps({"candidates": [{"content": {"parts": [{"text": "🧠 Contexte de la journée : calme avant l'annonce."}]},
+            "groundingMetadata": {"groundingChunks": [{"web": {"uri": "https://x/y", "title": "reuters.com"}}, {"web": {"uri": "https://z/w", "title": "bloomberg.com"}}]}}]}).encode()
+        msgs = [{"role": "system", "content": "REGLES"}, {"role": "user", "content": "DONNEES"}]
+        with patch.object(align_bot.urllib.request, "urlopen", return_value=rep) as uo:
+            txt = align_bot._appel_ia(align_bot.GEMINI_BASE, "gemini-2.5-flash", self.GKEY, msgs, recherche=True)
+        req = uo.call_args.args[0]; corps = json.loads(req.data.decode())
+        self.assertTrue(req.full_url.endswith("/models/gemini-2.5-flash:generateContent")); self.assertNotIn(self.GKEY, req.full_url)
+        self.assertEqual(req.get_header("X-goog-api-key"), self.GKEY)
+        self.assertEqual(corps["tools"], [{"google_search": {}}]); self.assertEqual(corps["systemInstruction"]["parts"][0]["text"], "REGLES")
+        self.assertEqual(align_bot._SOURCES_IA, ["reuters.com", "bloomberg.com"]); self.assertIn("Contexte", txt)
+        etat = {"ia_sources": {"k": ["reuters.com", "bloomberg.com"]}}
+        self.assertEqual(align_bot.ligne_sources(etat, "k"), "\n🔎 Sources : reuters.com, bloomberg.com"); self.assertEqual(align_bot.ligne_sources(etat, "autre"), "")
+        with patch.object(align_bot.urllib.request, "urlopen", return_value=rep) as uo:                 # sans recherche : pas d'outil, pas de sources
+            align_bot._appel_ia(align_bot.GEMINI_BASE, "gemini-3.6-flash", self.GKEY, msgs)
+        self.assertNotIn("tools", json.loads(uo.call_args.args[0].data.decode())); self.assertEqual(align_bot._SOURCES_IA, [])
+
+    def test_groq_short_prompt_and_minimum_interval(self):
+        from unittest.mock import patch
+        gros = {"liste": list(range(500)), "texte": "x" * 5000, "niveau": 4012.5}
+        etat = {}
+        _, appels = self._ia(etat, echecs=("Gemini", "Gemini 2.5"), donnees=gros, cle_cache="a")
+        groq = next(a for a in appels if a[0] == "Groq")
+        self.assertLessEqual(len(groq[2][1]["content"]), 3700)
+        self.assertEqual(sum(1 for a in appels if a[0] == "Groq"), 1)
+        with patch.object(align_bot.time, "time", return_value=__import__("time").time() + 5):
+            _, appels2 = self._ia(etat, echecs=("Gemini", "Gemini 2.5"), donnees=gros, cle_cache="b")
+        self.assertNotIn("Groq", [a[0] for a in appels2])                                          # < 20 s : on passe à la suivante
+
+    def test_free_daily_counters_stop_calls_at_limit(self):
+        from unittest.mock import patch
+        etat = {}
+        with patch.dict(align_bot.IA_PLAFOND_JOUR, {"Gemini": 1, "Gemini 2.5": 0}):
+            _, a1 = self._ia(etat, cle_cache="a"); _, a2 = self._ia(etat, cle_cache="b")
+        self.assertEqual(a1[0][0], "Gemini"); self.assertEqual(a2[0][0], "Groq")
+
+    def test_failures_back_off_progressively_no_loop(self):
+        etat = {}
+        for k in range(3):
+            self._ia(etat, echecs=("Gemini",), cle_cache=f"k{k}")
+            etat["ia_pause"].pop("Gemini", None) if k == 99 else None
+        self.assertEqual(etat["ia_echecs"]["Gemini"], 1)                      # 1 échec puis pause : pas de rappel en rafale
+        self.assertGreater(etat["ia_pause"]["Gemini"], __import__("time").time() + 200)
+
+    def test_ai_never_invents_a_price_and_never_changes_levels(self):
+        data = {"plan": {"entrée": 3995.5, "SL": 4010.2, "TP1": 3950.0}, "année": 2026}
+        self.assertEqual(align_bot.prix_inventes("Le SL 4010.2 tient, TP1 3950 et l'année 2026, +1,5 %", data), [])
+        self.assertEqual(align_bot.prix_inventes("Je propose plutôt un SL à 4025 et 3900 en cible", data), ["4025", "3900"])
+        from unittest.mock import patch
+        with patch.object(align_bot, "IA_FOURNISSEURS", self._chaine(gemini=self.GKEY)), \
+             patch.object(align_bot, "_appel_ia", side_effect=["Mets ton SL à 4099.9 maintenant, c'est mieux.", "Je déconseille cette entrée : la 1h est contre."]):
+            txt = align_bot.ia({}, "c", data)
+        self.assertEqual(txt, "Je déconseille cette entrée : la 1h est contre.")           # 1re réponse rejetée (prix inventé), 2e IA retenue
+        self.assertIn("je déconseille", align_bot.IA_REGLES); self.assertIn("ne les changes JAMAIS", align_bot.IA_REGLES)
 
     def test_anthropic_request_format_and_key_never_in_errors(self):
         import io
@@ -2136,25 +2234,19 @@ class AlignClaudeProviderTest(unittest.TestCase):
         msgs = [{"role": "system", "content": "REGLES"}, {"role": "user", "content": "DONNEES"}]
         with patch.object(align_bot.urllib.request, "urlopen", return_value=rep) as uo:
             txt = align_bot._appel_ia("https://api.anthropic.com/v1/messages", "claude-haiku-5-5", self.CLE, msgs)
-        req = uo.call_args.args[0]
-        corps = json.loads(req.data.decode())
-        self.assertEqual(req.get_header("X-api-key"), self.CLE)
-        self.assertEqual(req.get_header("Anthropic-version"), "2023-06-01")
-        self.assertEqual((corps["model"], corps["system"], corps["messages"]), ("claude-haiku-5-5", "REGLES", [msgs[1]]))
-        self.assertLessEqual(corps["max_tokens"], 500)
-        self.assertIn("Tiens-toi", txt)
-        corps_err = io.BytesIO(('{"error":{"status":"UNAUTHENTICATED","message":"bad key ' + self.CLE + '"}}').encode())
-        ex = urllib.error.HTTPError("https://api.anthropic.com/v1/messages", 401, "x", {}, corps_err)
-        detail = align_bot.detail_erreur_ia(ex, self.CLE)
-        self.assertIn("HTTP 401", detail); self.assertNotIn(self.CLE, detail); self.assertNotIn("sk-ant-api03", detail)
+        req = uo.call_args.args[0]; corps = json.loads(req.data.decode())
+        self.assertEqual(req.get_header("X-api-key"), self.CLE); self.assertEqual(corps["max_tokens"], 300)
+        self.assertEqual((corps["model"], corps["system"], corps["messages"]), ("claude-haiku-5-5", "REGLES", [msgs[1]])); self.assertIn("Tiens-toi", txt)
+        ex = urllib.error.HTTPError("https://api.anthropic.com/v1/messages", 401, "x", {}, io.BytesIO(('{"error":{"status":"X","message":"bad ' + self.CLE + '"}}').encode()))
+        d = align_bot.detail_erreur_ia(ex, self.CLE)
+        self.assertIn("HTTP 401", d); self.assertNotIn(self.CLE, d); self.assertNotIn("sk-ant-api03", d)
+        ex = urllib.error.HTTPError("https://g", 400, "x", {}, io.BytesIO(('{"error":{"status":"INVALID_ARGUMENT","message":"key ' + self.GKEY + ' invalid"}}').encode()))
+        d = align_bot.detail_erreur_ia(ex, "")
+        self.assertIn("HTTP 400 INVALID_ARGUMENT", d); self.assertNotIn("AIzaSy", d)
 
-    def test_key_moments_call_claude_and_lesson_does_not(self):
-        import inspect
-        src = inspect.getsource(align_bot)
-        self.assertEqual(src.count(", premium=True)"), 5)   # moments clés, En savoir plus, news x2, entrée
-        self.assertEqual(align_bot.IA_FOURNISSEURS[0][0], "Anthropic")
-        self.assertEqual(align_bot.ANTHROPIC_MAX_JOUR, 300)
-
+    def test_summary_is_short(self):
+        r = align_bot.resumer_donnees({"a": list(range(100)), "b": "y" * 1000, "c": 1.23456789}, 300)
+        self.assertLessEqual(len(r), 330); self.assertIn("1.2346", align_bot.resumer_donnees({"c": 1.23456789}, 300))
 
 if __name__ == "__main__":
     unittest.main()

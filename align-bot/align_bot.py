@@ -2361,20 +2361,35 @@ def menu_canal_vip(etat):
 # IA : plusieurs IA GRATUITES à la suite — si l'une tombe, la suivante répond (aucune clé obligatoire).
 # 1) Google Gemini (si la clé GEMINI_API_KEY existe)  2) OVHcloud Llama 3.3 70B (sans clé)  3) OVHcloud Mistral (sans clé)
 # 4) Pollinations (sans clé)  5) LLM7 (sans clé). Et si TOUT tombe : l'analyse interne du bot répond quand même.
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+_GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 IA_FOURNISSEURS = [
-    # Claude Haiku : payant (clé ANTHROPIC_API_KEY dans les secrets GitHub), UNIQUEMENT pour les moments clés (premium=True), plafond/jour ANTHROPIC_MAX_JOUR.
-    ("Anthropic", "https://api.anthropic.com/v1/messages", os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5", os.environ.get("ANTHROPIC_API_KEY", ""), True),
-    ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL") or "chat-latest", os.environ.get("OPENAI_API_KEY", ""), True),
-    ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash", os.environ.get("GEMINI_API_KEY", ""), True),
-    ("Gemini Lite", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.5-flash-lite", os.environ.get("GEMINI_API_KEY", ""), True),
+    # 1) Gemini (niveau gratuit, API native). « Gemini 2.5 » = modèle gratuit avec recherche Google gratuite (500/jour) : seul à faire du grounding.
+    ("Gemini", GEMINI_BASE, os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash", _GEMINI_KEY, True),
+    ("Gemini 2.5", GEMINI_BASE, "gemini-2.5-flash", _GEMINI_KEY, True),
+    # 2) Groq (plan gratuit, ~8K tokens/min : prompts courts + intervalle minimal)
+    ("Groq", "https://api.groq.com/openai/v1/chat/completions", os.environ.get("GROQ_MODEL") or "openai/gpt-oss-120b", os.environ.get("GROQ_API_KEY", ""), True),
+    # 3) IA sans clé
     ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta-Llama-3_3-70B-Instruct", "", False),
     ("OVH Mistral", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Mistral-Small-3.2-24B-Instruct", "", False),
     ("Pollinations", "https://text.pollinations.ai/openai", "openai", "", False),
     ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", "", False),
+    # 4) Payants : seulement sans aucune IA gratuite disponible (OpenAI n'est actif que si une clé est fournie)
+    ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL") or "chat-latest", os.environ.get("OPENAI_API_KEY", ""), True),
+    # Claude Haiku : dernier recours, moments clés VIP seulement (premium=True), plafond/jour ANTHROPIC_MAX_JOUR, ignoré sans crédit.
+    ("Anthropic", "https://api.anthropic.com/v1/messages", os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5", os.environ.get("ANTHROPIC_API_KEY", ""), True),
 ]
+# Limites gratuites : appels par jour et intervalle minimal entre deux appels (secondes)
+IA_PLAFOND_JOUR = {"Gemini": int(os.environ.get("GEMINI_MAX_JOUR") or "250"), "Gemini 2.5": int(os.environ.get("GEMINI_MAX_JOUR") or "250"),
+                   "Groq": int(os.environ.get("GROQ_MAX_JOUR") or "500")}
+IA_INTERVALLE_MIN = {"Groq": 20}
+IA_RESUME_CAR = {"Groq": 3500, "Anthropic": 2500}         # entrée courte : Groq (8K tokens/min), Claude (coût)
+GEMINI_RECHERCHE_MAX_JOUR = int(os.environ.get("GEMINI_SEARCH_MAX_JOUR") or "100")   # recherches Google/jour (quota gratuit : 500)
+CLAUDE_CACHE_SEC = 600                                    # Claude : au plus 1 appel / 10 min par marché et par type de moment
+CLAUDE_PAUSE_CREDIT_SEC = 6 * 3600                        # sans crédit : on n'insiste pas avant 6 h
 IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "300"))
-ANTHROPIC_MAX_JOUR = int(os.environ.get("ANTHROPIC_MAX_JOUR") or "300")     # appels Claude par jour (au-delà : IA gratuites)
-ANTHROPIC_MAX_TOKENS = 400                                                  # réponse courte : 4 lignes
+ANTHROPIC_MAX_JOUR = int(os.environ.get("ANTHROPIC_MAX_JOUR") or "100")     # appels Claude par jour (au-delà : IA gratuites)
+ANTHROPIC_MAX_TOKENS = 300                                                  # réponse courte : 4 lignes
 IA_REGLES = ("Tu es l'analyste de marché du bot ALIGN. Tu reçois des données chiffrées réelles calculées par le moteur ; tu dois les interpréter, pas les remplacer. "
              "Architecture : H4 = biais directeur, H1 = confirmation, M15 = structure/retracement, M5 = déclencheur après clôture ; M1 = suivi du prix. "
              "Sépare tendance, scénario privilégié, scénario alternatif, validation, invalidation et prochaine action. "
@@ -2383,7 +2398,10 @@ IA_REGLES = ("Tu es l'analyste de marché du bot ALIGN. Tu reçois des données 
              "Un setup M15/M5 contre H4/H1 est un scalp contre-tendance, jamais un swing. Une mèche seule ne confirme pas une entrée. "
              "Le prochain horaire de clôture fourni est une heure de réévaluation, PAS une promesse d'entrée. "
              "DXY, EUR/USD et US10Y sont du contexte uniquement ; si les données sont absentes ou anciennes, signale-le. "
-             "US10Y est une donnée officielle quotidienne, jamais une cotation intraday. Pas de promesse de gain. Langage direct, concret et sans remplissage.")
+             "US10Y est une donnée officielle quotidienne, jamais une cotation intraday. Pas de promesse de gain. Langage direct, concret et sans remplissage. "
+             "Les niveaux (entrée, TP1, TP2, SL, zone) sont calculés par l'indicateur : tu les ANALYSES, tu ne les changes JAMAIS et tu n'en proposes pas d'autres. "
+             "Si le plan te semble risqué ou incohérent avec le contexte, dis clairement « je déconseille » et pourquoi ; sinon dis ce qui valide ou invalide le plan. "
+             "N'écris aucun prix, niveau ou chiffre de marché absent des données fournies (même si une recherche web en donne).")
 
 def detail_erreur_ia(ex, cle=""):
     """Code HTTP exact + message du fournisseur, sans jamais afficher la clé."""
@@ -2393,7 +2411,10 @@ def detail_erreur_ia(ex, cle=""):
             corps = json.loads(ex.read().decode("utf-8", "replace"))
             corps = corps[0] if isinstance(corps, list) and corps else corps
             err = corps.get("error", {}) if isinstance(corps, dict) else {}
-            msg = f"{err.get('status', '')} {err.get('message', '')}".strip()
+            if isinstance(err, str):
+                msg = err
+            else:
+                msg = f"{err.get('status') or err.get('type') or ''} {err.get('message', '')}".strip()
         except Exception:
             pass
         texte = f"HTTP {ex.code} {msg}".strip()
@@ -2401,12 +2422,55 @@ def detail_erreur_ia(ex, cle=""):
         texte = f"{type(ex).__name__} {ex}".strip()
     if cle:
         texte = texte.replace(cle, "***")
-    return re.sub(r"(AIza|sk-ant-)[0-9A-Za-z_\-]{20,}", "***", texte)[:200]
+    return re.sub(r"(AIza|sk-ant-|gsk_)[0-9A-Za-z_\-]{20,}", "***", texte)[:200]
 
-def _appel_ia(url, modele, cle, messages):
+def erreur_sans_credit(detail):
+    """Compte Anthropic sans crédit : erreur attendue, traitée sans bruit (pas une panne)."""
+    d = str(detail).lower()
+    return "credit balance" in d or "billing" in d or "insufficient" in d and "credit" in d
+
+def resumer_donnees(obj, limite):
+    """Entrée courte : listes raccourcies (8 derniers éléments), textes tronqués, nombres arrondis, JSON compact."""
+    def r(o):
+        if isinstance(o, dict):
+            return {k: r(v) for k, v in list(o.items())[:40]}
+        if isinstance(o, (list, tuple)):
+            return [r(v) for v in list(o)[-8:]]
+        if isinstance(o, float):
+            return round(o, 4)
+        return o[:200] if isinstance(o, str) else o
+    t = json.dumps(r(obj), ensure_ascii=False, separators=(",", ":"))
+    return t if len(t) <= limite else t[:limite] + "…(résumé)"
+
+def prix_inventes(texte, donnees):
+    """Nombres de type prix (≥ 100, hors années et pourcentages) absents des données fournies : l'IA n'a pas le droit de les écrire."""
+    connus = [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", json.dumps(donnees, ensure_ascii=False))]
+    inventes = []
+    for m in re.finditer(r"(?<![\w.])(\d{3,}(?:[.,]\d+)?)(?![\w]|\s?%)", str(texte)):
+        n = float(m.group(1).replace(",", "."))
+        if n < 100 or (n == int(n) and 1990 <= n <= 2100 and "." not in m.group(1) and "," not in m.group(1)):
+            continue
+        if not any(abs(n - c) <= max(0.5, 0.003 * abs(c)) for c in connus):
+            inventes.append(m.group(1))
+    return inventes
+
+_SOURCES_IA = []        # sources de la dernière réponse avec recherche Google (noms de sites)
+
+def _appel_ia(url, modele, cle, messages, recherche=False):
     h = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "align-bot"}
     anthropic = "api.anthropic.com" in url
-    if anthropic:                                   # API Messages d'Anthropic : consigne système séparée, clé dans x-api-key
+    gemini = "generativelanguage.googleapis.com" in url
+    if gemini:                                      # API native Gemini (seule à offrir la recherche Google), clé dans l'en-tête
+        systeme = "\n".join(m["content"] for m in messages if m.get("role") == "system")
+        utilisateur = "\n".join(m["content"] for m in messages if m.get("role") != "system")
+        corps_ = {"systemInstruction": {"parts": [{"text": systeme}]}, "contents": [{"role": "user", "parts": [{"text": utilisateur}]}],
+                  "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1000}}
+        if recherche:
+            corps_["tools"] = [{"google_search": {}}]
+        corps = json.dumps(corps_).encode()
+        h["x-goog-api-key"] = cle
+        url = f"{url}/{modele}:generateContent"
+    elif anthropic:                                 # API Messages d'Anthropic : consigne système séparée, clé dans x-api-key
         systeme = "\n".join(m["content"] for m in messages if m.get("role") == "system")
         corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": ANTHROPIC_MAX_TOKENS, "system": systeme,
                             "messages": [m for m in messages if m.get("role") != "system"]}).encode()
@@ -2417,7 +2481,17 @@ def _appel_ia(url, modele, cle, messages):
             h["Authorization"] = f"Bearer {cle}"
     with urllib.request.urlopen(urllib.request.Request(url, data=corps, headers=h), timeout=25) as rep_:
         j = json.loads(rep_.read().decode())
-    if anthropic:
+    if gemini:
+        cand = (j.get("candidates") or [{}])[0]
+        txt = "".join(p_.get("text", "") for p_ in (cand.get("content") or {}).get("parts", [])).strip()
+        _SOURCES_IA.clear()
+        if recherche:
+            for ch in (cand.get("groundingMetadata") or {}).get("groundingChunks", []):
+                web = ch.get("web") or {}
+                nom = (web.get("title") or urllib.parse.urlparse(web.get("uri", "")).hostname or "").strip()
+                if nom and nom not in _SOURCES_IA:
+                    _SOURCES_IA.append(nom)
+    elif anthropic:
         txt = "".join(b.get("text", "") for b in j.get("content", []) if b.get("type") == "text").strip()
     else:
         txt = (j["choices"][0]["message"].get("content") or "").strip()
@@ -2425,11 +2499,19 @@ def _appel_ia(url, modele, cle, messages):
         raise ValueError("réponse vide")
     return txt
 
-def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False):
-    """Commentaire court d'une vraie IA. Essaie chaque IA gratuite à la suite ; '' seulement si toutes sont tombées."""
+def ligne_sources(etat, cle_cache):
+    """« 🔎 Sources : … » si la réponse vient d'une recherche Google (jamais de source inventée)."""
+    src = (etat.get("ia_sources") or {}).get(cle_cache) or []
+    return ("\n🔎 Sources : " + ", ".join(src[:4])) if src else ""
+
+def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False, recherche=False):
+    """Commentaire court d'une vraie IA. Ordre : Gemini -> Groq -> IA sans clé -> (payants) -> Claude en dernier recours.
+    premium = moment clé VIP (seul cas où Claude peut être appelé) ; recherche = Google Search (analyse « En savoir plus » et news seulement).
+    Compteurs par jour, intervalle minimal, pause croissante après échec, cache : jamais de boucle d'appels. '' si tout est tombé."""
     cache = etat.setdefault("ia_cache", {})
     if cle_cache and cle_cache in cache and time.time() - cache[cle_cache][0] < duree:
         return cache[cle_cache][1]
+    maintenant = time.time()
     jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
     compte = etat.setdefault("ia_jour", {})
     if compte.get(jour, 0) >= IA_MAX_JOUR:
@@ -2438,33 +2520,71 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False):
         etat["ia_dernier_statut"] = "DAILY_LIMIT_INTERNAL_FALLBACK"
         print("AI_PROVIDER_USED=INTERNAL_FALLBACK reason=DAILY_LIMIT", flush=True)
         return ""
-    messages = [{"role": "system", "content": IA_REGLES},
-                {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]
     txt, erreurs = "", []
-    claude_jour = etat.setdefault("ia_claude_jour", {})
-    for nom, url, modele, cle, besoin_cle in IA_FOURNISSEURS:
+    par_jour = etat.setdefault("ia_fournisseur_jour", {})
+    claude_t = etat.setdefault("ia_claude_t", {})
+    ordre = list(IA_FOURNISSEURS)
+    if recherche:                                       # la recherche Google gratuite n'existe que sur Gemini 2.5 : on l'essaie d'abord
+        ordre.sort(key=lambda f: 0 if f[0] == "Gemini 2.5" else 1)
+    for nom, url, modele, cle, besoin_cle in ordre:
         if besoin_cle and not cle:
             continue
-        if nom == "Anthropic" and (not premium or claude_jour.get(jour, 0) >= ANTHROPIC_MAX_JOUR):
-            continue                                   # Claude : moments clés seulement, dans la limite du plafond du jour
-        if time.time() < etat.get("ia_pause", {}).get(nom, 0):
-            continue                                   # IA en panne récemment : on passe à la suivante
+        compteur = par_jour.setdefault(nom, {})
+        if nom == "Anthropic":
+            if not premium or compteur.get(jour, 0) >= ANTHROPIC_MAX_JOUR:
+                continue                                # Claude : moments clés VIP seulement, dans la limite du plafond du jour
+            if cle_cache and maintenant - claude_t.get(cle_cache, 0) < CLAUDE_CACHE_SEC:
+                continue                                # au plus 1 appel Claude / 10 min par marché et par type de moment
+        elif nom in IA_PLAFOND_JOUR and compteur.get(jour, 0) >= IA_PLAFOND_JOUR[nom]:
+            continue                                    # quota gratuit du jour atteint
+        if maintenant < etat.get("ia_pause", {}).get(nom, 0):
+            continue                                    # IA en panne récemment : on passe à la suivante
+        if maintenant - etat.setdefault("ia_dernier_appel", {}).get(nom, 0) < IA_INTERVALLE_MIN.get(nom, 0):
+            continue                                    # limite par minute du plan gratuit
+        avec_recherche = bool(recherche and nom == "Gemini 2.5" and compteur.get(jour + "_recherche", 0) < GEMINI_RECHERCHE_MAX_JOUR)
+        limite = IA_RESUME_CAR.get(nom)
+        contexte = resumer_donnees(donnees, limite) if limite else json.dumps(donnees, ensure_ascii=False)
+        messages = [{"role": "system", "content": IA_REGLES},
+                    {"role": "user", "content": consigne + "\n\nDonnées :\n" + contexte}]
+        etat["ia_dernier_appel"][nom] = maintenant
         try:
-            txt = _appel_ia(url, modele, cle, messages)
-            etat.setdefault("ia_ok", {})[nom] = int(time.time())
+            brut = _appel_ia(url, modele, cle, messages, recherche=avec_recherche) if avec_recherche else _appel_ia(url, modele, cle, messages)
+            faux = prix_inventes(brut, donnees)
+            if faux:
+                raise ValueError("prix absents des données : " + ", ".join(faux[:3]))      # l'IA n'invente jamais un prix
+            txt = brut
+            etat.setdefault("ia_ok", {})[nom] = int(maintenant)
+            etat.setdefault("ia_echecs", {}).pop(nom, None)
             etat["ia_dernier_fournisseur"] = nom
             etat["ia_dernier_modele"] = modele
             etat["ia_dernier_statut"] = "CONNECTED"
-            if nom == "Anthropic":
-                claude_jour[jour] = claude_jour.get(jour, 0) + 1
-                for k in [k for k in claude_jour if k != jour]:
-                    claude_jour.pop(k)
-            print(f"AI_PROVIDER_USED={nom} model={modele}", flush=True)
+            compteur[jour] = compteur.get(jour, 0) + 1
+            if avec_recherche:
+                compteur[jour + "_recherche"] = compteur.get(jour + "_recherche", 0) + 1
+            for k in [k for k in compteur if not k.startswith(jour)]:
+                compteur.pop(k)
+            if nom == "Anthropic" and cle_cache:
+                claude_t[cle_cache] = maintenant
+            if cle_cache:
+                srcs = etat.setdefault("ia_sources", {})
+                if avec_recherche and _SOURCES_IA:
+                    srcs[cle_cache] = list(_SOURCES_IA)
+                else:
+                    srcs.pop(cle_cache, None)
+                for k in list(srcs)[:-20]:
+                    srcs.pop(k)
+            print(f"AI_PROVIDER_USED={nom} model={modele}" + (" search=google" if avec_recherche else ""), flush=True)
             break
         except Exception as ex:
             detail = detail_erreur_ia(ex, cle)
             erreurs.append(f"{nom}: {detail[:80]}")
-            etat.setdefault("ia_pause", {})[nom] = time.time() + 300   # on la laisse souffler 5 min
+            if nom == "Anthropic" and erreur_sans_credit(detail):
+                etat.setdefault("ia_pause", {})[nom] = maintenant + CLAUDE_PAUSE_CREDIT_SEC   # sans crédit : silence, repli gratuit
+                etat["ia_claude_credit"] = "NO_CREDIT"
+            else:
+                echecs = etat.setdefault("ia_echecs", {})
+                echecs[nom] = min(echecs.get(nom, 0) + 1, 4)
+                etat.setdefault("ia_pause", {})[nom] = maintenant + min(300 * 2 ** (echecs[nom] - 1), 3600)   # 5 min, 10, 20, 40… max 1 h
             print("ia", nom, modele, detail, flush=True)
     if not txt:
         etat["ia_dernier_fournisseur"] = "INTERNAL_FALLBACK"
@@ -2479,8 +2599,8 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False):
             compte.pop(k)
     compte[jour] = compte.get(jour, 0) + 1
     if cle_cache:
-        cache[cle_cache] = (time.time(), txt)
-        for k in [k for k, v in cache.items() if time.time() - v[0] > 3600]:
+        cache[cle_cache] = (maintenant, txt)
+        for k in [k for k, v in cache.items() if maintenant - v[0] > 3600]:
             cache.pop(k)
     return txt
 
@@ -2668,8 +2788,8 @@ def avis_ia(etat, m, r, cle, anglais=False):
     reevaluation.pop("secondes_restantes", None)
     empreinte["prochaine_reevaluation"] = reevaluation
     signature = hashlib.sha256(json.dumps(empreinte, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
-    t = ia(etat, consigne, donnees,
-           cle_cache=f"analyse_{m}_{langue_cache}_{signature}", premium=True)
+    cle_c = f"analyse_{m}_{langue_cache}_{signature}"
+    t = ia(etat, consigne, donnees, cle_cache=cle_c, premium=True, recherche=True)
     t = compacter_ia(t)
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
@@ -2679,7 +2799,7 @@ def avis_ia(etat, m, r, cle, anglais=False):
         # Le nom du fournisseur IA reste dans les journaux : rien de technique dans Telegram.
         if etat.get("ia_dernier_statut") == "CONNECTED" and fournisseur:
             print(f"AI_OPINION_PROVIDER={fournisseur}/{modele or ''}", flush=True)
-        return f"{titre}\n{t}"
+        return f"{titre}\n{t}{ligne_sources(etat, cle_c)}"
     # Toutes les IA en panne : l'analyse interne du bot répond (jamais de silence)
     titre, raison = verdict(r, cle)
     if anglais:
@@ -4662,6 +4782,227 @@ def recevoir_pseudo(etat, cid, pseudo):
                             "👉 TradingView → ton script → Gérer l'accès → ajoute ce pseudo"),
                    reply_markup=json.dumps({"inline_keyboard": [[{"text": "✅ C'est fait, accès donné", "callback_data": f"tvok:{cid}"}]]}))
 
+# ───────── ALERTES COURTES : sessions de marché + évènements de l'indicateur Pine ─────────
+# Existait déjà (réutilisé, jamais dupliqué) : entrée / TP1 / TP2 / SL / BE / « prépare-toi » (agent), retournement en préparation x/5,
+# essoufflement (distribution / accumulation), manipulation, news à 1 h / 40 / 15 / 5 min, fermeture du Gold à 60 / 40 min.
+# Ajouté ici : ouvertures et fermetures (préavis 15 et 5 min), alignement qui monte / baisse, SURCHARGE, compression relâchée,
+# impulsion, RETOURNEMENT CONFIRMÉ, SL cassé, CONFIRMATION ; alerte de préparation réduite pour le gratuit.
+SESSIONS = (   # code, nom FR, nom EN, fuseau, ouverture, fermeture, jours d'ouverture, jours de fermeture, marchés concernés
+    ("tokyo", "Tokyo", "Tokyo", "Asia/Tokyo", (9, 0), (15, 30), range(0, 5), range(0, 5), "BTC et GOLD", "BTC and GOLD"),
+    ("londres", "Londres", "London", "Europe/London", (8, 0), (16, 30), range(0, 5), range(0, 5), "GOLD et BTC", "GOLD and BTC"),
+    ("wall", "Wall Street / Nasdaq", "Wall Street / Nasdaq", "America/New_York", (9, 30), (16, 0), range(0, 5), range(0, 5), "NASDAQ, GOLD et BTC", "NASDAQ, GOLD and BTC"),
+    ("gold", "Gold (CME)", "Gold (CME)", "America/Chicago", (17, 0), (16, 0), (6, 0, 1, 2, 3), range(0, 5), "GOLD", "GOLD"),
+    ("btc", "BTC (bougie Daily)", "BTC (Daily candle)", "UTC", None, (0, 0), (), range(0, 7), "BTC", "BTC"),
+)
+SESSIONS_GRATUIT = {("londres", "ouvre"), ("wall", "ouvre")}      # gratuit : seulement le préavis 15 min des deux grandes ouvertures
+_ALERTES_SESSION = {
+    ("ouvre", 15): (("⏰ Ouverture {nom} dans 15 min ({h})", "💥 Volatilité attendue sur {mk}"), ("🔔 {nom} ouvre dans 15 min ({h})", "👀 {mk} peuvent bouger fort"),
+                    ("🕘 Plus que 15 min avant {nom} ({h})", "🎢 Ça peut secouer sur {mk}"), ("📣 {nom} s'ouvre à {h}, dans 15 min", "⚡ Prépare-toi à du mouvement sur {mk}")),
+    ("ouvre", 5): (("🚨 {nom} ouvre dans 5 min", "💥 Attention à la volatilité sur {mk}"), ("⏱ 5 min avant {nom} ({h})", "🛡 Pas d'entrée précipitée sur {mk}"),
+                   ("🔔 {nom} dans 5 min", "🎢 {mk} : ça va bouger"), ("⏰ Dernière ligne droite avant {nom} ({h})", "👀 Garde un œil sur {mk}")),
+    ("ferme", 15): (("🌙 Fermeture {nom} dans 15 min ({h})", "🛡 Évite de te lancer maintenant"), ("⏳ {nom} ferme dans 15 min ({h})", "👀 La liquidité baisse sur {mk}"),
+                    ("🕓 Plus que 15 min avant la fin de {nom}", "🔒 Sécurise tes positions sur {mk}"), ("📉 {nom} se termine à {h}, dans 15 min", "😎 Pas de précipitation sur {mk}")),
+    ("ferme", 5): (("🚨 {nom} ferme dans 5 min", "🔒 Stop en place sur {mk} ?"), ("⏱ 5 min avant la fermeture de {nom} ({h})", "🛡 Rien de nouveau sur {mk}"),
+                   ("🌙 {nom} : fin dans 5 min", "💥 Les prix peuvent bouger vite sur {mk}"), ("⏰ Dernier quart d'heure passé : {nom} ferme à {h}", "👀 Reste prudent sur {mk}")),
+}
+_ALERTES_SESSION_EN = {
+    ("ouvre", 15): (("⏰ {nom} opens in 15 min ({h})", "💥 Volatility expected on {mk}"), ("🔔 {nom} opening in 15 min ({h})", "👀 {mk} can move fast"),
+                    ("🕘 15 min left before {nom} ({h})", "🎢 Expect some shaking on {mk}"), ("📣 {nom} opens at {h}, in 15 min", "⚡ Get ready for movement on {mk}")),
+    ("ouvre", 5): (("🚨 {nom} opens in 5 min", "💥 Watch the volatility on {mk}"), ("⏱ 5 min before {nom} ({h})", "🛡 No rushed entries on {mk}"),
+                   ("🔔 {nom} in 5 min", "🎢 {mk}: movement incoming"), ("⏰ Final stretch before {nom} ({h})", "👀 Keep an eye on {mk}")),
+    ("ferme", 15): (("🌙 {nom} closes in 15 min ({h})", "🛡 Avoid jumping in now"), ("⏳ {nom} closing in 15 min ({h})", "👀 Liquidity drops on {mk}"),
+                    ("🕓 15 min left before {nom} ends", "🔒 Secure your positions on {mk}"), ("📉 {nom} wraps up at {h}, in 15 min", "😎 No rush on {mk}")),
+    ("ferme", 5): (("🚨 {nom} closes in 5 min", "🔒 Is your stop in place on {mk}?"), ("⏱ 5 min before {nom} closes ({h})", "🛡 Nothing new on {mk}"),
+                   ("🌙 {nom}: ending in 5 min", "💥 Prices can jump on {mk}"), ("⏰ Last stretch: {nom} closes at {h}", "👀 Stay careful on {mk}")),
+}
+
+def _tournante(etat, cle, n):
+    """Indice de variante qui tourne : jamais deux fois la même formulation de suite pour un même type d'alerte."""
+    rot = etat.setdefault("al_rot", {})
+    rot[cle] = (rot.get(cle, -1) + 1) % n
+    return rot[cle]
+
+def evenements_sessions(etat, now, derniers=None):
+    """Préavis 15 puis 5 min : une seule alerte par évènement et par palier (mémoire al_mem), jamais de rattrapage en rafale."""
+    mem, out = etat.setdefault("al_mem", {}).setdefault("sessions", {}), []
+    comp = [m for m, r in (derniers or {}).items() if sum((r.get("sqzs") or [0] * 11)[4:10]) >= 3]
+    for code, nom_fr, nom_en, zone, ouv, fer, j_ouv, j_fer, mk_fr, mk_en in SESSIONS:
+        tz = ZoneInfo(zone)
+        auj = datetime.datetime.fromtimestamp(now, tz).date()
+        for jour in (auj - datetime.timedelta(days=1), auj, auj + datetime.timedelta(days=1)):
+            for kind, hm, jours in (("ouvre", ouv, j_ouv), ("ferme", fer, j_fer)):
+                if not hm or jour.weekday() not in jours:
+                    continue
+                t = datetime.datetime(jour.year, jour.month, jour.day, hm[0], hm[1], tzinfo=tz).timestamp()
+                d = t - now
+                palier = 15 if 300 < d <= 900 else 5 if 0 < d <= 300 else None
+                cle = f"{code}:{kind}:{jour.isoformat()}:{palier}"
+                if palier is None or cle in mem:
+                    continue
+                mem[cle] = int(now)
+                out.append(dict(kind="session", code=code, evt=kind, palier=palier, t=t, nom=(nom_fr, nom_en), mk=(mk_fr, mk_en), marches=comp))
+    for k in [k for k, v in mem.items() if now - v > 2 * 86400]:
+        mem.pop(k)
+    return out
+
+def texte_session(etat, ev, anglais=False):
+    var = (_ALERTES_SESSION_EN if anglais else _ALERTES_SESSION)[(ev["evt"], ev["palier"])]
+    lignes = var[_tournante(etat, f"s:{ev['evt']}:{ev['palier']}", len(var))]
+    h = heure(ev["t"])
+    out = [l.format(nom=ev["nom"][1 if anglais else 0], h=h, mk=ev["mk"][1 if anglais else 0]) for l in lignes]
+    if ev["evt"] == "ouvre" and ev["palier"] == 15 and ev.get("marches"):
+        out.append(("⚡ " + ", ".join(ev["marches"]) + (" squeezed: breakout possible" if anglais else " comprimé : explosion possible")))
+    return out[:3]
+
+_PINE_TEXTES = {   # type -> variantes (FR, EN) ; {ic} {m} {n} {c} {seuil} {sens} {strat} {u} {niv} {fleche} {ratio}
+    "align_haut": (("📈 {ic} {m} : {n}/11 UT alignées", "🎯 Seuil {seuil} {etat_seuil}"), ("🧲 {ic} {m} : l'alignement monte ({n}/11)", "👀 Il en faut {seuil}"),
+                   ("⬆️ {ic} {m} : {n} unités dans le même sens", "🎯 {etat_seuil_court}")),
+    "align_bas": (("📉 {ic} {m} : alignement qui baisse ({n}/11)", "⏳ Il en faut {seuil}"), ("⬇️ {ic} {m} : {n}/11 UT, ça se disperse", "🙅 Pas de validation"),
+                  ("🌫 {ic} {m} : moins d'unités d'accord ({n}/11)", "👀 Seuil {seuil}")),
+    "surcharge": (("⚡ {ic} {m} : SURCHARGE, {c}/11 UT comprimées", "👀 Explosion possible, attends la direction"), ("🔋 {ic} {m} : le ressort se comprime ({c}/11)", "🧭 La clôture donnera le sens"),
+                  ("💤 {ic} {m} : marché très comprimé ({c}/11)", "⚠️ Ça peut partir d'un coup")),
+    "relache": (("💥 {ic} {m} : compression relâchée", "🧭 Sens à confirmer à la clôture"), ("🚀 {ic} {m} : ça se libère après la compression", "👀 Pas de précipitation, on attend la bougie"),
+                ("🎆 {ic} {m} : la compression saute", "🕯 Lis la clôture avant d'agir")),
+    "impulsion": (("🚀 {ic} {m} : impulsion {fleche}", "🕯 Bougie 15 min x{ratio} l'ATR"), ("💥 {ic} {m} : mouvement fort {fleche}", "😮 Grosse bougie 15 min (x{ratio})"),
+                  ("⚡ {ic} {m} : pulsion {fleche}", "🧘 Ne cours pas après, attends le repli")),
+    "ret_conf": (("✅ {ic} {m} : RETOURNEMENT CONFIRMÉ {sens}", "🎯 {strat}"), ("🔁 {ic} {m} : le retournement est validé ({sens})", "🎯 Profil {strat}"),
+                 ("🏁 {ic} {m} : retournement confirmé, direction {sens}", "🧭 {strat}")),
+    "ret_cancel": (("⛔ {ic} {m} : SL cassé à la clôture", "↩ Retournement en cours, j'attends 15 min / 1h"), ("🛑 {ic} {m} : le stop du plan est franchi", "🔄 Je guette la confirmation 15 min / 1h"),
+                   ("🚧 {ic} {m} : plan annulé (stop cassé)", "👀 Retournement possible, rien n'est validé")),
+    "confirmation": (("✅ {ic} {m} : CONFIRMATION {sens}", "🕯 Clôture {u} {pos} {niv}"), ("🔔 {ic} {m} : confirmation {sens} validée", "🕯 {u} clôturée {pos} {niv}"),
+                     ("🎯 {ic} {m} : {sens} confirmé à la clôture {u}", "📍 Ligne de décision {niv}")),
+}
+_PINE_TEXTES_EN = {
+    "align_haut": (("📈 {ic} {m}: {n}/11 timeframes aligned", "🎯 Threshold {seuil} {etat_seuil}"), ("🧲 {ic} {m}: alignment is rising ({n}/11)", "👀 Need {seuil}"),
+                   ("⬆️ {ic} {m}: {n} timeframes agree", "🎯 {etat_seuil_court}")),
+    "align_bas": (("📉 {ic} {m}: alignment dropping ({n}/11)", "⏳ Need {seuil}"), ("⬇️ {ic} {m}: {n}/11, it's scattering", "🙅 No validation"),
+                  ("🌫 {ic} {m}: fewer timeframes agree ({n}/11)", "👀 Threshold {seuil}")),
+    "surcharge": (("⚡ {ic} {m}: OVERLOAD, {c}/11 timeframes squeezed", "👀 Breakout possible, wait for the direction"), ("🔋 {ic} {m}: the spring is tightening ({c}/11)", "🧭 The close will give the way"),
+                  ("💤 {ic} {m}: very tight market ({c}/11)", "⚠️ It can go all at once")),
+    "relache": (("💥 {ic} {m}: squeeze released", "🧭 Direction to confirm at the close"), ("🚀 {ic} {m}: it's freeing up after the squeeze", "👀 No rush, wait for the candle"),
+                ("🎆 {ic} {m}: the squeeze pops", "🕯 Read the close before acting")),
+    "impulsion": (("🚀 {ic} {m}: impulse {fleche}", "🕯 15 min candle x{ratio} the ATR"), ("💥 {ic} {m}: strong move {fleche}", "😮 Big 15 min candle (x{ratio})"),
+                  ("⚡ {ic} {m}: surge {fleche}", "🧘 Don't chase it, wait for the pullback")),
+    "ret_conf": (("✅ {ic} {m}: REVERSAL CONFIRMED {sens}", "🎯 {strat}"), ("🔁 {ic} {m}: the reversal is validated ({sens})", "🎯 Profile {strat}"),
+                 ("🏁 {ic} {m}: reversal confirmed, direction {sens}", "🧭 {strat}")),
+    "ret_cancel": (("⛔ {ic} {m}: SL broken at the close", "↩ Reversal in progress, waiting for 15 min / 1h"), ("🛑 {ic} {m}: the plan's stop is crossed", "🔄 Watching for the 15 min / 1h confirmation"),
+                   ("🚧 {ic} {m}: plan cancelled (stop broken)", "👀 Reversal possible, nothing validated")),
+    "confirmation": (("✅ {ic} {m}: CONFIRMATION {sens}", "🕯 {u} close {pos} {niv}"), ("🔔 {ic} {m}: {sens} confirmation validated", "🕯 {u} closed {pos} {niv}"),
+                     ("🎯 {ic} {m}: {sens} confirmed at the {u} close", "📍 Decision line {niv}")),
+}
+_PINE_PRIO = {"ret_conf": 0, "confirmation": 1, "ret_cancel": 2, "impulsion": 3, "surcharge": 4, "relache": 5, "align_haut": 6, "align_bas": 7}
+
+def evenements_pine(etat, m, r, cle, now):
+    """Évènements de l'indicateur au moment où ils arrivent : chacun une seule fois (fronts montants mémorisés par marché)."""
+    mem = etat.setdefault("al_mem", {}).setdefault("pine", {}).setdefault(m, {})
+    statut, _ = etat_marche_hb(m, r, now)
+    ev, e = [], hb_etat_surveille(r)
+    d, n, comp = e["d"], e["n"], int(r.get("comp", 0))
+    base = dict(m=m, ic=ICONE.get(m, ""), seuil=MIN_ALIGN, n=n, c=comp)
+    if statut != "ouvert":
+        mem.update(n=n, comp=comp)
+        return ev                                      # marché fermé ou données périmées : aucune alerte inventée
+    prev_n, prev_c = mem.get("n"), mem.get("comp")
+    if prev_n is not None and not cle.get("trade") and now - mem.get("t_align", 0) >= 600:
+        franchit_haut, franchit_bas = n >= MIN_ALIGN > prev_n, n < MIN_ALIGN <= prev_n
+        if franchit_haut or (n - prev_n >= 2 and n >= MIN_ALIGN - 2):
+            ev.append(dict(kind="align_haut", **base, etat_seuil="atteint ✅" if n >= MIN_ALIGN else "presque", etat_seuil_court="Seuil atteint" if n >= MIN_ALIGN else "Presque au seuil")); mem["t_align"] = now
+        elif franchit_bas or (prev_n - n >= 2 and prev_n >= MIN_ALIGN - 2):
+            ev.append(dict(kind="align_bas", **base)); mem["t_align"] = now
+    if prev_c is not None:
+        if comp >= MIN_SQZ > prev_c:
+            ev.append(dict(kind="surcharge", **base))
+        elif prev_c >= MIN_SQZ and comp <= MIN_SQZ - 2:
+            ev.append(dict(kind="relache", **base))
+    mem.update(n=n, comp=comp)
+    b15, atr_ = r.get("b15") or [], float(r.get("atr") or 0)
+    if len(b15) >= 3 and atr_ > 0:                      # impulsion : dernière bougie 15 min CLÔTURÉE, grande et pleine
+        x = b15[-2]; rng = x["h"] - x["l"]
+        if rng >= 1.5 * atr_ and abs(x["c"] - x["o"]) >= 0.6 * rng and mem.get("imp_t") != x["t"]:
+            mem["imp_t"] = x["t"]
+            ev.append(dict(kind="impulsion", **base, fleche="⬆️" if x["c"] > x["o"] else "⬇️", ratio=str(round(rng / atr_, 1)).replace(".", ",")))
+    rd, rc = int(r.get("ret_dir") or 0), bool(r.get("ret_conf"))
+    if rd and rc and not mem.get("rc"):
+        ev.append(dict(kind="ret_conf", **base, sens="LONG" if rd == 1 else "SHORT", strat=r.get("strat") or "—"))
+    elif rd and not rc and not mem.get("rd"):
+        ev.append(dict(kind="ret_cancel", **base))
+    mem["rc"], mem["rd"] = rc, bool(rd)
+    zp, strat = r.get("zone_pine"), r.get("strat") or ""
+    if d and zp and strat and not cle.get("trade") and strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)[1] == "CONFIRMÉ":
+        barres = {"SWING": r.get("b1h"), "DAY": r.get("b5"), "SCALPING": r.get("m1")}.get(strat) or []
+        if len(barres) >= 3:
+            c1, c0, t1 = barres[-2]["c"], barres[-3]["c"], barres[-2]["t"]
+            au_dessus = lambda c: c > zp["zmil"] if d == 1 else c < zp["zmil"]
+            if au_dessus(c1) and not au_dessus(c0) and mem.get("conf_t") != t1:
+                mem["conf_t"] = t1
+                ev.append(dict(kind="confirmation", **base, sens="LONG" if d == 1 else "SHORT", u=HB_UNITE_VALIDATION.get(strat, "15 min"),
+                               pos="au-dessus de" if d == 1 else "sous", niv=px(zp["zmil"])))
+    return ev
+
+def texte_pine(etat, ev, anglais=False):
+    var = (_PINE_TEXTES_EN if anglais else _PINE_TEXTES)[ev["kind"]]
+    lignes = var[_tournante(etat, f"p:{ev['kind']}:{ev['m']}", len(var))]
+    ev = dict(ev)
+    if anglais:
+        ev["pos"] = {"au-dessus de": "above", "sous": "below"}.get(ev.get("pos"), ev.get("pos"))
+        ev["etat_seuil"] = "reached ✅" if "atteint" in str(ev.get("etat_seuil", "")) else "almost"
+        ev["etat_seuil_court"] = "Threshold reached" if "atteint" in str(ev.get("etat_seuil_court", "")) else "Almost at the threshold"
+        ev["u"] = str(ev.get("u", "")).replace(" min", " min")
+    return [l.format(**{k: v for k, v in ev.items() if k != "kind"}) for l in lignes]
+
+def regrouper_alertes(blocs):
+    """Plusieurs alertes dans la même minute = UN seul message de 4 lignes max : titre + première ligne de chacune."""
+    if len(blocs) == 1:
+        return blocs[0][:4]
+    lignes = [b[0] for b in blocs[:3]]
+    return ([f"⚡ {len(blocs)} infos"] + lignes)[:4]
+
+def diffuser_alerte(etat, chats, fr, en):
+    """VIP (chaîne + privés qui ont coché le marché) : langue de chaque destinataire ; l'en-tête sert au filtre par marché."""
+    for cid in destinataires_message(etat, chats, "\n".join(fr)):
+        _envoi_sur(cid, text="\n".join(en if str(cid) in LANG_EN else fr))
+
+def alertes_courtes(etat, chats, derniers, now=None):
+    """Appelé à chaque tour : sessions + évènements Pine du moment. Gratuit : préavis 15 min des grandes ouvertures seulement."""
+    now = now or time.time()
+    vip_fr, vip_en, libres = [], [], []
+    for ev in evenements_sessions(etat, now, derniers):
+        vip_fr.append(texte_session(etat, ev)); vip_en.append(texte_session(etat, ev, True))
+        if (ev["code"], ev["evt"]) in SESSIONS_GRATUIT and ev["palier"] == 15:
+            libres.append(ev)
+    for m, r in derniers.items():
+        for ev in sorted(evenements_pine(etat, m, r, etat.get(m, {}), now), key=lambda x: _PINE_PRIO[x["kind"]]):
+            vip_fr.append(texte_pine(etat, ev)); vip_en.append(texte_pine(etat, ev, True))
+    if vip_fr and TOKEN:
+        diffuser_alerte(etat, chats, regrouper_alertes(vip_fr), regrouper_alertes(vip_en))
+    if libres and TOKEN:
+        for cid in destinataires_gratuits(etat):
+            fr, en = [texte_session(etat, ev) for ev in libres], [texte_session(etat, ev, True) for ev in libres]
+            _envoi_sur(cid, text="\n".join(regrouper_alertes(en if str(cid) in LANG_EN else fr)))
+
+def alerte_gratuite_preparation(etat, texte, now=None):
+    """Gratuit : version réduite d'une alerte de préparation VIP (« JE PRÉPARE UNE POSITION », « PRÉPARE-TOI », « POINT D'ENTRÉE À VENIR ») :
+    jamais de sens ni de niveaux, une fois par marché toutes les 30 min, seulement si son bot est sur ON et le marché coché."""
+    tete = texte.split("\n")[0].upper()
+    if not any(k in tete for k in ("JE PRÉPARE UNE POSITION", "PRÉPARE-TOI", "POINT D'ENTRÉE À VENIR")):
+        return
+    m = next((x for x in MARCHES if x in tete), None)
+    now = now or time.time()
+    vus = etat.setdefault("al_mem", {}).setdefault("prep_gratuit", {})
+    if not m or now - vus.get(m, 0) < 1800:
+        return
+    vus[m] = now
+    ic = ICONE.get(m, "")
+    for cid in destinataires_gratuits(etat):
+        if not marche_autorise(etat, cid, m) or not bot_on(etat, cid):
+            continue
+        v = _tournante(etat, f"g:{cid}", 3)
+        fr = (("🔔 {ic} {m} : une position se prépare", "🔒 Sens et niveaux : VIP"), ("👀 {ic} {m} : quelque chose se met en place", "🔒 Détails réservés aux VIP"),
+              ("⏳ {ic} {m} : préparation en cours", "🔒 Niveaux : VIP"))[v]
+        en = (("🔔 {ic} {m}: a position is getting ready", "🔒 Direction and levels: VIP"), ("👀 {ic} {m}: something is setting up", "🔒 Details are VIP-only"),
+              ("⏳ {ic} {m}: setup in progress", "🔒 Levels: VIP"))[v]
+        _envoi_sur(cid, text="\n".join(l.format(ic=ic, m=m) for l in (en if str(cid) in LANG_EN else fr)))
+
 # ───────── ALIGN LIVE : état PUBLIC (niveau gratuit) pour la page TikTok LIVE ─────────
 # Fichier unique sur la branche « live-data » (jamais main : aucun redémarrage du bot). Aucune donnée VIP : ni prix, ni entrée, ni SL, ni TP.
 LIVE_DEPOT = os.environ.get("GITHUB_REPOSITORY") or "adelkhatra-bit/trading-auto"
@@ -5161,19 +5502,20 @@ def annonces_et_sessions(etat, maintenant, derniers):
                     etat,
                     "Après cette annonce économique, interprète uniquement la réaction de prix observée sur BTC et Gold. Dis si le mouvement est net ou limité, rappelle que les deux sens restent possibles et indique d'attendre la clôture 15 min avant toute reprise. N'invente aucun chiffre et ne donne pas d'ordre d'entrée.",
                     {"annonce": e["titre"], "réaction observée": lr, "consigne": "aucune entrée avant clôture 15 min"},
-                    cle_cache=f"newsreaction{e['t']}{e['titre']}", duree=3600, premium=True)
+                    cle_cache=f"newsreaction{e['t']}{e['titre']}", duree=3600, premium=True, recherche=True)
                 message = f"📰 RÉACTION À LA NEWS — {e['titre']}\n" + "\n".join(lr)
                 message += "\n⏳ J'attends la clôture de la bougie 15 min avant de reprendre"
                 if avis_apres:
-                    message += "\n\n🧠 L'analyse de l'IA ALIGN après l'annonce\n" + avis_apres
+                    message += "\n\n🧠 L'analyse de l'IA ALIGN après l'annonce\n" + avis_apres + ligne_sources(etat, f"newsreaction{e['t']}{e['titre']}")
                 out.append(message)
-        if 6 * 60 < reste <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
+        if 6 * 60 < reste <= 15 * 60 and f"ev{e['t']}{e['titre']}" not in vus:        # préavis 15 min (VIP : le gratuit ne reçoit aucune news)
             vus.append(f"ev{e['t']}{e['titre']}")
+            cle_news = f"news{e['t']}{e['titre']}"
             avis = ia(etat, "Explique en 2 lignes très simples ce que cette annonce peut faire au Gold et au BTC (sans donner de sens à trader, juste le risque).",
-                      {"annonce": e["titre"], "prévu": e.get("prev"), "avant": e.get("avant")}, cle_cache=f"news{e['t']}{e['titre']}", duree=3600, premium=True)
+                      {"annonce": e["titre"], "prévu": e.get("prev"), "avant": e.get("avant")}, cle_cache=cle_news, duree=3600, premium=True, recherche=True)
             out.append(f"⚠️⚠️ NEWS USA dans {round(reste / 60)} min ({heure(e['t'])})\n📰 {e['titre']}\n\n"
                        f"🟥 N'ouvre AUCUN trade\n🛡 Déjà en position ? Vérifie que ton STOP est bien placé\n"
-                       f"💥 Le prix peut bouger très fort dans les 2 sens\n⏳ On reprend à {fin}" + (f"\n\n🧠 L'avis de l'IA ALIGN\n{avis}" if avis else ""))
+                       f"💥 Le prix peut bouger très fort dans les 2 sens\n⏳ On reprend à {fin}" + (f"\n\n🧠 L'avis de l'IA ALIGN\n{avis}{ligne_sources(etat, cle_news)}" if avis else ""))
         if 0 <= reste <= 6 * 60 and f"ev5{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev5{e['t']}{e['titre']}")
             out.append(f"🚨🚨🚨 NEWS DANS {max(1, round(reste / 60))} MIN — {e['titre']}\n🟥 Ne touche à rien\n🛡 Stop en place ? OK, on attend")
@@ -5195,16 +5537,7 @@ def annonces_et_sessions(etat, maintenant, derniers):
                            f"🔓 Réouverture : {'dimanche ' if week else ''}{heure(rouv_)} (heure de Paris)\n"
                            + ("🔒 Tu es en position : mets-toi à BE si tu es en gain\n🛡 Vérifie que ton SL est bien placé\n" if tr_g else "🛡 Ne pas ouvrir de position avant la fermeture\n")
                            + ("💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains" if week else "💥 À la réouverture le prix peut sauter (écart)"))
-    # Ouvertures de marché (jours de semaine)
-    if jour.weekday() < 5:
-        for nom, zone, h, mn in (("Sydney", "Australia/Sydney", 10, 0), ("Tokyo", "Asia/Tokyo", 9, 0), ("Londres", "Europe/London", 8, 0), ("New York (Wall Street)", "America/New_York", 9, 30)):
-            loc = datetime.datetime.now(ZoneInfo(zone)).replace(hour=h, minute=mn, second=0, microsecond=0)
-            t_ouv = int(loc.timestamp())
-            if 0 <= t_ouv - maintenant <= 15 * 60 and f"ouv{nom}{cle_j}" not in vus:
-                vus.append(f"ouv{nom}{cle_j}")
-                comp = [m for m, r in derniers.items() if sum(r["sqzs"][4:10]) >= 3]
-                out.append(f"🔔 Ouverture de {nom} à {heure(t_ouv)} (dans {round((t_ouv - maintenant) / 60)} min). Volatilité forte attendue."
-                           + (f"\n⚡ {', '.join(comp)} comprimé sur plusieurs UT : explosion probable à l'ouverture, attends la direction." if comp else ""))
+    # Ouvertures / fermetures de marché : voir alertes_courtes() (préavis 15 et 5 min, FR/EN, regroupées)
     del vus[:-200]
     return out
 
@@ -6513,7 +6846,7 @@ def un_tour(etat, chats):
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
             cle["trade"]["auto_fait"] = True
             trx = cle["trade"]
-            t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite. " + IA_TON_JEUNE,
+            t_ = ia(etat, "Le bot vient d'entrer en position selon le plan de l'indicateur. Analyse ce plan (stratégie, SL, TP1, TP2) : dis si tu le valides en bougies ou si tu le déconseilles (« je déconseille » + raison), sans jamais proposer d'autres niveaux, et rappelle de mettre le SL tout de suite. " + IA_TON_JEUNE,
                     dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
                                                                     "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}), premium=True)
             if t_:
@@ -6568,6 +6901,11 @@ def un_tour(etat, chats):
         print(texte_etat(nom_marche, r), "\n")
 
     try:
+        if TOKEN:
+            alertes_courtes(etat, chats, derniers)
+    except Exception as ex:
+        print("alertes courtes", type(ex).__name__, ex)
+    try:
         publier_live(etat, derniers)
     except Exception as ex:
         print("live public", type(ex).__name__)
@@ -6614,6 +6952,7 @@ def un_tour(etat, chats):
                     if "403" in str(ex) and cid not in proprio(etat):
                         chats.discard(cid)   # l'abonné a bloqué le bot
             # Visiteurs non abonnés : teaser (positions masquées + bouton de paiement)
+            alerte_gratuite_preparation(etat, texte)
             envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("JE PRÉPARE", "J'ENTRE MAINTENANT")), clavier)
         for nom_marche in MARCHES:
             if nom_marche in derniers:
