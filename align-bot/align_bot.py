@@ -67,29 +67,70 @@ def fetch_tv_mtf(pair):
         print("TradingView MTF bridge:", ex, flush=True)
         return {"available": False, "reason": "bridge inaccessible", "snapshots": {}}
 
-def plan_indicateur(r):
-    """Sélectionne le plan Pine correspondant au profil sans transformer un plan non confirmé en entrée."""
-    profile = profil_strategie(r)
-    preferred = "M5" if profile["mode"].startswith("SCALPING") else "H4" if profile["mode"] == "SWING" else "M15"
+def _direction_tv(value):
+    text = str(value or "").strip().upper()
+    if any(x in text for x in ("LONG", "BULL", "HAUSSIER", "ACHAT", "BUY")):
+        return 1
+    if any(x in text for x in ("SHORT", "BEAR", "BAISSIER", "VENTE", "SELL")):
+        return -1
+    if any(x in text for x in ("NEUTRE", "NEUTRAL", "ATTENTE", "WAIT")):
+        return 0
+    return None
+
+
+def fusionne_lectures_tradingview(r):
+    """Fusionne uniquement les lectures MTF explicitement envoyées par ROBOT V12."""
     bridge = r.get("tv_indicator_mtf") or {}
+    snap = (bridge.get("snapshots") or {}).get(bridge.get("activeTimeframe")) or {}
+    robot = snap.get("robotV12") or {}
+    if not robot:
+        return r
+    for field, index in (("lecture_1m", 0), ("lecture_5m", 2), ("lecture_15m", 4), ("lecture_60m", 7)):
+        direction = _direction_tv(robot.get(field))
+        if direction is not None:
+            r["dirs"][index] = direction
+    for field, index in (("rsi_1m", 0), ("rsi_5m", 2), ("rsi_15m", 4), ("rsi_60m", 7)):
+        try:
+            value = float(robot.get(field))
+            if 0 <= value <= 100:
+                r["rsis"][index] = value
+        except (TypeError, ValueError):
+            pass
+    # Recompute the existing ALIGN bias/profile from the merged real MTF readings.
+    d1h, d4h = r["dirs"][7], r["dirs"][9]
+    r["confirme"] = d4h if d4h and d1h == d4h else 0
+    r["tv_robot_v12"] = robot
+    return r
+
+
+def plan_indicateur(r):
+    """Utilise le plan du timeframe réellement actif sur TradingView, jamais une UT supposée."""
+    bridge = r.get("tv_indicator_mtf") or {}
+    preferred = str(bridge.get("activeTimeframe") or "").upper()
     snap = (bridge.get("snapshots") or {}).get(preferred) or {}
     robot = snap.get("robotV12") or {}
-    entry, sl, tp = robot.get("entry"), robot.get("sl"), robot.get("tp")
     try:
-        entry, sl, tp = float(entry), float(sl), float(tp)
+        entry, sl, tp = float(robot.get("entry")), float(robot.get("sl")), float(robot.get("tp"))
     except (TypeError, ValueError):
-        return {"timeframe": preferred, "available": False, "reason": "aucun plan Pine complet sur cette unité"}
+        return {"timeframe": preferred or None, "available": False,
+                "reason": "aucun plan ROBOT V12 complet pour l'unité TradingView active"}
     if not snap.get("fresh"):
-        return {"timeframe": preferred, "available": False, "reason": "snapshot TradingView périmé"}
+        return {"timeframe": preferred, "available": False, "reason": "plan ROBOT V12 périmé"}
     signal = str(robot.get("signal") or robot.get("verdict") or "").upper()
-    direction = 1 if "LONG" in signal or "BUY" in signal else -1 if "SHORT" in signal or "SELL" in signal else 0
-    if not direction or entry <= 0 or sl <= 0 or tp <= 0:
-        return {"timeframe": preferred, "available": False, "reason": "direction ou niveaux Pine incomplets"}
+    direction = _direction_tv(signal)
+    if direction not in (-1, 1) or min(entry, sl, tp) <= 0:
+        return {"timeframe": preferred, "available": False, "reason": "direction ou niveaux ROBOT V12 invalides"}
     if (direction == 1 and not sl < entry < tp) or (direction == -1 and not tp < entry < sl):
         return {"timeframe": preferred, "available": False, "reason": "géométrie entrée/SL/TP incohérente"}
     return {"timeframe": preferred, "available": True, "direction": direction, "entry": entry, "sl": sl, "tp": tp,
             "confirmed": snap.get("confirmed") is True, "verdict": robot.get("verdict"),
+            "macro_bull": robot.get("macro_bull"), "macro_bear": robot.get("macro_bear"),
+            "long_score": robot.get("long_score"), "short_score": robot.get("short_score"),
+            "anticipation": robot.get("anticipation"), "anticipation_force": robot.get("anticipation_force"),
+            "zone_proche": robot.get("zone_proche"), "liq_haute_active": robot.get("liq_haute_active"),
+            "liq_basse_active": robot.get("liq_basse_active"),
             "timestamp": robot.get("receivedAt") or snap.get("timestamp"), "ageMs": snap.get("ageMs")}
+
 
 TTL_KRAKEN = {1: 5, 5: 10, 15: 30, 30: 60, 60: 120, 240: 300, 1440: 900, 10080: 1800}
 
@@ -4696,6 +4737,7 @@ def un_tour(etat, chats):
         try:
             r = analyser(pair)
             r["tv_indicator_mtf"] = fetch_tv_mtf(pair)
+            fusionne_lectures_tradingview(r)
         except Exception as ex:
             print(nom_marche, "erreur", ex); continue
         cle = etat.setdefault(nom_marche, {})
