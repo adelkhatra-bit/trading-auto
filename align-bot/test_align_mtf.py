@@ -1062,10 +1062,12 @@ class AlignMtfRulesTest(unittest.TestCase):
         dirs[7] = -1
         r = {"dirs": dirs, "confirme": -1, "m1": [candle(7200, c=73498.30)]}
         b = candle(7200, o=73444.10, h=73510.0, l=73430.0, c=73498.30)
-        with patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "raison technique")), \\
-             patch.object(align_bot, "raison_attente", return_value="La zone Daily/Weekly est extrême : j'attends un meilleur prix."), \\
-             patch.object(align_bot, "prochaine", return_value="Prochaine entrée SHORT"), \\
-             patch.object(align_bot, "heure", return_value="03:00"):
+        with (
+            patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "raison technique")),
+            patch.object(align_bot, "raison_attente", return_value="La zone Daily/Weekly est extrême : j'attends un meilleur prix."),
+            patch.object(align_bot, "prochaine", return_value="Prochaine entrée SHORT"),
+            patch.object(align_bot, "heure", return_value="03:00"),
+        ):
             raw = align_bot.texte_cloture("BTC", "1h", b, r, {})
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
