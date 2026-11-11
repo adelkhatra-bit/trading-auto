@@ -14,18 +14,17 @@ permissions:
   contents: read
   models: read
 
-concurrency:
-  group: align-bot
-  # Un seul worker : un déploiement arrête l'ancienne version avant de démarrer la nouvelle.
-  # Le bot sauvegarde son état pendant le polling et l'étape cache s'exécute aussi à l'annulation.
-  cancel-in-progress: true
-
 jobs:
   validate:
     uses: ./.github/workflows/align-bot-validation.yml
 
   signaux:
     needs: validate
+    # Ne remplace le worker actif qu'après validation complète du nouveau code.
+    # Une PR/push invalide ne doit jamais interrompre le bot en production.
+    concurrency:
+      group: align-bot
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 355
     defaults:
@@ -59,7 +58,25 @@ jobs:
               payload = json.loads(response.read().decode())
           if not payload.get("ok"):
               raise SystemExit("ÉCHEC: API Telegram indisponible")
+          info_url = "https://api.telegram.org/bot" + token + "/getWebhookInfo"
+          with urllib.request.urlopen(urllib.request.Request(info_url), timeout=20) as response:
+              info = json.loads(response.read().decode())
+          if not info.get("ok"):
+              raise SystemExit("ÉCHEC: impossible de vérifier le mode de réception Telegram")
+          webhook = (info.get("result") or {}).get("url", "").strip()
+          if webhook:
+              delete_url = "https://api.telegram.org/bot" + token + "/deleteWebhook?drop_pending_updates=false"
+              with urllib.request.urlopen(urllib.request.Request(delete_url), timeout=20) as response:
+                  deleted = json.loads(response.read().decode())
+              if not deleted.get("ok"):
+                  raise SystemExit("ÉCHEC: webhook Telegram actif et suppression impossible; le polling ne peut pas démarrer.")
+              print("TELEGRAM_WEBHOOK_REMOVED pending_updates_preserved=true")
+              with urllib.request.urlopen(urllib.request.Request(info_url), timeout=20) as response:
+                  verified = json.loads(response.read().decode())
+              if not verified.get("ok") or (verified.get("result") or {}).get("url", "").strip():
+                  raise SystemExit("ÉCHEC: le webhook Telegram est toujours actif après suppression.")
           print("TELEGRAM_API_OK bot=@" + payload["result"].get("username", "unknown"))
+          print("TELEGRAM_RECEIVE_MODE=polling webhook=none")
           print("Aucun message de démarrage envoyé aux utilisateurs.")
           PY
 
