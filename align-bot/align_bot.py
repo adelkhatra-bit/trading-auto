@@ -499,11 +499,16 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     proches = sorted([f for f in r.get("fvg", []) if abs((f[0] + f[1]) / 2 - p_) <= 3 * r["atr"]],
                      key=lambda f: abs((f[0] + f[1]) / 2 - p_))
     for lo, hi, ut_fvg, dd in proches[:2]:
-        contexte.append(f"🧲 FVG {ut_fvg} : {'haussière' if dd == 1 else 'baissière'} | Basse {px(lo)} | Haute {px(hi)}")
+        contexte += [f"🧲 FVG {'HAUSSIER' if dd == 1 else 'BAISSIER'} • {ut_fvg}",
+                     f"Limite basse : {px(lo)}", f"Limite haute : {px(hi)}",
+                     "↩️ Zone de déséquilibre à surveiller"]
     if r.get("distrib"):
-        contexte.append("⚠️ Distribution possible : essoufflement en zone haute (divergence RSI)")
+        contexte += ["🟥 DISTRIBUTION POSSIBLE", "Essoufflement en zone haute • divergence RSI"]
     if r.get("accum"):
-        contexte.append("⚠️ Accumulation possible : soutien en zone basse (divergence RSI)")
+        contexte += ["🟩 ACCUMULATION POSSIBLE", "Soutien en zone basse • divergence RSI"]
+    evenement = symbole_evenement_marche(r)
+    if evenement:
+        contexte += ["⚡ SIGNAL DE MOUVEMENT"] + evenement
     if contexte:
         l += ["━━━━━━━━━━━━━━━━━━", "🌍 NIVEAUX & CONTEXTE"] + contexte
     o = (cle or {}).get("ordre")
@@ -1482,8 +1487,38 @@ def markup_analyse(etat, m, r):
         lignes.append([{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
     return json.dumps({"inline_keyboard": lignes})
 
+def symbole_evenement_marche(r):
+    """Vocabulaire visuel court. Décrit un événement détecté sans le transformer en ordre d'achat/vente."""
+    nom = str(r.get("nom") or "").upper()
+    if "EXPLOSION ▲" in nom:
+        return ["💥 EXPANSION HAUSSIÈRE DÉTECTÉE", "⬆️ Impulsion vers le haut", "⏳ Attendre la validation ALIGN"]
+    if "EXPLOSION ▼" in nom:
+        return ["💥 EXPANSION BAISSIÈRE DÉTECTÉE", "⬇️ Impulsion vers le bas", "⏳ Attendre la validation ALIGN"]
+    if "ACHAT FORT" in nom:
+        return ["🚀 PRESSION ACHETEUSE FORTE", "⬆️ Signal de force détecté", "⏳ Confirmation 1H + 4H obligatoire"]
+    if "VENTE FORTE" in nom:
+        return ["🧨 PRESSION VENDEUSE FORTE", "⬇️ Signal de force détecté", "⏳ Confirmation 1H + 4H obligatoire"]
+    if "ZONE DE REBOND" in nom:
+        return ["🛟 ZONE DE REBOND SURVEILLÉE", "⬆️ Réaction haussière possible", "⏳ Déclencheur 5 min attendu"]
+    if "ZONE DE RETOURNEMENT" in nom:
+        return ["🔄 ZONE DE RETOURNEMENT SURVEILLÉE", "⬇️ Réaction baissière possible", "⏳ Déclencheur 5 min attendu"]
+    return []
+
+def blocs_fvg(r, limite=2):
+    """Affiche les FVG proches en cartes compactes, avec sens, unité et bornes séparées."""
+    p = r["m1"][-1]["c"]
+    proches = sorted(
+        [f for f in r.get("fvg", []) if abs((f[0] + f[1]) / 2 - p) <= 3 * r["atr"]],
+        key=lambda f: abs((f[0] + f[1]) / 2 - p)
+    )
+    blocs = []
+    for lo, hi, ut_fvg, dd in proches[:limite]:
+        sens = "HAUSSIER" if dd == 1 else "BAISSIER"
+        blocs += [f"🧲 FVG {sens} • {ut_fvg}", f"Limite basse : {px(lo)}", f"Limite haute : {px(hi)}"]
+    return blocs
+
 def texte_apercu(m, r, cle):
-    """Fiche synthétique ; l'intégralité des données reste accessible via le bouton Comprendre l'analyse."""
+    """Fiche synthétique avec langage visuel ; le détail reste accessible au bouton."""
     maj, n_ok = alignement(r)
     titre, raison = verdict(r, cle)
     biais = ("🟢 HAUSSIER" if maj == 1 else "🔴 BAISSIER" if maj == -1 else "🟠 NON CONFIRMÉ")
@@ -1494,14 +1529,27 @@ def texte_apercu(m, r, cle):
         "💹 PRIX ACTUEL",
         f"{px(prix)}",
         "━━━━━━━━━━━━━━━━━━━━",
-        "🧭 TENDANCE DU MARCHÉ",
+        "🧭 TENDANCE",
         biais,
         "📡 CONFIRMATION 1H + 4H",
-        f"{n_ok}/2  {'✅ CONFIRMÉ' if r.get('confirme') else '⏳ EN ATTENTE'}",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "🚦 DÉCISION ALIGN",
-        str(titre),
+        f"{n_ok}/2  {'✅ VALIDÉE' if r.get('confirme') else '⏳ EN ATTENTE'}",
     ]
+    evenement = symbole_evenement_marche(r)
+    if evenement:
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "⚡ ÉVÉNEMENT DU MARCHÉ"] + evenement
+    if r.get("accum"):
+        lignes += ["🟩 ACCUMULATION", "Soutien possible en zone basse"]
+    if r.get("distrib"):
+        lignes += ["🟥 DISTRIBUTION", "Essoufflement possible en zone haute"]
+    fvg = blocs_fvg(r, limite=1)
+    if fvg:
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "🧲 ZONE FVG À SURVEILLER"] + fvg
+    if r.get("annonce"):
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "🚨 RISQUE NEWS", "Pause sur les nouvelles entrées autour de l'annonce"]
+    elif r.get("news"):
+        premiere = str(r["news"]).splitlines()[0]
+        lignes += ["📰 CALENDRIER ÉCONOMIQUE", premiere]
+    lignes += ["━━━━━━━━━━━━━━━━━━━━", "🚦 DÉCISION ALIGN", str(titre)]
     if raison:
         lignes.append(str(raison))
     if cle.get("trade"):
@@ -1515,9 +1563,7 @@ def texte_apercu(m, r, cle):
                    f"{px(o.get('za', o['e']))} → {px(o.get('zb', o['e']))}"]
     else:
         lignes += ["━━━━━━━━━━━━━━━━━━━━", "⏳ PROCHAINE ACTION", str(prochaine(r, cle))]
-    if r.get("news"):
-        lignes += ["━━━━━━━━━━━━━━━━━━━━", "📰 ACTUALITÉS", str(r["news"])]
-    lignes += ["", "ℹ️ Les indicateurs, RSI, zones, FVG, stratégie et explications sont disponibles avec « Comprendre l'analyse »."]
+    lignes += ["", "ℹ️ Tous les détails, news, FVG, niveaux et explications sont dans les boutons ci-dessous."]
     return "\n".join(lignes)
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
