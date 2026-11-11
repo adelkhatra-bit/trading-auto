@@ -2347,20 +2347,24 @@ class TelegramAnalysisActionsRegressionTest(unittest.TestCase):
 
 
 class TelegramResponsivePollingRegressionTest(unittest.TestCase):
-    def test_pending_telegram_updates_are_drained_between_analysis_stages(self):
+    def test_pending_telegram_updates_are_drained_from_the_independent_poller_queue(self):
         from unittest.mock import patch
         state = {"offset": 77}
         chats = {"123"}
         update = {"update_id": 77, "message": {"chat": {"id": 123, "type": "private"}}}
         demandes = []
+        while not align_bot.TELEGRAM_UPDATES.empty():
+            align_bot.TELEGRAM_UPDATES.get_nowait()
+        align_bot.TELEGRAM_UPDATES.put(update)
         with patch.object(align_bot, "TOKEN", "test-token"), \
-             patch.object(align_bot, "telegram", return_value={"result": [update]}) as api, \
+             patch.object(align_bot, "telegram") as api, \
              patch.object(align_bot, "traiter", return_value=[("123", "GOLD")]) as handle:
             count = align_bot.recevoir_updates_telegram(state, chats, demandes)
         self.assertEqual(count, 1)
         self.assertEqual(demandes, [("123", "GOLD")])
-        api.assert_called_once_with("getUpdates", offset=77, timeout=0)
+        api.assert_not_called()
         handle.assert_called_once_with(state, chats, [update])
+        self.assertTrue(align_bot.TELEGRAM_UPDATES.empty())
 
     def test_telegram_polling_helper_is_safe_when_token_is_not_configured(self):
         from unittest.mock import patch
@@ -2378,3 +2382,86 @@ class TelegramResponsivePollingRegressionTest(unittest.TestCase):
              patch.object(align_bot, "menu_bot") as menu:
             align_bot.traiter({"proprio": ["123"]}, {"123"}, [update])
         menu.assert_called_once()
+
+
+class TelegramIndependentPollerFastPathTest(unittest.TestCase):
+    def setUp(self):
+        align_bot.CALLBACKS_ACKNOWLEDGED.clear()
+        align_bot.TELEGRAM_POLL_STOP.clear()
+        align_bot.SHUTDOWN_REQUESTED.clear()
+
+    def test_mon_bot_command_is_answered_by_fast_path_without_waiting_for_analysis(self):
+        from unittest.mock import patch
+        update = {"update_id": 99811, "message": {
+            "text": "/mon_bot", "chat": {"id": 123, "type": "private"},
+            "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "POSITIONS_GRATUITES", True), \
+             patch.object(align_bot, "menu_bot") as menu:
+            self.assertTrue(align_bot._traiter_lecture_rapide({}, {"123"}, update))
+        menu.assert_called_once_with({}, "123")
+        self.assertTrue(update.get("_align_fast_handled"))
+
+    def test_reply_keyboard_mon_bot_button_uses_same_fast_path(self):
+        from unittest.mock import patch
+        update = {"update_id": 99812, "message": {
+            "text": "🤖 Mon bot", "chat": {"id": 123, "type": "private"},
+            "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "POSITIONS_GRATUITES", True), \
+             patch.object(align_bot, "menu_bot") as menu:
+            self.assertTrue(align_bot._traiter_lecture_rapide({}, {"123"}, update))
+        menu.assert_called_once_with({}, "123")
+
+    def test_results_button_is_answered_by_fast_path(self):
+        from unittest.mock import patch
+        update = {"update_id": 99813, "message": {
+            "text": "📈 Mes résultats", "chat": {"id": 123, "type": "private"},
+            "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "POSITIONS_GRATUITES", True), \
+             patch.object(align_bot, "texte_resultats", return_value="results"), \
+             patch.object(align_bot, "_envoi_sur") as send:
+            self.assertTrue(align_bot._traiter_lecture_rapide({}, {"123"}, update))
+        send.assert_called_once()
+
+    def test_analysis_button_opens_market_choice_without_waiting_for_analysis(self):
+        from unittest.mock import patch
+        update = {"update_id": 99814, "message": {
+            "text": "📊 Faire une analyse", "chat": {"id": 123, "type": "private"},
+            "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "_menu_analyse_rapide") as menu:
+            self.assertTrue(align_bot._traiter_lecture_rapide({}, set(), update))
+        menu.assert_called_once_with("123")
+
+    def test_fast_path_never_treats_group_messages_as_private_bot_commands(self):
+        update = {"update_id": 99815, "message": {
+            "text": "/mon_bot", "chat": {"id": -100, "type": "supergroup"},
+            "from": {"id": 123}
+        }}
+        self.assertFalse(align_bot._traiter_lecture_rapide({}, set(), update))
+
+    def test_fast_path_does_not_bypass_deep_link_state_changes(self):
+        update = {"update_id": 99816, "message": {
+            "text": "/start auto_gold", "chat": {"id": 123, "type": "private"},
+            "from": {"id": 123}
+        }}
+        self.assertFalse(align_bot._traiter_lecture_rapide({}, {"123"}, update))
+
+    def test_callback_acknowledgement_is_not_sent_twice_by_the_main_handler(self):
+        from unittest.mock import patch
+        cb = {"id": "fast-callback"}
+        with patch.object(align_bot, "telegram", return_value={"ok": True}) as api:
+            align_bot._ack_callback_rapide(cb, "⌛ Action reçue")
+        self.assertIn("fast-callback", align_bot.CALLBACKS_ACKNOWLEDGED)
+        with patch.object(align_bot, "http_json") as http:
+            result = align_bot.telegram("answerCallbackQuery", callback_query_id="fast-callback")
+        self.assertEqual(result, {"ok": True, "result": True})
+        http.assert_not_called()
+
+    def test_shutdown_signal_requests_state_save_and_stops_poller(self):
+        import signal
+        align_bot._demander_arret(signal.SIGTERM, None)
+        self.assertTrue(align_bot.SHUTDOWN_REQUESTED.is_set())
+        self.assertTrue(align_bot.TELEGRAM_POLL_STOP.is_set())
