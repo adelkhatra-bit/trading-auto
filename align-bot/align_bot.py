@@ -1020,7 +1020,7 @@ TRAD = {
 "✅ Sélection enregistrée": "✅ Selection saved",
 "✅ Je suis rentré": "✅ I'm in", "🚪 Je suis sorti": "🚪 I'm out", "📈 Mes résultats": "📈 My results",
 "🧩 Indicateur TradingView": "🧩 TradingView indicator", "💎 Devenir VIP": "💎 Become VIP",
-"Utilise les boutons 👇": "Use the buttons 👇", "❌ Non": "❌ No",
+"Utilise les boutons 👇": "Use the buttons 👇", "📊 Analyse": "📊 Analysis", "🔔 Suivre": "🔔 Follow", "❌ Non": "❌ No",
 "📤 Partager à un ami": "📤 Share with a friend", "🎁 Offrir l'accès VIP": "🎁 Gift VIP access",
 "🎁 Offrir l'indicateur": "🎁 Gift the indicator", "⛔ Retirer l'accès": "⛔ Remove access",
 "✅ C'est fait, accès donné": "✅ Done, access given",
@@ -1726,17 +1726,10 @@ def telegram(methode, **params):
     return resultat
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Faire une analyse"}],
-                                   [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
-                                   [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
-                                   [{"text": "📡 Mes marchés"}],
-                                   [{"text": "🌐 English"}]],
-                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Faire une analyse"}],
-                                            [{"text": "💎 Devenir VIP"}],
-                                            [{"text": "📸 Partager mon gain"}, {"text": "📡 Mes marchés"}],
-                                            [{"text": "🌐 English"}]],
-                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
+CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "🔔 Suivre"}]],
+                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Analyse ou suivi"})
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "🔔 Suivre"}]],
+                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Analyse ou suivi"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
@@ -2062,28 +2055,15 @@ def menu_suivi(etat, cid):
     _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
 
 def bouton_rappel(m):
-    """Rappelle la bonne analyse de marché, même si un autre marché a envoyé des messages depuis."""
-    return json.dumps({"inline_keyboard": [
-        [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
-        [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
-    ]})
+    """Un seul bouton d'action, sans clavier secondaire."""
+    return json.dumps({"inline_keyboard": [[{"text": "🔔 Suivre ce marché", "callback_data": f"auto:{m}"}]]})
 
 def markup_analyse(etat, m, r):
-    """Clavier progressif : décision, explication, analyse complète et niveaux."""
+    """Un seul bouton utile sous la synthèse de marché."""
     cle = etat.get(m, {})
-    lignes = [
-        [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
-         {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
-        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
-         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
-    ]
     if cle.get("trade"):
-        lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
-                       {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
-    else:
-        lignes.append([{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
-    return json.dumps({"inline_keyboard": lignes})
+        return json.dumps({"inline_keyboard": [[{"text": "📍 Ma position", "callback_data": f"position:{m}"}]]})
+    return json.dumps({"inline_keyboard": [[{"text": "🔔 Suivre ce marché", "callback_data": f"auto:{m}"}]]})
 
 
 def markup_position(m):
@@ -2733,7 +2713,7 @@ def notifier_clotures(etat, m, r, cle):
             etat["veille_cloture"][m].pop(cid, None)
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
-    """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
+    """Une analyse = une seule carte lisible, pas un aperçu puis un deuxième rapport."""
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
     sig = signature_analyse(m, r, cle); der = vu.get(str(cid))
     if der and der["sig"] == sig and time.time() - der["t"] < 1200:
@@ -2919,12 +2899,8 @@ def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
     if etat.get("menu") == 4:
         return
-    fr = [("faire_analyse", "📊 Faire une analyse"), ("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
-          ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"), ("marches", "📡 Mes marchés"),
-          ("boutons", "⌨️ Faire revenir les boutons"), ("english", "🌐 English")]
-    en = [("faire_analyse", "📊 Run an analysis"), ("analyse_btc", "🟠 BTC Analysis"), ("analyse_gold", "🥇 Gold Analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
-          ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"), ("marches", "📡 My markets"),
-          ("boutons", "⌨️ Bring back the buttons"), ("francais", "🌐 Français")]
+    fr = [("analyse", "📊 Analyse"), ("suivre", "🔔 Suivre")]
+    en = [("analyse", "📊 Analysis"), ("suivre", "🔔 Follow")]
     try:
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in fr]))
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in en]), language_code="en")
@@ -3478,13 +3454,15 @@ def traiter(etat, chats, updates):
         if "mon bot" in txt or "mon_bot" in txt:
             menu_bot(etat, cid)
             continue
-        if "faire une analyse" in txt or "run an analysis" in txt:
-            _envoi_sur(cid, text=("📊 Quel marché veux-tu analyser ?" if cid not in LANG_EN else "📊 Which market do you want to analyse?"),
+        if txt.strip() in ("analyse", "📊 analyse", "analysis", "📊 analysis", "faire une analyse", "run an analysis"):
+            _envoi_sur(cid, text=("📊 QUE VEUX-TU ANALYSER ?" if cid not in LANG_EN else "📊 WHAT DO YOU WANT TO ANALYSE?"),
                        reply_markup=json.dumps({"inline_keyboard": [
                            [{"text": "🥇 GOLD", "callback_data": "analysechoice:GOLD"}],
                            [{"text": "🟠 BTC", "callback_data": "analysechoice:BTC"}],
-                           [{"text": "🥇 + 🟠 Les deux", "callback_data": "analysechoice:BOTH"}]
+                           [{"text": "🥇 + 🟠 LES DEUX", "callback_data": "analysechoice:BOTH"}]
                        ]}))
+        elif txt.strip() in ("suivre", "🔔 suivre", "follow", "🔔 follow", "mes marches", "my markets") or txt.startswith("/marches"):
+            menu_suivi(etat, cid)
         elif "analyse" in txt or "etat" in txt:
             demandes.append((cid, marche_demande(txt)))
         elif "rentre" in txt or txt.strip() == "oui":
