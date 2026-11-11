@@ -2117,3 +2117,19 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
         markup = json.loads(align_bot.markup_position("BTC"))["inline_keyboard"]
         callbacks = [b["callback_data"] for row in markup for b in row]
         self.assertIn("out:BTC", callbacks)
+
+
+    def test_manual_follow_returns_personal_position_and_exit_controls(self):
+        from unittest.mock import patch
+        state = {"GOLD": {"trade": {
+            "d": 1, "e": 100.0, "sl": 98.0, "tp1": 104.0, "tp2": 108.0,
+            "qui": {}
+        }}}
+        with patch.object(align_bot, "prix_actuel", return_value=101.0), \
+             patch.object(align_bot, "controle_entree", return_value="Contrôles OK"), \
+             patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.repondre(state, "101", True, "GOLD")
+        args = send.call_args.kwargs
+        self.assertEqual(args["reply_markup"], align_bot.markup_position("GOLD"))
+        self.assertIn("SUIVI PERSONNEL ACTIVÉ", args["text"])
+        self.assertIn("101", state["GOLD"]["trade"]["qui"])
