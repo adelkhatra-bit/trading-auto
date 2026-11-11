@@ -607,7 +607,7 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     return "\n".join(l)
 def strategie_mtf(r):
     """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
-    fl = lambda x: "⬆️" if x == 1 else "⬇️" if x == -1 else "➖"
+    fl = lambda x: "🟢⬆️" if x == 1 else "🔴⬇️" if x == -1 else "🟠➖"
     D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
     fond = d4h
     l = ["🧭 STRATÉGIE MULTI-UT",
