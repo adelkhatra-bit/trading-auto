@@ -49,6 +49,46 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(profile["mode"], "ATTENTE")
         self.assertEqual(profile["direction"], 0)
 
+    def test_fetch_tv_mtf_preserves_the_server_selected_timeframe(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return b'{"ok":true,"symbol":"XAUUSD","activeTimeframe":"M15","activeTimeframeFresh":true,"activeTimeframeAgeMs":1200,"snapshots":{"M5":{"fresh":true},"M15":{"fresh":true}},"receivedTimeframes":["M5","M15"]}'
+
+        old_url, old_token = align_bot.ALIGN_TV_API_URL, align_bot.ALIGN_TV_READ_TOKEN
+        align_bot.ALIGN_TV_API_URL, align_bot.ALIGN_TV_READ_TOKEN = "https://align.example", "test-token"
+        try:
+            with unittest.mock.patch("align_bot.urllib.request.urlopen", return_value=FakeResponse()):
+                result = align_bot.fetch_tv_mtf("XAUUSD")
+        finally:
+            align_bot.ALIGN_TV_API_URL, align_bot.ALIGN_TV_READ_TOKEN = old_url, old_token
+        self.assertTrue(result["available"])
+        self.assertEqual(result["activeTimeframe"], "M15")
+        self.assertEqual(result["activeTimeframeAgeMs"], 1200)
+        self.assertEqual(result["receivedTimeframes"], ["M5", "M15"])
+
+    def test_fetch_tv_mtf_rejects_stale_active_timeframe(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return b'{"ok":true,"symbol":"XAUUSD","activeTimeframe":"H4","activeTimeframeFresh":false,"snapshots":{"H4":{"fresh":true}}}'
+
+        old_url, old_token = align_bot.ALIGN_TV_API_URL, align_bot.ALIGN_TV_READ_TOKEN
+        align_bot.ALIGN_TV_API_URL, align_bot.ALIGN_TV_READ_TOKEN = "https://align.example", "test-token"
+        try:
+            with unittest.mock.patch("align_bot.urllib.request.urlopen", return_value=FakeResponse()):
+                result = align_bot.fetch_tv_mtf("XAUUSD")
+        finally:
+            align_bot.ALIGN_TV_API_URL, align_bot.ALIGN_TV_READ_TOKEN = old_url, old_token
+        self.assertTrue(result["available"])
+        self.assertIsNone(result["activeTimeframe"])
+
     def test_indicator_plan_follows_the_active_tradingview_timeframe(self):
         r = {"tv_indicator_mtf": {"available": True, "activeTimeframe": "M15", "snapshots": {
             "M5": {"fresh": True, "robotV12": {"signal": "SHORT", "entry": 100, "sl": 102, "tp": 96}},
