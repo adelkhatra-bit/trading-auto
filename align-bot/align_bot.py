@@ -1095,7 +1095,9 @@ TRAD = {
 "💪 Je garde ce type de position": "💪 I keep this type of position", "🧠 Le bot apprend : il note chaque TP et chaque SL": "🧠 The bot learns: it records every TP and SL",
 "🧠 Ce que le bot a appris :": "🧠 What the bot has learned:", "🔥🔥🔥 TRÈS BELLE POSITION": "🔥🔥🔥 VERY NICE POSITION", "🔥 BELLE POSITION": "🔥 NICE POSITION", "% visés": "% targeted", "CASSURE EN VUE —": "BREAKOUT IN SIGHT —", "👀 Le prix approche ≈": "👀 Price is approaching ≈", "plus haut des dernières bougies 15 min": "high of the last 15-min candles",
 "plus bas des dernières bougies 15 min": "low of the last 15-min candles", "🕯 Si une bougie 15 min CLÔTURE au-dessus → j'entre": "🕯 If a 15-min candle CLOSES above → I enter",
-"🕯 Si une bougie 15 min CLÔTURE en dessous → j'entre": "🕯 If a 15-min candle CLOSES below → I enter", "🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture": "🙅 A wick poking through isn't enough: we wait for the close", "🔔 Tiens-toi prêt": "🔔 Get ready", "la mèche de la bougie de cassure": "the wick of the breakout candle", ": à la clôture de la bougie 15 min qui casse ≈": ": at the close of the 15-min candle breaking ≈", "💥 CASSURE CONFIRMÉE": "💥 BREAKOUT CONFIRMED", "🕯 La bougie 15 min a CLÔTURÉ au-dessus de ≈": "🕯 The 15-min candle CLOSED above ≈",
+"🕯 Si une bougie 15 min CLÔTURE en dessous → j'entre": "🕯 If a 15-min candle CLOSES below → I enter", "🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture": "🙅 A wick poking through isn't enough: we wait for the close", "🔔 Tiens-toi prêt": "🔔 Get ready",
+"👍 Like si tu participes": "👍 Like if you're participating",
+"ℹ️ Analyse indicative : décision et ordre sous ta responsabilité.": "ℹ️ Indicative analysis: you are responsible for your decision and order.", "la mèche de la bougie de cassure": "the wick of the breakout candle", ": à la clôture de la bougie 15 min qui casse ≈": ": at the close of the 15-min candle breaking ≈", "💥 CASSURE CONFIRMÉE": "💥 BREAKOUT CONFIRMED", "🕯 La bougie 15 min a CLÔTURÉ au-dessus de ≈": "🕯 The 15-min candle CLOSED above ≈",
 "🕯 La bougie 15 min a CLÔTURÉ en dessous de ≈": "🕯 The 15-min candle CLOSED below ≈", "la mèche de cette bougie": "the wick of this candle",
 "🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE au-dessus de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES above ≈", "🅱️ Ou CASSURE : si une bougie 15 min CLÔTURE en dessous de ≈": "🅱️ Or BREAKOUT: if a 15-min candle CLOSES below ≈",
 "sur la cassure": "on the breakout", "🅰️ Entrée sur le repli dans la zone 🟨": "🅰️ Entry on the pullback in the zone 🟨", "POINT D'ENTRÉE À VENIR —": "ENTRY POINT COMING —", "👀 ÇA ARRIVE": "👀 IT'S COMING", "🎯 Je rentre dans la position (coach)": "🎯 I'm in this position (coach)", "🤖 Mon coach": "🤖 My coach", "👀 Voir plus": "👀 See more", "↩️ Repli en cours sur le 15 min : c'est lui qu'on attend pour entrer": "↩️ 15-min pullback in progress: that's what we wait for to enter", "⬇️ Tes boutons sont là 👇": "⬇️ Your buttons are here 👇", "💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ": "💡 Keyboard hidden? Tap the ⌘ icon right of the field", "Prochaines news (heure de Paris) :": "Next news (Paris time):", "aujourd'hui": "today", "demain": "tomorrow",
@@ -1463,7 +1465,7 @@ CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"tex
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
-MINI_AVERT = "ℹ️ Ma position perso • pas un conseil • risque de perte"
+MINI_AVERT = "ℹ️ Analyse indicative : décision et ordre sous ta responsabilité."
 REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
           "━━━━━━━━━━━━\n"
           "1️⃣ Ce sont MES positions perso, ma vision du marché\n"
@@ -2325,7 +2327,9 @@ def texte_cloture(m, tf, bougie, r, cle):
         "",
         "ℹ️ À RETENIR",
         "Une clôture seule ne déclenche pas une entrée.",
-        "Aucun ordre n'est envoyé à ton broker."
+        "Aucun ordre n'est envoyé à ton broker.",
+        MINI_AVERT,
+        "👍 Like si tu participes"
     ]
     return "\n".join(lignes)
 
@@ -3585,7 +3589,7 @@ def fmt_trade(m, tr, p=None):
             f"💡 BE : alerte après confirmation de clôture, pas sur une mèche\n\n"
             f"📍 Repère prix {m} ({'XAUUSD spot' if m == 'GOLD' else 'BTC/USD'}) :\n{echelle}\n\n"
             f"Risque {barres(risque)}\nGain   {barres(gain)}  (x{tr['rr']:.1f})\n"
-            + decision + f"\n{MINI_AVERT}")
+            + decision + f"\n{MINI_AVERT}\n👍 Like si tu participes")
 
 def vue(nom_niveau):
     """Unité de temps à regarder pour voir le niveau (4h, Daily, 1h…)."""
