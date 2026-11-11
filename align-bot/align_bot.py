@@ -1204,7 +1204,7 @@ def mise_en_forme(t):
             label = niveau.group("label").strip().rstrip(" :：≈=")
             value = niveau.group("value").strip()
             # Les prix Telegram ne doivent jamais contenir de séparateur de milliers : 4000,00 et non 4 000,00.
-            value = re.sub(r"(?<=\\d)[ \\u00a0\\u202f](?=\\d{3}(?:[ \\u00a0\\u202f]|[.,]|$))", "", value)
+            value = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:[ \u00a0\u202f]|[.,]|$))", "", value)
             detail = (niveau.group("detail") or "").strip()
             detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             if out and out[-1]:
