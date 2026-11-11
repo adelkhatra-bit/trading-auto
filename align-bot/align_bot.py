@@ -1263,12 +1263,15 @@ def telegram(methode, **params):
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
-                                   [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}], [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
+CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
+                                   [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
+                                   [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
                                    [{"text": "🌐 English"}]],
-                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}], [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
-                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
+                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
+                                            [{"text": "💎 Devenir VIP"}],
+                                            [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
+                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
@@ -1752,6 +1755,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
     sig = signature_analyse(m, r, cle); der = vu.get(str(cid))
     if der and der["sig"] == sig and time.time() - der["t"] < 1200:
+        armer_cloture(etat, cid, m, r, cle)
         lignes = chrono_txt(m, r, cle, time.time()).split("\n")
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
         _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\n".join(
@@ -3548,12 +3552,21 @@ def un_tour(etat, chats):
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 8:
+        if etat.get("clavier") != 9:
+            # Mise à jour silencieuse du clavier : aucun message promotionnel ou de démarrage.
             for cid in chats:
-                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas\n🌐 English : le bot en anglais\n📸 Partager mon gain : ta capture publiée\n🤖 Mon bot : il entre tout seul pour toi (ON / OFF)", reply_markup=CLAVIER)
+                try:
+                    telegram("sendMessage", chat_id=cid, text=" ", reply_markup=CLAVIER,
+                             disable_notification="true")
+                except Exception as ex:
+                    print("clavier", cid, ex)
             for cid in etat.get("prospects", []):
-                _envoi_sur(cid, text="🆕 Boutons : 🟠 Analyse BTC • 🥇 Analyse Gold • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 8
+                try:
+                    telegram("sendMessage", chat_id=cid, text=" ", reply_markup=CLAVIER_VISITEUR,
+                             disable_notification="true")
+                except Exception as ex:
+                    print("clavier visiteur", cid, ex)
+            etat["clavier"] = 9
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
