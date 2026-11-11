@@ -340,7 +340,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertTrue(send.call_args.kwargs["text"].startswith("🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL"))
+        self.assertTrue(send.call_args.kwargs["text"].startswith("🔴 SIGNAL NON CONFIRMÉ"))
+        self.assertIn("🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL", send.call_args.kwargs["text"])
         self.assertIn("N'ENTRE PAS", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
