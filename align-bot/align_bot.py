@@ -2922,7 +2922,7 @@ COMMANDES = {"/faire_analyse": "📊 Faire une analyse", "/analyse_btc": "🟠 A
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
-    if etat.get("menu") == 5:
+    if etat.get("menu") == 6:
         return
     fr = [("faire_analyse", "📊 Faire une analyse"), ("mon_bot", "🤖 Mon bot ON / OFF"),
           ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
@@ -2941,9 +2941,11 @@ def installer_menu(etat):
         telegram("setMyShortDescription", short_description="🎁 1 position BTC / Gold offerte chaque jour • 💎 Tout le reste dans ALIGN VIP")
         telegram("setMyDescription", description=("🎁 ALIGN Gratuit — BTC & Gold\n\n🎁 1 position offerte chaque jour, expliquée en bougies\n"
                                                   "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n📰 News et discours Fed gratuits\n\n"
-                                                  "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux, le coach (BE, TP)\n\n"
+                                                  "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux et le coach (BE, TP)\n"
+                                                  "🤖 Les abonnés au suivi sont enregistrés automatiquement à l'ouverture du signal.\n"
+                                                  "📍 Suivi personnel : SL, BE, TP et sortie manuelle depuis Telegram.\n\n"
                                                   "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
-        etat["menu"] = 5
+        etat["menu"] = 6
     except Exception as ex:
         print("menu", ex)
 
