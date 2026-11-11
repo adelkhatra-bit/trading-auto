@@ -132,6 +132,29 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("previous:GOLD", callbacks)
         self.assertIn("📌 Revoir l'analyse GOLD", labels)
 
+    def test_requested_analysis_arms_the_next_relevant_closed_candle(self):
+        state = {}
+        r = {"confirme": 0, "dirs": [0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+             "b1h": [candle(3600)]}
+        align_bot.armer_cloture(state, "123", "GOLD", r, {})
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["tf"], "1h")
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["dernier_t"], 3600)
+
+    def test_closed_candle_notifier_sends_once_per_new_candle(self):
+        from unittest.mock import patch
+        state = {"veille_cloture": {"BTC": {"123": {"tf": "5m", "dernier_t": 300, "restants": 1}}}}
+        r = {"b5": [candle(300), candle(600, o=100, h=103, l=99, c=102)],
+             "confirme": 0, "dirs": [0] * 11, "rsis": [50] * 11}
+        with patch.object(align_bot, "verdict", return_value=("ATTENDRE", "pas de confirmation")), \\
+             patch.object(align_bot, "alignement", return_value=(0, 0)), \\
+             patch.object(align_bot, "prochaine", return_value="Attendre"), \\
+             patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.notifier_clotures(state, "BTC", r, {})
+            align_bot.notifier_clotures(state, "BTC", r, {})
+        self.assertEqual(send.call_count, 1)
+        self.assertIn("CLÔTURE CONFIRMÉE", send.call_args.kwargs["text"])
+        self.assertNotIn("123", state["veille_cloture"]["BTC"])
+
     def test_chronometer_edits_again_on_the_next_second(self):
         from unittest.mock import patch
         state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1}}}, "GOLD": {}}
