@@ -72,31 +72,51 @@ jobs:
         run: python3 ai_healthcheck.py
 
       - name: Vérifier le bridge TradingView ROBOT V12 (BTC + GOLD)
-        # Le bridge enrichit l'analyse ; son indisponibilité ne doit pas arrêter les alertes du moteur interne.
-        continue-on-error: true
+        # Le moteur interne reste disponible, mais le statut bridge est explicite et jamais présenté comme connecté si absent ou périmé.
         env:
           ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
         run: |
           python3 - <<'PY'
           import json, os, urllib.parse, urllib.request
+          from datetime import datetime, timezone
           base = os.environ.get("ALIGN_TV_API_URL", "").strip().rstrip("/")
           token = os.environ.get("ALIGN_TV_READ_TOKEN", "").strip()
+          status = "CONNECTED"
+          details = []
           if not base or not token:
-              raise SystemExit("ÉCHEC: secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents — bridge indicateur non raccordé au bot.")
-          for symbol in ("BTCUSD", "XAUUSD"):
-              url = base + "/bridge/robot-v12/mtf?symbol=" + urllib.parse.quote(symbol)
-              req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "ALIGN-bridge-preflight"})
-              with urllib.request.urlopen(req, timeout=12) as response:
-                  payload = json.loads(response.read().decode("utf-8"))
-              if payload.get("ok") is not True or not isinstance(payload.get("snapshots"), dict):
-                  raise SystemExit("ÉCHEC: réponse bridge invalide pour " + symbol)
-              snapshots = payload["snapshots"]
-              fresh = [tf for tf, snap in snapshots.items() if isinstance(snap, dict) and snap.get("fresh") is True]
-              active = payload.get("activeTimeframe") or "aucune UT active récente"
-              print(f"BRIDGE_API_OK symbol={symbol} active={active} received={','.join(payload.get('receivedTimeframes', [])) or 'aucune'} fresh={','.join(fresh) or 'aucun plan frais'}")
-              if not snapshots:
-                  print(f"ATTENTION: aucun snapshot Pine reçu pour {symbol}; API joignable mais flux indicateur non prouvé.")
+              status = "NOT_CONFIGURED"
+              details.append("Secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents.")
+          else:
+              for symbol in ("BTCUSD", "XAUUSD"):
+                  try:
+                      url = base + "/bridge/robot-v12/mtf?symbol=" + urllib.parse.quote(symbol)
+                      req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "ALIGN-bridge-preflight"})
+                      with urllib.request.urlopen(req, timeout=12) as response:
+                          payload = json.loads(response.read().decode("utf-8"))
+                      if payload.get("ok") is not True or not isinstance(payload.get("snapshots"), dict):
+                          raise ValueError("réponse API invalide")
+                      snapshots = payload["snapshots"]
+                      fresh = [tf for tf, snap in snapshots.items() if isinstance(snap, dict) and snap.get("fresh") is True]
+                      active = payload.get("activeTimeframe") or "aucune"
+                      if not fresh:
+                          status = "DEGRADED"
+                          details.append(symbol + ": aucun snapshot frais")
+                      print(f"BRIDGE symbol={symbol} active={active} fresh={','.join(fresh) or 'NONE'}")
+                  except Exception as exc:
+                      status = "DEGRADED"
+                      details.append(symbol + ": " + type(exc).__name__)
+          print("BRIDGE_STATUS=" + status)
+          for detail in details:
+              print("::warning::TradingView bridge " + detail)
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as f:
+                  f.write("## TradingView ROBOT V12 — état du bridge\\n\\n")
+                  f.write("- **Statut :** " + status + "\\n")
+                  f.write("- **Détail :** " + (" ; ".join(details) if details else "BTCUSD et XAUUSD contrôlés") + "\\n")
+                  f.write("- **Conséquence :** si le bridge est indisponible, ALIGN utilise son moteur interne ; aucune donnée TradingView n'est revendiquée.\\n")
           PY
 
       - name: Analyse BTC + Gold et envoi Telegram
