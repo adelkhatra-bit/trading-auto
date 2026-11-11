@@ -2689,3 +2689,25 @@ class TestActiveTimeframeReading(unittest.TestCase):
 
     def test_no_bridge_no_invented_line(self):
         self.assertIsNone(align_bot.lecture_unite_active({"dirs": [1] * 11}))
+
+
+class TestGuaranteedShutdown(unittest.TestCase):
+    def test_forced_shutdown_saves_state_then_exits(self):
+        from unittest.mock import patch
+        align_bot._ETAT_COURANT.update({"etat": {"x": 1}, "chats": {"1"}})
+        with patch.object(align_bot.time, "sleep"), \
+             patch.object(align_bot, "_sauver_etat_sous_verrou") as save, \
+             patch.object(align_bot.os, "_exit") as quit_:
+            align_bot._arret_garanti()
+        save.assert_called_once()
+        quit_.assert_called_once_with(0)
+        align_bot._ETAT_COURANT.clear()
+
+    def test_signal_starts_single_watchdog(self):
+        from unittest.mock import patch
+        align_bot.SHUTDOWN_REQUESTED.clear(); align_bot.TELEGRAM_POLL_STOP.clear()
+        with patch.object(align_bot.threading, "Thread") as th:
+            align_bot._demander_arret(2, None)
+            align_bot._demander_arret(15, None)
+        self.assertEqual(th.call_count, 1)
+        align_bot.SHUTDOWN_REQUESTED.clear(); align_bot.TELEGRAM_POLL_STOP.clear()
