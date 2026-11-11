@@ -468,8 +468,13 @@ JOURNAL_MAX = 2500
 
 def journal_ajouter(etat, entree):
     journal = etat.setdefault("journal_telegram", [])
-    cle = (entree.get("direction"), entree.get("update_id"), entree.get("message_id"),
-           entree.get("chat_id"), entree.get("text"))
+    if entree.get("direction") == "sortant" and entree.get("type") == "editMessageText":
+        for precedent in reversed(journal):
+            if (precedent.get("direction") == "sortant"
+                    and str(precedent.get("chat_id")) == str(entree.get("chat_id"))
+                    and str(precedent.get("message_id")) == str(entree.get("message_id"))):
+                precedent.update(entree)
+                return
     if entree.get("update_id") is not None and any(
         (x.get("direction"), x.get("update_id")) == (entree.get("direction"), entree.get("update_id"))
         for x in journal[-20:]
