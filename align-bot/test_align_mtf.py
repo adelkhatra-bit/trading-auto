@@ -185,7 +185,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "id": "gold-analysis", "data": "analysechoice:GOLD",
             "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
-        with patch.object(align_bot, "telegram"):
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "autorise", return_value=True):
             self.assertEqual(align_bot.traiter({}, set(), [update]), [("123", "GOLD")])
 
     def test_both_analysis_choice_callback_returns_both_markets(self):
@@ -194,7 +194,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "id": "both-analysis", "data": "analysechoice:BOTH",
             "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
-        with patch.object(align_bot, "telegram"):
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "autorise", return_value=True):
             self.assertEqual(align_bot.traiter({}, set(), [update]), [("123", "BTC"), ("123", "GOLD")])
 
     def test_breakout_uses_closed_5m_bars(self):
@@ -1066,10 +1066,11 @@ class AlignMtfRulesTest(unittest.TestCase):
 
     def test_main_keyboards_show_gold_btc_and_markets_buttons(self):
         import json
-        for keyboard in (align_bot.CLAVIER, align_bot.CLAVIER_VISITEUR):
+        for keyboard, attendus in ((align_bot.CLAVIER, ("🥇 Analyse Gold", "🟠 Analyse BTC", "📡 Mes marchés", "📊 Faire une analyse")),
+                                   (align_bot.CLAVIER_VISITEUR, ("🥇 Analyse Gold", "🟠 Analyse BTC", "📊 Faire une analyse", "💎 Devenir VIP"))):
             parsed = json.loads(keyboard)
             labels = [b["text"] for row in parsed["keyboard"] for b in row]
-            for attendu in ("🥇 Analyse Gold", "🟠 Analyse BTC", "📡 Mes marchés", "📊 Faire une analyse"):
+            for attendu in attendus:
                 self.assertIn(attendu, labels)
             self.assertEqual(len(labels), len(set(labels)))   # aucun doublon
 
@@ -2055,7 +2056,7 @@ class TestOneTapMarketAnalysis(unittest.TestCase):
             "id": "choose-gold", "data": "analysechoice:GOLD",
             "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
         }}
-        with patch.object(align_bot, "telegram"):
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "autorise", return_value=True):
             demandes = align_bot.traiter({}, set(), [update])
         self.assertEqual(demandes, [("101", "GOLD")])
 
@@ -2065,7 +2066,7 @@ class TestOneTapMarketAnalysis(unittest.TestCase):
             "id": "choose-both", "data": "analysechoice:BOTH",
             "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
         }}
-        with patch.object(align_bot, "telegram"):
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "autorise", return_value=True):
             demandes = align_bot.traiter({}, set(), [update])
         self.assertEqual(set(demandes), {("101", "BTC"), ("101", "GOLD")})
 
@@ -2768,3 +2769,43 @@ class TestStopNotTooTight(unittest.TestCase):
         mini = max(align_bot.SL_RISQUE_MIN_ATR * a, e * align_bot.SL_RISQUE_MIN_PCT)
         self.assertGreater(e + mini, 74044)          # le nouveau SL survit à la mèche
         self.assertGreater(e - 1.5 * mini, 73535)  # TP1 à 1,5 R reste atteignable (plus bas 73535)
+
+
+class TestEveryMainButtonAnswers(unittest.TestCase):
+    """Chaque bouton du clavier répond (membre et visiteur), sans fuite des niveaux VIP."""
+    def _run(self, text=None, cb=None, auth=True, state=None):
+        from unittest.mock import patch
+        st = state if state is not None else {"bienvenue": {"601": 1}, "lien": "https://t.me/+VIP"}
+        if cb:
+            upd = {"update_id": 5, "callback_query": {"id": "c", "data": cb, "message": {"chat": {"id": 601, "type": "private"}}, "from": {"id": 601}}}
+        else:
+            upd = {"update_id": 5, "message": {"message_id": 1, "text": text, "date": 0, "chat": {"id": 601, "type": "private"}, "from": {"id": 601, "first_name": "T"}}}
+        out = []
+        with patch.object(align_bot, "autorise", return_value=auth), \
+             patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: out.append(k)), \
+             patch.object(align_bot, "telegram"), \
+             patch.object(align_bot, "analyse_visiteur", side_effect=lambda *x: out.append({"text": "VISITEUR"})):
+            d = align_bot.traiter(st, {"601"} if auth else set(), [upd])
+        return out, d
+
+    def test_member_vip_button_answers(self):
+        for t in ("💎 Devenir VIP", "/vip"):
+            out, _ = self._run(t)
+            self.assertTrue(out and "DÉJÀ VIP" in out[0]["text"])
+
+    def test_member_buttons_all_answer(self):
+        for t in ("🤖 Mon bot", "📈 Mes résultats", "📸 Partager mon gain", "🧩 Indicateur TradingView", "📊 Faire une analyse"):
+            out, d = self._run(t)
+            self.assertTrue(out or d, t)
+
+    def test_visitor_never_gets_vip_levels_from_analysis_choice(self):
+        out, d = self._run(cb="analysechoice:GOLD", auth=False, state={"lien": "x", "prospects": ["601"]})
+        self.assertEqual(d, [])
+        self.assertEqual(out[-1]["text"], "VISITEUR")
+
+    def test_visitor_keyboard_has_no_dead_button(self):
+        for row in json.loads(align_bot.CLAVIER_VISITEUR)["keyboard"]:
+            for b in row:
+                out, d = self._run(b["text"], auth=False, state={"lien": "x", "prospects": ["601"]})
+                self.assertTrue(out or d, b["text"])
+                self.assertFalse(any("Utilise les boutons en bas" in (o.get("text") or "") for o in out), b["text"])
