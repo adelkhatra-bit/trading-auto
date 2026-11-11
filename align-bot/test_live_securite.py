@@ -20,8 +20,8 @@ class SecuriteVip(unittest.TestCase):
         etat, envois = self._etat(), []
         with patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append((c, k)) or {"ok": True}):
             ab.notifier_securite_vip(etat); ab.notifier_securite_vip(etat); ab.notifier_securite_vip(etat)
-        self.assertEqual([c for c, _ in envois], ["1", "2"])                    # une fois par utilisateur, jamais en doublon
-        for _, k in envois:
+        self.assertEqual(sorted(c for c, _ in envois), ["1", "2"])                # une fois par utilisateur, jamais en doublon
+        for _, k in sorted(envois, key=lambda e: e[0]):
             bouton = json.loads(k["reply_markup"])["inline_keyboard"][0][0]
             self.assertEqual((bouton["text"], bouton["url"]), ("💎 Rejoindre le VIP", LIEN))
             self.assertIn(f"💎 Abonnement VIP : {ab.PRIX_STARS} ⭐ / mois", k["text"])
@@ -49,7 +49,7 @@ class SecuriteVip(unittest.TestCase):
             self.assertEqual(envois, [])
             etat["lien"] = LIEN
             ab.notifier_securite_vip(etat); ab.notifier_securite_vip(etat)
-        self.assertEqual(envois, ["1", "2"])
+        self.assertEqual(sorted(envois), ["1", "2"])
 
     def test_failed_send_is_retried_not_marked_as_seen(self):
         etat = self._etat(proprio=["1"])
