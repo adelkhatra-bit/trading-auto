@@ -378,6 +378,20 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("🗂 Message history", [b["text"] for b in en_buttons])
         self.assertIn("🔔 Follow the next position", [b["text"] for b in en_buttons])
 
+    def test_all_static_telegram_inline_button_labels_have_english_translations(self):
+        labels = [
+            "🎯 Suivre la prochaine position", "❓ Pourquoi cette décision ?",
+            "📊 Analyse complète", "🎯 Niveaux / prix", "⏱ Toutes les unités",
+            "🗂 Historique des messages", "🟢 Je suis rentré",
+            "🔔 Suivre la prochaine position", "📍 Ma position • SL / TP",
+            "🗂 Historique", "🔔 Suivre le prochain setup",
+            "✅ Publier", "❌ Refuser", "✅ Accepter", "👀 Voir son profil",
+            "⬅️ Plus récents", "Plus anciens ➡️", "↩️ Retour à l'analyse",
+            "🎯 Voir les niveaux", "ℹ️ Comprendre l'analyse",
+        ]
+        missing = [label for label in labels if label not in align_bot.TRAD]
+        self.assertEqual(missing, [])
+
     def test_english_position_and_close_keyboard_labels_are_translated(self):
         import json
         for french_markup, expected in (
