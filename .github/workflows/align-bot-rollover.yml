@@ -73,6 +73,25 @@ jobs:
                       raise
                   print(f"ROLL_OVER_RACE old_run={run_id} http={exc.code}")
 
+          # Standard cancellation may leave a runner/process stuck. Escalate to
+          # GitHub's force-cancel endpoint if the old run remains active.
+          grace_deadline = time.time() + 15
+          while time.time() < grace_deadline:
+              remaining = older_active_runs()
+              if not remaining:
+                  break
+              time.sleep(3)
+
+          for run in older_active_runs():
+              run_id = run["id"]
+              try:
+                  request(f"/actions/runs/{run_id}/force-cancel", method="POST")
+                  print(f"FORCE_RETIRING old_run={run_id} old_sha={run.get('head_sha', '')[:12]}")
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (404, 409):
+                      raise
+                  print(f"FORCE_RETIRE_RACE old_run={run_id} http={exc.code}")
+
           deadline = time.time() + 120
           while time.time() < deadline:
               remaining = older_active_runs()
