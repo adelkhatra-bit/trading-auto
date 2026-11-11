@@ -1048,6 +1048,64 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(state["ia_dernier_statut"], "ALL_EXTERNAL_PROVIDERS_FAILED")
         self.assertTrue(state.get("ia_err"))
 
+    def test_openai_is_configured_as_primary_external_ai_provider(self):
+        provider = align_bot.IA_FOURNISSEURS[0]
+        self.assertEqual(provider[0], "OpenAI")
+        self.assertEqual(provider[1], "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(provider[2], "chat-latest")
+        self.assertTrue(provider[4])
+
+    def test_ai_data_includes_next_review_time_not_predicted_entry_time(self):
+        from unittest.mock import patch
+        r = {
+            "m1": [candle(1, c=100.0)], "dirs": [0] * 11, "rsis": [50] * 11,
+            "posD": 0.5, "posW": 0.5, "confirme": 0, "b5": [],
+            "macro_data": {}, "tv_indicator_mtf": {}
+        }
+        with patch.object(align_bot, "verdict", return_value=("ATTENTE", "Pas de confirmation")), \
+             patch.object(align_bot, "plan_indicateur", return_value={"available": False}), \
+             patch.object(align_bot, "profil_strategie", return_value={"mode": "ATTENTE"}), \
+             patch.object(align_bot, "timeframe_attendu", return_value="4h"), \
+             patch.object(align_bot, "prochaine_cloture_bougie", return_value=18000):
+            data = align_bot.donnees_ia("GOLD", r, {})
+        self.assertEqual(data["prochaine_reevaluation"]["unite_bloquante"], "4h")
+        self.assertIn("pas une prévision d'entrée", data["prochaine_reevaluation"]["signification"])
+
+    def test_details_button_returns_ai_briefing_and_keeps_raw_technical_details(self):
+        import json
+        from unittest.mock import patch
+        update = {"update_id": 99500, "callback_query": {
+            "id": "details-gold", "data": "details:GOLD",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        r = {"m1": [candle(1, c=100.0)], "dirs": [0] * 11, "confirme": 0, "b5": []}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "analyse_marche", return_value=r), \
+             patch.object(align_bot, "avis_ia", return_value="BRIEFING IA GOLD") as ai, \
+             patch.object(align_bot, "_envoi_sur") as send, \
+             patch.object(align_bot, "telegram"):
+            align_bot.traiter({}, set(), [update])
+        self.assertEqual(ai.call_args.args[1], "GOLD")
+        self.assertEqual(send.call_args.kwargs["text"], "BRIEFING IA GOLD")
+        keyboard = json.loads(send.call_args.kwargs["reply_markup"])["inline_keyboard"]
+        self.assertIn("rawdetails:GOLD", [b["callback_data"] for row in keyboard for b in row])
+
+    def test_raw_technical_details_callback_is_routed_and_responds(self):
+        from unittest.mock import patch
+        update = {"update_id": 99501, "callback_query": {
+            "id": "rawdetails-gold", "data": "rawdetails:GOLD",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        r = {"m1": [candle(1, c=100.0)], "dirs": [0] * 11, "confirme": 0, "b5": []}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "analyse_marche", return_value=r), \
+             patch.object(align_bot, "texte_etat", return_value="DONNEES TECHNIQUES GOLD"), \
+             patch.object(align_bot, "_envoi_sur") as send, \
+             patch.object(align_bot, "telegram"):
+            align_bot.traiter({}, set(), [update])
+        self.assertEqual(send.call_args.kwargs["text"], "DONNEES TECHNIQUES GOLD")
+
+
     def test_verified_external_ai_provider_is_named_in_telegram_commentary(self):
         from unittest.mock import patch
         state = {"ia_dernier_fournisseur": "Gemini", "ia_dernier_modele": "gemini-flash-latest",
@@ -1088,6 +1146,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 patch.object(align_bot, "texte_apercu", return_value="analysis-card"),
                 patch.object(align_bot, "texte_etat", return_value="analysis-details"),
                 patch.object(align_bot, "texte_pourquoi", return_value="analysis-why"),
+                patch.object(align_bot, "avis_ia", return_value="analysis-ai"),
                 patch.object(align_bot, "_envoi_sur") as send,
                 patch.object(align_bot, "telegram", return_value={"ok": True}),
             ):
@@ -1933,8 +1992,8 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
             ["202"]
         )
         self.assertEqual(
-            align_bot.destinataires_message(state, {"101", "202"}, "🥇 GOLD — SIGNAL NON CONFIRMÉ"),
-            ["101", "202"]
+            set(align_bot.destinataires_message(state, {"101", "202"}, "🥇 GOLD — SIGNAL NON CONFIRMÉ")),
+            {"101", "202"}
         )
 
     def test_followmarket_both_registers_btc_and_gold(self):
