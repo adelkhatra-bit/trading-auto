@@ -146,8 +146,7 @@ jobs:
         run: python3 ai_healthcheck.py
 
       - name: Vérifier le bridge TradingView ROBOT V12 (BTC + GOLD)
-        # Le bridge enrichit l'analyse ; son indisponibilité ne doit pas arrêter les alertes du moteur interne.
-        continue-on-error: true
+        # Pas de faux raccordement : le bot ne démarre pas si les deux flux Pine actifs ne sont pas frais.
         env:
           ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
@@ -157,7 +156,7 @@ jobs:
           base = os.environ.get("ALIGN_TV_API_URL", "").strip().rstrip("/")
           token = os.environ.get("ALIGN_TV_READ_TOKEN", "").strip()
           if not base or not token:
-              raise SystemExit("ÉCHEC: secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents — bridge indicateur non raccordé au bot.")
+              raise SystemExit("ÉCHEC: secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents — bridge TradingView non raccordé.")
           for symbol in ("BTCUSD", "XAUUSD"):
               url = base + "/bridge/robot-v12/mtf?symbol=" + urllib.parse.quote(symbol)
               req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "ALIGN-bridge-preflight"})
@@ -165,12 +164,17 @@ jobs:
                   payload = json.loads(response.read().decode("utf-8"))
               if payload.get("ok") is not True or not isinstance(payload.get("snapshots"), dict):
                   raise SystemExit("ÉCHEC: réponse bridge invalide pour " + symbol)
-              snapshots = payload["snapshots"]
-              fresh = [tf for tf, snap in snapshots.items() if isinstance(snap, dict) and snap.get("fresh") is True]
-              active = payload.get("activeTimeframe") or "aucune UT active récente"
-              print(f"BRIDGE_API_OK symbol={symbol} active={active} received={','.join(payload.get('receivedTimeframes', [])) or 'aucune'} fresh={','.join(fresh) or 'aucun plan frais'}")
-              if not snapshots:
-                  print(f"ATTENTION: aucun snapshot Pine reçu pour {symbol}; API joignable mais flux indicateur non prouvé.")
+              active = str(payload.get("activeTimeframe") or "").upper()
+              if payload.get("activeTimeframeFresh") is not True or active not in {"M1", "M5", "M15", "M30", "H1", "H2", "H4", "D1", "W1"}:
+                  raise SystemExit("ÉCHEC: aucune unité TradingView active et fraîche pour " + symbol)
+              snap = payload["snapshots"].get(active) or {}
+              robot = snap.get("robotV12") or {}
+              if snap.get("fresh") is not True or not isinstance(robot, dict) or not robot:
+                  raise SystemExit("ÉCHEC: snapshot actif frais ou données ROBOT V12 absents pour " + symbol)
+              directions = [robot.get(k) for k in ("lecture_1m", "lecture_5m", "lecture_15m", "lecture_60m")]
+              if not any(v not in (None, "") for v in directions):
+                  raise SystemExit("ÉCHEC: aucune lecture MTF ROBOT V12 exploitable pour " + symbol)
+              print(f"BRIDGE_CONFIRMED symbol={symbol} active={active} age_ms={payload.get('activeTimeframeAgeMs')} received={','.join(payload.get('receivedTimeframes', []))} fresh_snapshot=true robot_v12=true")
           PY
 
       - name: Analyse BTC + Gold et envoi Telegram
