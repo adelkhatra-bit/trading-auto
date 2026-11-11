@@ -1521,7 +1521,8 @@ def markup_analyse(etat, m, r):
     lignes = [
         [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
          {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
-        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"}]
+        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
+         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}]
     ]
     if cle.get("trade"):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
@@ -1529,6 +1530,33 @@ def markup_analyse(etat, m, r):
     else:
         lignes.append([{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
     return json.dumps({"inline_keyboard": lignes})
+
+
+def texte_timeframes(m, r):
+    """Lecture pédagogique de toutes les unités réellement calculées par ALIGN."""
+    noms = ["1 min", "2 min", "5 min", "10 min", "15 min", "30 min", "45 min",
+            "1 heure", "2 heures", "4 heures", "Daily"]
+    directions = ["🟩 HAUSSIER ⬆️" if d == 1 else "🟥 BAISSIER ⬇️" if d == -1 else "⬜ NEUTRE ➖"
+                  for d in r["dirs"]]
+    lignes = [
+        f"⏱ TOUTES LES UNITÉS — {m}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "Lecture technique : direction + RSI",
+    ]
+    for nom, direction, valeur in zip(noms, directions, r["rsis"]):
+        lignes.append(f"{nom} : {direction} • RSI {valeur:.0f}")
+    lignes += [
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🧭 COMMENT ALIGN PREND SA DÉCISION",
+        "🏔 4 h : tendance principale",
+        "🔁 1 h : confirmation obligatoire de la 4 h",
+        "👀 15 min : contexte et zone de repli",
+        "🎯 5 min : déclencheur après clôture confirmée",
+        "📍 1 min : suivi du prix et de la position",
+        "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.",
+        "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d'entrée."
+    ]
+    return "\\n".join(lignes)
 
 
 def texte_pourquoi(m, r, cle):
@@ -2400,7 +2428,7 @@ def traiter(etat, chats, updates):
                     else:
                         _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est pas encore disponible. Appuie sur Analyse {mk}.")
                 continue
-            if choix in ("why", "details", "levels") and mk in MARCHES:
+            if choix in ("why", "details", "levels", "timeframes") and mk in MARCHES:
                 if not autorise(etat, qui, cb.get("from", {}).get("id")):
                     try:
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Détails réservés aux VIP")
@@ -2427,6 +2455,10 @@ def traiter(etat, chats, updates):
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Analyse complète", "callback_data": f"details:{mk}"},
                                                                              {"text": "🎯 Niveaux / prix", "callback_data": f"levels:{mk}"}],
                                                                             [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
+                elif choix == "timeframes":
+                    _envoi_sur(qui, text=texte_timeframes(mk, r_detail),
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{mk}"},
+                                                                             {"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
                 elif choix == "details":
                     _envoi_sur(qui, text=texte_etat(mk, r_detail, cle_detail, vip=True),
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎯 Voir les niveaux", "callback_data": f"levels:{mk}"}],
