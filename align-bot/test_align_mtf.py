@@ -2809,3 +2809,19 @@ class TestEveryMainButtonAnswers(unittest.TestCase):
                 out, d = self._run(b["text"], auth=False, state={"lien": "x", "prospects": ["601"]})
                 self.assertTrue(out or d, b["text"])
                 self.assertFalse(any("Utilise les boutons en bas" in (o.get("text") or "") for o in out), b["text"])
+
+
+class TestTradeCardShowsStrategy(unittest.TestCase):
+    def test_entry_card_states_type_duration_and_levels(self):
+        tr = {"d": -1, "e": 100.0, "sl": 101.0, "tp1": 97.0, "tp2": 95.0, "rr": 3.0, "n1": "support 4h", "n2": "support Daily"}
+        tr.update(align_bot.strategie_trade({"dirs": [-1] * 11, "dirW": -1}, -1))
+        txt = align_bot.fmt_trade("GOLD", tr, 100.1)
+        self.assertIn("🏷 Type : SWING — position de plusieurs jours", txt)
+        self.assertIn("validation clôture 1h", txt)
+        en = align_bot.traduire(txt)
+        self.assertIn("multi-day position", en)
+
+    def test_no_strategy_no_invented_line(self):
+        tr = {"d": 1, "e": 100.0, "sl": 99.0, "tp1": 103.0, "tp2": 105.0, "rr": 3.0, "n1": "r 1h", "n2": "r 4h"}
+        tr.update(align_bot.strategie_trade({"dirs": [0] * 11}, 1))
+        self.assertNotIn("🏷 Type", align_bot.fmt_trade("BTC", tr))

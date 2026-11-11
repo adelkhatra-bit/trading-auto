@@ -847,6 +847,19 @@ def strategie_alignement(dirs, d, dW=0):
     return "", "AUCUNE", "Pas d'alignement conforme aux règles SCALPING / DAY / SWING"
 
 
+DUREE_STRATEGIE = {"SWING": "position de plusieurs jours", "DAY": "position dans la journée",
+                   "SCALPING": "position courte, quelques minutes à 1-2 h"}
+CALE_STRATEGIE = {"SWING": "SL derrière la zone 1h / 4h • TP 4h / Daily • validation clôture 1h",
+                  "DAY": "SL derrière la zone 1h • TP 1h / 4h • validation clôture 5 min",
+                  "SCALPING": "SL derrière la zone 15 min • TP 15 min / 1h • validation clôture 1 min"}
+
+
+def strategie_trade(r, d):
+    """Fige sur la position le type (SWING / DAY / SCALPING) lu au moment de l'entrée."""
+    strat, etat_, motif = strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)
+    return {"strat": strat, "strat_etat": etat_, "strat_motif": motif} if strat else {}
+
+
 def niveaux_strategie(strat):
     """Unités du SL et des TP selon la stratégie (identique à l'indicateur v12)."""
     if strat == "SWING":
@@ -1208,7 +1221,7 @@ TRAD = {
 "📡 Mes marchés": "📡 My markets",
 "📍 Suivre cette position": "📍 Follow this position", "📍 Ma position • SL / TP": "📍 My position • SL / TP", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
  "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
-"🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "💎 TU ES DÉJÀ VIP": "💎 YOU ARE ALREADY VIP", "✅ Toutes les positions, les niveaux et le coach sont actifs pour toi": "✅ All positions, levels and the coach are active for you", "📲 Le canal ALIGN VIP 💎 est accessible avec le bouton ci-dessous": "📲 Open the ALIGN VIP 💎 channel with the button below", "📲 Ouvrir le canal ALIGN VIP 💎": "📲 Open ALIGN VIP 💎 channel", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
+"🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "🏷 Type :": "🏷 Type:", "position de plusieurs jours": "multi-day position", "position dans la journée": "intraday position", "position courte, quelques minutes à 1-2 h": "short position, a few minutes to 1-2 h", "validation clôture": "confirmation close", "SL derrière la zone": "SL behind the zone", "💎 TU ES DÉJÀ VIP": "💎 YOU ARE ALREADY VIP", "✅ Toutes les positions, les niveaux et le coach sont actifs pour toi": "✅ All positions, levels and the coach are active for you", "📲 Le canal ALIGN VIP 💎 est accessible avec le bouton ci-dessous": "📲 Open the ALIGN VIP 💎 channel with the button below", "📲 Ouvrir le canal ALIGN VIP 💎": "📲 Open ALIGN VIP 💎 channel", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
 "✅ Sélection enregistrée": "✅ Selection saved", "🥇 + 🟠 Les deux": "🥇 + 🟠 Both",
 "✅ Je suis rentré": "✅ I'm in", "🚪 Je suis sorti": "🚪 I'm out", "📈 Mes résultats": "📈 My results",
 "🧩 Indicateur TradingView": "🧩 TradingView indicator", "💎 Devenir VIP": "💎 Become VIP",
@@ -4439,7 +4452,8 @@ def fmt_trade(m, tr, p=None):
               f"🛑 Stop Loss : {px(tr['sl'])}\n"
               f"💰 TP1 : {px(tr['tp1'])}\n"
               f"🏁 TP2 : {px(tr['tp2'])}\n"
-              f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n")
+              f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n"
+              + (f"🏷 Type : {tr['strat']} — {DUREE_STRATEGIE[tr['strat']]}\n🧭 {CALE_STRATEGIE[tr['strat']]}\n" if tr.get("strat") in DUREE_STRATEGIE else ""))
     decision = (f"\n━━━━━━━━━━━━\n📍 RÉCAPITULATIF — {m}\n"
                 f"{'🟩 LONG ⬆️' if d == 1 else '🟥 SHORT ⬇️'}\n"
                 f"Entrée {px(tr['e'])} • SL {px(tr['sl'])}\n"
@@ -5020,6 +5034,7 @@ def agent(m, r, cle, ferme):
             cle["cassure_t"] = pc["t15"]
             tr = dict(pc, statut="entree", cree=r["t"], encore=0, atr_e=r["atr"])
             tr["profil"] = profil_trade(m, tr, r)
+            tr.update(strategie_trade(r, d))
             non, n_, w_ = memoire_refuse(tr["profil"])
             if non:
                 out.append(f"🧠 {ICONE.get(m, '')} {m} : cassure vue, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
@@ -5192,6 +5207,7 @@ def agent(m, r, cle, ferme):
                          sl_h=bougie_protegee(r["b15"][-3:], d, sl_m), sl_ut="15 min")
                 tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=a_)
                 tr["profil"] = profil_trade(m, tr, r)
+                tr.update(strategie_trade(r, d))
                 non, n_, w_ = memoire_refuse(tr["profil"])
                 if non:
                     cle["prep"] = False; cle.pop("ordre", None)
