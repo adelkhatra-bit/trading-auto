@@ -1213,6 +1213,9 @@ def verdict(r, cle):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
     al = r["confirme"]
     if not al:
+        # Même lecture que le chrono : 4 h neutre ≠ 1 h qui ne confirme pas.
+        if not (r.get("dirs") or [0] * 11)[9]:
+            return ("🔴🔴 N'ENTRE PAS", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT\n🔔 Je te préviens dès que c'est validé")
         return ("🔴🔴 N'ENTRE PAS", "⏳ Le 1h ne confirme pas la tendance 4h\n🔔 Je te préviens dès que c'est validé")
     if etire(r, al):
         return ("⛔ TROP TARD — le marché est déjà parti", "😎 Patience, on trouve une autre entrée\n" + prochaine(r, cle))
@@ -1257,7 +1260,7 @@ TRAD = {
 "🕒 Heure de clôture de la bougie :": "🕒 Candle close time:",
 "⏳ PROCHAINE CLÔTURE ": "⏳ NEXT CANDLE CLOSE ",
 "⏱ Temps restant :": "⏱ Time remaining:",
-"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
+"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT": "⏳ 4h is neutral: no LONG or SHORT direction", "⏳ Le 1h ne confirme pas la tendance 4h": "⏳ 1h does not confirm the 4h trend", "🔔 Je te préviens dès que c'est validé": "🔔 I'll tell you as soon as it's validated", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
 "🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
 "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
 "🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
@@ -3131,39 +3134,6 @@ def notifier_clotures(etat, m, r, cle):
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
 
-def carte_avis_courte(m, r, cle, anglais=False):
-    """Avis court pour mobile : voyants des unités (code couleur de l'indicateur), sens, quoi faire.
-    Le détail complet de l'IA reste derrière le bouton « En savoir plus »."""
-    cle = cle or {}
-    v = voyants_unites(r)
-    ligne1 = v[0].split(" : ", 1)[1] if v else ""
-    ligne2 = v[1].split(" : ", 1)[1] if len(v) > 1 else ""
-    titre, raison = verdict(r, cle)
-    prof = profil_strategie(r)
-    sens = (cle.get("trade") or {}).get("d") or alignement(r)[0] or 0
-    raison = re.sub(r"\s+", " ", str(raison or "")).strip()
-    if len(raison) > 110:
-        raison = raison[:110].rsplit(" ", 1)[0].rstrip(",;: ") + "…"
-    if anglais:
-        return "\n".join([f"🧠 ALIGN OPINION — {ICONE.get(m, '')} {m}",
-                          f"⚡ Short units : {ligne1}", f"🏔 Big units : {ligne2}",
-                          f"🧭 Direction : {'🟩 LONG ⬆️' if sens == 1 else '🟥 SHORT ⬇️' if sens == -1 else '⬜ none'}",
-                          f"🏷 Type : {prof.get('mode', '—')}",
-                          f"🚦 {traduire(titre)}"] + ([f"➡️ {traduire(raison)}"] if raison else []) +
-                         ["👇 More details: « 🧠 Learn more » button"])
-    return "\n".join([f"🧠 L'AVIS ALIGN — {ICONE.get(m, '')} {m}",
-                      f"⚡ Petites unités : {ligne1}", f"🏔 Grandes unités : {ligne2}",
-                      f"🧭 Sens : {'🟩 LONG ⬆️' if sens == 1 else '🟥 SHORT ⬇️' if sens == -1 else '⬜ aucun'}",
-                      f"🏷 Type : {prof.get('mode', '—')}",
-                      f"🚦 {titre}"] + ([f"➡️ {raison}"] if raison else []) +
-                     ["👇 Le détail complet : bouton « 🧠 En savoir plus »"])
-
-
-def markup_avis(m, anglais=False):
-    return json.dumps({"inline_keyboard": [[{"text": "🧠 Learn more" if anglais else "🧠 En savoir plus", "callback_data": f"details:{m}"}],
-                                           [{"text": "⏱ All timeframes" if anglais else "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}]]})
-
-
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
@@ -3174,11 +3144,8 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
         _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\n".join(
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
-             f"🕒 Analyse de référence : {heure(der['t'])}",
-             "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
-        # Même traitement pour BTC et GOLD : une analyse répétée conserve aussi son avis IA.
-        en = str(cid) in LANG_EN
-        _envoi_sur(cid, text=carte_avis_courte(m, r, cle, anglais=en), reply_markup=markup_avis(m, en))
+             f"🕒 Analyse de référence : {heure(der['t'])}"] + voyants_unites(r) + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
+        # Un seul message (voyants inclus) ; l'avis IA complet reste derrière « 🧠 En savoir plus ».
         return
     armer_cloture(etat, cid, m, r, cle)
     # Toutes les analyses passent par le même garde-fou 429 que les autres messages.
@@ -3734,7 +3701,7 @@ def traiter(etat, chats, updates):
                                reply_markup=markup_position(mk))
                 elif choix == "why":
                     _envoi_sur(qui, text=texte_pourquoi(mk, r_detail, cle_detail),
-                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Analyse complète", "callback_data": f"details:{mk}"},
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "🧠 En savoir plus", "callback_data": f"details:{mk}"},
                                                                              {"text": "🎯 Niveaux / prix", "callback_data": f"levels:{mk}"}],
                                                                             [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
                 elif choix == "rawdetails":
