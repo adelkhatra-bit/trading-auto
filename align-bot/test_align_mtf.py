@@ -870,6 +870,7 @@ class AlignMtfRulesTest(unittest.TestCase):
 
     def test_all_timeframe_button_is_present_and_callback_is_handled(self):
         import json
+        from unittest.mock import patch
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button["callback_data"] for row in keyboard for button in row]
         self.assertIn("timeframes:BTC", callbacks)
