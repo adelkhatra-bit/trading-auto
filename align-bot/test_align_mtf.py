@@ -114,6 +114,16 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("🛑 Stop Loss : 102.00", message)
         self.assertIn("🏁 TP2 : 92.00", message)
 
+    def test_telegram_price_levels_render_value_before_explanation(self):
+        message = align_bot.mise_en_forme(
+            "PLAN\n💰 TP1 ≈ 4 075,50 (ancienne mèche haute — bougie 15 minutes)\n"
+            "🛑 Stop Loss : 4 020,00 (sous la mèche basse — bougie 15 minutes)\n"
+            "📌 Entrée : 4 050,00"
+        )
+        self.assertIn("💰 TP1\n4 075,50\nancienne mèche haute — bougie 15 minutes", message)
+        self.assertIn("🛑 Stop Loss\n4 020,00\nsous la mèche basse — bougie 15 minutes", message)
+        self.assertIn("📌 Entrée\n4 050,00", message)
+
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
         r = {
