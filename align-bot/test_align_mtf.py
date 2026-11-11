@@ -124,6 +124,17 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("🛑 Stop Loss\n4 020,00\nsous la mèche basse — bougie 15 minutes", message)
         self.assertIn("📌 Entrée\n4 050,00", message)
 
+    def test_telegram_formatter_splits_compound_information(self):
+        message = align_bot.mise_en_forme(
+            "ALIGN • GOLD\\n"
+            "Tendance : haussière • Confirmation : 2/2\\n"
+            "FVG 15m : haussière | Basse 4 050,00 | Haute 4 060,00"
+        )
+        self.assertIn("Tendance\\nhaussière", message)
+        self.assertIn("Confirmation\\n2/2", message)
+        self.assertIn("Basse\\n4 050,00", message)
+        self.assertIn("Haute\\n4 060,00", message)
+
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
         r = {
