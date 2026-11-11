@@ -1868,26 +1868,40 @@ def synchroniser_veille_auto(etat, m, r):
 
 
 def texte_cloture(m, tf, bougie, r, cle):
-    """Compte rendu déterministe après clôture réelle : résultat, blocage et prochaine action."""
+    """Le verdict de sécurité est la première information, avant tout détail de marché."""
     duree = TF_SECONDES[tf]
     d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
     couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
-    titre, raison = verdict(r, cle)
-    maj, n_ok = alignement(r)
-    confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (4 h + 1 h)"
+    titre, details = verdict(r, cle)
+    titre = str(titre).upper()
+    if "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTENDS" in titre or "PATIENCE" in titre:
+        decision = "🚫 N'ENTRE PAS — ATTENDS LE PROCHAIN SIGNAL"
+    elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
+        decision = "🟢 SIGNAL D'ENTRÉE VALIDÉ — VÉRIFIE LES NIVEAUX"
+    elif cle.get("trade"):
+        decision = "🟢 POSITION DÉJÀ OUVERTE — NE RAJOUTE PAS UNE ENTRÉE"
+    else:
+        decision = "⏸ PAS D'ENTRÉE POUR LE MOMENT — ATTENDS"
+    dirs = r.get("dirs", [0] * 11)
+    d4h, d1h = dirs[9], dirs[7]
+    sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
+    confirmation = "2/2 — confirmée" if r.get("confirme") else "0/2 — non confirmée"
     lignes = [
-        f"🕯 CLÔTURE CONFIRMÉE — {tf} — {ICONE.get(m, '📊')} {m}",
-        f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
-        f"📊 Résultat : bougie {couleur} — ouverture {px(bougie['o'])}, clôture {px(bougie['c'])}",
-        f"🧭 Tendance : 4 h {'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'} ; confirmation 1 h {'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'}",
-        f"✅ Alignement : {confirmation}",
-        f"🚦 Décision ALIGN : {titre}",
-        f"⏳ Pourquoi : {raison_attente(r, cle)}",
-        f"➡️ Prochaine étape : {prochaine(r, cle)}",
-        "ℹ️ Une clôture seule ne déclenche pas une entrée. Aucun ordre n'est envoyé à ton broker."
+        decision,
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🕯 CLÔTURE {tf} — {ICONE.get(m, '📊')} {m}",
+        f"🕒 Bougie terminée à {heure(bougie['t'] + duree)}",
+        f"📊 Bougie {couleur} | Ouverture {px(bougie['o'])} → clôture {px(bougie['c'])}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🧭 Tendance 4 h : {sens(d4h)}",
+        f"🧭 Confirmation 1 h : {sens(d1h)}",
+        f"✅ Alignement 4 h + 1 h : {confirmation}",
+        f"❓ POURQUOI : {raison_attente(r, cle)}",
+        f"➡️ CE QUE TU DOIS FAIRE : {details}",
+        f"🔜 Prochaine étape : {prochaine(r, cle)}",
+        "ℹ️ Une clôture de bougie n'est pas une entrée automatique. Aucun ordre n'est envoyé à ta plateforme."
     ]
     return "\n".join(lignes)
-
 
 def notifier_clotures(etat, m, r, cle):
     """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
