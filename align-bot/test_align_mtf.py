@@ -359,6 +359,58 @@ class AlignMtfRulesTest(unittest.TestCase):
                 align_bot.avis_ia({}, "GOLD", {}, {}, anglais=english)
             self.assertIn(expected, call.call_args.kwargs["cle_cache"])
 
+    def test_english_analysis_inline_button_labels_are_translated_without_changing_callbacks(self):
+        import json
+        state = {"GOLD": {}}
+        french = json.loads(align_bot.markup_analyse(state, "GOLD", {}))
+        english = json.loads(align_bot.traduire_clavier(align_bot.markup_analyse(state, "GOLD", {})))
+        fr_buttons = [b for row in french["inline_keyboard"] for b in row]
+        en_buttons = [b for row in english["inline_keyboard"] for b in row]
+        self.assertEqual([b["callback_data"] for b in fr_buttons], [b["callback_data"] for b in en_buttons])
+        self.assertEqual(
+            [align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons],
+            [b["text"] for b in en_buttons],
+        )
+        self.assertIn("❓ Why this decision?", [b["text"] for b in en_buttons])
+        self.assertIn("📊 Full analysis", [b["text"] for b in en_buttons])
+        self.assertIn("🎯 Levels / prices", [b["text"] for b in en_buttons])
+        self.assertIn("⏱ All timeframes", [b["text"] for b in en_buttons])
+        self.assertIn("🗂 Message history", [b["text"] for b in en_buttons])
+        self.assertIn("🔔 Follow the next position", [b["text"] for b in en_buttons])
+
+    def test_all_static_telegram_inline_button_labels_have_english_translations(self):
+        labels = [
+            "🎯 Suivre la prochaine position", "❓ Pourquoi cette décision ?",
+            "📊 Analyse complète", "🎯 Niveaux / prix", "⏱ Toutes les unités",
+            "🗂 Historique des messages", "🟢 Je suis rentré",
+            "🔔 Suivre la prochaine position", "📍 Ma position • SL / TP",
+            "🗂 Historique", "🔔 Suivre le prochain setup",
+            "✅ Publier", "❌ Refuser", "✅ Accepter", "👀 Voir son profil",
+            "⬅️ Plus récents", "Plus anciens ➡️", "↩️ Retour à l'analyse",
+            "🎯 Voir les niveaux", "ℹ️ Comprendre l'analyse",
+        ]
+        missing = [label for label in labels if label not in align_bot.TRAD]
+        self.assertEqual(missing, [])
+
+    def test_english_position_and_close_keyboard_labels_are_translated(self):
+        import json
+        for french_markup, expected in (
+            (align_bot.markup_position("GOLD"), "📍 My position • SL / TP"),
+            (align_bot.markup_cloture("GOLD"), "🔔 Follow the next setup"),
+            (align_bot.bouton_rappel("GOLD"), "📌 Review analysis: GOLD"),
+        ):
+            english = json.loads(align_bot.traduire_clavier(french_markup))
+            labels = [b["text"] for row in english["inline_keyboard"] for b in row]
+            self.assertIn(expected, labels)
+
+    def test_english_rules_translate_current_risk_line_and_main_keyboard_placeholder(self):
+        rules = align_bot.traduire(align_bot.REGLES)
+        self.assertIn("Suggested risk: 0.5 to 1%", rules)
+        self.assertNotIn("0,5 à 1 %", rules)
+        import json
+        keyboard = json.loads(align_bot.traduire_clavier(align_bot.CLAVIER))
+        self.assertEqual(keyboard["input_field_placeholder"], "Choose an ALIGN action")
+
     def test_english_and_french_main_keyboards_keep_identical_button_actions(self):
         import json
         french = json.loads(align_bot.CLAVIER)
