@@ -534,10 +534,52 @@ def texte_historique(etat, cid, limite=8, offset=0):
     return "\n".join(lignes)
 
 def alignement(r):
-    """Le 1h confirme la tendance 4h ; le 15m n'est pas un filtre."""
+    """Biais de fond : H4 donne le sens, H1 le confirme. M15/M5 sont évalués séparément."""
     d1h, d4h = r["dirs"][7], r["dirs"][9]
     maj = d4h if d4h != 0 and d1h == d4h else 0
     return maj, (2 if maj else 0)
+
+
+def profil_strategie(r):
+    """Classe le setup sans confondre alignement directionnel et autorisation d’entrée."""
+    D = r["dirs"]
+    d5, d15, d1h, d4h = D[2], D[4], D[7], D[9]
+    if d4h and d1h == d4h and d15 == -d4h and d5 == d15:
+        direction = d15
+        mode, horizon = "SCALPING CONTRE-TENDANCE", "court terme ; ne pas transformer en position swing"
+        contexte, contre = "M15 et M5 sont alignés contre le biais H4/H1", True
+    elif d4h and d1h == d4h:
+        direction = d4h
+        if d15 == direction:
+            mode, horizon = "SWING", "plusieurs séances si la structure H4 reste valide"
+            contexte = "H4, H1 et M15 sont alignés"
+        elif d15 == -direction:
+            mode, horizon = "INTRADAY", "séance en cours ; pas de conservation automatique la nuit"
+            contexte = "M15 est en retracement contre le biais H4/H1"
+        else:
+            mode, horizon = "INTRADAY", "séance en cours ; réévaluer à chaque clôture"
+            contexte = "M15 est neutre : attendre une structure exploitable"
+        contre = False
+    elif d1h and d15 == d1h and d4h in (0, d1h):
+        direction = d1h
+        mode, horizon = "INTRADAY", "mouvement de séance ; sortie avant invalidation"
+        contexte = "H1 et M15 sont alignés"
+        contre = False
+    elif d15 and d5 == d15:
+        direction = d15
+        contre = bool(d1h == -direction or d4h == -direction)
+        mode = "SCALPING CONTRE-TENDANCE" if contre else "SCALPING"
+        horizon = "court terme ; ne pas transformer en position swing"
+        contexte = "M15 et M5 sont alignés" + (" mais H1/H4 s’opposent" if contre else "")
+    else:
+        direction, mode, horizon = 0, "ATTENTE", "aucune durée de position à annoncer"
+        contexte, contre = "pas de confluence exploitable entre les unités", False
+    m5_aligne = bool(direction and d5 == direction)
+    return {"mode": mode, "direction": direction, "horizon": horizon, "contexte": contexte,
+            "m5_aligne": m5_aligne, "contre_tendance": contre,
+            "statut": "CONFLUENCE M5 — attendre le déclencheur clôturé" if m5_aligne
+                      else "PRÉPARATION — attendre l’alignement ou le retournement M5"}
+
 
 def texte_etat(nom_marche, r, cle=None, vip=True):
     """Carte Telegram complète : mise en page uniquement, aucune rubrique d'analyse supprimée."""
@@ -618,26 +660,34 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(prochaine(r, cle))
     return "\n".join(l)
 def strategie_mtf(r):
-    """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
+    """H4/H1 = fond, M15 = préparation, M5 = timing ; profil scalp/intraday/swing explicite."""
     fl = lambda x: "🟢⬆️" if x == 1 else "🔴⬇️" if x == -1 else "🟠➖"
     D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
-    fond = d4h
+    profil = profil_strategie(r)
     l = ["🧭 STRATÉGIE MULTI-UT",
          f"🏔 Tendance principale 4 h : {fl(d4h)}",
-         f"📅 Tendance Daily : {fl(dD)}",
          f"🔁 Confirmation 1 h : {fl(d1h)}",
-         f"ℹ️ Contexte 15 min   {fl(d15)}",
-         f"🎯 Déclencheur 5 min   {fl(d5)}"]
-    if r["confirme"] and r.get("repli"):
-        l.append(f"✅ Tendance VALIDÉE   {SENS[r['confirme']]}\n⏳ Le 15 min fait son repli : l'entrée n'est PAS encore là")
-    elif r["confirme"]:
-        l.append(f"✅ VALIDÉ   {SENS[r['confirme']]}")
+         f"👀 Préparation 15 min : {fl(d15)}",
+         f"🎯 Timing 5 min : {fl(d5)}",
+         f"📅 Contexte Daily : {fl(dD)}",
+         f"🧩 PROFIL RETENU : {profil['mode']}",
+         f"🧭 Lecture : {profil['contexte']}",
+         f"⏱ Horizon indicatif : {profil['horizon']}",
+         f"🚦 {profil['statut']}"]
+    if profil["contre_tendance"]:
+        l.append("⚠️ Contre-tendance : objectif court, risque réduit selon les règles, aucune conservation swing.")
+    if r.get("confirme") and r.get("repli"):
+        l.append(f"✅ Biais H4/H1 validé   {SENS[r['confirme']]}\n⏳ Le 15 min retrace : attendre le retour du M5 dans le sens du biais")
+    elif r.get("confirme"):
+        l.append(f"✅ Biais de fond H4/H1 validé   {SENS[r['confirme']]}")
+    elif profil["mode"].startswith("SCALPING"):
+        l.append(f"🟡 Setup court terme détecté   {SENS[profil['direction']]}\n⛔ Ce setup n’est pas un swing et reste soumis au déclencheur clôturé.")
     elif not d4h:
-        l.append("➖ Pas de tendance de fond en 4 h\n⛔ Rien de validé : on ne trade pas")
-    elif d1h == -fond:
-        l.append("↩️ 1 h en opposition à la tendance de fond\n⛔ On attend la confirmation 1 h")
+        l.append("➖ Pas de tendance de fond en 4 h\n⏳ Les configurations M15/M5 restent surveillées pour un éventuel scalp.")
+    elif d1h == -d4h:
+        l.append("↩️ 1 h en opposition à la tendance de fond\n⏳ Pas de swing : surveiller uniquement une configuration courte M15/M5.")
     else:
-        l.append(f"⏳ {SENS[fond]} en préparation — ⛔ PAS ENCORE VALIDÉ\n✅ Il manque la confirmation 1 h {fl(fond)}")
+        l.append(f"⏳ {SENS[d4h]} en préparation — confirmation H1 manquante")
     return l
 
 def bloque_dw(r, d, prix=None):
@@ -1331,6 +1381,65 @@ TRAD.update({
     "ℹ️ Comprendre l'analyse": "ℹ️ Understand the analysis",
 })
 
+TRAD.update({
+    "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY",
+    "🏔 Tendance principale 4 h : ": "🏔 Main 4h trend: ",
+    "🔁 Confirmation 1 h : ": "🔁 1h confirmation: ",
+    "👀 Préparation 15 min : ": "👀 15m setup: ",
+    "🎯 Timing 5 min : ": "🎯 5m timing: ",
+    "📅 Contexte Daily : ": "📅 Daily context: ",
+    "🧩 PROFIL RETENU : ": "🧩 SELECTED PROFILE: ",
+    "🧭 Lecture : ": "🧭 Reading: ",
+    "⏱ Horizon indicatif : ": "⏱ Indicative horizon: ",
+    "H4, H1 et M15 sont alignés": "H4, H1 and M15 are aligned",
+    "M15 est en retracement contre le biais H4/H1": "M15 is pulling back against the H4/H1 bias",
+    "M15 est neutre : attendre une structure exploitable": "M15 is neutral: wait for a usable structure",
+    "H1 et M15 sont alignés": "H1 and M15 are aligned",
+    "M15 et M5 sont alignés": "M15 and M5 are aligned",
+    " mais H1/H4 s’opposent": " but H1/H4 oppose it",
+    "plusieurs séances si la structure H4 reste valide": "several sessions while H4 structure remains valid",
+    "séance en cours ; pas de conservation automatique la nuit": "current session; no automatic overnight hold",
+    "séance en cours ; réévaluer à chaque clôture": "current session; reassess at every close",
+    "mouvement de séance ; sortie avant invalidation": "session move; exit before invalidation",
+    "court terme ; ne pas transformer en position swing": "short term; do not turn into a swing position",
+    "aucune durée de position à annoncer": "no holding period to announce",
+    "SCALPING CONTRE-TENDANCE": "COUNTER-TREND SCALPING",
+    "SWING": "SWING", "INTRADAY": "INTRADAY", "SCALPING": "SCALPING", "ATTENTE": "WAIT",
+    "🚦 CONFLUENCE M5 — attendre le déclencheur clôturé": "🚦 M5 CONFLUENCE — wait for the confirmed trigger",
+    "🚦 PRÉPARATION — attendre l’alignement ou le retournement M5": "🚦 SETUP FORMING — wait for M5 alignment or reversal",
+    "⚠️ Contre-tendance : objectif court, risque réduit selon les règles, aucune conservation swing.": "⚠️ Counter-trend: short target, reduced risk per rules, never hold as a swing.",
+    "🟡 Setup court terme détecté": "🟡 Short-term setup detected",
+    "⛔ Ce setup n’est pas un swing et reste soumis au déclencheur clôturé.": "⛔ This is not a swing setup and still requires a confirmed trigger.",
+    "➖ Pas de tendance de fond en 4 h": "➖ No higher-timeframe trend on 4h",
+    "⏳ Les configurations M15/M5 restent surveillées pour un éventuel scalp.": "⏳ M15/M5 setups remain monitored for a possible scalp.",
+    "↩️ 1 h en opposition à la tendance de fond": "↩️ 1h opposes the higher-timeframe trend",
+    "⏳ Pas de swing : surveiller uniquement une configuration courte M15/M5.": "⏳ No swing: monitor only a short-term M15/M5 setup.",
+    "⏳ confirmation H1 manquante": "⏳ H1 confirmation missing",
+    "Profil proposé : ": "Suggested profile: ",
+    "Préparation M15 : ": "M15 setup: ",
+    "Timing M5 : ": "M5 timing: ",
+    "alignée": "aligned",
+    "en attente / retracement": "waiting / pullback",
+    "direction alignée ; déclencheur clôturé à vérifier": "direction aligned; confirm the candle-close trigger",
+    "attendre la confirmation dans le sens du setup": "wait for confirmation in the setup direction",
+    "🔁 1 h : confirme ou contredit le biais de fond H4": "🔁 1h: confirms or contradicts the H4 bias",
+    "👀 15 min : préparation, retracement, cassure et retest": "👀 15m: setup, pullback, breakout and retest",
+    "🎯 5 min : timing ; clôture, rejet ou retest confirmé obligatoire": "🎯 5m: timing; confirmed close, rejection or retest required",
+    "⚖️ SCALPING : M15 + M5 • INTRADAY : H1 + M15 + M5 • SWING : H4 + H1 + M15": "⚖️ SCALPING: M15 + M5 • INTRADAY: H1 + M15 + M5 • SWING: H4 + H1 + M15",
+    "⚠️ Un setup contre H4/H1 reste un scalp contre-tendance, jamais un swing": "⚠️ A setup against H4/H1 remains counter-trend scalping, never a swing",
+    "📍 1 min : suivi du prix et de la position": "📍 1m: price and position monitoring",
+    "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.": "ℹ️ 2m, 10m, 30m, 45m, 2h and Daily: additional context and confirmation.",
+    "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d’entrée.": "⚠️ A bullish or bearish timeframe alone never authorizes an entry.",
+    "🧭 Fond H4 • confirmation H1 • préparation M15 • timing M5": "🧭 H4 bias • H1 confirmation • M15 setup • M5 timing",
+    "M15 = préparation, M5 = timing après clôture confirmée": "M15 = setup, M5 = timing after confirmed close",
+    "Biais H4/H1 validé": "H4/H1 bias confirmed",
+    "Le 15 min retrace : attendre le retour du M5 dans le sens du biais": "15m is pulling back: wait for M5 to turn back with the bias",
+    "Biais de fond H4/H1 validé": "H4/H1 higher-timeframe bias confirmed",
+    "📈 TradingView 5 min": "📈 TradingView 5 min",
+    "📈 TradingView 15 min": "📈 TradingView 15 min",
+    "📈 TradingView 1 h": "📈 TradingView 1 h",
+    "📈 TradingView 4 h": "📈 TradingView 4 h",
+})
 LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
 _CLES = sorted(TRAD, key=len, reverse=True)
 BOUTONS_FR = ["🤖 Mon bot", "📸 Partager mon gain", "🟠 Analyse BTC", "🥇 Analyse Gold", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
@@ -1696,6 +1805,8 @@ def donnees_ia(m, r, cle):
     return {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
             "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
             "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
+            "profil_strategie": profil_strategie(r),
+            "lecture_multi_unites": {"M5": r["dirs"][2], "M15": r["dirs"][4], "H1": r["dirs"][7], "H4": r["dirs"][9]},
             "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
@@ -1706,9 +1817,9 @@ def donnees_ia(m, r, cle):
 def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
     consigne = (
-        "Explain the current market structure and what must happen before an entry. Explicitly assess DXY, EUR/USD and the supplied macro divergences. Reply in clear, natural English, maximum 3 short lines."
+        "You MUST assess H4, H1, M15 and M5. Separate higher-timeframe bias, M15 pullback/setup and M5 timing. Classify SCALPING, INTRADAY, SWING or WAIT. Counter-trend M15/M5 setups are scalp-only, never swing. Directional alignment is not an entry trigger: require a confirmed candle close and respect the internal verdict. State indicative holding horizon and missing conditions. Assess DXY, EUR/USD and macro divergences. Clear English, maximum 4 short lines."
         if anglais else
-        "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer. Vérifie explicitement le DXY, EUR/USD et les divergences macro fournies. Réponds en français clair, 3 lignes courtes maximum."
+        "Analyse obligatoirement H4, H1, M15 et M5. Distingue le biais H4/H1, le retracement et la préparation M15, puis le timing M5. Classe SCALPING, INTRADAY, SWING ou ATTENTE selon les données. Un setup M15/M5 contre H1/H4 reste un scalp contre-tendance, jamais un swing. L'alignement directionnel n'est pas un déclencheur : exige une clôture confirmée et respecte le verdict interne. Précise l'horizon indicatif et les conditions manquantes. Vérifie DXY, EUR/USD et les divergences macro. Français clair, 4 lignes maximum."
     )
     langue_cache = "en" if anglais else "fr"
     t = ia(etat, consigne, donnees_ia(m, r, cle),
@@ -1721,6 +1832,11 @@ def avis_ia(etat, m, r, cle, anglais=False):
     if anglais:
         return "🧠 ALIGN internal analysis\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
     return "🧠 L'avis ALIGN (analyse interne)\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
+
+def url_tradingview(m, timeframe):
+    """Ouvre le bon instrument et la bonne unité ; ne pilote pas le graphique déjà ouvert."""
+    symbole = "KRAKEN:XBTUSD" if m == "BTC" else "FOREXCOM:XAUUSD"
+    return "https://www.tradingview.com/chart/?symbol=" + urllib.parse.quote(symbole, safe="") + "&interval=" + str(timeframe)
 
 def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
@@ -1740,7 +1856,11 @@ def markup_analyse(etat, m, r):
          {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
         [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
+        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
+        [{"text": "📈 TradingView 5 min", "url": url_tradingview(m, 5)},
+         {"text": "📈 TradingView 15 min", "url": url_tradingview(m, 15)}],
+        [{"text": "📈 TradingView 1 h", "url": url_tradingview(m, 60)},
+         {"text": "📈 TradingView 4 h", "url": url_tradingview(m, 240)}]
     ]
     if cle.get("trade"):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
@@ -1755,6 +1875,10 @@ def markup_position(m):
         [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
         [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
+        [{"text": "📈 TradingView 5 min", "url": url_tradingview(m, 5)},
+         {"text": "📈 TradingView 15 min", "url": url_tradingview(m, 15)}],
+        [{"text": "📈 TradingView 1 h", "url": url_tradingview(m, 60)},
+         {"text": "📈 TradingView 4 h", "url": url_tradingview(m, 240)}],
         [{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]
     ]})
 
@@ -1810,6 +1934,9 @@ def texte_timeframes(m, r):
         f"⏱ TOUTES LES UNITÉS — {m}",
         "━━━━━━━━━━━━━━━━━━━━",
         "Lecture technique : direction + RSI",
+        f"Profil proposé : {profil_strategie(r)['mode']} — {profil_strategie(r)['horizon']}",
+        f"Préparation M15 : {'alignée' if r['dirs'][4] == profil_strategie(r)['direction'] and profil_strategie(r)['direction'] else 'en attente / retracement'}",
+        f"Timing M5 : {'direction alignée ; déclencheur clôturé à vérifier' if profil_strategie(r)['m5_aligne'] else 'attendre la confirmation dans le sens du setup'}",
     ]
     for nom, direction, valeur in zip(noms, directions, r["rsis"]):
         lignes.append(f"{nom} : {direction} • RSI {valeur:.0f}")
@@ -1817,9 +1944,11 @@ def texte_timeframes(m, r):
         "━━━━━━━━━━━━━━━━━━━━",
         "🧭 COMMENT ALIGN PREND SA DÉCISION",
         "🏔 4 h : tendance principale",
-        "🔁 1 h : confirmation obligatoire de la 4 h",
-        "👀 15 min : contexte et zone de repli",
-        "🎯 5 min : déclencheur après clôture confirmée",
+        "🔁 1 h : confirme ou contredit le biais de fond H4",
+        "👀 15 min : préparation, retracement, cassure et retest",
+        "🎯 5 min : timing ; clôture, rejet ou retest confirmé obligatoire",
+        "⚖️ SCALPING : M15 + M5 • INTRADAY : H1 + M15 + M5 • SWING : H4 + H1 + M15",
+        "⚠️ Un setup contre H4/H1 reste un scalp contre-tendance, jamais un swing",
         "📍 1 min : suivi du prix et de la position",
         "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.",
         "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d'entrée."
@@ -3600,8 +3729,8 @@ def fmt_trade(m, tr, p=None):
                 "⛔ Ne pas anticiper la clôture de confirmation. Le SL reste obligatoire.\n")
     return (f"{tete}\n"
             + resume +
-            f"🧭 Tendance 4H • confirmation 1H • déclencheur 5M clôturé\n"
-            f"⏱ Vue d'entrée : 5 minutes (15M = contexte)\n\n"
+            f"🧭 Fond H4 • confirmation H1 • préparation M15 • timing M5\n"
+            f"⏱ Vue d'entrée : 5 minutes (15M = préparation, M5 = timing après clôture confirmée)\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
             f"1️⃣ 👀 Mets-toi en vue 5 minutes pour l'entrée\n"
             + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (structure 5 min)\n"
