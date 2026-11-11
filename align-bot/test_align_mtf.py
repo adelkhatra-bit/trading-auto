@@ -1623,7 +1623,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "rsis": [61, 45, 65, 50, 38, 54, 49, 63, 42, 68, 71],
         }
         message = align_bot.texte_timeframes("GOLD", r)
-        for label in ("1 min", "2 min", "5 min", "10 min", "15 min", "30 min",
+        for label in ("1 min", "3 min", "5 min", "10 min", "15 min", "30 min",
                       "45 min", "1 heure", "2 heures", "4 heures", "Daily"):
             self.assertIn(label, message)
         self.assertIn("4 h : tendance principale", message)
@@ -2836,3 +2836,16 @@ class TestNextValidationCountdown(unittest.TestCase):
             fin = align_bot.prochaine_cloture_bougie(r, "1h", now)
         self.assertGreater(fin, now)
         self.assertRegex(align_bot.duree_cloture(fin - now), r"^\d\d:\d\d$")
+
+
+class TestReversalAfterStop(unittest.TestCase):
+    def test_entry_after_opposite_stop_is_labelled_reversal(self):
+        cle = {"retournement": {"d": 1, "t": 1000}}
+        self.assertTrue(align_bot.retournement_confirme(cle, 1, {"t": 2000}))
+        self.assertNotIn("retournement", cle)
+        tr = {"d": 1, "e": 100.0, "sl": 99.0, "tp1": 103.0, "tp2": 105.0, "rr": 3.0, "n1": "a", "n2": "b", "retour": True}
+        self.assertTrue(align_bot.fmt_trade("GOLD", tr).startswith("✅ RETOURNEMENT CONFIRMÉ : LONG"))
+
+    def test_old_or_same_direction_is_not_reversal(self):
+        self.assertFalse(align_bot.retournement_confirme({"retournement": {"d": 1, "t": 0}}, 1, {"t": 5 * 3600}))
+        self.assertFalse(align_bot.retournement_confirme({"retournement": {"d": -1, "t": 0}}, 1, {"t": 10}))

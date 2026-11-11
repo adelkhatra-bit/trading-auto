@@ -21,7 +21,7 @@ MARCHES = {"BTC": "XBTUSD", "GOLD": "XAUUSD"}  # BTC → FTMO (CFD 24/7) • GOL
 MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 2.0
 LIEN_RESULTATS = "https://t.me/+RajFd_hMgl1kNmQ0"     # groupe ALIGN Résultats (lien privé)
 RISQUE_MAX = 1.5      # SL jamais plus loin que 1,5 ATR 15 min : pas de gros SL, on attend mieux
-UT = ["1", "2", "5", "10", "15", "30", "45", "1h", "2h", "4h", "D"]
+UT = ["1", "3", "5", "10", "15", "30", "45", "1h", "2h", "4h", "D"]   # 3 min comme l'indicateur TradingView (unité standard)
 POIDS = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
 
 # ───────── Données ─────────
@@ -426,7 +426,7 @@ def analyser(pair):
     m1, m5, m15, h1, h4, d1 = (bougies(pair, i) for i in (1, 5, 15, 60, 240, 1440))
     if pair != "XAUUSD":
         m1 = direct_btc(m1, pair)
-    series = {"1": m1, "2": regrouper(m1, 2, 60), "5": m5, "10": regrouper(m5, 2, 300), "15": m15,
+    series = {"1": m1, "3": regrouper(m1, 3, 60), "5": m5, "10": regrouper(m5, 2, 300), "15": m15,
               "30": bougies(pair, 30), "45": regrouper(m15, 3, 900), "1h": h1, "2h": regrouper(h1, 2, 3600), "4h": h4, "D": d1}
     et = {k: etat_ut(v) for k, v in series.items()}
     dirs = [et[k][0] for k in UT]; sqzs = [et[k][1] for k in UT]; rsis = [et[k][2] or 50 for k in UT]
@@ -852,6 +852,15 @@ DUREE_STRATEGIE = {"SWING": "position de plusieurs jours", "DAY": "position dans
 CALE_STRATEGIE = {"SWING": "SL derrière la zone 1h / 4h • TP 4h / Daily • validation clôture 1h",
                   "DAY": "SL derrière la zone 1h • TP 1h / 4h • validation clôture 5 min",
                   "SCALPING": "SL derrière la zone 15 min • TP 15 min / 1h • validation clôture 1 min"}
+
+
+def retournement_confirme(cle, d, r):
+    """Vrai si cette entrée suit un SL touché dans l'autre sens (moins de 4 h) : le retournement est confirmé."""
+    rt = (cle or {}).get("retournement") or {}
+    ok = rt.get("d") == d and r.get("t", 0) - rt.get("t", 0) <= 4 * 3600
+    if rt:
+        cle.pop("retournement", None)
+    return ok
 
 
 def strategie_trade(r, d):
@@ -1434,7 +1443,7 @@ TRAD = {
 "🟠 / 🥇 Ou appuie sur Analyse BTC / Gold": "🟠 / 🥇 Or tap BTC / Gold Analysis",
 "👌 Pas de position ouverte. J'attends le prochain setup.": "👌 No open position. Waiting for the next setup.",
 "clôturé": "closed", "🚪 Sortie": "🚪 Exit", "🎉 Bravo !": "🎉 Well done!", "💪 On repart au prochain": "💪 On to the next one",
-"🚪 Sortie manuelle": "🚪 Manual exit", "🛑 Stop touché": "🛑 SL hit", "🔒 Stop protégé touché": "🔒 Protected SL hit", "🛡 Stop remonté touché": "🛡 Raised SL hit",
+"🚪 Sortie manuelle": "🚪 Manual exit", "🛑 Stop touché": "🛑 SL hit", "✅ RETOURNEMENT CONFIRMÉ :": "✅ REVERSAL CONFIRMED:", "↩ RETOURNEMENT possible vers le": "↩ Possible REVERSAL to", ": j'entre seulement si le 15 min et la 1 h le confirment": ": I only enter if 15 min and 1 h confirm it", "🔒 Stop protégé touché": "🔒 Protected SL hit", "🛡 Stop remonté touché": "🛡 Raised SL hit",
 "💰 TP1 encaissé": "💰 TP1 banked", "🏆 Objectif final": "🏆 Final target",
 # Résultats
 "Aucun trade clôturé pour l'instant.": "No closed trade yet.", "Les résultats apparaîtront après la première clôture réellement enregistrée.": "Results will appear after the first actually recorded close.",
@@ -1765,10 +1774,10 @@ TRAD.update({
     "🔁 1 h : confirme ou contredit le biais de fond H4": "🔁 1h: confirms or contradicts the H4 bias",
     "👀 15 min : préparation, retracement, cassure et retest": "👀 15m: setup, pullback, breakout and retest",
     "🎯 5 min : timing ; clôture, rejet ou retest confirmé obligatoire": "🎯 5m: timing; confirmed close, rejection or retest required",
-    "⚖️ SCALPING : M15 + M5 • INTRADAY : H1 + M15 + M5 • SWING : H4 + H1 + M15": "⚖️ SCALPING: M15 + M5 • INTRADAY: H1 + M15 + M5 • SWING: H4 + H1 + M15",
+    "⚖️ SCALPING : H1 + M15 + M5 + M1 • DAY : H4 + H1 + M15 + M5 • SWING : W1/D1 + H4 + H1": "⚖️ SCALPING: H1 + M15 + M5 + M1 • DAY: H4 + H1 + M15 + M5 • SWING: W1/D1 + H4 + H1",
     "⚠️ Un setup contre H4/H1 reste un scalp contre-tendance, jamais un swing": "⚠️ A setup against H4/H1 remains counter-trend scalping, never a swing",
     "📍 1 min : suivi du prix et de la position": "📍 1m: price and position monitoring",
-    "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.": "ℹ️ 2m, 10m, 30m, 45m, 2h and Daily: additional context and confirmation.",
+    "ℹ️ 3, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.": "ℹ️ 2m, 10m, 30m, 45m, 2h and Daily: additional context and confirmation.",
     "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d’entrée.": "⚠️ A bullish or bearish timeframe alone never authorizes an entry.",
     "🧭 Fond H4 • confirmation H1 • préparation M15 • timing M5": "🧭 H4 bias • H1 confirmation • M15 setup • M5 timing",
     "M15 = préparation, M5 = timing après clôture confirmée": "M15 = setup, M5 = timing after confirmed close",
@@ -2443,7 +2452,7 @@ def texte_position(m, r, cle, cid):
 
 def texte_timeframes(m, r):
     """Lecture pédagogique de toutes les unités réellement calculées par ALIGN."""
-    noms = ["1 min", "2 min", "5 min", "10 min", "15 min", "30 min", "45 min",
+    noms = ["1 min", "3 min", "5 min", "10 min", "15 min", "30 min", "45 min",
             "1 heure", "2 heures", "4 heures", "Daily"]
     directions = ["🟩 HAUSSIER ⬆️" if d == 1 else "🟥 BAISSIER ⬇️" if d == -1 else "⬜ NEUTRE ➖"
                   for d in r["dirs"]]
@@ -2464,10 +2473,10 @@ def texte_timeframes(m, r):
         "🔁 1 h : confirme ou contredit le biais de fond H4",
         "👀 15 min : préparation, retracement, cassure et retest",
         "🎯 5 min : timing ; clôture, rejet ou retest confirmé obligatoire",
-        "⚖️ SCALPING : M15 + M5 • INTRADAY : H1 + M15 + M5 • SWING : H4 + H1 + M15",
+        "⚖️ SCALPING : H1 + M15 + M5 + M1 • DAY : H4 + H1 + M15 + M5 • SWING : W1/D1 + H4 + H1",
         "⚠️ Un setup contre H4/H1 reste un scalp contre-tendance, jamais un swing",
         "📍 1 min : suivi du prix et de la position",
-        "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.",
+        "ℹ️ 3, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.",
         "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d'entrée."
     ]
     return "\n".join(lignes)
@@ -4465,6 +4474,8 @@ def fmt_trade(m, tr, p=None):
                 f"Entrée {px(tr['e'])} • SL {px(tr['sl'])}\n"
                 f"TP1 {px(tr['tp1'])} • TP2 {px(tr['tp2'])}\n"
                 "⛔ Ne pas anticiper la clôture de confirmation. Le SL reste obligatoire.\n")
+    if tr.get("retour"):
+        tete = f"✅ RETOURNEMENT CONFIRMÉ : {'LONG' if d == 1 else 'SHORT'}\n" + tete
     return (f"{tete}\n"
             + resume +
             f"🧭 Fond H4 • confirmation H1 • préparation M15 • timing M5\n"
@@ -5043,6 +5054,7 @@ def agent(m, r, cle, ferme):
             tr = dict(pc, statut="entree", cree=r["t"], encore=0, atr_e=r["atr"])
             tr["profil"] = profil_trade(m, tr, r)
             tr.update(strategie_trade(r, d))
+            tr["retour"] = retournement_confirme(cle, d, r)
             non, n_, w_ = memoire_refuse(tr["profil"])
             if non:
                 out.append(f"🧠 {ICONE.get(m, '')} {m} : cassure vue, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
@@ -5216,6 +5228,7 @@ def agent(m, r, cle, ferme):
                 tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=a_)
                 tr["profil"] = profil_trade(m, tr, r)
                 tr.update(strategie_trade(r, d))
+                tr["retour"] = retournement_confirme(cle, d, r)
                 non, n_, w_ = memoire_refuse(tr["profil"])
                 if non:
                     cle["prep"] = False; cle.pop("ordre", None)
@@ -5274,7 +5287,10 @@ def agent(m, r, cle, ferme):
             if tr.get("be_dit"):
                 out.append(f"🔒 {ICONE.get(m, '')} {m} : sorti à BE\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n🛡 Aucune perte\n🔎 Je cherche la prochaine entrée")
             else:
-                out.append(f"❌ {ICONE.get(m, '')} {m} : stop {px(sl)} touché\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n😎 On coupe, prochain setup bientôt")
+                inverse = "LONG" if d == -1 else "SHORT"
+                out.append(f"❌ {ICONE.get(m, '')} {m} : stop {px(sl)} touché\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n😎 On coupe, prochain setup bientôt\n"
+                           f"↩ RETOURNEMENT possible vers le {inverse} : j'entre seulement si le 15 min et la 1 h le confirment")
+                cle["retournement"] = {"d": -d, "t": r["t"]}
             cle["fin"] = [tr, sl, "🔒 Sorti à BE" if tr.get("be_dit") else "🛑 Stop touché"]; cle["stop_t"] = r["t"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
