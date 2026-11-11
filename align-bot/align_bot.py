@@ -1466,14 +1466,59 @@ def avis_ia(etat, m, r, cle):
     return "🧠 L'avis ALIGN (analyse interne)\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
 
 def bouton_auto(m):
-    return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
+    return json.dumps({"inline_keyboard": [[{"text": "🔔 Me prévenir pour prendre position", "callback_data": f"auto:{m}"}]]})
 
 def markup_analyse(etat, m, r):
-    """Après chaque analyse, proposer le suivi de la prochaine position, même si le setup n'est pas encore prêt."""
+    """Clavier inline de la fiche : détails, niveaux et action explicite sur la position."""
     cle = etat.get(m, {})
-    if not cle.get("trade"):
-        return bouton_auto(m)
-    return CLAVIER
+    lignes = [
+        [{"text": "ℹ️ Comprendre l'analyse", "callback_data": f"details:{m}"},
+         {"text": "📊 Voir les niveaux", "callback_data": f"levels:{m}"}]
+    ]
+    if cle.get("trade"):
+        lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
+                       {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
+    else:
+        lignes.append([{"text": "🎯 Me prévenir pour prendre position", "callback_data": f"auto:{m}"}])
+    return json.dumps({"inline_keyboard": lignes})
+
+def texte_apercu(m, r, cle):
+    """Fiche synthétique ; l'intégralité des données reste accessible via le bouton Comprendre l'analyse."""
+    maj, n_ok = alignement(r)
+    titre, raison = verdict(r, cle)
+    biais = ("🟢 HAUSSIER" if maj == 1 else "🔴 BAISSIER" if maj == -1 else "🟠 NON CONFIRMÉ")
+    prix = r["m1"][-1]["c"]
+    lignes = [
+        f"{ICONE.get(m, '📊')}  ALIGN MTF  •  {m}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "💹 PRIX ACTUEL",
+        f"{px(prix)}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🧭 TENDANCE DU MARCHÉ",
+        biais,
+        "📡 CONFIRMATION 1H + 4H",
+        f"{n_ok}/2  {'✅ CONFIRMÉ' if r.get('confirme') else '⏳ EN ATTENTE'}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🚦 DÉCISION ALIGN",
+        str(titre),
+    ]
+    if raison:
+        lignes.append(str(raison))
+    if cle.get("trade"):
+        tr = cle["trade"]
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "📍 POSITION EN COURS",
+                   f"{'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'}",
+                   f"🎯 TP visé : {px(tr['tp2'] if tr.get('statut') == 'tp1' else tr['tp1'])}"]
+    elif cle.get("ordre"):
+        o = cle["ordre"]
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "🟨 ZONE DE PRÉPARATION",
+                   f"{px(o.get('za', o['e']))} → {px(o.get('zb', o['e']))}"]
+    else:
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "⏳ PROCHAINE ACTION", str(prochaine(r, cle))]
+    if r.get("news"):
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "📰 ACTUALITÉS", str(r["news"])]
+    lignes += ["", "ℹ️ Les indicateurs, RSI, zones, FVG, stratégie et explications sont disponibles avec « Comprendre l'analyse »."]
+    return "\n".join(lignes)
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
@@ -1633,7 +1678,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
              f"👆 Mon analyse de {heure(der['t'])} est juste au-dessus : elle est toujours bonne"] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
         return
     vu[str(cid)] = {"sig": sig, "t": time.time()}
-    _envoi_sur(cid, text=texte_etat(m, r, cle), reply_markup=markup_analyse(etat, m, r))
+    _envoi_sur(cid, text=texte_apercu(m, r, cle), reply_markup=markup_analyse(etat, m, r))
     a_ = avis_ia(etat, m, r, cle)
     if a_:
         _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
@@ -1956,6 +2001,56 @@ def traiter(etat, chats, updates):
         if cb:
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
+            if choix in ("details", "levels") and mk in MARCHES:
+                if not autorise(etat, qui, cb.get("from", {}).get("id")):
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Détails réservés aux VIP")
+                    except Exception:
+                        pass
+                    _envoi_sur(qui, text="🔒 Les détails complets et les niveaux sont réservés aux VIP.",
+                               **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}))
+                    continue
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📊 Informations")
+                except Exception:
+                    pass
+                r_detail = DERNIERS.get(mk)
+                if r_detail is None:
+                    try:
+                        r_detail = analyse_marche(etat, MARCHES[mk])
+                    except Exception as ex:
+                        print("détails analyse", ex)
+                        _envoi_sur(qui, text="⚠️ Les détails sont momentanément indisponibles. Réessaie avec le bouton Analyse.")
+                        continue
+                cle_detail = etat.get(mk, {})
+                if choix == "details":
+                    _envoi_sur(qui, text=texte_etat(mk, r_detail, cle_detail, vip=True),
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Voir les niveaux", "callback_data": f"levels:{mk}"}],
+                                                                                 [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
+                else:
+                    tr_detail = cle_detail.get("trade")
+                    if tr_detail:
+                        txt_niveaux = fmt_trade(mk, tr_detail, r_detail["m1"][-1]["c"])
+                    elif cle_detail.get("ordre"):
+                        txt_niveaux = ("🟨 ZONE DE PRÉPARATION\n" + statut_txt(0, cle_detail["ordre"]).strip()
+                                       + "\n⏳ Aucun déclenchement confirmé : attendre la clôture prévue.")
+                    else:
+                        txt_niveaux = ("📊 NIVEAUX ALIGN\n⏳ Aucun plan d'entrée confirmé pour le moment.\n"
+                                       "Le bot attend les confirmations de sa stratégie avant de publier des niveaux.")
+                    _envoi_sur(qui, text=txt_niveaux,
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "ℹ️ Comprendre l'analyse", "callback_data": f"details:{mk}"},
+                                                                             {"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
+                continue
+            if choix == "resume" and mk in MARCHES:
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="Analyse")
+                except Exception:
+                    pass
+                r_resume = DERNIERS.get(mk)
+                if r_resume:
+                    _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {})),
+                               reply_markup=markup_analyse(etat, mk, r_resume))
+                continue
             if choix in ("jok", "jno") and qui in proprio(etat):
                 decider_entree(etat, cb, choix == "jok", mk)
                 continue
