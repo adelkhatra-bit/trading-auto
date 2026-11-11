@@ -2082,3 +2082,38 @@ class TestTelegramSimpleAnalysisLayout(unittest.TestCase):
             self.assertIn("faire_analyse", names)
             self.assertNotIn("analyse_btc", names)
             self.assertNotIn("analyse_gold", names)
+
+
+class TestTelegramPositionStateClarity(unittest.TestCase):
+    def test_trade_alert_does_not_offer_ambiguous_no_or_im_in_buttons(self):
+        import json
+        buttons = json.loads(align_bot.boutons("BTC"))["inline_keyboard"]
+        labels = [b["text"] for row in buttons for b in row]
+        callbacks = [b["callback_data"] for row in buttons for b in row]
+        self.assertEqual(labels, ["📍 Suivre cette position"])
+        self.assertEqual(callbacks, ["in:BTC"])
+
+    def test_active_trade_keyboard_is_personalized_for_untracked_user(self):
+        import json
+        state = {"GOLD": {"trade": {"e": 100, "qui": {"101": {"e": 100, "sl": 98, "tp1": 104}}}}}
+        untracked = json.loads(align_bot.markup_analyse(state, "GOLD", {}, "202"))["inline_keyboard"]
+        tracked = json.loads(align_bot.markup_analyse(state, "GOLD", {}, "101"))["inline_keyboard"]
+        self.assertEqual([b["callback_data"] for row in untracked for b in row], ["in:GOLD"])
+        self.assertEqual([b["callback_data"] for row in tracked for b in row], ["position:GOLD", "out:GOLD"])
+
+    def test_position_details_never_call_unregistered_user_a_position_holder(self):
+        state = {"GOLD": {"trade": {"e": 100, "sl": 98, "tp1": 104, "tp2": 108, "d": 1, "qui": {}}}}
+        message = align_bot.texte_position("GOLD", {"m1": [candle(1, c=101)]}, state["GOLD"], "202")
+        self.assertIn("Tu n'es pas encore enregistré", message)
+        self.assertNotIn("TA POSITION", message)
+
+    def test_results_empty_state_has_no_manual_entry_instruction(self):
+        message = align_bot._texte_resultats({}, "101")
+        self.assertIn("première clôture réellement enregistrée", message)
+        self.assertNotIn("Je suis rentré", message)
+
+    def test_position_keyboard_exposes_manual_exit_to_registered_user(self):
+        import json
+        markup = json.loads(align_bot.markup_position("BTC"))["inline_keyboard"]
+        callbacks = [b["callback_data"] for row in markup for b in row]
+        self.assertIn("out:BTC", callbacks)
