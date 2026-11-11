@@ -1713,6 +1713,40 @@ def mise_en_forme(t):
     txt = "\n".join(out)
     return re.sub(r"\n{3,}", "\n\n", txt).strip()
 
+# Telegram peut imposer un délai de plusieurs heures après un dépassement de quota.
+# Le cooldown est isolé par chat pour ne pas bloquer les autres destinataires.
+TELEGRAM_RETRY_UNTIL = {}
+
+
+def _telegram_cooldown_restant(chat_id, maintenant=None):
+    cle = str(chat_id) if chat_id is not None else "__global__"
+    maintenant = time.time() if maintenant is None else float(maintenant)
+    restant = max(0.0, float(TELEGRAM_RETRY_UNTIL.get(cle, 0)) - maintenant)
+    if restant <= 0:
+        TELEGRAM_RETRY_UNTIL.pop(cle, None)
+    return restant
+
+
+def _telegram_verifie_cooldown(chat_id, maintenant=None):
+    restant = _telegram_cooldown_restant(chat_id, maintenant)
+    if restant > 0:
+        raise RuntimeError(
+            f"Telegram cooldown actif pour {chat_id}: réessai dans {int(restant + 0.999)} s; "
+            "aucune requête réseau répétée"
+        )
+
+
+def _telegram_enregistre_429(chat_id, erreur, maintenant=None):
+    match = re.search(r"retry after\\s+(\\d+)", str(erreur), re.IGNORECASE)
+    if not match:
+        return 0
+    delai = max(1, int(match.group(1)))
+    cle = str(chat_id) if chat_id is not None else "__global__"
+    maintenant = time.time() if maintenant is None else float(maintenant)
+    TELEGRAM_RETRY_UNTIL[cle] = max(float(TELEGRAM_RETRY_UNTIL.get(cle, 0)), maintenant + delai)
+    return delai
+
+
 def telegram(methode, **params):
     if methode in ("sendMessage", "editMessageText", "sendPhoto") and str(params.get("chat_id")) in LANG_EN:
         if "text" in params:
@@ -1725,8 +1759,17 @@ def telegram(methode, **params):
         for k in ("text", "caption"):
             if k in params:
                 params[k] = mise_en_forme(params[k])
+    chat_id = params.get("chat_id")
+    _telegram_verifie_cooldown(chat_id)
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
-    resultat = http_json(url, urllib.parse.urlencode(params).encode())
+    try:
+        resultat = http_json(url, urllib.parse.urlencode(params).encode())
+    except Exception as ex:
+        if "HTTP Error 429" in str(ex):
+            delai = _telegram_enregistre_429(chat_id, ex)
+            if delai:
+                print(f"telegram rate limit chat={chat_id}: pause {delai}s; envoi suspendu sans nouvel appel")
+        raise
     if methode in ("sendMessage", "editMessageText", "sendPhoto", "copyMessage") and resultat.get("ok"):
         payload = resultat.get("result") or {}
         texte = params.get("text") or params.get("caption")
