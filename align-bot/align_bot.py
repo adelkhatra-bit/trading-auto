@@ -2150,13 +2150,11 @@ def boutons_canal(etat, texte):
     lien = lambda p: f"https://t.me/{bot}?start={p}"
     lignes = []
     position = m and any(k in texte for k in ("J'ENTRE MAINTENANT", "TP1", "TP2", "BE", "STOP", "Stop", "SL", "parti"))
-    setup = m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "CASSURE", "PRÉPARE-TOI", "REPLI", "RETRACE", "MANIPULATION", "zone"))
-    # Canal épuré : seulement les boutons utiles au message (le reste est dans le clavier du bot)
-    if setup or position:
-        lignes.append([{"text": "🎯 Je rentre dans la prochaine position", "url": lien(f"auto_{m.lower()}")}])
-    if position:
-        lignes.append([{"text": "📍 Suivre cette position", "url": lien("rentre")}, {"text": "🚪 Je suis sorti", "url": lien("sorti")}])
-    lignes.append([{"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}, {"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}])
+    # Chaîne VIP épurée : Telegram n'autorise pas le bouton bleu « Menu » ni le clavier dans une chaîne.
+    # → 1 seul bouton sous chaque message : il ouvre le bot, où le VIP retrouve le MÊME menu que le gratuit.
+    if position and "J'ENTRE MAINTENANT" in texte:
+        lignes.append([{"text": "📍 Je prends cette position", "url": lien("rentre")}])
+    lignes.append([{"text": "🤖 Ouvrir mon menu ALIGN", "url": lien("boutons")}])
     return json.dumps({"inline_keyboard": lignes})
 
 def menu_canal_vip(etat):
