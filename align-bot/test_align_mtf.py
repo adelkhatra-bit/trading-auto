@@ -1914,10 +1914,7 @@ class TestTelegramCompactKeyboards(unittest.TestCase):
             self.assertFalse(any("tradingview.com" in url for url in urls))
         analysis = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in analysis for button in row]
-        self.assertIn("why:BTC", callbacks)
-        self.assertIn("details:BTC", callbacks)
-        self.assertIn("levels:BTC", callbacks)
-        self.assertIn("timeframes:BTC", callbacks)
+        self.assertEqual(callbacks, ["auto:BTC"])
 
 
 class TestTradingViewReportRegression(unittest.TestCase):
@@ -2078,3 +2075,31 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
             align_bot.traiter(state, set(), [update])
         self.assertEqual([call.args[2] for call in subscribe.call_args_list], ["BTC", "GOLD"])
         self.assertEqual(state["marches_par_chat"]["102"], "BOTH")
+
+
+class TestTelegramSimpleAnalysisLayout(unittest.TestCase):
+    def test_analysis_message_has_only_the_relevant_follow_or_position_actions(self):
+        import json
+        markup = json.loads(align_bot.markup_analyse({}, "GOLD", {}))
+        callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
+        self.assertEqual(callbacks, ["auto:GOLD"])
+
+    def test_active_position_keeps_only_entered_and_exited_actions(self):
+        import json
+        markup = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))
+        callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
+        self.assertEqual(callbacks, ["in:GOLD", "out:GOLD"])
+
+    def test_telegram_command_menu_has_one_analysis_entry_not_separate_btc_gold_entries(self):
+        from unittest.mock import patch
+        import json
+        with patch.object(align_bot, "telegram") as tg:
+            align_bot.installer_menu({})
+        calls = [c for c in tg.call_args_list if c.args and c.args[0] == "setMyCommands"]
+        self.assertEqual(len(calls), 2)
+        for call in calls:
+            commands = json.loads(call.kwargs["commands"])
+            names = [c["command"] for c in commands]
+            self.assertIn("faire_analyse", names)
+            self.assertNotIn("analyse_btc", names)
+            self.assertNotIn("analyse_gold", names)
