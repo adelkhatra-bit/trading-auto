@@ -407,6 +407,40 @@ class AlignMtfRulesTest(unittest.TestCase):
         with patch.object(align_bot.time, "time", return_value=900.0):
             self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m"), 1200)
 
+    def test_dxy_requires_a_real_one_hour_reference_window(self):
+        now = 10_000
+        self.assertIsNone(align_bot.variation_une_heure([(now - 240, 101.0), (now, 101.2)]))
+        change = align_bot.variation_une_heure([(now - 3600, 100.0), (now, 100.5)])
+        self.assertIsNotNone(change)
+        self.assertAlmostEqual(change[0], 0.5)
+        self.assertEqual(change[1], 60)
+
+    def test_macro_confluence_detects_dollar_impulse_and_asset_divergence_without_forcing_entry(self):
+        now = align_bot.time.time()
+        etat = {"macro": {
+            "dxy": [(now - 3600, 100.0), (now, 100.30)],
+            "eurusd": [(now - 3600, 1.1000), (now, 1.0960)]
+        }}
+        bars = [{"c": 100.0} for _ in range(5)]
+        bars[-1]["c"] = 101.0
+        result = align_bot.macro_confluence(etat, "GOLD", {"b15": bars}, maintenant=now)
+        self.assertIn("FORTE HAUSSE", result["dollar_direction"])
+        self.assertIn("COHÉRENT", result["controle_dxy_eurusd"])
+        self.assertIn("DIVERGENCE HAUSSIÈRE", result["divergence_actif_dollar"])
+        self.assertIn("ne jamais inverser LONG/SHORT", result["regle"])
+
+    def test_dxy_fails_closed_when_the_latest_quote_is_stale(self):
+        now = align_bot.time.time()
+        state = {"macro": {"dxy": [(now - 7200, 100.0), (now - 3600, 100.5)]}}
+        self.assertIsNone(align_bot.dxy_info(state, maintenant=now))
+
+    def test_macro_confluence_fails_closed_when_eurusd_or_dxy_history_is_too_short(self):
+        now = align_bot.time.time()
+        etat = {"macro": {"dxy": [(now - 240, 100.0), (now, 100.4)], "eurusd": []}}
+        result = align_bot.macro_confluence(etat, "BTC", {"b15": [{"c": 100.0}] * 5})
+        self.assertFalse(result["disponible"])
+        self.assertEqual(result["statut"], "DONNÉES DXY INSUFFISANTES")
+
     def test_chronometer_keeps_remaining_duration_and_paris_close_time_on_separate_lines(self):
         from unittest.mock import patch
         dirs = [0] * 11

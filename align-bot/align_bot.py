@@ -924,7 +924,21 @@ TRAD = {
 "👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
-"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "💵 Dollar (DXY)": "💵 Dollar (DXY)", "favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "💵 Dollar (DXY)": "💵 Dollar (DXY)", "💵 DXY ": "💵 DXY ",
+"— dollar FORTE HAUSSE — IMPULSION HAUSSIÈRE": "— dollar STRONG RISE — BULLISH IMPULSE",
+"— dollar FORTE BAISSE — IMPULSION BAISSIÈRE": "— dollar STRONG FALL — BEARISH IMPULSE",
+"— dollar HAUSSIER (BULLISH)": "— dollar BULLISH",
+"— dollar BAISSIER (BEARISH)": "— dollar BEARISH",
+"💶 EUR/USD :": "💶 EUR/USD:",
+"🔀 GOLD / dollar :": "🔀 GOLD / dollar:",
+"🔀 BTC / dollar :": "🔀 BTC / dollar:",
+"DIVERGENCE HAUSSIÈRE : l'actif résiste malgré un dollar en hausse": "BULLISH DIVERGENCE: the asset holds despite a rising dollar",
+"DIVERGENCE BAISSIÈRE : l'actif baisse malgré un dollar en recul": "BEARISH DIVERGENCE: the asset falls despite a weaker dollar",
+"CORRÉLATION INVERSE : dollar en hausse, actif en baisse": "INVERSE CORRELATION: dollar up, asset down",
+"CORRÉLATION INVERSE : dollar en baisse, actif en hausse": "INVERSE CORRELATION: dollar down, asset up",
+"COHÉRENT : DXY et EUR/USD évoluent en sens inverse": "CONSISTENT: DXY and EUR/USD move in opposite directions",
+"DIVERGENCE : DXY et EUR/USD évoluent dans le même sens": "DIVERGENCE: DXY and EUR/USD move in the same direction",
+"favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -1527,7 +1541,7 @@ def analyse_marche(etat, pair):
     r["annonce"] = annonce_proche(etat or {}, int(time.time()))
     r["news"] = news_txt(etat or {})
     try:
-        r["macro"] = contexte_macro(etat or {}, m)
+        r["macro"] = contexte_macro(etat or {}, m, r)
     except Exception:
         pass
     return r
@@ -1565,6 +1579,11 @@ IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds 
              "Tu t'appuies UNIQUEMENT sur les données fournies : aucun prix inventé, jamais de contradiction avec le verdict du bot. "
              "Si le prix est en haut de sa zone Daily/Weekly, près d'une résistance, avec divergence ou essoufflement, déconseille de poursuivre un LONG; "
              "ne propose un SHORT que si le retournement est confirmé par les clôtures et le contexte 1h. "
+             "Analyse aussi le DXY et EUR/USD : le DXY mesure la force du dollar face à un panier de devises, dominé par l'euro. "
+             "Compare leur direction et leur variation sur 1h avec le BTC ou le Gold. Signale une impulsion forte du dollar, "
+             "une relation inverse cohérente ou une divergence haussière/baissière de l'actif. "
+             "Ne déduis JAMAIS un signal inverse automatique : le DXY est un contexte, pas un déclencheur. "
+             "Si les données macro sont absentes ou trop anciennes, dis-le explicitement et n'invente rien. "
              "Une confluence en % n'est pas une probabilité de gain. Rappelle le SL et le risque. Pas de promesse de gain.")
 
 def _appel_ia(url, modele, cle, messages):
@@ -1641,10 +1660,12 @@ def donnees_ia(m, r, cle):
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
+            "contexte_macro_dollar": r.get("macro_data") or {}, 
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
 
 def avis_ia(etat, m, r, cle):
-    t = ia(etat, "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer.", donnees_ia(m, r, cle),
+    r["macro_data"] = macro_confluence(etat, m, r)
+    t = ia(etat, "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer. Vérifie explicitement le DXY, EUR/USD et les divergences macro fournies.", donnees_ia(m, r, cle),
            cle_cache=f"analyse_{m}_{int(time.time() // 600)}")
     if t:
         return f"🧠 L'avis de l'IA ALIGN\n{t}"
@@ -3777,6 +3798,10 @@ def macro(etat):
                   * v["USDCAD"] ** 0.091 * v["USDSEK"] ** 0.042 * v["USDCHF"] ** 0.036)
             mc["dxy"].append((now, round(dx, 3)))
             mc["dxy"] = [x for x in mc["dxy"] if now - x[0] <= 3 * 3600 + 600]
+            # EUR/USD est la paire majeure de référence du panier DXY : on la conserve
+            # au même instant pour contrôler la relation inverse sans mélanger les horaires.
+            mc.setdefault("eurusd", []).append((now, round(v["EURUSD"], 6)))
+            mc["eurusd"] = [x for x in mc["eurusd"] if now - x[0] <= 3 * 3600 + 600]
         except Exception as ex:
             print("dxy", ex)
     if now - mc.get("us10_t", 0) >= 3 * 3600:
@@ -3793,23 +3818,101 @@ def macro(etat):
             print("taux US", ex)
     return mc
 
-def dxy_info(etat):
-    h = (etat.get("macro") or {}).get("dxy") or []
-    if len(h) < 2:
+def variation_une_heure(historique):
+    """Variation 1h seulement si un échantillon existe entre 40 et 80 minutes."""
+    if len(historique) < 2:
         return None
-    now_t, v = h[-1]
-    ref = min(h, key=lambda x: abs((now_t - x[0]) - 3600))
-    return v, (v - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
+    now_t, valeur = historique[-1]
+    candidats = [x for x in historique[:-1] if 2400 <= now_t - x[0] <= 4800 and x[1]]
+    if not candidats or not valeur:
+        return None
+    ref = min(candidats, key=lambda x: abs((now_t - x[0]) - 3600))
+    return (valeur - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
 
-def contexte_macro(etat, m):
-    """Lignes « contexte » propres à CHAQUE marché (Gold et BTC bien séparés)."""
+
+def dxy_info(etat, maintenant=None):
+    h = (etat.get("macro") or {}).get("dxy") or []
+    if not h:
+        return None
+    maintenant = time.time() if maintenant is None else maintenant
+    # Une cotation de plus de 15 minutes est trop ancienne pour guider un biais intraday.
+    if maintenant - h[-1][0] > 15 * 60 or h[-1][0] > maintenant + 60:
+        return None
+    variation = variation_une_heure(h)
+    if variation is None:
+        return None
+    ch, mn = variation
+    return h[-1][1], ch, mn
+
+def macro_confluence(etat, m, r=None, maintenant=None):
+    """Biais dollar/EURUSD et divergence avec l'actif ; contexte seulement, jamais un déclencheur."""
+    mc = etat.get("macro") or {}
+    di = dxy_info(etat, maintenant=maintenant)
+    if not di:
+        return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES"}
+    dxy, variation, age_min = di
+    hist_eur = mc.get("eurusd") or []
+    eur_change = None
+    if hist_eur and abs(hist_eur[-1][0] - (mc.get("dxy") or [[0]])[-1][0]) <= 8 * 60:
+        eur_variation = variation_une_heure(hist_eur)
+        if eur_variation is not None:
+            eur_change = eur_variation[0]
+    if variation >= 0.25:
+        dollar_state = "FORTE HAUSSE — IMPULSION HAUSSIÈRE"
+    elif variation <= -0.25:
+        dollar_state = "FORTE BAISSE — IMPULSION BAISSIÈRE"
+    elif variation > 0.03:
+        dollar_state = "HAUSSIER (BULLISH)"
+    elif variation < -0.03:
+        dollar_state = "BAISSIER (BEARISH)"
+    else:
+        dollar_state = "NEUTRE"
+    fx_check = "INDISPONIBLE"
+    if eur_change is not None:
+        if variation > 0.03 and eur_change < -0.03 or variation < -0.03 and eur_change > 0.03:
+            fx_check = "COHÉRENT : DXY et EUR/USD évoluent en sens inverse"
+        elif abs(variation) <= 0.03 or abs(eur_change) <= 0.03:
+            fx_check = "MIXTE : mouvement faible"
+        else:
+            fx_check = "DIVERGENCE : DXY et EUR/USD évoluent dans le même sens"
+    asset_change = None
+    if r and r.get("b15") and len(r["b15"]) >= 5:
+        b = r["b15"]
+        ref_close = b[-5]["c"]
+        if ref_close:
+            asset_change = (b[-1]["c"] - ref_close) / ref_close * 100
+    divergence = "NON ÉVALUABLE"
+    if asset_change is not None and abs(variation) > 0.03 and abs(asset_change) > 0.03:
+        if variation > 0 and asset_change > 0:
+            divergence = "DIVERGENCE HAUSSIÈRE : l'actif résiste malgré un dollar en hausse"
+        elif variation < 0 and asset_change < 0:
+            divergence = "DIVERGENCE BAISSIÈRE : l'actif baisse malgré un dollar en recul"
+        elif variation > 0 and asset_change < 0:
+            divergence = "CORRÉLATION INVERSE : dollar en hausse, actif en baisse"
+        else:
+            divergence = "CORRÉLATION INVERSE : dollar en baisse, actif en hausse"
+    return {
+        "disponible": True, "dxy": dxy, "dxy_variation_1h_pct": round(variation, 4),
+        "age_reference_min": age_min, "dollar_direction": dollar_state,
+        "eurusd_variation_1h_pct": round(eur_change, 4) if eur_change is not None else None,
+        "controle_dxy_eurusd": fx_check, "actif": m,
+        "actif_variation_1h_pct": round(asset_change, 4) if asset_change is not None else None,
+        "divergence_actif_dollar": divergence,
+        "regle": "Contexte macro uniquement : ne jamais inverser LONG/SHORT ni autoriser une entrée sans confirmations 4h/1h/15m/5m."
+    }
+
+
+def contexte_macro(etat, m, r=None):
+    """Lignes macro vérifiables et propres à chaque marché."""
     l = []
-    di = dxy_info(etat)
-    if di:
-        v, ch, mn = di
-        fl = "⬆️" if ch > 0.03 else "⬇️" if ch < -0.03 else "➖"
-        effet = ("favorable au 🟩 LONG" if ch < -0.03 else "frein pour le 🟩 LONG" if ch > 0.03 else "neutre")
-        l.append(f"💵 Dollar (DXY) {v:.2f} {fl} {ch:+.2f} % en {mn} min → {effet} {m}")
+    mc = macro_confluence(etat, m, r)
+    if mc["disponible"]:
+        d = mc["dxy_variation_1h_pct"]
+        fleche = "⬆️" if d > 0.03 else "⬇️" if d < -0.03 else "➖"
+        l.append(f"💵 DXY {mc['dxy']:.2f} {fleche} {d:+.2f} % / 1 h — dollar {mc['dollar_direction']}")
+        l.append(f"💶 EUR/USD : {mc['controle_dxy_eurusd']}" +
+                 (f" ({mc['eurusd_variation_1h_pct']:+.2f} % / 1 h)" if mc["eurusd_variation_1h_pct"] is not None else " (historique en constitution)"))
+        l.append(f"🔀 {m} / dollar : {mc['divergence_actif_dollar']}")
     us = (etat.get("macro") or {}).get("us10")
     if us and m == "GOLD":
         dv = us[0] - us[1]
@@ -4294,9 +4397,11 @@ def un_tour(etat, chats):
         r["fermeture"] = nom_marche == "GOLD" and (0 < f_ <= 35 or -120 <= f_ <= 0)   # jusqu'à 10 min après la réouverture
         r["news"] = news_txt(etat)
         try:
-            r["macro"] = contexte_macro(etat, nom_marche)
-        except Exception:
-            pass
+            r["macro_data"] = macro_confluence(etat, nom_marche, r)
+            r["macro"] = contexte_macro(etat, nom_marche, r)
+        except Exception as ex:
+            print("macro analyse", nom_marche, ex)
+            r["macro_data"] = {"disponible": False, "statut": "DONNÉES MACRO INDISPONIBLES"}
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
