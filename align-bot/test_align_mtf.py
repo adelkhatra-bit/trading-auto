@@ -1714,6 +1714,50 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(message.splitlines()[1], "🟢 SIGNAL VALIDÉ — VÉRIFIE LES NIVEAUX")
         self.assertNotIn("SIGNAL NON CONFIRMÉ", message)
 
+
+class TelegramRateLimitTest(unittest.TestCase):
+    def setUp(self):
+        align_bot.TELEGRAM_RETRY_UNTIL.clear()
+
+    def tearDown(self):
+        align_bot.TELEGRAM_RETRY_UNTIL.clear()
+
+    def test_429_retry_after_sets_a_chat_specific_cooldown(self):
+        delay = align_bot._telegram_enregistre_429(
+            "gold-chat", "HTTP Error 429: Too Many Requests: retry after 29359", maintenant=1000
+        )
+        self.assertEqual(delay, 29359)
+        self.assertEqual(align_bot._telegram_cooldown_restant("gold-chat", maintenant=1001), 29358)
+        self.assertEqual(align_bot._telegram_cooldown_restant("btc-chat", maintenant=1001), 0)
+
+    def test_expired_cooldown_is_removed(self):
+        align_bot.TELEGRAM_RETRY_UNTIL["gold-chat"] = 1100
+        self.assertEqual(align_bot._telegram_cooldown_restant("gold-chat", maintenant=1101), 0)
+        self.assertNotIn("gold-chat", align_bot.TELEGRAM_RETRY_UNTIL)
+
+    def test_telegram_does_not_repeat_network_calls_during_retry_after(self):
+        with unittest.mock.patch.object(
+            align_bot, "http_json",
+            side_effect=RuntimeError("HTTP Error 429: Too Many Requests: retry after 120")
+        ) as request:
+            with self.assertRaisesRegex(RuntimeError, "HTTP Error 429"):
+                align_bot.telegram("sendMessage", chat_id="gold-chat", text="test")
+            with self.assertRaisesRegex(RuntimeError, "cooldown actif"):
+                align_bot.telegram("sendMessage", chat_id="gold-chat", text="test")
+            self.assertEqual(request.call_count, 1)
+
+    def test_telegram_cooldown_does_not_block_another_chat(self):
+        align_bot.TELEGRAM_RETRY_UNTIL["gold-chat"] = __import__("time").time() + 2000
+        with self.assertRaisesRegex(RuntimeError, "cooldown actif"):
+            align_bot.telegram("sendMessage", chat_id="gold-chat", text="test")
+        with unittest.mock.patch.object(
+            align_bot, "http_json", return_value={"ok": True, "result": {"message_id": 7}}
+        ) as request:
+            result = align_bot.telegram("sendMessage", chat_id="btc-chat", text="test")
+        self.assertTrue(result["ok"])
+        request.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
 
