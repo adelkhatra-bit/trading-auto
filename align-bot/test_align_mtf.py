@@ -1951,6 +1951,14 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         self.assertIn(align_bot.SEPARATEUR + "\n<b>POURQUOI J'ATTENDS</b>", html)
         self.assertIn("<i>ℹ️ note</i>", html)
 
+    def test_analysis_shows_todays_us_news(self):
+        import time as _t
+        now = _t.time()
+        e = {"cal": {"t": 1, "jour": [{"titre": "Unemployment Claims", "t": int(now - 60), "impact": "Low", "prev": "220K"}]}}
+        lignes = align_bot.news_du_jour(e, maintenant=now)
+        self.assertEqual(lignes[0], "📰 NEWS USA DU JOUR")
+        self.assertIn("Unemployment Claims (prévu 220K) — sortie", lignes[1])
+
     def test_coach_speaks_with_first_name(self):
         etat = {}
         align_bot.retenir_prenom(etat, 5, {"first_name": "Adel K"})

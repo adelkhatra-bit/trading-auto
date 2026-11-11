@@ -2732,12 +2732,16 @@ def texte_apercu(m, r, cle):
     if cle.get("ordre") and not tr:
         o = cle["ordre"]
         lignes += [f"🟨 Zone surveillée : {px(min(o.get('za', o['e']), o.get('zb', o['e'])))} → {px(max(o.get('za', o['e']), o.get('zb', o['e'])))}"]
-    if r.get("news"):
+    jour_ = news_du_jour(DERNIER_ETAT) if DERNIER_ETAT else []
+    if jour_:
+        lignes += [""] + jour_
+    elif r.get("news"):
         lignes += [news_courte(r["news"])]
     lignes += ["", "👇 Détails : boutons ci-dessous", "ℹ️ Aucun ordre n'est envoyé automatiquement à ton broker."]
     return "\n".join(lignes)
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
+DERNIER_ETAT = {}           # état courant (calendrier des news) lu par les cartes d'analyse
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
 SL_RISQUE_MIN_ATR = 1.4      # stop jamais plus serré que 1,4 ATR 15 min (évite les SL pris par une simple mèche)
 SL_RISQUE_MIN_PCT = 0.0012   # ni plus serré que 0,12 % du prix
@@ -4483,6 +4487,10 @@ def calendrier(etat, maintenant):
                            for x in brut if x.get("country") == "USD" and (x.get("impact") == "High" or (
                                x.get("impact") == "Medium" and any(k in x.get("title", "") for k in ("Speaks", "FOMC", "Fed", "Powell", "PCE", "PPI", "CPI", "Jobless", "Claims",
                                                                         "Retail", "GDP", "ISM", "Payrolls", "JOLTS", "Sentiment", "Employment"))))]
+            # Toutes les annonces USD du jour (même faibles) : affichées dans l'analyse pour montrer le sérieux
+            cache["jour"] = [dict(titre=x["title"], t=int(datetime.datetime.fromisoformat(x["date"]).timestamp()),
+                                  impact=x.get("impact", ""), prev=x.get("forecast", ""), avant=x.get("previous", ""))
+                             for x in brut if x.get("country") == "USD" and x.get("impact") in ("High", "Medium", "Low")]
             cache["t"] = maintenant
         except Exception as ex:
             print("calendrier", ex)
@@ -4632,6 +4640,27 @@ def news_txt(etat, heures=4, n=2):
     if not proche:
         lignes.append(f"✅ Rien d'ici {heures} h")
     return "\n".join(lignes)
+
+IMPACT_IC = {"High": "🔴", "Medium": "🟠", "Low": "🟡"}
+
+def news_du_jour(etat, n=3, maintenant=None):
+    """Les annonces et discours USA d'AUJOURD'HUI (heure de Paris), déjà sortis ou à venir, même les petites."""
+    now = maintenant or time.time()
+    jour = datetime.datetime.fromtimestamp(now, PARIS).date()
+    cal = etat.get("cal", {})
+    evs = sorted((e for e in (cal.get("jour") or cal.get("ev") or [])
+                  if datetime.datetime.fromtimestamp(e["t"], PARIS).date() == jour), key=lambda e: e["t"])
+    if not evs:
+        return []
+    passes = [e for e in evs if e["t"] <= now][-n:]
+    avenir = [e for e in evs if e["t"] > now][:max(1, n - len(passes))]
+    lignes = ["📰 NEWS USA DU JOUR"]
+    for e in passes + avenir:
+        ic = "🎤" if "speak" in e["titre"].lower() else IMPACT_IC.get(e.get("impact"), "📰")
+        etat_ = "sortie ✅" if e["t"] <= now else dans_txt(e["t"] - now)
+        prevu = f" (prévu {e['prev']})" if e.get("prev") else ""
+        lignes.append(f"{ic} {heure(e['t'])} {court(e['titre'], 40)}{prevu} — {etat_}")
+    return lignes
 
 def prochaine_news(etat):
     """Prochaine annonce ou discours USA à fort impact (BTC et Gold y réagissent)."""
@@ -5812,6 +5841,8 @@ def un_tour(etat, chats):
 
     envois, derniers = [], {}
     calendrier(etat, int(time.time()))
+    global DERNIER_ETAT
+    DERNIER_ETAT = etat
     try:
         macro(etat)
     except Exception as ex:
