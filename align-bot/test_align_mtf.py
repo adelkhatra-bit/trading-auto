@@ -148,6 +148,17 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("FOREXCOM%3AXAUUSD", gold)
         self.assertIn("interval=240", gold)
 
+    def test_failed_telegram_analysis_delivery_is_not_marked_as_sent(self):
+        state = {}
+        market = "GOLD"
+        analysis = {"m1": [candle(1, c=4050.0)], "dirs": [0] * 11, "rsis": [50.0] * 11,
+                    "prix": 4050.0, "atr": 2.0, "confirme": 0}
+        with unittest.mock.patch.object(align_bot, "signature_analyse", return_value="sig-test"), \
+             unittest.mock.patch.object(align_bot, "armer_cloture"), \
+             unittest.mock.patch.object(align_bot, "_envoi_sur", return_value=None):
+            align_bot.envoyer_analyse_a(state, "chat-429", market, analysis, {})
+        self.assertNotIn("chat-429", state.get("vu_analyse", {}).get(market, {}))
+
     def test_entry_stop_uses_m15_structure_not_the_trigger_m5_wick(self):
         r = {"b15": [candle(0, l=98.0, h=102.0), candle(900, l=97.5, h=102.5),
                       candle(1800, l=97.0, h=103.0)], "atr": 2.0}
