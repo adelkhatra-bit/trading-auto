@@ -1080,8 +1080,8 @@ TRAD = {
 " · ALIGN ": " · ALIGN ",
 " · H1 ": " · H1 ",
 " · H4 ": " · H4 ",
-"🚫 Aucun ordre envoyé au broker.": "🚫 No order is sent to the broker."
- "🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
+"🚫 Aucun ordre envoyé au broker.": "🚫 No order is sent to the broker.",
+"🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
 "⛔ TROP TARD — le marché est déjà parti": "⛔ TOO LATE — the market has already moved",
 "😎 Patience, on trouve une autre entrée": "😎 Be patient, we'll find another entry",
 "⏳ 15 min / 1 h / 4 h pas alignées": "⏳ 15 min / 1 h / 4 h not aligned",
