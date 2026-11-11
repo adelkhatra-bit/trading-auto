@@ -953,21 +953,15 @@ def plan_cassure(r, d):
     if not casse or trop:
         return None
     e = r["m1"][-1]["c"]
-    # SL derrière la STRUCTURE (plus bas / plus haut des 3 dernières bougies 15 min), pas juste derrière la bougie de cassure :
-    # le retest de la cassure revient souvent chercher ces mèches. Au moins 1 bougie moyenne, jamais plus de 1,5.
-    if d == 1:
-        sl = min(min(x["l"] for x in b[-3:]), L - 0.5 * a) - 0.35 * a
-        sl = min(sl, e - 1.0 * a); sl = max(sl, e - RISQUE_MAX * a)
-    else:
-        sl = max(max(x["h"] for x in b[-3:]), L + 0.5 * a) + 0.35 * a
-        sl = max(sl, e + 1.0 * a); sl = min(sl, e + RISQUE_MAX * a)
-    if abs(e - sl) < max(a, e * 0.0008):
-        sl = e - d * max(a, e * 0.0008)
+    # Le déclencheur est M5, mais le SL protège la structure M15.
+    sl = stop_structure_15m(r, d, e)
+    if sl is None:
+        return None
     risque = abs(e - sl)
     t1, t2 = objectifs(r, d, e, risque)
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
-                src="cassure 5 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=bougie_protegee(b[-3:], d, sl), sl_ut="5 min")
+                src="cassure 5 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=bougie_protegee(r["b15"][-3:], d, sl), sl_ut="15 min")
 
 def stop_structure_15m(r, d, entry):
     """SL derrière la structure M15, pas derrière une seule mèche M5.
@@ -4266,7 +4260,6 @@ def point_entree(r, d, p):
         e = max(e, p)
         res4h = [v for v, n in r["grosses"] if n == "4h" and e < v < e + 3 * a]
         res1h = res4h or [v for v, n in r["grosses"] if n == "1h" and e < v < e + 3 * a]   # résistance la plus costaud d'abord (4h)
-        sl = max(H, min(res1h) if res1h else H) + 0.3 * a
     else:         # LONG : on achète un repli vers un support
         z50, z618, z786 = H - 0.5 * (H - L), H - 0.618 * (H - L), H - 0.786 * (H - L)
         cand = [(v, n) for v, n in r["niveaux"] if z786 - 0.3 * a <= v <= z50 + 0.3 * a and n in ("15m", "1h", "4h")]
@@ -4280,9 +4273,10 @@ def point_entree(r, d, p):
         e = min(e, p)
         sup4h = [v for v, n in r["grosses"] if n == "4h" and e - 3 * a < v < e]
         sup1h = sup4h or [v for v, n in r["grosses"] if n == "1h" and e - 3 * a < v < e]   # support le plus costaud d'abord (4h)
-        sl = min(L, max(sup1h) if sup1h else L) - 0.3 * a
-    if abs(e - sl) < max(a, e * 0.0008):
-        sl = e - d * max(a, e * 0.0008)
+    # Stop structurel M15 commun à toutes les entrées sur repli.
+    sl = stop_structure_15m(r, d, e)
+    if sl is None:
+        return None
     risque = abs(e - sl)
     # Grands objectifs : niveaux 4h / Daily uniquement (on vise les grosses unités de temps)
     t1, t2 = objectifs(r, d, e, risque)
@@ -4293,18 +4287,10 @@ def point_entree(r, d, p):
     else:
         zb, za = max(e, min(z50, p)), min(e, z786); za = max(za, sl + 0.25 * (e - sl))
     za, zb = min(za, zb), max(za, zb)
-    # SL serré : juste derrière le bas (LONG) / le haut (SHORT) de la zone, là où se fera la mèche de rejet
-    sl_serre = za - 0.6 * a if d == 1 else zb + 0.6 * a
-    if d * (sl_serre - sl) > 0:
-        sl = sl_serre
-    # Jamais de gros SL : si le risque dépasse 1,5 ATR, on attend un repli plus profond (entrée plus près du SL)
-    if abs(e - sl) > RISQUE_MAX * a:
-        e = sl + d * RISQUE_MAX * a
-        if d == 1: zb = max(za, min(zb, e))
-        else: za = min(zb, max(za, e))
+    # Le stop structurel n'est jamais rapproché artificiellement de la zone.
     risque = max(abs(e - sl), 1e-9)
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
-                za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(b, d, sl), sl_ut="5 min")
+                za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(r["b15"][-3:], d, sl), sl_ut="15 min")
 
 def coach(etat, m, r, cle):
     """Agent individuel : messages courts envoyés aux abonnés effectivement inscrits sur la position."""
@@ -4799,6 +4785,11 @@ def agent(m, r, cle, ferme):
                             f"🙅 Une mèche qui dépasse ne suffit pas : on attend la clôture\n🔔 Tiens-toi prêt", bouton_auto(m)))
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
         o = point_entree(r, d, p)
+        if o is None:
+            if r["t"] - cle.get("recalc_t", 0) >= 1800:
+                cle["recalc_t"] = r["t"]
+                out.append(f"⛔ {ICONE.get(m, '')} {m} : pas d'entrée — structure M15 absente ou stop trop éloigné. J'attends un setup exploitable sans resserrer le SL.")
+            return out
         # Refuser de poursuivre un mouvement déjà en haut/bas de sa zone, même si le repli projeté semble acceptable.
         bloque = bloque_dw(r, d, o["e"]) or bloque_dw(r, d, p)
         # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
