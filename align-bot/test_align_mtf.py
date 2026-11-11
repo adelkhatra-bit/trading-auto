@@ -539,12 +539,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             [align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons],
             [b["text"] for b in en_buttons],
         )
-        self.assertIn("❓ Why this decision?", [b["text"] for b in en_buttons])
-        self.assertIn("📊 Full analysis", [b["text"] for b in en_buttons])
-        self.assertIn("🎯 Levels / prices", [b["text"] for b in en_buttons])
-        self.assertIn("⏱ All timeframes", [b["text"] for b in en_buttons])
-        self.assertIn("🗂 Message history", [b["text"] for b in en_buttons])
-        self.assertIn("🔔 Follow the next position", [b["text"] for b in en_buttons])
+        self.assertEqual([b["text"] for b in en_buttons], ["🔔 Follow the next position"])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):
         labels = [
@@ -801,14 +796,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
         labels = [button["text"] for row in keyboard for button in row]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("❓ Pourquoi cette décision ?", labels)
-        self.assertIn("📊 Analyse complète", labels)
-        self.assertIn("🎯 Niveaux / prix", labels)
-        self.assertIn("🔔 Suivre la prochaine position", labels)
-        self.assertIn("why:GOLD", callbacks)
-        self.assertIn("details:GOLD", callbacks)
-        self.assertIn("levels:GOLD", callbacks)
-        self.assertIn("auto:GOLD", callbacks)
+        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
+        self.assertEqual(callbacks, ["auto:GOLD"])
 
     def test_active_trade_keyboard_has_manual_entry_and_exit_controls(self):
         import json
@@ -1576,7 +1565,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("timeframes:BTC", callbacks)
+        self.assertEqual(callbacks, ["auto:BTC"])
         update = {"update_id": 9210, "callback_query": {
             "id": "cb-timeframes", "data": "timeframes:BTC",
             "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
@@ -1600,12 +1589,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         labels = [button["text"] for row in keyboard for button in row]
-        self.assertIn("why:BTC", callbacks)
-        self.assertIn("details:BTC", callbacks)
-        self.assertIn("levels:BTC", callbacks)
-        self.assertIn("Pourquoi cette décision ?", " ".join(labels))
-        self.assertIn("Analyse complète", " ".join(labels))
-        self.assertIn("Niveaux / prix", " ".join(labels))
+        self.assertEqual(callbacks, ["auto:BTC"])
+        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
 
     def test_why_callback_returns_short_explanation_and_more_detail_buttons(self):
         from unittest.mock import patch
@@ -1904,10 +1889,7 @@ class TestTelegramCompactKeyboards(unittest.TestCase):
             self.assertFalse(any("tradingview.com" in url for url in urls))
         analysis = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in analysis for button in row]
-        self.assertIn("why:BTC", callbacks)
-        self.assertIn("details:BTC", callbacks)
-        self.assertIn("levels:BTC", callbacks)
-        self.assertIn("timeframes:BTC", callbacks)
+        self.assertEqual(callbacks, ["auto:BTC"])
 
 
 class TestTradingViewReportRegression(unittest.TestCase):
@@ -2075,7 +2057,7 @@ class TelegramSimpleMenuTest(unittest.TestCase):
             "from": {"id": 101}
         }}
         with patch.object(align_bot, "_envoi_sur") as send:
-            demandes = align_bot.traiter({}, set(), [update])
+            demandes = align_bot.traiter({"proprio": ["101"]}, set(), [update])
         self.assertEqual(demandes, [])
         self.assertIn("GOLD", str(send.call_args))
         self.assertIn("BTC", str(send.call_args))
@@ -2088,7 +2070,7 @@ class TelegramSimpleMenuTest(unittest.TestCase):
             "from": {"id": 101}
         }}
         with patch.object(align_bot, "_envoi_sur") as send:
-            demandes = align_bot.traiter({}, set(), [update])
+            demandes = align_bot.traiter({"proprio": ["101"]}, set(), [update])
         self.assertEqual(demandes, [])
         self.assertIn("followmarket:GOLD", str(send.call_args))
         self.assertNotIn("analysechoice", str(send.call_args))
