@@ -145,9 +145,9 @@ class AlignMtfRulesTest(unittest.TestCase):
         state = {"veille_cloture": {"BTC": {"123": {"tf": "5m", "dernier_t": 300, "restants": 1}}}}
         r = {"b5": [candle(300), candle(600, o=100, h=103, l=99, c=102)],
              "confirme": 0, "dirs": [0] * 11, "rsis": [50] * 11}
-        with patch.object(align_bot, "verdict", return_value=("ATTENDRE", "pas de confirmation")), \\
-             patch.object(align_bot, "alignement", return_value=(0, 0)), \\
-             patch.object(align_bot, "prochaine", return_value="Attendre"), \\
+        with patch.object(align_bot, "verdict", return_value=("ATTENDRE", "pas de confirmation")), \
+             patch.object(align_bot, "alignement", return_value=(0, 0)), \
+             patch.object(align_bot, "prochaine", return_value="Attendre"), \
              patch.object(align_bot, "_envoi_sur") as send:
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
