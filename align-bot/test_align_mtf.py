@@ -1935,9 +1935,12 @@ class TestTradingViewReportRegression(unittest.TestCase):
 
     def test_analysis_command_maps_to_market_selection_prompt(self):
         self.assertEqual(align_bot.COMMANDES["/faire_analyse"], "📊 Faire une analyse")
-        self.assertIn(("faire_analyse", "📊 Faire une analyse"), [
-            ("faire_analyse", "📊 Faire une analyse")
-        ])
+        from unittest.mock import patch
+        with patch.object(align_bot, "telegram") as api:
+            align_bot.installer_menu({})
+        import json
+        commands = json.loads(api.call_args_list[0].kwargs["commands"])
+        self.assertIn("faire_analyse", [x["command"] for x in commands])
 
     def test_installer_menu_refreshes_existing_version_four_users(self):
         from unittest.mock import patch
