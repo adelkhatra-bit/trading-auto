@@ -423,7 +423,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         }}
         bars = [{"c": 100.0} for _ in range(5)]
         bars[-1]["c"] = 101.0
-        result = align_bot.macro_confluence(etat, "GOLD", {"b15": bars})
+        result = align_bot.macro_confluence(etat, "GOLD", {"b15": bars}, maintenant=now)
         self.assertIn("FORTE HAUSSE", result["dollar_direction"])
         self.assertIn("COHÉRENT", result["controle_dxy_eurusd"])
         self.assertIn("DIVERGENCE HAUSSIÈRE", result["divergence_actif_dollar"])
