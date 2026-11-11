@@ -14,7 +14,8 @@ permissions:
 
 concurrency:
   group: align-bot
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  # Ne jamais interrompre une session d'analyse déjà lancée lors d'un push ou lancement manuel.
+  cancel-in-progress: false
 
 jobs:
   signaux:
