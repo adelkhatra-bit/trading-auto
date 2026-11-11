@@ -416,7 +416,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(change[1], 60)
 
     def test_macro_confluence_detects_dollar_impulse_and_asset_divergence_without_forcing_entry(self):
-        now = 10_000
+        now = align_bot.time.time()
         etat = {"macro": {
             "dxy": [(now - 3600, 100.0), (now, 100.30)],
             "eurusd": [(now - 3600, 1.1000), (now, 1.0960)]
@@ -429,8 +429,13 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("DIVERGENCE HAUSSIÈRE", result["divergence_actif_dollar"])
         self.assertIn("ne jamais inverser LONG/SHORT", result["regle"])
 
+    def test_dxy_fails_closed_when_the_latest_quote_is_stale(self):
+        now = align_bot.time.time()
+        state = {"macro": {"dxy": [(now - 7200, 100.0), (now - 3600, 100.5)]}}
+        self.assertIsNone(align_bot.dxy_info(state, maintenant=now))
+
     def test_macro_confluence_fails_closed_when_eurusd_or_dxy_history_is_too_short(self):
-        now = 10_000
+        now = align_bot.time.time()
         etat = {"macro": {"dxy": [(now - 240, 100.0), (now, 100.4)], "eurusd": []}}
         result = align_bot.macro_confluence(etat, "BTC", {"b15": [{"c": 100.0}] * 5})
         self.assertFalse(result["disponible"])
