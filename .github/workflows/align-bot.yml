@@ -3,7 +3,7 @@ name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
 on:
   push:
     branches: [main]
-    paths: ["align-bot/**", ".github/workflows/align-bot.yml"]
+    paths: ["align-bot/**", ".github/workflows/align-bot.yml", ".github/workflows/align-bot-validation.yml"]
   schedule:
     - cron: "0 */6 * * *"
   workflow_dispatch:
@@ -18,7 +18,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    uses: ./.github/workflows/align-bot-validation.yml
+
   signaux:
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 355
     defaults:
@@ -35,12 +39,6 @@ jobs:
           path: align-bot/state.json
           key: align-etat-${{ github.run_id }}
           restore-keys: align-etat-
-
-      - name: Vérifier la syntaxe Python et les tests de régression
-        working-directory: align-bot
-        run: |
-          python3 -m py_compile align_bot.py
-          python3 -m unittest -v test_align_mtf.py
 
       - name: Vérifier la connexion à Telegram sans envoyer de message
         working-directory: align-bot
