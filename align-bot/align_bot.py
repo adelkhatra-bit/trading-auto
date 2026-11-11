@@ -2562,7 +2562,7 @@ def traiter(etat, chats, updates):
                 if offset > 0:
                     boutons.append([{"text": "⬅️ Plus récents", "callback_data": f"history:{marche or 'x'}:{max(0, offset - 8)}"}])
                 if offset + 8 < total:
-                    boutons.append([{"text": "Plus anciens ➡️", "callback_data": f"history:{marche or 'x'}:{offset + 15}"}])
+                    boutons.append([{"text": "Plus anciens ➡️", "callback_data": f"history:{marche or 'x'}:{offset + 8}"}])
                 if marche:
                     boutons.append([{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{marche}"}])
                 _envoi_sur(qui, text=texte_historique(etat, qui, limite=8, offset=offset),
