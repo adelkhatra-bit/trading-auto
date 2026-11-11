@@ -1090,6 +1090,21 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(send.call_args.kwargs["reply_markup"])["inline_keyboard"]
         self.assertIn("rawdetails:GOLD", [b["callback_data"] for row in keyboard for b in row])
 
+    def test_raw_technical_details_callback_is_routed_and_responds(self):
+        from unittest.mock import patch
+        update = {"update_id": 99501, "callback_query": {
+            "id": "rawdetails-gold", "data": "rawdetails:GOLD",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        r = {"m1": [candle(1, c=100.0)], "dirs": [0] * 11, "confirme": 0, "b5": []}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "analyse_marche", return_value=r), \
+             patch.object(align_bot, "texte_etat", return_value="DONNEES TECHNIQUES GOLD"), \
+             patch.object(align_bot, "_envoi_sur") as send, \
+             patch.object(align_bot, "telegram"):
+            align_bot.traiter({}, set(), [update])
+        self.assertEqual(send.call_args.kwargs["text"], "DONNEES TECHNIQUES GOLD")
+
 
     def test_verified_external_ai_provider_is_named_in_telegram_commentary(self):
         from unittest.mock import patch
