@@ -175,12 +175,31 @@ class AlignMtfRulesTest(unittest.TestCase):
         sl = align_bot.stop_structure_15m(r, -1, 100.0)
         self.assertGreater(sl, max(x["h"] for x in r["b15"]))
 
+    def test_gold_analysis_choice_callback_returns_only_gold_request(self):
+        from unittest.mock import patch
+        update = {"update_id": 99101, "callback_query": {
+            "id": "gold-analysis", "data": "analysechoice:GOLD",
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "telegram"):
+            self.assertEqual(align_bot.traiter({}, set(), [update]), [("123", "GOLD")])
+
+    def test_both_analysis_choice_callback_returns_both_markets(self):
+        from unittest.mock import patch
+        update = {"update_id": 99102, "callback_query": {
+            "id": "both-analysis", "data": "analysechoice:BOTH",
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "telegram"):
+            self.assertEqual(align_bot.traiter({}, set(), [update]), [("123", "BTC"), ("123", "GOLD")])
+
     def test_breakout_uses_closed_5m_bars(self):
         bars = [candle(i) for i in range(21)]
         bars.append(candle(21, o=100.5, h=103.0, l=100.2, c=102.0))
         r = {
             "b5": bars, "atr5": 1.0, "atr": 1.0, "r5": [50.0],
             "m1": [candle(22, o=101.0, h=102.0, l=100.8, c=102.0)],
+            "b15": [candle(0, l=98.0), candle(900, l=98.5), candle(1800, l=99.0)],
             "grosses": []
         }
         plan = align_bot.plan_cassure(r, 1)
