@@ -98,7 +98,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         with patch.object(align_bot.time, "time", return_value=7200):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
         self.assertIn("DIRECTION : 4 h LONG — confirmation 1 h manquante", message)
-        self.assertIn("PROCHAINE CLÔTURE 1h : 1 h 00 min 00 s", message)
+        self.assertIn("⏳ PROCHAINE CLÔTURE 1h", message)
+        self.assertIn("⏱ Temps restant : 1 h 00 min 00 s", message)
         self.assertNotIn("PROCHAINE CLÔTURE 5m", message)
         self.assertIn("J'attends une clôture 1 h", message)
 
@@ -359,7 +360,9 @@ class AlignMtfRulesTest(unittest.TestCase):
                 with patch.object(align_bot, "prochaine", return_value="Pas encore de sens"):
                     msg = align_bot.texte_cloture("GOLD", "5m", candle(300, o=4029.73, h=4032, l=4028, c=4031.11), r, {})
         self.assertTrue(msg.startswith("🔴 SIGNAL NON CONFIRMÉ"))
-        self.assertLess(msg.index("🔴 SIGNAL NON CONFIRMÉ"), msg.index("🕯 CLÔTURE 5m"))
+        self.assertLess(msg.index("🔴 SIGNAL NON CONFIRMÉ"), msg.index("🕯 BOUGIE 5m CLÔTURÉE"))
+        self.assertIn("BOUGIE 5m CLÔTURÉE", msg)
+        self.assertNotIn("CLÔTURE 5m —", msg)
         self.assertIn("N'ENTRE PAS", msg)
         self.assertIn("POURQUOI", msg)
         self.assertIn("CE QUE TU DOIS FAIRE", msg)
@@ -403,6 +406,22 @@ class AlignMtfRulesTest(unittest.TestCase):
             self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m"), 900)
         with patch.object(align_bot.time, "time", return_value=900.0):
             self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m"), 1200)
+
+    def test_chronometer_keeps_remaining_duration_and_paris_close_time_on_separate_lines(self):
+        from unittest.mock import patch
+        dirs = [0] * 11
+        dirs[9] = 1
+        r = {
+            "m1": [candle(7200, c=4031.42)],
+            "dirs": dirs, "confirme": 0, "atr": 1.0,
+            "b1h": [candle(3600)], "b4h": [candle(0)]
+        }
+        with patch.object(align_bot.time, "time", return_value=7200):
+            message = align_bot.chrono_txt("GOLD", r, {}, 0)
+        self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 1 h 00 min 00 s\n🕒 Heure prévue : 04:00:00 (heure de Paris)", message)
+        formatted = align_bot.mise_en_forme(message)
+        self.assertIn("⏱ Temps restant\n1 h 00 min 00 s", formatted)
+        self.assertIn("🕒 Heure prévue\n04:00:00 (heure de Paris)", formatted)
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
         from unittest.mock import patch
@@ -1184,7 +1203,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(lines[0], "🔴 SIGNAL NON CONFIRMÉ")
         self.assertIn("🚫 N'ENTRE PAS", message)
         self.assertIn("ATTENDS LE PROCHAIN SIGNAL", message)
-        self.assertIn("🕯 CLÔTURE 1h", message)
+        self.assertIn("🕯 BOUGIE 1h CLÔTURÉE", message)
         self.assertIn("🟠 BTC", message)
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
                          "TENDANCE MULTI-UNITÉS", "4 h\nSHORT", "Confirmation 1 h\nSHORT", "2/2", "DÉCISION ALIGN",
@@ -1229,7 +1248,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 message = align_bot.texte_cloture("BTC", tf, b, r, {})
                 self.assertEqual(message.splitlines()[0], "🔴 SIGNAL NON CONFIRMÉ")
                 self.assertEqual(message.splitlines()[1], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
-                self.assertIn(f"🕯 CLÔTURE {tf}", message)
+                self.assertIn(f"🕯 BOUGIE {tf} CLÔTURÉE", message)
 
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
         from unittest.mock import patch
