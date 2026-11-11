@@ -1581,7 +1581,7 @@ def maj_chronos(etat, m, r):
                 ch.pop(cid, None)
                 etat.setdefault("auto", {})[m] = [x for x in etat["auto"].get(m, []) if str(x) != str(cid)]
                 telegram("editMessageText", chat_id=cid, message_id=c["mid"],
-                         text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\\n😎 La position n'est pas venue : pas de mauvaise entrée\\n🎯 Réappuie sur le bouton pour la prochaine")
+                         text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n😎 La position n'est pas venue : pas de mauvaise entrée\n🎯 Réappuie sur le bouton pour la prochaine")
                 continue
             seconde = int(now)
             if c.get("derniere_seconde") != seconde:
@@ -1681,9 +1681,9 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
     sig = signature_analyse(m, r, cle); der = vu.get(str(cid))
     if der and der["sig"] == sig and time.time() - der["t"] < 1200:
-        lignes = chrono_txt(m, r, cle, time.time()).split("\\n")
+        lignes = chrono_txt(m, r, cle, time.time()).split("\n")
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
-        _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\\n".join(
+        _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\n".join(
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
              f"🕒 Analyse de référence : {heure(der['t'])}",
              "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
