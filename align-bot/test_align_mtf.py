@@ -108,6 +108,31 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertNotIn("LONG est confirmé", reason)
         self.assertNotIn("SHORT est confirmé", reason)
 
+
+    def test_long_entry_zone_waits_for_pullback_from_above(self):
+        from unittest.mock import patch
+        dirs = [0] * 11
+        dirs[7] = dirs[9] = 1
+        r = {"dirs": dirs, "confirme": 1, "m1": [candle(1, c=102.0)]}
+        order = {"d": 1, "e": 100.0, "za": 99.0, "zb": 101.0}
+        with patch.object(align_bot, "etire", return_value=False), \
+             patch.object(align_bot, "bloque_dw", return_value=False):
+            reason = align_bot.raison_attente(r, {"ordre": order})
+        self.assertIn("j'attends qu'il redescende", reason)
+        self.assertNotIn("remonte dans cette zone", reason)
+
+    def test_short_entry_zone_waits_for_rebound_from_below(self):
+        from unittest.mock import patch
+        dirs = [0] * 11
+        dirs[7] = dirs[9] = -1
+        r = {"dirs": dirs, "confirme": -1, "m1": [candle(1, c=98.0)]}
+        order = {"d": -1, "e": 100.0, "za": 99.0, "zb": 101.0}
+        with patch.object(align_bot, "etire", return_value=False), \
+             patch.object(align_bot, "bloque_dw", return_value=False):
+            reason = align_bot.raison_attente(r, {"ordre": order})
+        self.assertIn("j'attends qu'il remonte", reason)
+        self.assertNotIn("redescende dans cette zone", reason)
+
     def test_existing_auto_reservations_are_migrated_to_multi_timeframe_watch(self):
         from unittest.mock import patch
         state = {

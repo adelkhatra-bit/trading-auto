@@ -1628,12 +1628,17 @@ def raison_attente(r, cle):
         return f"La tendance {sens} existe, mais le prix est dans une zone Daily/Weekly extrême. J'attends un meilleur prix ou un retournement confirmé."
     if not o:
         return f"La direction {sens} est confirmée, mais aucun point d'entrée propre n'est encore validé. J'attends que le prix construise un repli exploitable."
+    d = o.get("d", d)
     p = r.get("m1", [{}])[-1].get("c") if r.get("m1") else None
     bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
-    if p is not None and p < bas:
-        return f"Le biais {sens} est confirmé. Le prix est à {px(p)} et n'a pas encore rejoint la zone d'entrée {px(bas)}–{px(haut)}."
-    if p is not None and p > haut:
-        return f"Le biais {sens} est confirmé. Le prix est à {px(p)} et reste au-dessus de la zone d'entrée {px(bas)}–{px(haut)}. J'attends le repli."
+    if p is not None and d == 1 and p > haut:
+        return f"Le biais LONG est confirmé. Le prix est à {px(p)}, au-dessus de la zone {px(bas)}–{px(haut)}. Je n'achète pas au prix actuel : j'attends qu'il redescende dans cette zone."
+    if p is not None and d == 1 and p < bas:
+        return f"Le biais LONG est confirmé, mais le prix est déjà passé sous la zone {px(bas)}–{px(haut)}. Je n'achète pas en retard : j'attends un nouveau point d'entrée."
+    if p is not None and d == -1 and p < bas:
+        return f"Le biais SHORT est confirmé. Le prix est à {px(p)}, sous la zone {px(bas)}–{px(haut)}. Je ne vends pas au prix actuel : j'attends qu'il remonte dans cette zone."
+    if p is not None and d == -1 and p > haut:
+        return f"Le biais SHORT est confirmé, mais le prix est déjà passé au-dessus de la zone {px(bas)}–{px(haut)}. Je ne vends pas en retard : j'attends un nouveau point d'entrée."
     if cle.get("traverse"):
         return f"Le prix a traversé la zone {px(bas)}–{px(haut)} sans rejet valide. Pas d'entrée : j'attends une mèche de rejet puis une clôture 5 min dans le sens {sens}."
     return f"Le prix travaille la zone d'entrée {px(bas)}–{px(haut)}, mais je n'ai pas encore de rejet confirmé par une clôture 5 min. Une mèche seule ne suffit pas."
