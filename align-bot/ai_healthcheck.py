@@ -29,26 +29,40 @@ messages = [
         "courte confirmant que tu as reçu ce test. N'invente aucun prix ni signal."
     )},
 ]
-attempts = []
+attempts, connecte = [], ""
 for name, url, model, key, needs_key in align_bot.IA_FOURNISSEURS:
     if needs_key and not key:
         attempts.append(name + "=NOT_CONFIGURED")
         print(f"AI_PROVIDER_STATUS {name}=NOT_CONFIGURED", flush=True)
+        if name == "Anthropic":
+            print("ANTHROPIC=NOT_CONFIGURED", flush=True)
         continue
+    if not needs_key and connecte:
+        continue                                  # IA sans clé : inutile de toutes les tester si une IA répond déjà
     try:
-        # Même fonction HTTP, même modèle, même extraction et même seuil
-        # minimal que le véritable commentaire produit par le bot.
+        # Même fonction HTTP, même modèle, même extraction et même seuil minimal que le véritable commentaire produit par le bot.
         reply = align_bot._appel_ia(url, model, key, messages)
         attempts.append(name + "=CONNECTED")
         print(f"AI_PROVIDER_STATUS {name}=CONNECTED model={model}", flush=True)
-        print("AI_EXTERNAL_REPLY=" + " ".join(reply.split())[:220], flush=True)
-        write_summary("CONNECTED", name, ", ".join(attempts))
-        sys.exit(0)
+        if name == "Anthropic":
+            print("ANTHROPIC=CONNECTED", flush=True)
+        if not connecte:
+            connecte = name
+            print("AI_EXTERNAL_REPLY=" + " ".join(reply.split())[:220], flush=True)
     except Exception as exc:
-        attempts.append(name + "=" + align_bot.detail_erreur_ia(exc, key)[:40])
-        print(f"AI_PROVIDER_STATUS {name}=ERROR", flush=True)
-        print("AI_PROVIDER_CHECK_FAILED", name, "model=" + model, align_bot.detail_erreur_ia(exc, key), flush=True)
+        detail_ = align_bot.detail_erreur_ia(exc, key)
+        etat_ = "NO_CREDIT" if name == "Anthropic" and align_bot.erreur_sans_credit(detail_) else "ERROR"
+        attempts.append(name + "=" + (etat_ if etat_ == "NO_CREDIT" else detail_[:40]))
+        print(f"AI_PROVIDER_STATUS {name}={etat_}", flush=True)
+        if name == "Anthropic":
+            print(f"ANTHROPIC={etat_}", flush=True)         # NO_CREDIT n'est pas une panne : le bot bascule sur les IA gratuites
+        if name.startswith("Gemini"):
+            print(f"GEMINI_HTTP {name} model={model} {detail_[:160]}", flush=True)
+        print("AI_PROVIDER_CHECK_FAILED", name, "model=" + model, detail_, flush=True)
 
+if connecte:
+    write_summary("CONNECTED", connecte, ", ".join(attempts))
+    sys.exit(0)
 write_summary("UNAVAILABLE", "", ", ".join(attempts))
 # Code non nul pour signaler l'indisponibilité ; le workflow est non bloquant.
 # avis_ia() utilise alors le verdict et la stratégie MTF internes, sans simuler une IA.
