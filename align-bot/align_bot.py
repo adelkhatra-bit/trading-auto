@@ -2440,7 +2440,7 @@ def inscrire_auto(etat, cid, m, notifier=True):
             "🙅 Ne place pas d'ordre sur une zone qui n'a pas encore été calculée."
         ]
     lignes += [
-        "🔔 Je t'expliquerai chaque clôture utile : 5 min, 15 min, 1 h et 4 h.",
+        "🔔 Je t'alerterai à la prochaine clôture utile pour débloquer la décision. Toutes les unités restent consultables avec le bouton « Toutes les unités ».",
         "🤖 Si ALIGN déclenche une position, ton suivi interne sera activé automatiquement.",
         "ℹ️ Aucun ordre n'est envoyé à ta plateforme : tu gardes la main sur l'exécution.",
         "🎯 Le coach suit ensuite le SL, le passage à BE et les TP.",
@@ -2548,7 +2548,10 @@ def armer_clotures_multi(etat, cid, m, r):
     surveillances[str(cid)] = {
         "multi": True,
         "derniers_t": derniers,
-        "expire": time.time() + CHRONO_MAX
+        # Le suivi peut attendre une clôture H4 presque 4 h plus tard.
+        # Une marge évite que l'expiration et la clôture soient traitées dans le mauvais ordre.
+        "expire": time.time() + CHRONO_MAX + 300,
+        "h4_close_grace_v1": True
     }
 
 
@@ -2559,6 +2562,10 @@ def synchroniser_veille_auto(etat, m, r):
         suivi = surveillances.get(str(cid), {})
         if not suivi.get("multi"):
             armer_clotures_multi(etat, cid, m, r)
+        elif not suivi.get("h4_close_grace_v1"):
+            # Migration unique des suivis déjà actifs : ne pas prolonger leur durée à chaque tour.
+            suivi["expire"] = float(suivi.get("expire", time.time())) + 300
+            suivi["h4_close_grace_v1"] = True
 
 
 def texte_cloture(m, tf, bougie, r, cle):
