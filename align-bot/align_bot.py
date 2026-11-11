@@ -1941,14 +1941,16 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
 def donnees_ia(m, r, cle):
     titre, raison = verdict(r, cle)
     o = (cle or {}).get("ordre") or {}
+    dirs = r.get("dirs") or [0] * 11
+    rsis = r.get("rsis") or [50] * 11
     data = {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
-            "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
-            "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
+            "sens 1m/5m/15m/1h/4h/Daily": [dirs[i] if len(dirs) > i else 0 for i in (0, 2, 4, 7, 9, 10)],
+            "RSI 5m/15m/1h/4h": [round(rsis[i]) if len(rsis) > i else 50 for i in (2, 4, 7, 9)],
             "profil_strategie": profil_strategie(r),
             "plan_indicateur_tradingview": plan_indicateur(r),
             "snapshots_indicateur_tradingview": (r.get("tv_indicator_mtf") or {}).get("snapshots", {}),
-            "lecture_multi_unites": {"M5": r["dirs"][2], "M15": r["dirs"][4], "H1": r["dirs"][7], "H4": r["dirs"][9]},
-            "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
+            "lecture_multi_unites": {"M5": dirs[2] if len(dirs) > 2 else 0, "M15": dirs[4] if len(dirs) > 4 else 0, "H1": dirs[7] if len(dirs) > 7 else 0, "H4": dirs[9] if len(dirs) > 9 else 0},
+            "position Daily (0 bas, 1 haut)": round(r.get("posD", 0.5), 2), "position Weekly": round(r.get("posW", 0.5), 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
@@ -3697,7 +3699,7 @@ def destinataires_message(etat, chats, texte):
     # La chaîne VIP reste commune et reçoit les deux marchés, sans préférence individuelle.
     if etat.get("canal"):
         cibles.append(str(etat["canal"]))
-    return list(dict.fromkeys(cibles))
+    return sorted(set(cibles))
 
 def destinataires(etat, chats):
     """Téléphones qui reçoivent les signaux + la chaîne VIP."""
