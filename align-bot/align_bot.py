@@ -413,8 +413,10 @@ def analyser(pair):
     except Exception:
         pass
     atr5 = atr(m5, 14)[-1] if len(m5) >= 15 else a
-    return dict(fvg=fvg, niv_cles=niv_cles, asie=asie, distrib=distrib, accum=accum, div4h=div4h, b5=m5[-30:], atr5=atr5, ema5=ema([x["c"] for x in m5], 20)[-1], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
-                grosses=grosses, b15=b[-30:], ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
+    return dict(fvg=fvg, niv_cles=niv_cles, asie=asie, distrib=distrib, accum=accum, div4h=div4h,
+                b5=m5[-30:], b15=m15[-30:], b1h=h1[-30:], b4h=h4[-30:], bd=d1[-30:], bw=w1[-30:],
+                atr5=atr5, ema5=ema([x["c"] for x in m5], 20)[-1], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
+                grosses=grosses, ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
 
@@ -1213,7 +1215,7 @@ def mise_en_forme(t):
             label = niveau.group("label").strip().rstrip(" :：≈=")
             value = niveau.group("value").strip()
             detail = (niveau.group("detail") or "").strip()
-            detail = re.sub(r"^[()\\[\\]—–,:; ]+|[()\\[\\] ]+$", "", detail)
+            detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             if out and out[-1]:
                 out.append("")
             out.append(label)
@@ -1221,6 +1223,15 @@ def mise_en_forme(t):
             if detail:
                 out.append(detail)
             out.append("")
+            continue
+        mesure = re.match(
+            r"^(?P<label>(?:Basse|Haute|Bas|Haut|Low|High|Support|Résistance|Resistance))\s+"
+            r"(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)$",
+            l, re.IGNORECASE)
+        if mesure:
+            if out and out[-1]:
+                out.append("")
+            out += [mesure.group("label"), mesure.group("value"), ""]
             continue
         mt = re.search(r" ?: | ≈ ", l)
         if mt and not l.startswith(("ℹ️", "RSI")):
@@ -1252,12 +1263,15 @@ def telegram(methode, **params):
     return http_json(url, urllib.parse.urlencode(params).encode())
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "✅ Je suis rentré"}, {"text": "🚪 Je suis sorti"}],
-                                   [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}], [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
+CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
+                                   [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
+                                   [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
                                    [{"text": "🌐 English"}]],
-                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}], [{"text": "💎 Devenir VIP"}], [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
-                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Utilise les boutons 👇"})
+                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
+                                            [{"text": "💎 Devenir VIP"}],
+                                            [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
+                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
@@ -1466,14 +1480,66 @@ def avis_ia(etat, m, r, cle):
     return "🧠 L'avis ALIGN (analyse interne)\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
 
 def bouton_auto(m):
-    return json.dumps({"inline_keyboard": [[{"text": "🎯 Je rentre dans la prochaine position", "callback_data": f"auto:{m}"}]]})
+    return json.dumps({"inline_keyboard": [[{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
+
+def bouton_rappel(m):
+    """Rappelle la bonne analyse de marché, même si un autre marché a envoyé des messages depuis."""
+    return json.dumps({"inline_keyboard": [
+        [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
+        [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
+    ]})
 
 def markup_analyse(etat, m, r):
-    """Après chaque analyse, proposer le suivi de la prochaine position, même si le setup n'est pas encore prêt."""
+    """Clavier inline de la fiche : détails, niveaux et action explicite sur la position."""
     cle = etat.get(m, {})
-    if not cle.get("trade"):
-        return bouton_auto(m)
-    return CLAVIER
+    lignes = [
+        [{"text": "ℹ️ Comprendre l'analyse", "callback_data": f"details:{m}"},
+         {"text": "📊 Voir les niveaux", "callback_data": f"levels:{m}"}]
+    ]
+    if cle.get("trade"):
+        lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
+                       {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
+    else:
+        lignes.append([{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
+    return json.dumps({"inline_keyboard": lignes})
+
+def texte_apercu(m, r, cle):
+    """Fiche synthétique ; l'intégralité des données reste accessible via le bouton Comprendre l'analyse."""
+    maj, n_ok = alignement(r)
+    titre, raison = verdict(r, cle)
+    biais = ("🟢 HAUSSIER" if maj == 1 else "🔴 BAISSIER" if maj == -1 else "🟠 NON CONFIRMÉ")
+    prix = r["m1"][-1]["c"]
+    lignes = [
+        f"{ICONE.get(m, '📊')}  ALIGN MTF  •  {m}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "💹 PRIX ACTUEL",
+        f"{px(prix)}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🧭 TENDANCE DU MARCHÉ",
+        biais,
+        "📡 CONFIRMATION 1H + 4H",
+        f"{n_ok}/2  {'✅ CONFIRMÉ' if r.get('confirme') else '⏳ EN ATTENTE'}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🚦 DÉCISION ALIGN",
+        str(titre),
+    ]
+    if raison:
+        lignes.append(str(raison))
+    if cle.get("trade"):
+        tr = cle["trade"]
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "📍 POSITION EN COURS",
+                   f"{'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'}",
+                   f"🎯 TP visé : {px(tr['tp2'] if tr.get('statut') == 'tp1' else tr['tp1'])}"]
+    elif cle.get("ordre"):
+        o = cle["ordre"]
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "🟨 ZONE DE PRÉPARATION",
+                   f"{px(o.get('za', o['e']))} → {px(o.get('zb', o['e']))}"]
+    else:
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "⏳ PROCHAINE ACTION", str(prochaine(r, cle))]
+    if r.get("news"):
+        lignes += ["━━━━━━━━━━━━━━━━━━━━", "📰 ACTUALITÉS", str(r["news"])]
+    lignes += ["", "ℹ️ Les indicateurs, RSI, zones, FVG, stratégie et explications sont disponibles avec « Comprendre l'analyse »."]
+    return "\n".join(lignes)
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
@@ -1515,7 +1581,7 @@ def chrono_txt(m, r, cle, t0):
     return "\n".join(l)
 
 def maj_chronos(etat, m, r):
-    """Met à jour chaque chronomètre (1 fois par minute). Fin : entrée, ou délai max dépassé."""
+    """Actualise le compte à rebours à la seconde pendant que le processus Telegram tourne."""
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
     cle = etat.get(m, {})
     for cid, c in list(ch.items()):
@@ -1531,9 +1597,12 @@ def maj_chronos(etat, m, r):
                 telegram("editMessageText", chat_id=cid, message_id=c["mid"],
                          text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n😎 La position n'est pas venue : pas de mauvaise entrée\n🎯 Réappuie sur le bouton pour la prochaine")
                 continue
-            if now - c.get("maj", 0) >= 60:
+            seconde = int(now)
+            if c.get("derniere_seconde") != seconde:
+                c["derniere_seconde"] = seconde
                 c["maj"] = now
-                telegram("editMessageText", chat_id=cid, message_id=c["mid"], text=chrono_txt(m, r, cle, c["t0"]))
+                telegram("editMessageText", chat_id=cid, message_id=c["mid"],
+                         text=chrono_txt(m, r, cle, c["t0"]))
         except Exception as ex:
             if "not modified" not in str(ex):
                 print("chrono", ex)
@@ -1621,19 +1690,88 @@ def signature_analyse(m, r, cle):
     o = cle.get("ordre") or {}
     return "|".join([titre, str(r["confirme"]), str(bool(cle.get("trade"))), str(round(o.get("e", 0) / max(r["atr"], 1e-9)))])
 
+def timeframe_attendu(r, cle):
+    """Un seul horizon décisionnel est surveillé à la fois, selon l'étape réelle de la stratégie."""
+    if cle.get("trade") or cle.get("ordre") or cle.get("prep") or cle.get("attente_rsi") or cle.get("attente_rejet"):
+        return "5m"
+    if not r.get("confirme"):
+        return "1h" if r.get("dirs", [0] * 10)[9] else "4h"
+    return "15m"
+
+
+def armer_cloture(etat, cid, m, r, cle):
+    """Mémorise la prochaine clôture attendue après une demande explicite d'analyse."""
+    tf = timeframe_attendu(r, cle)
+    champs = {"5m": "b5", "15m": "b15", "1h": "b1h", "4h": "b4h", "D": "bd", "W": "bw"}
+    bars = r.get(champs[tf], [])
+    if not bars:
+        return
+    surveillances = etat.setdefault("veille_cloture", {}).setdefault(m, {})
+    surveillances[str(cid)] = {"tf": tf, "dernier_t": int(bars[-1]["t"]), "restants": 3}
+
+
+def texte_cloture(m, tf, bougie, r, cle):
+    """Compte rendu déterministe fondé sur une bougie entièrement clôturée et les règles ALIGN."""
+    d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
+    couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
+    titre, raison = verdict(r, cle)
+    maj, n_ok = alignement(r)
+    confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (1h + 4h)"
+    decision = str(titre)
+    lignes = [f"🕯 CLÔTURE CONFIRMÉE — {ICONE.get(m, '📊')} {m}",
+              f"⏱ Unité de temps : {tf}",
+              f"📍 Bougie terminée à {heure(bougie['t'] + {'5m':300,'15m':900,'1h':3600,'4h':14400,'D':86400,'W':604800}[tf])}",
+              f"📊 Bougie {couleur} • ouverture {px(bougie['o'])} • clôture {px(bougie['c'])}",
+              f"🧭 Alignement 1h + 4h : {confirmation}",
+              f"🚦 Décision ALIGN : {decision}"]
+    if raison:
+        lignes.append(str(raison))
+    lignes += [f"➡️ Étape suivante : {prochaine(r, cle)}",
+               "⚠️ Une clôture de bougie n'est pas, à elle seule, une confirmation d'entrée. Aucun ordre broker n'est envoyé."]
+    return "\n".join(lignes)
+
+
+def notifier_clotures(etat, m, r, cle):
+    """Alerte une seule fois par nouvelle bougie complète, uniquement aux utilisateurs ayant demandé l'analyse."""
+    champs = {"5m": "b5", "15m": "b15", "1h": "b1h", "4h": "b4h", "D": "bd", "W": "bw"}
+    for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
+        tf = suivi.get("tf")
+        bars = r.get(champs.get(tf, ""), [])
+        if not bars:
+            continue
+        close = next((b for b in bars if int(b["t"]) > int(suivi.get("dernier_t", 0))), None)
+        if not close:
+            continue
+        suivi["dernier_t"] = int(close["t"])
+        _envoi_sur(cid, text=texte_cloture(m, tf, close, r, cle),
+                   reply_markup=markup_analyse(etat, m, r))
+        suivi["restants"] = int(suivi.get("restants", 1)) - 1
+        if suivi["restants"] <= 0 or cle.get("trade"):
+            etat["veille_cloture"][m].pop(cid, None)
+
+
 def envoyer_analyse_a(etat, cid, m, r, cle):
-    """Analyse à la demande. Rien n'a bougé depuis la dernière (moins de 20 min) → message court : regarde au-dessus + estimation."""
+    """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
     sig = signature_analyse(m, r, cle); der = vu.get(str(cid))
     if der and der["sig"] == sig and time.time() - der["t"] < 1200:
+        armer_cloture(etat, cid, m, r, cle)
         lignes = chrono_txt(m, r, cle, time.time()).split("\n")
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
-        _envoi_sur(cid, reply_markup=CLAVIER, text="\n".join(
+        _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\n".join(
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
-             f"👆 Mon analyse de {heure(der['t'])} est juste au-dessus : elle est toujours bonne"] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
+             f"🕒 Analyse de référence : {heure(der['t'])}",
+             "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
         return
     vu[str(cid)] = {"sig": sig, "t": time.time()}
-    _envoi_sur(cid, text=texte_etat(m, r, cle), reply_markup=markup_analyse(etat, m, r))
+    armer_cloture(etat, cid, m, r, cle)
+    res = telegram("sendMessage", chat_id=cid, text=texte_apercu(m, r, cle),
+                   reply_markup=markup_analyse(etat, m, r))
+    try:
+        vu[str(cid)]["mid"] = res["result"]["message_id"]
+    except (KeyError, TypeError):
+        pass
+    # L'avis IA reste envoyé séparément : aucune information existante n'est supprimée.
     a_ = avis_ia(etat, m, r, cle)
     if a_:
         _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
@@ -1956,6 +2094,98 @@ def traiter(etat, chats, updates):
         if cb:
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
+            if choix == "previous" and mk in MARCHES:
+                if not autorise(etat, qui, cb.get("from", {}).get("id")):
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Analyse réservée aux VIP")
+                    except Exception:
+                        pass
+                    _envoi_sur(qui, text="🔒 Le rappel de l'analyse complète est réservé aux VIP.",
+                               **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}))
+                    continue
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text=f"📌 Analyse {mk}")
+                except Exception:
+                    pass
+                reference = etat.get("vu_analyse", {}).get(mk, {}).get(qui, {})
+                mid = reference.get("mid")
+                if mid:
+                    try:
+                        telegram("copyMessage", chat_id=qui, from_chat_id=qui, message_id=mid)
+                    except Exception as ex:
+                        print("rappel analyse", qui, mk, ex)
+                        r_ref = DERNIERS.get(mk)
+                        if r_ref:
+                            _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
+                                      reply_markup=markup_analyse(etat, mk, r_ref))
+                        else:
+                            _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est plus disponible. Relance l'analyse du marché.")
+                else:
+                    r_ref = DERNIERS.get(mk)
+                    if r_ref:
+                        res = _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
+                                         reply_markup=markup_analyse(etat, mk, r_ref))
+                        if res and res.get("ok"):
+                            etat.setdefault("vu_analyse", {}).setdefault(mk, {}).setdefault(qui, {})["mid"] = res["result"]["message_id"]
+                    else:
+                        _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est pas encore disponible. Appuie sur Analyse {mk}.")
+                continue
+            if choix in ("details", "levels") and mk in MARCHES:
+                if not autorise(etat, qui, cb.get("from", {}).get("id")):
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Détails réservés aux VIP")
+                    except Exception:
+                        pass
+                    _envoi_sur(qui, text="🔒 Les détails complets et les niveaux sont réservés aux VIP.",
+                               **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}))
+                    continue
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📊 Informations")
+                except Exception:
+                    pass
+                r_detail = DERNIERS.get(mk)
+                if r_detail is None:
+                    try:
+                        r_detail = analyse_marche(etat, MARCHES[mk])
+                    except Exception as ex:
+                        print("détails analyse", ex)
+                        _envoi_sur(qui, text="⚠️ Les détails sont momentanément indisponibles. Réessaie avec le bouton Analyse.")
+                        continue
+                cle_detail = etat.get(mk, {})
+                if choix == "details":
+                    _envoi_sur(qui, text=texte_etat(mk, r_detail, cle_detail, vip=True),
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Voir les niveaux", "callback_data": f"levels:{mk}"}],
+                                                                                 [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
+                else:
+                    tr_detail = cle_detail.get("trade")
+                    if tr_detail:
+                        txt_niveaux = fmt_trade(mk, tr_detail, r_detail["m1"][-1]["c"])
+                    elif cle_detail.get("ordre"):
+                        txt_niveaux = ("🟨 ZONE DE PRÉPARATION\n" + statut_txt(0, cle_detail["ordre"]).strip()
+                                       + "\n⏳ Aucun déclenchement confirmé : attendre la clôture prévue.")
+                    else:
+                        txt_niveaux = ("📊 NIVEAUX ALIGN\n⏳ Aucun plan d'entrée confirmé pour le moment.\n"
+                                       "Le bot attend les confirmations de sa stratégie avant de publier des niveaux.")
+                    _envoi_sur(qui, text=txt_niveaux,
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "ℹ️ Comprendre l'analyse", "callback_data": f"details:{mk}"},
+                                                                             {"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
+                continue
+            if choix == "resume" and mk in MARCHES:
+                if not autorise(etat, qui, cb.get("from", {}).get("id")):
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Réservé aux VIP")
+                    except Exception:
+                        pass
+                    continue
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="Analyse")
+                except Exception:
+                    pass
+                r_resume = DERNIERS.get(mk)
+                if r_resume:
+                    _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {})),
+                               reply_markup=markup_analyse(etat, mk, r_resume))
+                continue
             if choix in ("jok", "jno") and qui in proprio(etat):
                 decider_entree(etat, cb, choix == "jok", mk)
                 continue
@@ -2269,9 +2499,10 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
 
 def _envoi_sur(cid, **kw):
     try:
-        telegram("sendMessage", chat_id=cid, **kw)
+        return telegram("sendMessage", chat_id=cid, **kw)
     except Exception as ex:
         print("envoi", cid, ex)
+        return None
 
 def connecter_canal(etat, mcm):
     """Le bot vient d'être ajouté (ou retiré) comme administrateur d'une chaîne : il la prend comme chaîne VIP."""
@@ -3321,12 +3552,10 @@ def un_tour(etat, chats):
     demandes = []
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
-        if etat.get("clavier") != 8:
-            for cid in chats:
-                _envoi_sur(cid, text="🆕 Nouveaux boutons\n🟠 Analyse BTC\n🥇 Analyse Gold\n🚦 Chaque analyse te dit si tu peux entrer ou pas\n🌐 English : le bot en anglais\n📸 Partager mon gain : ta capture publiée\n🤖 Mon bot : il entre tout seul pour toi (ON / OFF)", reply_markup=CLAVIER)
-            for cid in etat.get("prospects", []):
-                _envoi_sur(cid, text="🆕 Boutons : 🟠 Analyse BTC • 🥇 Analyse Gold • 💎 Devenir VIP", reply_markup=CLAVIER_VISITEUR)
-            etat["clavier"] = 8
+        if etat.get("clavier") != 9:
+            # Le nouveau clavier sera joint au prochain vrai message du bot.
+            # Aucun message vide, promotionnel ou de démarrage n'est envoyé.
+            etat["clavier"] = 9
         if not etat.get("bot"):
             try:
                 etat["bot"] = telegram("getMe")["result"]["username"]
@@ -3425,6 +3654,7 @@ def un_tour(etat, chats):
                 if t_:
                     envois.append(f"🧠 La leçon de l'IA ALIGN\n{t_}")
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
+        notifier_clotures(etat, nom_marche, r, cle)
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
                                  f"📍 Prix {zone_txt(r['posD'])} Daily\n🙅 Prudence sur les 🟩 LONG\n👀 Un 🟥 SHORT ⬇️ peut se préparer"),
@@ -3518,11 +3748,18 @@ def main():
         while TOKEN and time.time() < min(prochain, debut + DUREE_SEC):
             reste = int(min(prochain, debut + DUREE_SEC) - time.time())
             try:
-                maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=max(1, min(50, reste))).get("result", [])
+                maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=1).get("result", [])
             except Exception as ex:
                 print("ecoute", ex); time.sleep(5); continue
             for cid, mq in traiter(etat, chats, maj):
                 envoyer_analyse(cid, etat, mq)
+            # Le polling Telegram reste à 1 s afin de faire vivre les chronomètres
+            # sans relancer l'analyse complète des marchés à chaque seconde.
+            for marche, derniere in list(DERNIERS.items()):
+                try:
+                    maj_chronos(etat, marche, derniere)
+                except Exception as ex:
+                    print("tick chrono", marche, ex)
             etat["chats"] = sorted(chats)
             json.dump(etat, open(ETAT_FICHIER, "w"))
         if time.time() >= debut + DUREE_SEC:
