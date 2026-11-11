@@ -2015,7 +2015,7 @@ def entrer_inscrits(etat, m, tr, chats=()):
         if cid in etat.get("prospects", []):
             etat.setdefault("bienvenue", {}).setdefault(cid, m)
         stats_bot(etat, cid)["auto"] += 1
-        _envoi_sur(cid, text=(
+        _envoi_sur(cid, reply_markup=markup_position(m), text=(
             f"🤖 {ICONE.get(m, '')} {m} : JE SUIS RENTRÉ, SUIS-MOI\n{SENS[tr['d']]}\n"
             "👀 Mets-toi en vue 15 minutes\n"
             f"🛑 SL un peu {meche_sl(tr)}\n"
