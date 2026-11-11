@@ -12,6 +12,8 @@ if (!process.env.SAFE_MODE) process.env.SAFE_MODE = '0';
 const SAFE_MODE = process.env.SAFE_MODE !== '0';
 
 // ─── TRADINGVIEW LIVE INGESTION ─────────────────────────────────────────────
+// This route is registered before the remaining routes, so parse JSON here as well.
+app.use(express.json({ limit: '50mb' }));
 const tvDataStore = {};
 // Keep one independent TradingView indicator snapshot per symbol AND timeframe.
 // tvDataStore remains the legacy latest-per-symbol view used by existing agents.
