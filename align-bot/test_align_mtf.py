@@ -49,6 +49,41 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(profile["mode"], "ATTENTE")
         self.assertEqual(profile["direction"], 0)
 
+    def test_indicator_plan_uses_m5_for_scalping_and_preserves_levels(self):
+        dirs = [0] * 11
+        dirs[9], dirs[7], dirs[4], dirs[2] = -1, -1, 1, 1
+        r = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
+            "M5": {"fresh": True, "confirmed": True, "robotV12": {"signal": "SHORT", "entry": 100, "sl": 102, "tp": 96}}
+        }}}
+        plan = align_bot.plan_indicateur(r)
+        self.assertTrue(plan["available"])
+        self.assertEqual(plan["timeframe"], "M5")
+        self.assertEqual((plan["entry"], plan["sl"], plan["tp"]), (100, 102, 96))
+        self.assertTrue(plan["confirmed"])
+
+    def test_indicator_plan_uses_h4_for_swing(self):
+        dirs = [0] * 11
+        dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, 1, 1
+        r = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
+            "H4": {"fresh": True, "confirmed": False, "robotV12": {"signal": "LONG", "entry": 100, "sl": 98, "tp": 104}}
+        }}}
+        plan = align_bot.plan_indicateur(r)
+        self.assertTrue(plan["available"])
+        self.assertEqual(plan["timeframe"], "H4")
+        self.assertFalse(plan["confirmed"])
+
+    def test_indicator_plan_rejects_stale_or_incomplete_snapshot(self):
+        dirs = [0] * 11
+        dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, -1, 0
+        stale = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
+            "M15": {"fresh": False, "robotV12": {"signal": "LONG", "entry": 100, "sl": 98, "tp": 104}}
+        }}}
+        incomplete = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
+            "M15": {"fresh": True, "robotV12": {"signal": "LONG", "entry": 100, "sl": None, "tp": 104}}
+        }}}
+        self.assertFalse(align_bot.plan_indicateur(stale)["available"])
+        self.assertFalse(align_bot.plan_indicateur(incomplete)["available"])
+
     def test_tradingview_links_select_market_and_requested_timeframe(self):
         btc = align_bot.url_tradingview("BTC", 5)
         gold = align_bot.url_tradingview("GOLD", 240)
