@@ -100,6 +100,22 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertNotIn("LONG est confirmé", reason)
         self.assertNotIn("SHORT est confirmé", reason)
 
+    def test_existing_auto_reservations_are_migrated_to_multi_timeframe_watch(self):
+        from unittest.mock import patch
+        state = {
+            "auto": {"GOLD": ["123"]},
+            "veille_cloture": {"GOLD": {"123": {"tf": "5m", "dernier_t": 300, "restants": 2}}}
+        }
+        r = {
+            "b5": [candle(600)], "b15": [candle(900)],
+            "b1h": [candle(3600)], "b4h": [candle(14400)]
+        }
+        with patch.object(align_bot.time, "time", return_value=100):
+            align_bot.synchroniser_veille_auto(state, "GOLD", r)
+        watcher = state["veille_cloture"]["GOLD"]["123"]
+        self.assertTrue(watcher["multi"])
+        self.assertEqual(watcher["derniers_t"], {"5m": 600, "15m": 900, "1h": 3600, "4h": 14400})
+
     def test_multi_timeframe_watcher_reports_each_new_close_only_once(self):
         from unittest.mock import patch
         state = {"veille_cloture": {"GOLD": {"123": {
