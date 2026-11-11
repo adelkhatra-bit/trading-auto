@@ -1692,8 +1692,34 @@ def chrono_txt(m, r, cle, t0):
     ]
     return "\n".join(l)
 
+def _editer_chrono_ou_recreer(cid, chrono, texte):
+    """Répare un chronomètre dont le message Telegram a été supprimé ou n'est plus éditable."""
+    try:
+        telegram("editMessageText", chat_id=cid, message_id=chrono["mid"], text=texte)
+        return True
+    except Exception as ex:
+        erreur = str(ex).lower()
+        if "message is not modified" in erreur or "message not modified" in erreur:
+            return True
+        if any(x in erreur for x in ("message to edit not found", "message can't be edited",
+                                     "message_id_invalid", "message identifier is not specified")):
+            try:
+                nouveau = telegram("sendMessage", chat_id=cid, text=texte, disable_notification="true")
+                chrono["mid"] = nouveau["result"]["message_id"]
+                chrono["maj"] = time.time()
+                print("chrono réparé", cid, chrono["mid"])
+                return True
+            except Exception as remplacement:
+                print("chrono remplacement", cid, remplacement)
+                return False
+        if any(x in erreur for x in ("bot was blocked", "chat not found", "user is deactivated")):
+            print("chrono destinataire indisponible", cid, ex)
+            return False
+        raise
+
+
 def maj_chronos(etat, m, r):
-    """Actualise le compte à rebours à la seconde pendant que le processus Telegram tourne."""
+    """Actualise le compte à rebours et recrée son message si Telegram l'a rendu invalide."""
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
     cle = etat.get(m, {})
     for cid, c in list(ch.items()):
@@ -1701,21 +1727,23 @@ def maj_chronos(etat, m, r):
         try:
             if cle.get("trade") and c.get("fini") is None:
                 c["fini"] = True
-                telegram("editMessageText", chat_id=cid, message_id=c["mid"], text=chrono_txt(m, r, cle, c["t0"]))
-                ch.pop(cid, None); continue
+                _editer_chrono_ou_recreer(cid, c, chrono_txt(m, r, cle, c["t0"]))
+                ch.pop(cid, None)
+                continue
             if now - c["t0"] > CHRONO_MAX:
                 ch.pop(cid, None)
                 etat.setdefault("auto", {})[m] = [x for x in etat["auto"].get(m, []) if str(x) != str(cid)]
-                telegram("editMessageText", chat_id=cid, message_id=c["mid"],
-                         text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n😎 La position n'est pas venue : pas de mauvaise entrée\n🎯 Réappuie sur le bouton pour la prochaine")
+                texte = (f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\\n"
+                         "😎 La position n'est pas venue : pas de mauvaise entrée\\n"
+                         "🎯 Réappuie sur le bouton pour la prochaine")
+                _editer_chrono_ou_recreer(cid, c, texte)
                 continue
             if now - c.get("maj", 0) >= CHRONO_REFRESH_SEC:
                 c["maj"] = now
-                telegram("editMessageText", chat_id=cid, message_id=c["mid"],
-                         text=chrono_txt(m, r, cle, c["t0"]))
+                if not _editer_chrono_ou_recreer(cid, c, chrono_txt(m, r, cle, c["t0"])):
+                    ch.pop(cid, None)
         except Exception as ex:
-            if "not modified" not in str(ex):
-                print("chrono", ex)
+            print("chrono", cid, ex)
 
 def lancer_chrono(etat, cid, m, r=None):
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
