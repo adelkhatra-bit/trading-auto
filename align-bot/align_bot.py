@@ -1516,55 +1516,103 @@ def bouton_rappel(m):
     ]})
 
 def markup_analyse(etat, m, r):
-    """Clavier inline de la fiche : détails, niveaux et action explicite sur la position."""
+    """Clavier progressif : décision, explication, analyse complète et niveaux."""
     cle = etat.get(m, {})
     lignes = [
-        [{"text": "ℹ️ Comprendre l'analyse", "callback_data": f"details:{m}"},
-         {"text": "📊 Voir les niveaux", "callback_data": f"levels:{m}"}]
+        [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
+         {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
+        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"}]
     ]
     if cle.get("trade"):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
                        {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
     else:
-        lignes.append([{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
+        lignes.append([{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
     return json.dumps({"inline_keyboard": lignes})
 
+
+def texte_pourquoi(m, r, cle):
+    """Explication courte de la décision, sans transformer le biais en signal d'entrée."""
+    titre, raison = verdict(r, cle)
+    maj, n_ok = alignement(r)
+    direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "AUCUNE DIRECTION CONFIRMÉE"
+    tr = (cle or {}).get("trade")
+    if tr:
+        autorisation = "POSITION DÉJÀ OUVERTE"
+    elif titre.startswith("🟢 TU PEUX ENTRER"):
+        autorisation = "ENTRÉE AUTORISÉE PAR ALIGN"
+    elif titre.startswith("⛔ TROP TARD"):
+        autorisation = "NE PAS ENTRER — MOUVEMENT DÉJÀ PARTI"
+    elif titre.startswith("🟡 PATIENCE"):
+        autorisation = "ATTENDRE — PAS ENCORE D'AUTORISATION"
+    else:
+        autorisation = "NE PAS ENTRER"
+    return "\n".join([
+        f"❓ POURQUOI ALIGN ? — {m}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🚦 {autorisation}",
+        f"🧭 Direction à surveiller : {direction}",
+        f"📡 Confirmation 1 h + 4 h : {n_ok}/2",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "⛔ MOTIF",
+        str(raison or "Aucun motif supplémentaire disponible."),
+        "━━━━━━━━━━━━━━━━━━━━",
+        "➡️ ACTION",
+        "Attendre une nouvelle validation explicite d'ALIGN. Le biais LONG/SHORT n'est pas, à lui seul, un ordre d'entrée.",
+        "ℹ️ Aucun ordre n'est envoyé au broker."
+    ])
+
 def texte_apercu(m, r, cle):
-    """Fiche synthétique ; l'intégralité des données reste accessible via le bouton Comprendre l'analyse."""
+    """Carte d'abordage : autorisation d'entrée en premier, détails derrière les boutons."""
+    cle = cle or {}
     maj, n_ok = alignement(r)
     titre, raison = verdict(r, cle)
-    biais = ("🟢 HAUSSIER" if maj == 1 else "🔴 BAISSIER" if maj == -1 else "🟠 NON CONFIRMÉ")
     prix = r["m1"][-1]["c"]
-    lignes = [
-        f"{ICONE.get(m, '📊')}  ALIGN MTF  •  {m}",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "💹 PRIX ACTUEL",
-        f"{px(prix)}",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "🧭 TENDANCE DU MARCHÉ",
-        biais,
-        "📡 CONFIRMATION 1H + 4H",
-        f"{n_ok}/2  {'✅ CONFIRMÉ' if r.get('confirme') else '⏳ EN ATTENTE'}",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "🚦 DÉCISION ALIGN",
-        str(titre),
-    ]
-    if raison:
-        lignes.append(str(raison))
-    if cle.get("trade"):
-        tr = cle["trade"]
-        lignes += ["━━━━━━━━━━━━━━━━━━━━", "📍 POSITION EN COURS",
-                   f"{'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'}",
-                   f"🎯 TP visé : {px(tr['tp2'] if tr.get('statut') == 'tp1' else tr['tp1'])}"]
-    elif cle.get("ordre"):
-        o = cle["ordre"]
-        lignes += ["━━━━━━━━━━━━━━━━━━━━", "🟨 ZONE DE PRÉPARATION",
-                   f"{px(o.get('za', o['e']))} → {px(o.get('zb', o['e']))}"]
+    tr = cle.get("trade")
+    if tr:
+        decision = "📍 POSITION EN COURS"
+        direction = "LONG ⬆️" if tr["d"] == 1 else "SHORT ⬇️"
+    elif titre.startswith("🟢 TU PEUX ENTRER"):
+        decision = "🟢 ENTRÉE AUTORISÉE"
+        direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "À confirmer"
+    elif titre.startswith("⛔ TROP TARD"):
+        decision = "⛔ NE PAS ENTRER — TROP TARD"
+        direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "Non confirmée"
+    elif titre.startswith("🟡 PATIENCE"):
+        decision = "🟡 ATTENDRE — PAS D'ENTRÉE"
+        direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "Non confirmée"
     else:
-        lignes += ["━━━━━━━━━━━━━━━━━━━━", "⏳ PROCHAINE ACTION", str(prochaine(r, cle))]
+        decision = "⛔ NE PAS ENTRER"
+        direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "AUCUNE DIRECTION CONFIRMÉE"
+
+    lignes = [
+        f"{ICONE.get(m, '📊')} ALIGN • {m}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🚦 {decision}",
+        f"🧭 Biais à surveiller : {direction}",
+        "⚠️ Le biais n'est pas une autorisation d'entrée.",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "❗ POURQUOI ?",
+        str(raison or "Aucune entrée autorisée pour le moment."),
+        "━━━━━━━━━━━━━━━━━━━━",
+        "➡️ CE QUE TU DOIS FAIRE",
+        ("Gérer la position déjà ouverte et suivre les alertes de sortie." if tr else
+         "Attendre un nouveau message explicite « ENTRÉE AUTORISÉE »."),
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"💹 Prix actuel : {px(prix)}",
+        f"📡 Confirmation 1 h + 4 h : {n_ok}/2",
+    ]
+    if cle.get("ordre") and not tr:
+        o = cle["ordre"]
+        lignes += ["🟨 Zone surveillée (pas un ordre) :",
+                   f"{px(o.get('za', o['e']))} → {px(o.get('zb', o['e']))}"]
     if r.get("news"):
-        lignes += ["━━━━━━━━━━━━━━━━━━━━", "📰 ACTUALITÉS", str(r["news"])]
-    lignes += ["", "ℹ️ Les indicateurs, RSI, zones, FVG, stratégie et explications sont disponibles avec « Comprendre l'analyse »."]
+        lignes += [f"📰 Actualité : {r['news']}"]
+    lignes += [
+        "━━━━━━━━━━━━━━━━━━━━",
+        "👇 Besoin d'aller plus loin ? Utilise les boutons ci-dessous.",
+        "ℹ️ Aucun ordre n'est envoyé automatiquement à ton broker."
+    ]
     return "\n".join(lignes)
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
@@ -2352,7 +2400,7 @@ def traiter(etat, chats, updates):
                     else:
                         _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est pas encore disponible. Appuie sur Analyse {mk}.")
                 continue
-            if choix in ("details", "levels") and mk in MARCHES:
+            if choix in ("why", "details", "levels") and mk in MARCHES:
                 if not autorise(etat, qui, cb.get("from", {}).get("id")):
                     try:
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Détails réservés aux VIP")
@@ -2374,9 +2422,15 @@ def traiter(etat, chats, updates):
                         _envoi_sur(qui, text="⚠️ Les détails sont momentanément indisponibles. Réessaie avec le bouton Analyse.")
                         continue
                 cle_detail = etat.get(mk, {})
-                if choix == "details":
+                if choix == "why":
+                    _envoi_sur(qui, text=texte_pourquoi(mk, r_detail, cle_detail),
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Analyse complète", "callback_data": f"details:{mk}"},
+                                                                             {"text": "🎯 Niveaux / prix", "callback_data": f"levels:{mk}"}],
+                                                                            [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
+                elif choix == "details":
                     _envoi_sur(qui, text=texte_etat(mk, r_detail, cle_detail, vip=True),
-                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Voir les niveaux", "callback_data": f"levels:{mk}"}],
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎯 Voir les niveaux", "callback_data": f"levels:{mk}"}],
+                                                                                 [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{mk}"}],
                                                                                  [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
                 else:
                     tr_detail = cle_detail.get("trade")
