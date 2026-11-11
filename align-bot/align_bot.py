@@ -2134,40 +2134,56 @@ def synchroniser_veille_auto(etat, m, r):
 
 
 def texte_cloture(m, tf, bougie, r, cle):
-    """Le verdict de sécurité est la première information, avant tout détail de marché."""
+    """Distingue explicitement clôture technique et confirmation du signal d'entrée."""
     cle = cle or {}
     duree = TF_SECONDES[tf]
     d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
     couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
     titre, details = verdict(r, cle)
     titre = str(titre).upper()
-    if cle.get("trade"):
-        decision = "🟢 SIGNAL DÉJÀ DÉCLENCHÉ — NE RAJOUTE PAS UNE ENTRÉE"
-    elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTENDS" in titre or "PATIENCE" in titre:
-        decision = "🚫 N'ENTRE PAS — ATTENDS LE PROCHAIN SIGNAL"
-    elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
-        decision = "🟢 SIGNAL D'ENTRÉE VALIDÉ — VÉRIFIE LES NIVEAUX"
+    position_ouverte = bool(cle.get("trade"))
+    signal_confirme = not position_ouverte and (
+        "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre
+    )
+    if position_ouverte:
+        statut = "🟢 POSITION EN COURS — SUIVI DU TRADE"
+        decision = "🟢 Position déjà ouverte : ne rajoute pas une entrée."
+    elif signal_confirme:
+        statut = "🟢 CLÔTURE — SIGNAL CONFIRMÉ"
+        decision = "🟢 Signal validé : vérifie la zone, le stop et les objectifs avant d'agir."
     else:
-        decision = "⏸ PAS D'ENTRÉE POUR LE MOMENT — ATTENDS"
+        statut = "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ"
+        decision = "🚫 N'ENTRE PAS. Attends une confirmation complète avant toute entrée."
     dirs = r.get("dirs", [0] * 11)
     d4h, d1h = dirs[9], dirs[7]
     sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
     _, n_ok = alignement(r)
-    confirmation = "2/2 — confirmée" if n_ok == 2 else "0/2 — non confirmée"
+    confirmation = f"{n_ok}/2 — alignement confirmé" if n_ok == 2 else f"{n_ok}/2 — alignement non confirmé"
     lignes = [
+        statut,
         decision,
         "━━━━━━━━━━━━━━━━━━━━",
-        f"🕯 CLÔTURE {tf} — {ICONE.get(m, '📊')} {m}",
-        f"🕒 Bougie terminée à {heure(bougie['t'] + duree)}",
+        f"🕯 Bougie {tf} clôturée — {ICONE.get(m, '📊')} {m}",
+        f"🕒 Heure de clôture : {heure(bougie['t'] + duree)}",
         f"📊 Bougie {couleur} | Ouverture {px(bougie['o'])} → clôture {px(bougie['c'])}",
         "━━━━━━━━━━━━━━━━━━━━",
         f"🧭 Tendance 4 h : {sens(d4h)}",
         f"🧭 Confirmation 1 h : {sens(d1h)}",
         f"✅ Alignement 4 h + 1 h : {confirmation}",
         f"❓ POURQUOI : {raison_attente(r, cle)}",
-        f"➡️ CE QUE TU DOIS FAIRE : {details}",
+        f"➡️ PROCHAINE ACTION : {details}",
+    ]
+    ordre = cle.get("ordre")
+    if ordre and not position_ouverte:
+        bas, haut = sorted((ordre.get("za", ordre["e"]), ordre.get("zb", ordre["e"])))
+        lignes += [
+            "🟡 POSITION À VENIR — ordre en attente, aucune position ouverte",
+            f"📍 Zone surveillée : {px(bas)} à {px(haut)}",
+            f"🛑 Stop prévu : {px(ordre['sl'])} — {meche_sl(ordre)}",
+        ]
+    lignes += [
         f"🔜 Prochaine étape : {prochaine(r, cle)}",
-        "ℹ️ Une clôture de bougie n'est pas une entrée automatique. Aucun ordre n'est envoyé à ta plateforme."
+        "ℹ️ Une bougie clôturée ne déclenche jamais une entrée à elle seule. Aucun ordre n'est envoyé à ton broker."
     ]
     return "\n".join(lignes)
 
