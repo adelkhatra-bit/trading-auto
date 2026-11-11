@@ -5678,7 +5678,14 @@ function handleTvWebhook(req, res) {
     const symbol = data.symbol ? String(data.symbol).toUpperCase() : '';
     // STRICT: only use the TF explicitly sent with this webhook payload.
     // Never fall back to activeSymbol.timeframe — that belongs to a potentially different symbol.
-    const resolvedTf = String(data.timeframe || data.tf || 'H1').toUpperCase();
+    const resolvedTf = String(data.timeframe || data.tf || '').toUpperCase().trim();
+    const VALID_ROBOT_TIMEFRAMES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H2', 'H4', 'D1', 'W1'];
+    if (!VALID_ROBOT_TIMEFRAMES.includes(resolvedTf)) {
+      pushLog('tradingview-webhook', 'bridge-4000', 'WEBHOOK REJECTED: missing/invalid timeframe', 'error', {
+        symbol, timeframe: resolvedTf || null, receivedAt
+      });
+      return res.status(400).json({ ok: false, error: 'valid timeframe required', receivedTimeframes: VALID_ROBOT_TIMEFRAMES });
+    }
     const action = data.action != null
       ? String(data.action)
       : (data.signal != null ? String(data.signal) : (data.event != null ? String(data.event) : null));
@@ -5749,6 +5756,10 @@ function handleTvWebhook(req, res) {
       signal: data.signal || null,
       tickerid: data.tickerid || null,
       timeframe: resolvedTf,
+      confirmed: data.confirmed === true || data.confirmed === 'true',
+      candle_confirmed: data.candle_confirmed === true || data.candle_confirmed === 'true',
+      bar_confirmed: data.bar_confirmed === true || data.bar_confirmed === 'true',
+      candle_time: data.candle_time || data.bar_time || null,
       macro_bear: data.macro_bear != null ? parseFloat(data.macro_bear) : null,
       macro_bull: data.macro_bull != null ? parseFloat(data.macro_bull) : null,
       verdict: data.verdict || null,
