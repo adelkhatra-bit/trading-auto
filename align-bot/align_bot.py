@@ -227,7 +227,9 @@ def yahoo_or(interval):
     except Exception as ex:
         print("spot or", ex)
     ecart = _CACHE.get("ecart", 0.0)
-    out = [dict(t=b["t"], o=b["o"] + ecart, h=b["h"] + ecart, l=b["l"] + ecart, c=b["c"] + ecart) for b in c[1]]
+    out = [dict(t=b["t"], o=b["o"] + ecart, h=b["h"] + ecart, l=b["l"] + ecart, c=b["c"] + ecart,
+                v=b.get("v"), trades=b.get("trades"),
+                volume_source=b.get("volume_source") or "COMEX GC=F Yahoo proxy") for b in c[1]]
     if interval == 1 and spot and out:
         # Dernière minute = prix spot EN DIRECT (comme le graphique XAUUSD), pour ne pas avoir 10 min de retard
         t = int(time.time()) // 60 * 60
@@ -255,7 +257,9 @@ def paxg_or(interval):
     except Exception as ex:
         print("spot or", ex)
     e = _CACHE.get("ecart_paxg", 0.0)
-    out = [dict(t=b["t"], o=b["o"] + e, h=b["h"] + e, l=b["l"] + e, c=b["c"] + e) for b in c[1]]
+    out = [dict(t=b["t"], o=b["o"] + e, h=b["h"] + e, l=b["l"] + e, c=b["c"] + e,
+                v=b.get("v"), trades=b.get("trades"),
+                volume_source=b.get("volume_source") or "Kraken PAXG proxy") for b in c[1]]
     if interval == 1 and spot and out:
         t = int(time.time()) // 60 * 60
         if t > out[-1]["t"]:
