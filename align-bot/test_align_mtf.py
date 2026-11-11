@@ -1833,6 +1833,7 @@ class TelegramRateLimitTest(unittest.TestCase):
 
 class AlignHeartbeatAndGeminiTest(unittest.TestCase):
     NOW = 1_800_000_000  # peu importe : on injecte now
+    flags = []
 
     def _bars(self, n=25, rng=1.0, last_rng=None, t0=None, pas=300):
         t0 = t0 or (self.NOW - n * pas)
@@ -1853,7 +1854,7 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
     def _run(self, state, r, m="GOLD", cle=None, cid="501", now=None):
         from unittest.mock import patch
         sent = []
-        with patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: sent.append((c, k["text"])) or {"ok": True}), \
+        with patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: sent.append((c, k["text"])) or self.flags.append(k.get("disable_notification")) or {"ok": True}), \
              patch.object(align_bot, "verdict", return_value=("⏳ ATTEND", "")), \
              patch.object(align_bot, "cme_ouvert", return_value=True), \
              patch.object(align_bot, "POSITIONS_GRATUITES", False):
@@ -1934,6 +1935,87 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
         names = [p[0] for p in align_bot.IA_FOURNISSEURS]
         self.assertIn("OVH Llama", names)
         self.assertEqual(sum(1 for n in names if n.startswith("Gemini")), 2)
+
+
+class AlignSoundAndAiBudgetTest(unittest.TestCase):
+    def test_important_alerts_are_never_silent(self):
+        import ast
+        src = Path(align_bot.__file__).read_text(encoding="utf-8")
+        silencieux = set()
+        for f in ast.walk(ast.parse(src)):
+            if isinstance(f, ast.FunctionDef):
+                for n in ast.walk(f):
+                    if isinstance(n, ast.keyword) and n.arg == "disable_notification":
+                        silencieux.add(f.name)
+        # règles/menu épinglés, chrono et jauge modifiés en place, changement de langue : jamais prépare-toi / entrée / TP / SL
+        self.assertEqual(silencieux, {"epingler", "menu_canal_vip", "_editer_chrono_ou_recreer", "_lancer_chrono_verrouille", "changer_langue", "maj_jauge"})
+
+    def test_free_heartbeat_silent_vip_heartbeat_rings(self):
+        t = AlignHeartbeatAndGeminiTest
+        from unittest.mock import patch
+        for vip, attendu in ((True, None), (False, "true")):
+            tc = t("test_calm_heartbeat_real_data_then_no_spam")
+            sent = []
+            st = tc._state("501", vip=vip)
+            r = tc._r(b5=tc._bars(rng=1.0, last_rng=0.3))
+            with patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: sent.append(k) or {"ok": True}), \
+                 patch.object(align_bot, "verdict", return_value=("⏳ ATTEND", "")), \
+                 patch.object(align_bot, "cme_ouvert", return_value=True), patch.object(align_bot, "POSITIONS_GRATUITES", False):
+                align_bot.battement_coeur(st, "GOLD", r, {}, now=tc.NOW)
+            self.assertEqual(sent[0].get("disable_notification"), attendu)
+
+    def test_sound_asset_and_menu_button(self):
+        from unittest.mock import patch
+        self.assertTrue(os.path.isfile(align_bot.SON_PIECE))
+        self.assertLess(os.path.getsize(align_bot.SON_PIECE), 300_000)
+        for fn in (align_bot.menu_bot, align_bot.menu_bot_gratuit):
+            with patch.object(align_bot, "_envoi_sur") as send:
+                fn({"bienvenue": {}}, "101")
+            cb = [b["callback_data"] for row in json.loads(send.call_args.kwargs["reply_markup"])["inline_keyboard"] for b in row]
+            self.assertEqual(cb.count("son:piece"), 1)
+
+    def test_sound_upload_is_multipart_with_instructions(self):
+        from unittest.mock import patch, MagicMock
+        rep = MagicMock(); rep.__enter__.return_value.read.return_value = b'{"ok": true}'
+        with patch.object(align_bot.urllib.request, "urlopen", return_value=rep) as uo, patch.object(align_bot, "_telegram_verifie_cooldown"):
+            align_bot.envoyer_son_piece("101")
+        req = uo.call_args.args[0]
+        self.assertTrue(req.full_url.endswith("/sendAudio"))
+        self.assertIn(b"Enregistrer pour les notifications", req.data)
+        self.assertIn(b"audio/mpeg", req.data)
+        align_bot.LANG_EN.add("102")
+        try:
+            with patch.object(align_bot.urllib.request, "urlopen", return_value=rep) as uo, patch.object(align_bot, "_telegram_verifie_cooldown"):
+                align_bot.envoyer_son_piece("102")
+        finally:
+            align_bot.LANG_EN.discard("102")
+        self.assertIn(b"Save for notifications", uo.call_args.args[0].data)
+
+    def test_ai_calls_per_hour_measured(self):
+        """Une heure simulée (12 cycles de 5 min, 3 marchés) : battement de cœur sans IA ; IA seulement aux moments clés, cachée."""
+        from unittest.mock import patch
+        appels = []
+        def faux_ia(etat, consigne, donnees, cle_cache=None, duree=600):
+            appels.append(cle_cache); return "🧠 test"
+        etat, tc = {}, AlignHeartbeatAndGeminiTest("test_calm_heartbeat_real_data_then_no_spam")
+        horloge = [tc.NOW]
+        with patch.object(align_bot, "ia", side_effect=faux_ia), patch.object(align_bot, "donnees_ia", return_value={}), \
+             patch.object(align_bot.time, "time", side_effect=lambda: horloge[0]), \
+             patch.object(align_bot, "_envoi_sur", return_value={"ok": True}), \
+             patch.object(align_bot, "verdict", return_value=("⏳ ATTEND", "")), patch.object(align_bot, "cme_ouvert", return_value=True):
+            for cycle in range(12):
+                horloge[0] = tc.NOW + cycle * 300
+                for m in ("BTC", "GOLD", "NASDAQ"):
+                    st = tc._state("501", m=m)
+                    st["veille_cloture"] = {m: {"501": {"multi": True, "derniers_t": {}, "expire": 9e12}}}
+                    r = tc._r(b5=tc._bars(rng=1.0, last_rng=0.3, t0=horloge[0] - 25 * 300))
+                    r["m1"] = [{"t": horloge[0] - 30, "c": 100.0}]
+                    align_bot.battement_coeur(etat.setdefault("hb", st), m, r, {}, now=horloge[0])
+                    # événements clés répétés à chaque cycle : le garde-fou doit limiter les appels
+                    align_bot.commentaires_ia_temps_reel(etat, m, r, {}, ["🎯 TP1 TOUCHÉ", "🌀🌀 MANIPULATION EN COURS", "👀 JE PRÉPARE UNE POSITION"])
+        print(f"IA_APPELS_PAR_HEURE={len(appels)} (3 marchés, événements clés à chaque cycle)")
+        self.assertLessEqual(len(appels), 3 * (1 + 2 + 1))     # prep 1/2h + tp 1/h + turbulence 1/30min par marché
+        self.assertGreaterEqual(len(appels), 3)
 
 
 if __name__ == "__main__":
