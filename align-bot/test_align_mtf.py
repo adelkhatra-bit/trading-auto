@@ -101,7 +101,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
         self.assertIn("DIRECTION : 4 h LONG — confirmation 1 h manquante", message)
         self.assertIn("⏳ PROCHAINE CLÔTURE 1h", message)
-        self.assertIn("⏱ Temps restant : 1 h 00 min 00 s", message)
+        self.assertIn("⏱ Temps restant : 60:00", message)
         self.assertNotIn("PROCHAINE CLÔTURE 5m", message)
         self.assertIn("J'attends une clôture 1 h", message)
 
@@ -432,8 +432,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("ne jamais inverser LONG/SHORT", result["regle"])
 
     def test_us10y_is_included_as_official_daily_data_for_ai_context(self):
-        today = datetime.datetime.now(align_bot.PARIS).date()
-        yesterday = today - datetime.timedelta(days=1)
+        today = align_bot.datetime.datetime.now(align_bot.PARIS).date()
+        yesterday = today - align_bot.datetime.timedelta(days=1)
         state = {"macro": {"us10": (4.25, 4.20, yesterday.strftime("%m/%d/%Y"))}}
         info = align_bot.us10_info(state)
         self.assertTrue(info["disponible"])
@@ -442,7 +442,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("QUOTIDIENNE", info["frequence"])
 
     def test_us10y_rejects_stale_official_data_instead_of_calling_it_live(self):
-        old = (datetime.datetime.now(align_bot.PARIS).date() - datetime.timedelta(days=8)).strftime("%m/%d/%Y")
+        old = (align_bot.datetime.datetime.now(align_bot.PARIS).date() - align_bot.datetime.timedelta(days=8)).strftime("%m/%d/%Y")
         info = align_bot.us10_info({"macro": {"us10": (4.25, 4.20, old)}})
         self.assertFalse(info["disponible"])
         self.assertEqual(info["statut"], "US10Y TROP ANCIEN")
