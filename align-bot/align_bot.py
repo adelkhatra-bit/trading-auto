@@ -1233,7 +1233,8 @@ def mise_en_forme(t):
         if mesure:
             if out and out[-1]:
                 out.append("")
-            out += [mesure.group("label"), mesure.group("value"), ""]
+            value = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:[ \u00a0\u202f]|[.,]|$))", "", mesure.group("value"))
+            out += [mesure.group("label"), value, ""]
             continue
         mt = re.search(r" ?: | ≈ ", l)
         if mt and not l.startswith(("ℹ️", "RSI")):
@@ -1241,7 +1242,10 @@ def mise_en_forme(t):
             if 2 < len(g) <= 34 and d_.strip():
                 if out and out[-1]:
                     out.append("")
-                out += [g.strip(), ("≈ " if "≈" in mt.group() else "") + d_.strip(), ""]
+                valeur = d_.strip()
+                if re.match(r"^[+-]?\d", valeur):
+                    valeur = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:[ \u00a0\u202f]|[.,]|$))", "", valeur)
+                out += [g.strip(), ("≈ " if "≈" in mt.group() else "") + valeur, ""]
                 continue
         if l.endswith(" :") or l.endswith(":"):
             l = l.rstrip(" :")
@@ -2667,6 +2671,9 @@ def annonces_et_sessions(etat, maintenant, derniers):
             out.append(f"📰 NEWS USA DANS 1 H — {heure(e['t'])}\n🗞 {e['titre']}\n🚦 ⏳ JE N'ENTRE PAS ENCORE\n"
                        f"🛑 Pas de nouvelle position à partir de {heure(e['t'] - 15 * 60)}\n🔒 En position ? Mets-toi à BE si tu es en gain\n"
                        f"📊 Prévu : {e.get('prev') or '?'} • avant : {e.get('avant') or '?'}")
+        if 35 * 60 < reste <= 40 * 60 and f"ev40{e['t']}{e['titre']}" not in vus:
+            vus.append(f"ev40{e['t']}{e['titre']}")
+            out.append(f"⚠️ NEWS USA DANS 40 MIN — {heure(e['t'])}\n📰 {e['titre']}\n🛡 Évite toute nouvelle entrée à l’approche de l’annonce. Vérifie ton SL si tu es déjà en position.")
         if 5 * 60 <= -reste <= 8 * 60 and f"evr{e['t']}{e['titre']}" not in vus:
             vus.append(f"evr{e['t']}{e['titre']}")
             lr = []
@@ -2690,11 +2697,11 @@ def annonces_et_sessions(etat, maintenant, derniers):
         if 15 * 60 <= -reste <= 25 * 60 and f"evfin{e['t']}{e['titre']}" not in vus:
             vus.append(f"evfin{e['t']}{e['titre']}")
             out.append(f"✅ News passée ({e['titre']}). 🟩 Le bot reprend la recherche d'entrées.")
-    # Fermeture du Gold : 1 h avant et 35 min avant (jours de semaine)
+    # Fermeture du Gold : 1 h avant et 40 min avant (jours de semaine)
     if jour.weekday() < 5:
         f_ = minutes_avant_fermeture_gold(maintenant)
         tp_, cme_, rouv_ = horaires_gold(maintenant)
-        for avant, cle_f in ((60, "f60"), (35, "f35")):
+        for avant, cle_f in ((60, "f60"), (40, "f40")):
             if avant - 5 < f_ <= avant and f"{cle_f}{cle_j}" not in vus:
                 vus.append(f"{cle_f}{cle_j}")
                 tr_g = (etat.get("GOLD") or {}).get("trade")
