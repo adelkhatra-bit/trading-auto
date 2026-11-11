@@ -98,7 +98,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         with patch.object(align_bot.time, "time", return_value=7200):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
         self.assertIn("DIRECTION : 4 h LONG — confirmation 1 h manquante", message)
-        self.assertIn("PROCHAINE CLÔTURE 1h : 1 h 00 min 00 s", message)
+        self.assertIn("⏳ PROCHAINE CLÔTURE 1h", message)
+        self.assertIn("⏱ Temps restant : 1 h 00 min 00 s", message)
         self.assertNotIn("PROCHAINE CLÔTURE 5m", message)
         self.assertIn("J'attends une clôture 1 h", message)
 
@@ -417,7 +418,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         }
         with patch.object(align_bot.time, "time", return_value=7200):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
-        self.assertIn("⏳ PROCHAINE CLÔTURE 1h\\n⏱ Temps restant : 1 h 00 min 00 s\\n🕒 Heure prévue : 04:00:00 (heure de Paris)", message)
+        self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 1 h 00 min 00 s\n🕒 Heure prévue : 04:00:00 (heure de Paris)", message)
         formatted = align_bot.mise_en_forme(message)
         self.assertIn("⏱ Temps restant : 1 h 00 min 00 s", formatted)
         self.assertIn("🕒 Heure prévue : 04:00:00 (heure de Paris)", formatted)
@@ -1202,7 +1203,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(lines[0], "🔴 SIGNAL NON CONFIRMÉ")
         self.assertIn("🚫 N'ENTRE PAS", message)
         self.assertIn("ATTENDS LE PROCHAIN SIGNAL", message)
-        self.assertIn("🕯 CLÔTURE 1h", message)
+        self.assertIn("🕯 BOUGIE 1h CLÔTURÉE", message)
         self.assertIn("🟠 BTC", message)
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
                          "TENDANCE MULTI-UNITÉS", "4 h\nSHORT", "Confirmation 1 h\nSHORT", "2/2", "DÉCISION ALIGN",
@@ -1247,7 +1248,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 message = align_bot.texte_cloture("BTC", tf, b, r, {})
                 self.assertEqual(message.splitlines()[0], "🔴 SIGNAL NON CONFIRMÉ")
                 self.assertEqual(message.splitlines()[1], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
-                self.assertIn(f"🕯 CLÔTURE {tf}", message)
+                self.assertIn(f"🕯 BOUGIE {tf} CLÔTURÉE", message)
 
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
         from unittest.mock import patch
