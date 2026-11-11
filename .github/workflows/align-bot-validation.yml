@@ -37,4 +37,7 @@ jobs:
       - name: Validate ALIGN workflow with actionlint
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/align-bot-validation.yml .github/workflows/align-bot.yml .github/workflows/align-bot-rollover.yml
       - name: Run complete MTF regression suite
+        env:
+          # Parité Pine <-> bot sur VRAIES bougies Kraken (sauté proprement si le réseau est indisponible)
+          ALIGN_PARITE_RESEAU: "1"
         run: python -m unittest discover -s align-bot -p "test_*.py" -v
