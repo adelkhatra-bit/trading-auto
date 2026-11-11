@@ -1795,3 +1795,51 @@ class TestTradingViewReportRegression(unittest.TestCase):
         self.assertIn("Unité sélectionnée : H4", message)
         self.assertIn("Entrée indicateur", message)
         self.assertIn("Profil SWING", message)
+
+
+class TestFollowPositionMarketChoice(unittest.TestCase):
+    def test_follow_button_opens_explicit_btc_gold_or_both_menu(self):
+        import json
+        from unittest.mock import patch
+        for cid, expected in (("101", "CHOISIS LES MARCHÉS"), ("202", "CHOOSE THE MARKETS")):
+            with patch.object(align_bot, "_envoi_sur") as send:
+                if cid == "202":
+                    old = set(align_bot.LANG_EN)
+                    align_bot.LANG_EN.add(cid)
+                    try:
+                        align_bot.menu_suivi({}, cid)
+                    finally:
+                        align_bot.LANG_EN.clear()
+                        align_bot.LANG_EN.update(old)
+                else:
+                    align_bot.menu_suivi({}, cid)
+            args = send.call_args.kwargs
+            self.assertIn(expected, args["text"])
+            keyboard = json.loads(args["reply_markup"])["inline_keyboard"]
+            callbacks = [button["callback_data"] for row in keyboard for button in row]
+            self.assertEqual(callbacks, ["followmarket:BTC", "followmarket:GOLD", "followmarket:BOTH"])
+
+    def test_followmarket_btc_registers_only_btc(self):
+        from unittest.mock import patch
+        update = {"update_id": 99001, "callback_query": {
+            "id": "follow-btc", "data": "followmarket:BTC",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "inscrire_auto") as subscribe, \
+             patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
+            align_bot.traiter({}, set(), [update])
+        subscribe.assert_called_once_with(unittest.mock.ANY, "101", "BTC")
+
+    def test_followmarket_both_registers_btc_and_gold(self):
+        from unittest.mock import patch
+        state = {}
+        update = {"update_id": 99002, "callback_query": {
+            "id": "follow-both", "data": "followmarket:BOTH",
+            "message": {"chat": {"id": 102, "type": "private"}}, "from": {"id": 102}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "inscrire_auto") as subscribe, \
+             patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
+            align_bot.traiter(state, set(), [update])
+        self.assertEqual([call.args[2] for call in subscribe.call_args_list], ["BTC", "GOLD"])
