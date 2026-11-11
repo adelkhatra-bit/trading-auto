@@ -1754,3 +1754,20 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTelegramCompactKeyboards(unittest.TestCase):
+    def test_analysis_and_position_keyboards_do_not_add_unrequested_tradingview_links(self):
+        import json
+        for markup in (align_bot.markup_analyse({}, "BTC", {}), align_bot.markup_position("GOLD")):
+            keyboard = json.loads(markup)["inline_keyboard"]
+            labels = [button.get("text", "") for row in keyboard for button in row]
+            urls = [button.get("url", "") for row in keyboard for button in row]
+            self.assertFalse(any("TradingView" in label for label in labels))
+            self.assertFalse(any("tradingview.com" in url for url in urls))
+        analysis = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
+        callbacks = [button.get("callback_data") for row in analysis for button in row]
+        self.assertIn("why:BTC", callbacks)
+        self.assertIn("details:BTC", callbacks)
+        self.assertIn("levels:BTC", callbacks)
+        self.assertIn("timeframes:BTC", callbacks)
