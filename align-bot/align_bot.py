@@ -1055,7 +1055,7 @@ TRAD = {
 "📍 Suivre cette position": "📍 Follow this position", "📍 Ma position • SL / TP": "📍 My position • SL / TP", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
  "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
 "🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
-"✅ Sélection enregistrée": "✅ Selection saved",
+"✅ Sélection enregistrée": "✅ Selection saved", "🥇 + 🟠 Les deux": "🥇 + 🟠 Both",
 "✅ Je suis rentré": "✅ I'm in", "🚪 Je suis sorti": "🚪 I'm out", "📈 Mes résultats": "📈 My results",
 "🧩 Indicateur TradingView": "🧩 TradingView indicator", "💎 Devenir VIP": "💎 Become VIP",
 "Utilise les boutons 👇": "Use the buttons 👇", "❌ Non": "❌ No",
@@ -3295,7 +3295,7 @@ def traiter(etat, chats, updates):
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Réservé aux VIP")
                     except Exception:
                         pass
-                    _envoi_sur(qui, text="🔒 Réservé aux VIP\\n🎁 Ta position gratuite du jour est déjà utilisée\\n💎 VIP 49,90 € / mois 👇",
+                    _envoi_sur(qui, text="🔒 Réservé aux VIP\n🎁 Ta position gratuite du jour est déjà utilisée\n💎 VIP 49,90 € / mois 👇",
                                **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
                     continue
                 # La sélection explicite est aussi la préférence de distribution privée.
@@ -3493,21 +3493,23 @@ def traiter(etat, chats, updates):
             if choix == "auto" and mk in MARCHES:
                 # Le marché est déjà connu depuis le bouton de l'analyse : activation en un seul appui.
                 if autorise(etat, qui, cb["from"]["id"]) or qui not in etat.get("bienvenue", {}):
-                    selectionner_marches_suivi(etat, qui, mk)
+                    # Un abonné BTC + GOLD garde les deux marchés : suivre BTC ne doit pas couper GOLD.
+                    if etat.get("marches_par_chat", {}).get(str(qui)) != "BOTH":
+                        selectionner_marches_suivi(etat, qui, mk)
                     inscrire_auto(etat, qui, mk, notifier=False)
                     try:
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔔 Suivi activé pour " + mk)
                     except Exception:
                         pass
-                    _envoi_sur(qui, text=(f"🔔 SUIVI ACTIVÉ : {mk}\\nJe t'alerterai dès qu'une entrée sera confirmée."
+                    _envoi_sur(qui, text=(f"🔔 SUIVI ACTIVÉ : {mk}\nJe t'alerterai dès qu'une entrée sera confirmée."
                                           if qui not in LANG_EN else
-                                          f"🔔 FOLLOWING {mk}\\nI'll alert you when an entry is confirmed."))
+                                          f"🔔 FOLLOWING {mk}\nI'll alert you when an entry is confirmed."))
                 else:
                     try:
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Réservé aux VIP")
                     except Exception:
                         pass
-                    _envoi_sur(qui, text="🔒 Réservé aux VIP\\n🎁 Ta position gratuite du jour est déjà utilisée\\n⏰ Une nouvelle demain\\n💎 VIP 49,90 € / mois 👇",
+                    _envoi_sur(qui, text="🔒 Réservé aux VIP\n🎁 Ta position gratuite du jour est déjà utilisée\n⏰ Une nouvelle demain\n💎 VIP 49,90 € / mois 👇",
                                **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
                 continue
             if choix in ("pub", "refus") and qui in proprio(etat):
