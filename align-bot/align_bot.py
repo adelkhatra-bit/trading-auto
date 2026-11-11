@@ -995,7 +995,7 @@ def verdict(r, cle):
         sens = "⬆️ ACHAT" if tr["d"] == 1 else "⬇️ VENTE"
         prog = tr["d"] * (p - tr["e"]) / max(abs(tr["tp1"] - tr["e"]), 1e-9)
         if tr["statut"] == "entree" and prog < 0.25 and not tr.get("tard"):
-            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {meche_sl(tr)}\n🙅 Jamais pile sur la mèche\n📍 Repère prix : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n👉 Puis appuie sur ✅ Je suis rentré")
+            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {meche_sl(tr)}\n🙅 Jamais pile sur la mèche\n📍 Repère prix : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.")
         return ("🔴🔴 N'ENTRE PAS", f"⏰ Trop tard : la position {sens} est déjà partie\n⏳ J'attends le prochain setup")
     if r.get("annonce"):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
@@ -1015,7 +1015,9 @@ def verdict(r, cle):
 TRAD = {
 # Boutons
 "🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis", "📊 Faire une analyse": "📊 Run an analysis",
-"📡 Mes marchés": "📡 My markets", "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
+"📡 Mes marchés": "📡 My markets",
+"📍 Suivre cette position": "📍 Follow this position", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
+ "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
 "🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
 "✅ Sélection enregistrée": "✅ Selection saved",
 "✅ Je suis rentré": "✅ I'm in", "🚪 Je suis sorti": "🚪 I'm out", "📈 Mes résultats": "📈 My results",
@@ -1232,7 +1234,7 @@ TRAD = {
 "🚪 Sortie manuelle": "🚪 Manual exit", "🛑 Stop touché": "🛑 SL hit", "🔒 Stop protégé touché": "🔒 Protected SL hit", "🛡 Stop remonté touché": "🛡 Raised SL hit",
 "💰 TP1 encaissé": "💰 TP1 banked", "🏆 Objectif final": "🏆 Final target",
 # Résultats
-"Aucun trade clôturé pour l'instant.": "No closed trade yet.", "👉 Appuie sur ✅ Je suis rentré quand tu prends une position.": "👉 Tap ✅ I'm in when you take a position.",
+"Aucun trade clôturé pour l'instant.": "No closed trade yet.", "Les résultats apparaîtront après la première clôture réellement enregistrée.": "Results will appear after the first actually recorded close.",
 "✅ TP gagnés": "✅ TP won", "❌ Stops touchés": "❌ SL hit", "🎯 Réussite": "🎯 Win rate", "💰 Total": "💰 Total", "Derniers trades :": "Last trades:",
 "🤖 Bilan du bot   en cours de construction": "🤖 Bot record   being built", "🤖 Bilan du bot": "🤖 Bot record",
 # News / sessions
@@ -1333,7 +1335,7 @@ TRAD = {
 "6️⃣ 💰 TP1 touché → stop à l'entrée": "6️⃣ 💰 TP1 hit → SL to entry", "7️⃣ ⚖️ Petit risque : 1 à 2 % du compte maximum par position": "7️⃣ ⚖️ Small risk: 1 to 2 % of the account max per position",
 "8️⃣ ⚠️ Le trading peut faire perdre tout le capital": "8️⃣ ⚠️ Trading can lose all your capital",
 "📰 Je t'envoie les news : pas de trade juste avant ni juste après": "📰 I send you the news: no trade right before or after",
-"🤖 Appuie sur ✅ Je suis rentré : ton coach te suit jusqu'au TP": "🤖 Tap ✅ I'm in: your coach follows you to TP",
+"🤖 Les abonnés au suivi sont enregistrés automatiquement à l'ouverture du signal.": "🤖 Follow subscribers are registered automatically when a signal opens.",
 "📈 Tes gains et tes pertes sont calculés tout seuls": "📈 Your wins and losses are calculated automatically",
 "🧩 L'indicateur TradingView : bouton 🧩 en bas": "🧩 The TradingView indicator: 🧩 button below", "🤝 Partage à tes amis :": "🤝 Share with your friends:",
 "ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. Ce n'est pas un conseil en investissement ni une recommandation personnalisée. Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.":
@@ -1754,8 +1756,8 @@ REGLES = ("📌 RÈGLES — ALIGN Signaux\n"
           "8️⃣ ⚠️ Le trading peut faire perdre tout le capital\n"
           "━━━━━━━━━━━━\n"
           "📰 Je t'envoie les news : pas de trade juste avant ni juste après\n"
-          "🤖 Appuie sur ✅ Je suis rentré : ton coach te suit jusqu'au TP\n"
-          "📈 Tes gains et tes pertes sont calculés tout seuls\n"
+          "🤖 Les abonnés au suivi sont enregistrés automatiquement à l'ouverture du signal.\n"
+          "📈 Les résultats sont calculés à la clôture réellement constatée.\n"
           "🧩 Indicateur TradingView : bouton 🧩 en bas (ne signifie pas que ses signaux sont reçus automatiquement)\n"
           "━━━━━━━━━━━━\n"
           "🤝 Partage à tes amis :\n"
@@ -1840,7 +1842,7 @@ def boutons_canal(etat, texte):
         lignes.append([{"text": "🎯 Je rentre dans la prochaine position", "url": lien(f"auto_{m.lower()}")}])
     # Mêmes boutons, même ordre que le clavier du bot ALIGN Coach
     lignes.append([{"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}, {"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}])
-    lignes.append([{"text": "✅ Je suis rentré", "url": lien("rentre")}, {"text": "🚪 Je suis sorti", "url": lien("sorti")}])
+    lignes.append([{"text": "📍 Suivre cette position", "url": lien("rentre")}, {"text": "🚪 Je suis sorti", "url": lien("sorti")}])
     lignes.append([{"text": "🤖 Mon bot", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}])
     lignes.append([{"text": "📸 Partager mon gain", "url": lien("gain")}, {"text": "🧩 Indicateur TradingView", "url": lien("indicateur")}])
     return json.dumps({"inline_keyboard": lignes})
@@ -2067,14 +2069,18 @@ def bouton_rappel(m):
         [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
     ]})
 
-def markup_analyse(etat, m, r):
-    """Clavier minimal et contextuel : suivi si aucune position, commandes si position ouverte."""
+def markup_analyse(etat, m, r, cid=None):
+    """Clavier personnalisé : position réelle si l'utilisateur est inscrit, sinon suivi explicite."""
     cle = etat.get(m, {})
-    if cle.get("trade"):
+    tr = cle.get("trade") or {}
+    pos = (tr.get("qui") or {}).get(str(cid)) if cid is not None else None
+    if tr and (cid is None or (isinstance(pos, dict) and not pos.get("fini"))):
         lignes = [
             [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"}],
             [{"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}],
         ]
+    elif tr:
+        lignes = [[{"text": "📍 Suivre cette position", "callback_data": f"in:{m}"}]]
     else:
         lignes = [[{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]
     return json.dumps({"inline_keyboard": lignes})
@@ -2084,6 +2090,7 @@ def markup_position(m):
     return json.dumps({"inline_keyboard": [
         [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
+        [{"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}],
         [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
         [{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]
     ]})
@@ -2102,7 +2109,12 @@ def texte_position(m, r, cle, cid):
     tr = (cle or {}).get("trade")
     if not tr:
         return f"📍 Aucune position ALIGN ouverte sur {m}.\n🔔 J'attends le prochain signal confirmé."
-    pos = tr.get("qui", {}).get(str(cid), {})
+    pos = tr.get("qui", {}).get(str(cid))
+    if not isinstance(pos, dict) or pos.get("fini"):
+        return (f"📍 SIGNAL ALIGN EN COURS — {m}\n"
+                "Tu n'es pas encore enregistré sur cette position.\n"
+                "Utilise « Suivre cette position » si tu l'as prise.\n"
+                "Aucun résultat personnel ne sera compté avant ton inscription.")
     prix = (r or {}).get("m1", [{}])[-1].get("c", tr["e"])
     entree = pos.get("e", tr["e"]) if isinstance(pos, dict) else tr["e"]
     sl = (pos.get("sl_conseil") or pos.get("sl") or tr["sl"]) if isinstance(pos, dict) else tr["sl"]
@@ -2705,7 +2717,7 @@ def notifier_clotures(etat, m, r, cle):
             if nouveaux:
                 bougie = nouveaux[-1]
                 resultat = _envoi_sur(cid, text=texte_cloture(m, tf, bougie, r, cle),
-                                     reply_markup=markup_analyse(etat, m, r))
+                                     reply_markup=markup_analyse(etat, m, r, cid))
                 # Ne consommer la clôture que si Telegram a accepté l'envoi : sinon réessayer au tour suivant.
                 if resultat is not None and not (isinstance(resultat, dict) and resultat.get("ok") is False):
                     derniers[tf] = int(bougie["t"])
@@ -2718,7 +2730,7 @@ def notifier_clotures(etat, m, r, cle):
         if not close:
             continue
         resultat = _envoi_sur(cid, text=texte_cloture(m, tf, close, r, cle),
-                               reply_markup=markup_analyse(etat, m, r))
+                               reply_markup=markup_analyse(etat, m, r, cid))
         if resultat is None or (isinstance(resultat, dict) and resultat.get("ok") is False):
             continue
         suivi["dernier_t"] = int(close["t"])
@@ -2746,7 +2758,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     vu[str(cid)] = {"sig": sig, "t": time.time()}
     armer_cloture(etat, cid, m, r, cle)
     res = telegram("sendMessage", chat_id=cid, text=texte_apercu(m, r, cle),
-                   reply_markup=markup_analyse(etat, m, r))
+                   reply_markup=markup_analyse(etat, m, r, cid))
     try:
         vu[str(cid)]["mid"] = res["result"]["message_id"]
     except (KeyError, TypeError):
@@ -2819,7 +2831,7 @@ def texte_resultats(etat, cid):
 def _texte_resultats(etat, cid):
     st = etat.get("stats", {}).get(cid)
     if not st:
-        return "📈 Mes résultats\n━━━━━━━━━━━━\nAucun trade clôturé pour l'instant.\n👉 Appuie sur ✅ Je suis rentré quand tu prends une position."
+        return "📈 Mes résultats\n━━━━━━━━━━━━\nAucun trade clôturé pour l'instant.\nLes résultats apparaîtront après la première clôture réellement enregistrée."
     n = st["tp"] + st["sl"]
     l = ["📈 Mes résultats", "━━━━━━━━━━━━",
          f"✅ TP gagnés   {st['tp']}", f"❌ Stops touchés   {st['sl']}",
@@ -3214,14 +3226,14 @@ def traiter(etat, chats, updates):
                         r_ref = DERNIERS.get(mk)
                         if r_ref:
                             _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
-                                      reply_markup=markup_analyse(etat, mk, r_ref))
+                                      reply_markup=markup_analyse(etat, mk, r_ref, qui))
                         else:
                             _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est plus disponible. Relance l'analyse du marché.")
                 else:
                     r_ref = DERNIERS.get(mk)
                     if r_ref:
                         res = _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
-                                         reply_markup=markup_analyse(etat, mk, r_ref))
+                                         reply_markup=markup_analyse(etat, mk, r_ref, qui))
                         if res and res.get("ok"):
                             etat.setdefault("vu_analyse", {}).setdefault(mk, {}).setdefault(qui, {})["mid"] = res["result"]["message_id"]
                     else:
@@ -3304,7 +3316,7 @@ def traiter(etat, chats, updates):
                         _envoi_sur(qui, text="⚠️ L'analyse n'est pas disponible pour le moment. Réessaie avec le bouton Analyse.")
                         continue
                 _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {})),
-                           reply_markup=markup_analyse(etat, mk, r_resume))
+                           reply_markup=markup_analyse(etat, mk, r_resume, qui))
                 continue
             if choix in ("jok", "jno") and qui in proprio(etat):
                 decider_entree(etat, cb, choix == "jok", mk)
@@ -3594,7 +3606,7 @@ def refuser(etat, cid):
 def masquer(texte):
     """Cache tous les prix (entrée, stop, TP) pour les visiteurs non abonnés."""
     texte = re.sub(r"[+-]\d+,\d+ %", "🔒 %", texte)
-    return re.sub(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", "🔒🔒🔒", texte).replace("\n\nTu es rentré ?", "")
+    return re.sub(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", "🔒🔒🔒", texte).replace("\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", "")
 
 def envoyer_prospects(etat, texte, signal, clavier=None):
     """Visiteurs : news en clair ; UNE position de bienvenue complète (bougies + coach) ;
@@ -3768,8 +3780,10 @@ def destinataires(etat, chats):
     return list(chats) + ([etat["canal"]] if etat.get("canal") else [])
 
 def boutons(m):
-    return json.dumps({"inline_keyboard": [[{"text": "✅ Je suis rentré", "callback_data": f"in:{m}"},
-                                            {"text": "❌ Non", "callback_data": f"out:{m}"}]]})
+    """Sur une alerte d'entrée, le seul choix proposé est de suivre cette position."""
+    return json.dumps({"inline_keyboard": [[
+        {"text": "📍 Suivre cette position", "callback_data": f"in:{m}"}
+    ]]})
 
 def barre_pct(pct, n=10):
     pct = max(0, min(100, pct)); plein = round(pct / 100 * n)
@@ -4655,7 +4669,7 @@ def agent(m, r, cle, ferme):
             out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}"
                         f"🕯 La bougie 5 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
                         f"🛑 SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de cette bougie\n\n"
-                        f"{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                        f"{fmt_trade(m, tr, p)}{ferme}\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", boutons(m)))
             return out
         # Le prix approche du niveau de cassure : on l'annonce AVANT (1 fois par niveau)
         if len(r["b5"]) >= 22 and not r.get("annonce"):
@@ -4830,7 +4844,7 @@ def agent(m, r, cle, ferme):
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
                 pct_conf = round(100 * score / len(checks))
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confluence : {pct_conf}% ({score}/{len(checks)} critères, pas une probabilité de gain)\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\nTu es rentré ?", boutons(m)))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confluence : {pct_conf}% ({score}/{len(checks)} critères, pas une probabilité de gain)\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
@@ -4891,7 +4905,7 @@ def agent(m, r, cle, ferme):
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
                 tr["encore"] += 1
                 if True:
-                    out.append((f"👍 {m} : tu peux encore rentrer ({px(p)}). Stop {px(sl)} • TP1 {px(t1)}\n\nTu es rentré ?", boutons(m)))
+                    out.append((f"👍 {m} : tu peux encore rentrer ({px(p)}). Stop {px(sl)} • TP1 {px(t1)}\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", boutons(m)))
         elif not tr.get("tard"):
             tr["tard"] = True
             # Le bot reste en position jusqu'au TP ou au SL (son bilan compte toutes ses positions)
@@ -5081,7 +5095,7 @@ def un_tour(etat, chats):
                 try:
                     if cid == etat.get("canal"):
                         # Chaîne VIP : pas de clavier possible dans une chaîne → boutons sous le message (ils ouvrent le bot)
-                        txt = texte.replace("\n\nTu es rentré ?", "")
+                        txt = texte.replace("\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", "")
                         telegram("sendMessage", chat_id=cid, text=txt, reply_markup=boutons_canal(etat, texte))
                     elif clavier:
                         telegram("sendMessage", chat_id=cid, text=texte, reply_markup=clavier)
