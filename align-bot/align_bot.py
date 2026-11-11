@@ -1015,6 +1015,9 @@ def verdict(r, cle):
 TRAD = {
 # Boutons
 "🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis",
+"📡 Mes marchés": "📡 My markets", "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
+"🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
+"✅ Sélection enregistrée": "✅ Selection saved",
 "✅ Je suis rentré": "✅ I'm in", "🚪 Je suis sorti": "🚪 I'm out", "📈 Mes résultats": "📈 My results",
 "🧩 Indicateur TradingView": "🧩 TradingView indicator", "💎 Devenir VIP": "💎 Become VIP",
 "Utilise les boutons 👇": "Use the buttons 👇", "❌ Non": "❌ No",
@@ -1550,7 +1553,7 @@ TRAD.update({
 LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
 _CLES = sorted(TRAD, key=len, reverse=True)
 BOUTONS_FR = ["🤖 Mon bot", "📸 Partager mon gain", "🟠 Analyse BTC", "🥇 Analyse Gold", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
-              "🧩 Indicateur TradingView", "💎 Devenir VIP", "❌ Non"]
+              "🧩 Indicateur TradingView", "💎 Devenir VIP", "📡 Mes marchés", "❌ Non"]
 INVERSE = {TRAD[b]: b for b in BOUTONS_FR}        # bouton anglais reçu → même action qu'en français
 
 def traduire(t):
@@ -1701,11 +1704,13 @@ def telegram(methode, **params):
 CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
                                    [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
                                    [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
+                                   [{"text": "📡 Mes marchés"}],
                                    [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
                                             [{"text": "💎 Devenir VIP"}],
-                                            [{"text": "📸 Partager mon gain"}, {"text": "🌐 English"}]],
+                                            [{"text": "📸 Partager mon gain"}, {"text": "📡 Mes marchés"}],
+                                            [{"text": "🌐 English"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
@@ -2444,7 +2449,7 @@ def regler_bot(etat, cid, on):
 def entrer_inscrits(etat, m, tr, chats=()):
     """Le bot vient d'entrer : il fait entrer automatiquement tous les membres dont le bot est ON,
     plus ceux qui ont appuyé sur 🎯, au prix d'entrée du bot (coach + résultats comptés)."""
-    auto = [c for c in chats if bot_on(etat, c) and c not in etat.get("prospects", []) and c != etat.get("canal")]
+    auto = [c for c in chats if bot_on(etat, c) and marche_autorise(etat, c, m) and c not in etat.get("prospects", []) and c != etat.get("canal")]
     for cid in list(dict.fromkeys(etat.get("auto", {}).pop(m, []) + auto)):
         if isinstance(tr.setdefault("qui", {}).get(cid), dict):
             continue
@@ -2606,6 +2611,9 @@ def notifier_clotures(etat, m, r, cle):
     """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
     champs = TF_CHAMPS
     for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
+        if not marche_autorise(etat, cid, m):
+            etat["veille_cloture"][m].pop(cid, None)
+            continue
         if suivi.get("multi"):
             if cle.get("trade") or time.time() >= float(suivi.get("expire", 0)):
                 etat["veille_cloture"][m].pop(cid, None)
@@ -2819,7 +2827,7 @@ def changer_langue(etat, cid, anglais, membre_ok):
 COMMANDES = {"/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
              "/resultats": "📈 Mes résultats", "/gain": "📸 Partager mon gain", "/vip": "💎 Devenir VIP",
              "/english": "🌐 English", "/francais": "🌐 Français", "/rentre": "✅ Je suis rentré", "/sorti": "🚪 Je suis sorti",
-             "/indicateur": "🧩 Indicateur TradingView"}
+             "/indicateur": "🧩 Indicateur TradingView", "/marches": "📡 Mes marchés"}
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
@@ -3033,6 +3041,14 @@ def traiter(etat, chats, updates):
                 continue
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb_chat["id"])
+            if choix == "markets" and mk in ("BTC", "GOLD", "BOTH"):
+                etat.setdefault("marches_par_chat", {})[qui] = mk
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Sélection enregistrée")
+                except Exception:
+                    pass
+                menu_marches(etat, qui)
+                continue
             if choix == "results":
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📈 Tes résultats")
@@ -3333,6 +3349,9 @@ def traiter(etat, chats, updates):
             etat.setdefault("noms", {})[cid] = nom
             menu_indicateur(etat, cid, nom)
             continue
+        if "mes marches" in txt or "my markets" in txt or txt.startswith("/marches"):
+            menu_marches(etat, cid)
+            continue
         if "mon bot" in txt or "mon_bot" in txt:
             menu_bot(etat, cid)
             continue
@@ -3542,6 +3561,50 @@ def connecter_canal(etat, mcm):
     elif etat.get("canal") == cid and st in ("left", "kicked", "member"):
         etat.pop("canal", None)
 
+def marche_selection(etat, cid):
+    """Préférence personnelle persistante ; les anciens abonnés gardent les deux marchés."""
+    choix = etat.setdefault("marches_par_chat", {}).get(str(cid), "BOTH")
+    return choix if choix in ("BTC", "GOLD", "BOTH") else "BOTH"
+
+def marche_autorise(etat, cid, marche):
+    choix = marche_selection(etat, cid)
+    return choix == "BOTH" or choix == marche
+
+def menu_marches(etat, cid):
+    choix = marche_selection(etat, cid)
+    labels = {
+        "BTC": "🟠 BTC uniquement",
+        "GOLD": "🥇 GOLD uniquement",
+        "BOTH": "🟠 BTC + 🥇 GOLD",
+    }
+    lignes = [[{"text": ("✅ " if choix == "BTC" else "") + labels["BTC"], "callback_data": "markets:BTC"}],
+              [{"text": ("✅ " if choix == "GOLD" else "") + labels["GOLD"], "callback_data": "markets:GOLD"}],
+              [{"text": ("✅ " if choix == "BOTH" else "") + labels["BOTH"], "callback_data": "markets:BOTH"}]]
+    _envoi_sur(cid, text="📡 CHOISIS LES MARCHÉS QUE TU SOUHAITES SUIVRE\\n\\nLes analyses et alertes privées seront filtrées selon ton choix.\\nLes positions déjà ouvertes restent suivies jusqu'à leur clôture.",
+               reply_markup=json.dumps({"inline_keyboard": lignes}))
+
+def marche_du_message(texte):
+    """Détecte le marché dans l'en-tête d'une notification ; les messages macro mixtes exigent BOTH."""
+    tete = " ".join(str(texte or "").splitlines()[:3]).upper()
+    btc = bool(re.search(r"\\bBTC\\b|BITCOIN", tete))
+    gold = bool(re.search(r"\\bGOLD\\b|XAUUSD", tete))
+    if btc and gold:
+        return "BOTH"
+    if btc:
+        return "BTC"
+    if gold:
+        return "GOLD"
+    return None
+
+def destinataires_message(etat, chats, texte):
+    marche = marche_du_message(texte)
+    cibles = [str(c) for c in chats if marche is None or (marche == "BOTH" and marche_selection(etat, c) == "BOTH") or
+              (marche in ("BTC", "GOLD") and marche_autorise(etat, c, marche))]
+    # La chaîne VIP reste commune et reçoit les deux marchés, sans préférence individuelle.
+    if etat.get("canal"):
+        cibles.append(str(etat["canal"]))
+    return list(dict.fromkeys(cibles))
+
 def destinataires(etat, chats):
     """Téléphones qui reçoivent les signaux + la chaîne VIP."""
     return list(chats) + ([etat["canal"]] if etat.get("canal") else [])
@@ -3593,6 +3656,13 @@ def jauge(m, r, cle, cid=None, canal=False):
 
 def maj_jauge(m, r, cle, chats, canal=None):
     for cid in list(chats) + ([canal] if canal else []):
+        if cid != canal and not marche_autorise(etat, cid, m):
+            mid = cle.get("jauge", {}).pop(cid, None)
+            cle.get("jauge_txt", {}).pop(cid, None)
+            if mid:
+                try: telegram("deleteMessage", chat_id=cid, message_id=mid)
+                except Exception: pass
+            continue
         txt = jauge(m, r, cle, cid, cid == canal)
         mid = cle.get("jauge", {}).get(cid)
         try:
@@ -4849,7 +4919,7 @@ def un_tour(etat, chats):
     if TOKEN:
         for t in envois:
             texte, clavier = (t if isinstance(t, tuple) else (t, None))
-            for cid in destinataires(etat, chats):
+            for cid in destinataires_message(etat, chats, texte):
                 try:
                     if cid == etat.get("canal"):
                         # Chaîne VIP : pas de clavier possible dans une chaîne → boutons sous le message (ils ouvrent le bot)
