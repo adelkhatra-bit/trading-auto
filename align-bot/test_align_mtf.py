@@ -125,9 +125,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("📌 Entrée\n4050,00", message)
 
     def test_telegram_price_values_remove_all_thousands_grouping_spaces(self):
-        message = align_bot.mise_en_forme("PLAN\\n💰 TP1 : 12 345 678,90 (niveau majeur)")
-        self.assertIn("12 345 678,90", "12 345 678,90")  # input uses grouped digits
-        self.assertIn("💰 TP1\\n12345678,90\\nniveau majeur", message)
+        message = align_bot.mise_en_forme("PLAN\n💰 TP1 : 12 345 678,90 (niveau majeur)")
+        self.assertIn("💰 TP1\n12345678,90\nniveau majeur", message)
 
     def test_previous_analysis_button_is_market_specific(self):
         import json
