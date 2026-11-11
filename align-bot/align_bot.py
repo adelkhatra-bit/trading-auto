@@ -784,6 +784,37 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
     if "Prochaine entrée" not in raison and not tr:
         l.append(prochaine(r, cle))
     return "\n".join(l)
+# Unité regardée sur TradingView → fenêtre d'alignement et type de position (UT = 1,2,5,10,15,30,45,1h,2h,4h,D).
+FENETRES_UT = {
+    "M1": ("SCALPING", [0, 2, 4], "1 min + 5 min + 15 min", "quelques minutes"),
+    "M5": ("SCALPING / INTRADAY", [2, 4, 7], "5 min + 15 min + 1 h", "dans la séance"),
+    "M15": ("INTRADAY", [4, 7, 9], "15 min + 1 h + 4 h", "dans la journée"),
+    "M30": ("INTRADAY", [5, 7, 9], "30 min + 1 h + 4 h", "dans la journée"),
+    "H1": ("SWING", [7, 9, 10], "1 h + 4 h + Daily", "plusieurs jours"),
+    "H2": ("SWING", [8, 9, 10], "2 h + 4 h + Daily", "plusieurs jours"),
+    "H4": ("SWING", [9, 10], "4 h + Daily", "plusieurs jours à semaines"),
+    "D1": ("POSITION", [10], "Daily (Weekly non lu)", "semaines"),
+    "W1": ("POSITION", [10], "Daily (Weekly non lu)", "semaines"),
+}
+
+
+def lecture_unite_active(r):
+    """Adapte la lecture à l'unité ouverte sur TradingView ; rien n'est affiché si le bridge ne la fournit pas."""
+    tf = str((r.get("tv_indicator_mtf") or {}).get("activeTimeframe") or "").upper()
+    if tf not in FENETRES_UT:
+        return None
+    mode, idx, noms, duree = FENETRES_UT[tf]
+    D = r.get("dirs") or []
+    vals = [D[i] for i in idx if i < len(D)]
+    if vals and all(v == 1 for v in vals):
+        etat_ = "🟢 alignement LONG"
+    elif vals and all(v == -1 for v in vals):
+        etat_ = "🔴 alignement SHORT"
+    else:
+        etat_ = "🟠 pas d'alignement complet : attendre"
+    return f"📺 Ton graphique {tf} → {mode} ({duree})\n🧩 {noms} : {etat_}"
+
+
 def strategie_mtf(r):
     """H4/H1 = fond, M15 = préparation, M5 = timing ; profil scalp/intraday/swing explicite."""
     fl = lambda x: "🟢⬆️" if x == 1 else "🔴⬇️" if x == -1 else "🟠➖"
@@ -799,6 +830,9 @@ def strategie_mtf(r):
          f"🧭 Lecture : {profil['contexte']}",
          f"⏱ Horizon indicatif : {profil['horizon']}",
          f"🚦 {profil['statut']}"]
+    vue = lecture_unite_active(r)
+    if vue:
+        l.append(vue)
     if profil["contre_tendance"]:
         l.append("⚠️ Contre-tendance : objectif court, risque réduit selon les règles, aucune conservation swing.")
     if r.get("confirme") and r.get("repli"):
@@ -1081,7 +1115,7 @@ TRAD = {
 "🕒 Heure de clôture de la bougie :": "🕒 Candle close time:",
 "⏳ PROCHAINE CLÔTURE ": "⏳ NEXT CANDLE CLOSE ",
 "⏱ Temps restant :": "⏱ Time remaining:",
-"🕒 Heure prévue :": "🕒 Scheduled time:", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
+"🕒 Heure prévue :": "🕒 Scheduled time:", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
 "🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
 "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
 "🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
@@ -3013,6 +3047,32 @@ def controle_entree(etat, m, d):
             f"⚡ RSI 5 min   {r5:.0f}{' (surcharge, normal)' if (r5 >= 65 if d == -1 else r5 <= 35) else ''}\n"
             f"{r['news']}")
 
+def alerte_latence_entree(tr, prix):
+    """Latence Telegram/marché : compare le prix réel au moment du clic avec le plan du signal.
+    Renvoie "" si l'entrée reste saine, un avertissement ⚠️, ou un refus ⛔ si le stop est trop proche."""
+    try:
+        d, e0, sl = int(tr["d"]), float(tr["e"]), float(tr["sl"])
+        tp1 = float(tr.get("tp1", e0))
+        prix = float(prix)
+    except (KeyError, TypeError, ValueError):
+        return ""
+    risque0 = abs(e0 - sl)
+    if risque0 <= 0:
+        return ""
+    reste = d * (prix - sl)                       # distance réelle jusqu'au stop
+    if reste <= 0.25 * risque0:
+        return ("⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.\n"
+                "⏳ N'entre pas maintenant, attends le prochain signal.")
+    if reste < 0.6 * risque0:
+        return ("⚠️ Latence : le prix s'est rapproché du stop depuis le signal.\n"
+                f"🛑 Garde le SL du plan ({px(sl)}), ne le resserre pas ; réduis la taille si tu entres.")
+    gain_dispo = d * (tp1 - prix)
+    if gain_dispo < 0.5 * risque0:
+        return ("⚠️ Latence : le prix a déjà fait une bonne partie du chemin.\n"
+                "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.")
+    return ""
+
+
 def repondre(etat, cid, oui, mk=None):
     """Active le suivi personnel d'une position en cours ou enregistre une sortie manuelle."""
     trades = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
@@ -3029,6 +3089,11 @@ def repondre(etat, cid, oui, mk=None):
             return
         m = cands[0]; tr = etat[m]["trade"]
         e = prix_actuel(m) or tr["e"]
+        alerte = alerte_latence_entree(tr, e)
+        if alerte.startswith("⛔"):
+            # Le prix est déjà collé au stop (ou l'a dépassé) : on n'ouvre pas de suivi perdant d'avance.
+            _envoi_sur(cid, text=f"{ICONE.get(m, '')} {m}\n{alerte}", reply_markup=markup_position(m))
+            return
         tr.setdefault("qui", {})[cid] = {"e": e, "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
         _envoi_sur(cid, reply_markup=markup_position(m), text=(
             f"👊 SUIVI PERSONNEL ACTIVÉ — {ICONE.get(m, '')} {m}\n{SENS[tr['d']]}\n"
@@ -3037,6 +3102,7 @@ def repondre(etat, cid, oui, mk=None):
             f"💰 TP1   {px(tr['tp1'])}\n"
             f"━━━━━━━━━━━━\n"
             f"🤖 Coach activé jusqu'au TP\n"
+            + (f"{alerte}\n" if alerte else "") +
             f"{controle_entree(etat, m, tr['d'])}\n"
             f"━━━━━━━━━━━━\n"
             f"🔎 Je surveille toutes les 5 min :\n"
@@ -5160,6 +5226,23 @@ def _traiter_lecture_rapide(etat, chats, update):
     return False
 
 
+TOASTS_CALLBACK = {
+    "in": ("👊 Suivi de ta position activé : le coach te guide jusqu'au TP", "👊 Position tracking on: the coach guides you to TP"),
+    "auto": ("🔔 Suivi activé : je te préviens dès qu'une entrée est confirmée", "🔔 Tracking on: I'll alert you when an entry is confirmed"),
+    "followmarket": ("🔔 Suivi activé : je te préviens dès qu'une entrée est confirmée", "🔔 Tracking on: I'll alert you when an entry is confirmed"),
+    "markets": ("✅ Marchés enregistrés", "✅ Markets saved"),
+    "out": ("🚪 Sortie enregistrée", "🚪 Exit recorded"),
+    "analysechoice": ("📊 Analyse en cours…", "📊 Analysis running…"),
+}
+
+
+def toast_callback(data, anglais=False):
+    """Petite notification Telegram affichée immédiatement au clic, propre à chaque bouton."""
+    cle = str(data or "").split(":", 1)[0]
+    fr, en = TOASTS_CALLBACK.get(cle, ("⌛ Action reçue, traitement en cours.", "⌛ Action received, processing."))
+    return en if anglais else fr
+
+
 def _ack_callback_rapide(cb, text):
     try:
         telegram("answerCallbackQuery", callback_query_id=cb["id"], text=text)
@@ -5190,7 +5273,7 @@ def boucle_polling_telegram(etat, chats):
                     _ack_callback_rapide(cb, "🔒 Open the bot in a private chat." if anglais else "🔒 Ouvre le bot en conversation privée.")
                     update["_align_fast_handled"] = True
                 else:
-                    _ack_callback_rapide(cb, "⌛ Action received, processing." if anglais else "⌛ Action reçue, traitement en cours.")
+                    _ack_callback_rapide(cb, toast_callback(cb.get("data", ""), anglais))
             else:
                 _traiter_lecture_rapide(etat, chats, update)
             TELEGRAM_UPDATES.put(update)

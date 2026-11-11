@@ -2630,3 +2630,62 @@ class TestMainKeyboardButtonsRouting(unittest.TestCase):
     def test_markets_button_opens_market_selector(self):
         self.assertTrue(self._send("📡 Mes marchés")[2].called)
         self.assertTrue(self._send(align_bot.TRAD["📡 Mes marchés"], en=True)[2].called)
+
+
+class TestFollowToastAndLatencyGuard(unittest.TestCase):
+    def test_each_follow_button_gets_specific_toast(self):
+        self.assertIn("Suivi de ta position activé", align_bot.toast_callback("in:GOLD"))
+        self.assertIn("entrée est confirmée", align_bot.toast_callback("auto:BTC"))
+        self.assertIn("Position tracking on", align_bot.toast_callback("in:GOLD", anglais=True))
+        self.assertIn("traitement", align_bot.toast_callback("inconnu:x"))
+
+    def test_poller_sends_specific_toast_on_click(self):
+        from unittest.mock import patch
+        upd = {"update_id": 990001, "callback_query": {"id": "t1", "data": "in:GOLD",
+               "message": {"chat": {"id": 5, "type": "private"}}, "from": {"id": 5}}}
+        calls = []
+        def fake(methode, **k):
+            calls.append((methode, k))
+            if methode == "getUpdates":
+                align_bot.TELEGRAM_POLL_STOP.set()
+                return {"result": [upd]}
+            return {"ok": True}
+        align_bot.TELEGRAM_POLL_STOP.clear()
+        with patch.object(align_bot, "telegram", side_effect=fake), patch.object(align_bot, "TOKEN", "x"):
+            align_bot.boucle_polling_telegram({}, set())
+        align_bot.TELEGRAM_POLL_STOP.clear()
+        while not align_bot.TELEGRAM_UPDATES.empty():
+            align_bot.TELEGRAM_UPDATES.get_nowait()
+        toasts = [k["text"] for m, k in calls if m == "answerCallbackQuery"]
+        self.assertTrue(toasts and "Suivi de ta position activé" in toasts[0])
+
+    def test_latency_guard(self):
+        tr = {"d": -1, "e": 4065.0, "sl": 4068.0, "tp1": 4027.0}   # SHORT, risque 3
+        self.assertEqual(align_bot.alerte_latence_entree(tr, 4064.5), "")
+        self.assertTrue(align_bot.alerte_latence_entree(tr, 4066.5).startswith("⚠️"))
+        self.assertTrue(align_bot.alerte_latence_entree(tr, 4067.6).startswith("⛔"))
+        self.assertTrue(align_bot.alerte_latence_entree(tr, 4028.0).startswith("⚠️"))
+
+    def test_join_refused_when_price_at_stop(self):
+        from unittest.mock import patch
+        etat = {"GOLD": {"trade": {"d": -1, "e": 4065.0, "sl": 4068.0, "tp1": 4027.0, "qui": {}}}}
+        with patch.object(align_bot, "prix_actuel", return_value=4067.8), \
+             patch.object(align_bot, "_envoi_sur") as envoi, \
+             patch.object(align_bot, "markup_position", return_value="{}"):
+            align_bot.repondre(etat, "9", True, "GOLD")
+        self.assertNotIn("9", etat["GOLD"]["trade"]["qui"])
+        self.assertIn("collé au stop", envoi.call_args.kwargs["text"])
+
+
+class TestActiveTimeframeReading(unittest.TestCase):
+    def test_m5_chart_reads_5_15_60_alignment(self):
+        r = {"dirs": [-1] * 9 + [0, -1], "tv_indicator_mtf": {"activeTimeframe": "M5"}}
+        txt = align_bot.lecture_unite_active(r)
+        self.assertIn("M5", txt); self.assertIn("SHORT", txt); self.assertIn("5 min + 15 min + 1 h", txt)
+
+    def test_h1_chart_needs_4h_for_swing(self):
+        r = {"dirs": [-1] * 9 + [0, -1], "tv_indicator_mtf": {"activeTimeframe": "H1"}}
+        self.assertIn("pas d'alignement", align_bot.lecture_unite_active(r))
+
+    def test_no_bridge_no_invented_line(self):
+        self.assertIsNone(align_bot.lecture_unite_active({"dirs": [1] * 11}))
