@@ -1695,7 +1695,7 @@ TRAD.update({
 # Libellés des claviers inline et règle de risque : traduction explicite, sans changer les callbacks.
 TRAD.update({
     "❓ Pourquoi cette décision ?": "❓ Why this decision?",
-    "📊 Analyse complète": "📊 Full analysis",
+    "📊 Analyse complète": "📊 Full analysis", "🧠 En savoir plus": "🧠 Learn more",
     "🎯 Niveaux / prix": "🎯 Levels / prices",
     "⏱ Toutes les unités": "⏱ All timeframes",
     "🗂 Historique des messages": "🗂 Message history",
@@ -2372,7 +2372,7 @@ def markup_analyse(etat, m, r, cid=None):
     lignes.extend([
         [
             {"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
-            {"text": "📊 Analyse complète", "callback_data": f"details:{m}"},
+            {"text": "🧠 En savoir plus", "callback_data": f"details:{m}"},
         ],
         [
             {"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
@@ -2507,6 +2507,17 @@ def texte_pourquoi(m, r, cle):
         "ℹ️ Aucun ordre n'est envoyé au broker."
     ])
 
+def news_courte(news):
+    """Une seule ligne d'actualité dans la carte : la prochaine annonce, ou rien d'important d'ici 4 h."""
+    lignes = [re.sub(r"^[^\wÀ-ÿ]+", "", x).strip() for x in str(news).split("\n") if x.strip()]
+    evts = [x for x in lignes if re.search(r"\d{1,2}:\d{2}", x) and "Prochaines news" not in x]
+    calme = any("Rien d'ici" in x for x in lignes)
+    if evts:
+        return (f"📰 Pas de news d'ici 4 h — prochaine : {court(evts[0], 70)}" if calme
+                else f"📰 News : {court(evts[0], 80)}")
+    return f"📰 {court(lignes[0] if lignes else news, 80)}"
+
+
 def court(texte, n=120):
     texte = re.sub(r"\s+", " ", str(texte or "")).strip()
     return texte if len(texte) <= n else texte[:n].rsplit(" ", 1)[0].rstrip(",;: ") + "…"
@@ -2541,8 +2552,9 @@ def objectifs_marche(r, d):
         l.append(f"🪫 Essoufflement possible : ≈ {px(suite[0])} ({suite[1]})")
     a5 = r.get("atr5") or 0
     if a5 > 0:
-        minutes = int(round(abs(cible[0] - p) / a5 * 5 * 1.5 / 5.0)) * 5
-        l.append(f"⏱ Trajet estimé : ≈ {max(5, minutes)} min (indicatif, pas une promesse)")
+        minutes = max(5, int(round(abs(cible[0] - p) / a5 * 5 * 1.5 / 5.0)) * 5)
+        duree = f"≈ {minutes} min" if minutes < 120 else f"≈ {minutes // 60} h" if minutes <= 480 else "plusieurs heures à jours"
+        l.append(f"⏱ Trajet estimé : {duree} (indicatif, pas une promesse)")
     return l
 
 
@@ -2570,7 +2582,9 @@ def texte_apercu(m, r, cle):
         direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "AUCUNE DIRECTION CONFIRMÉE"
 
     prof = profil_strategie(r) if r.get("dirs") and len(r.get("dirs")) >= 11 else {}
-    sens = (tr or {}).get("d") or prof.get("direction") or maj or 0
+    sens = (tr or {}).get("d") or maj or prof.get("direction") or 0
+    if not tr and not maj and sens:
+        direction = ("LONG ⬆️" if sens == 1 else "SHORT ⬇️") + " — pas encore confirmé"
     type_ = prof.get("mode") or ""
     lignes = [
         f"{ICONE.get(m, '📊')} {m} — {px(prix)}",
@@ -2591,7 +2605,7 @@ def texte_apercu(m, r, cle):
         o = cle["ordre"]
         lignes += [f"🟨 Zone surveillée : {px(min(o.get('za', o['e']), o.get('zb', o['e'])))} → {px(max(o.get('za', o['e']), o.get('zb', o['e'])))}"]
     if r.get("news"):
-        lignes += [f"📰 Actualité : {r['news']}"]
+        lignes += [news_courte(r["news"])]
     lignes += ["", "👇 Détails : boutons ci-dessous", "ℹ️ Aucun ordre n'est envoyé automatiquement à ton broker."]
     return "\n".join(lignes)
 
@@ -3168,9 +3182,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     except (KeyError, TypeError):
         pass
     # L'avis IA reste envoyé séparément ; aucune information existante n'est supprimée.
-    # Avis court (voyants des unités) ; l'avis IA complet est derrière « En savoir plus ».
-    en = str(cid) in LANG_EN
-    _envoi_sur(cid, text=carte_avis_courte(m, r, cle, anglais=en), reply_markup=markup_avis(m, en))
+    # Les voyants sont déjà dans la carte ; l'avis IA complet est derrière « 🧠 En savoir plus ».
 
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
