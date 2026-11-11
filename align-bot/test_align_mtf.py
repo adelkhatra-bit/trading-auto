@@ -482,7 +482,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(align_bot.px(4000), "4000")
         self.assertEqual(align_bot.mise_en_forme("TP1 : 4 000,00"), "TP1\n4000")
 
-    def test_repeated_analysis_keeps_ai_commentary_for_btc_and_gold(self):
+    def test_repeated_analysis_sends_one_complete_ai_card_for_btc_and_gold(self):
         from unittest.mock import patch
         for market in ("BTC", "GOLD"):
             state = {"vu_analyse": {market: {"123": {"sig": "same", "t": align_bot.time.time() - 30}}}}
@@ -490,16 +490,17 @@ class AlignMtfRulesTest(unittest.TestCase):
             with (
                 patch.object(align_bot, "signature_analyse", return_value="same"),
                 patch.object(align_bot, "armer_cloture") as arm,
-                patch.object(align_bot, "chrono_txt", return_value="⏳ Prochaine clôture"),
-                patch.object(align_bot, "statut_txt", return_value="⏳ ATTENTE"),
                 patch.object(align_bot, "avis_ia", return_value="🧠 AI opinion") as ai,
-                patch.object(align_bot, "_envoi_sur") as send,
+                patch.object(align_bot, "telegram", return_value={"result": {"message_id": 42}}) as send,
+                patch.object(align_bot, "markup_analyse", return_value='{"inline_keyboard": []}'),
+                patch.object(align_bot, "px", return_value="100.00"),
             ):
                 align_bot.envoyer_analyse_a(state, "123", market, r, {})
             arm.assert_called_once()
             ai.assert_called_once_with(state, market, r, {}, anglais=False)
-            self.assertEqual(send.call_count, 2, market)
+            send.assert_called_once()
             self.assertIn("AI opinion", send.call_args.kwargs["text"])
+            self.assertIn(market, send.call_args.kwargs["text"])
 
     def test_ai_commentary_uses_english_for_english_subscribers(self):
         from unittest.mock import patch
