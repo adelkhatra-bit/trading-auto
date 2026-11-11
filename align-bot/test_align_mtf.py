@@ -615,7 +615,10 @@ class AlignMtfRulesTest(unittest.TestCase):
                 patch.object(align_bot, "telegram"),
             ):
                 align_bot.traiter({}, set(), [update])
-            toggle.assert_called_once_with({}, "123", enabled)
+            toggle.assert_called_once()
+            args, _ = toggle.call_args
+            self.assertEqual(args[1:], ("123", enabled))
+            self.assertEqual(args[0]["offset"], 9111)
 
     def test_owner_admin_buttons_are_routed_to_their_handlers(self):
         from unittest.mock import patch
