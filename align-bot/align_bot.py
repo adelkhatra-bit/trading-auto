@@ -2593,12 +2593,14 @@ def texte_cloture(m, tf, bougie, r, cle):
         lignes.append(f"🎯 {profil['mode']} {sens(profil.get('direction', 0))}")
     tr = cle.get("trade")
     ordre = cle.get("ordre")
+    niveau = lambda value: px(value) if value is not None else "—"
     if tr:
-        lignes.append(f"📍 Entrée {px(tr['e'])} · SL {px(tr['sl'])} · TP1 {px(tr['tp1'])} · TP2 {px(tr['tp2'])}")
+        lignes.append(f"📍 Entrée {niveau(tr.get('e'))} · SL {niveau(tr.get('sl'))} · TP1 {niveau(tr.get('tp1'))} · TP2 {niveau(tr.get('tp2'))}")
         lignes.append("👀 Suivi actif : SL / BE / TP")
     elif ordre:
-        bas, haut = sorted((ordre.get("za", ordre["e"]), ordre.get("zb", ordre["e"])))
-        lignes.append(f"🟡 Zone {px(bas)}–{px(haut)} · SL {px(ordre['sl'])} · TP1 {px(ordre['tp1'])} · TP2 {px(ordre['tp2'])}")
+        entree = ordre.get("e", prix)
+        bas, haut = sorted((ordre.get("za", entree), ordre.get("zb", entree)))
+        lignes.append(f"🟡 Zone {px(bas)}–{px(haut)} · SL {niveau(ordre.get('sl'))} · TP1 {niveau(ordre.get('tp1'))} · TP2 {niveau(ordre.get('tp2'))}")
     else:
         attente = "4h" if not d4h else "1h" if d1h != d4h else "15m" if not r.get("confirme") else "5m"
         lignes.append(f"⏳ Prochaine validation : clôture {attente}")
