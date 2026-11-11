@@ -1468,6 +1468,13 @@ def avis_ia(etat, m, r, cle):
 def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
 
+def bouton_rappel(m):
+    """Rappelle la bonne analyse de marché, même si un autre marché a envoyé des messages depuis."""
+    return json.dumps({"inline_keyboard": [
+        [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
+        [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
+    ]})
+
 def markup_analyse(etat, m, r):
     """Clavier inline de la fiche : détails, niveaux et action explicite sur la position."""
     cle = etat.get(m, {})
@@ -1676,11 +1683,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     if der and der["sig"] == sig and time.time() - der["t"] < 1200:
         lignes = chrono_txt(m, r, cle, time.time()).split("\\n")
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
-        clavier_rappel = json.dumps({"inline_keyboard": [
-            [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
-            [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
-        ]})
-        _envoi_sur(cid, reply_markup=clavier_rappel, text="\\n".join(
+        _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\\n".join(
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
              f"🕒 Analyse de référence : {heure(der['t'])}",
              "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
@@ -2012,6 +2015,14 @@ def traiter(etat, chats, updates):
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
             if choix == "previous" and mk in MARCHES:
+                if not autorise(etat, qui, cb.get("from", {}).get("id")):
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Analyse réservée aux VIP")
+                    except Exception:
+                        pass
+                    _envoi_sur(qui, text="🔒 Le rappel de l'analyse complète est réservé aux VIP.",
+                               **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {"reply_markup": CLAVIER_VISITEUR}))
+                    continue
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text=f"📌 Analyse {mk}")
                 except Exception:
