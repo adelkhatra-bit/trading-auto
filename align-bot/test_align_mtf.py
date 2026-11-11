@@ -904,16 +904,16 @@ class AlignMtfRulesTest(unittest.TestCase):
             for i in range(40)
         ]}
         update = {"update_id": 9240, "callback_query": {
-            "id": "cb-history-page", "data": "history:BTC:15",
+            "id": "cb-history-page", "data": "history:BTC:8",
             "message": {"chat": {"id": 123}}, "from": {"id": 123}
         }}
         with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
             align_bot.traiter(state, set(), [update])
-        self.assertIn("Messages 12 à 26 sur 41", send.call_args.kwargs["text"])
+        self.assertIn("Messages 26 à 33 sur 41", send.call_args.kwargs["text"])
         buttons = json.loads(send.call_args.kwargs["reply_markup"])["inline_keyboard"]
         callbacks = [button["callback_data"] for row in buttons for button in row]
         self.assertIn("history:BTC:0", callbacks)
-        self.assertIn("history:BTC:30", callbacks)
+        self.assertIn("history:BTC:16", callbacks)
 
     def test_personal_close_notification_attaches_results_and_history_buttons(self):
         from unittest.mock import patch
