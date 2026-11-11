@@ -357,10 +357,28 @@ class AlignMtfRulesTest(unittest.TestCase):
             with patch.object(align_bot, "raison_attente", return_value="La 1 h doit confirmer la 4 h"):
                 with patch.object(align_bot, "prochaine", return_value="Pas encore de sens"):
                     msg = align_bot.texte_cloture("GOLD", "5m", candle(300, o=4029.73, h=4032, l=4028, c=4031.11), r, {})
-        self.assertTrue(msg.startswith("🚫 N'ENTRE PAS"))
-        self.assertLess(msg.index("🚫 N'ENTRE PAS"), msg.index("🕯 CLÔTURE 5m"))
+        self.assertTrue(msg.startswith("🔴 CLÔTURE — SIGNAL NON CONFIRMÉ"))
+        self.assertLess(msg.index("🔴 CLÔTURE — SIGNAL NON CONFIRMÉ"), msg.index("🕯 Bougie 5m clôturée"))
+        self.assertIn("N'ENTRE PAS", msg)
         self.assertIn("POURQUOI", msg)
-        self.assertIn("CE QUE TU DOIS FAIRE", msg)
+        self.assertIn("PROCHAINE ACTION", msg)
+
+    def test_upcoming_position_is_distinguished_from_open_trade(self):
+        from unittest.mock import patch
+        r = {"dirs": [1] * 11, "confirme": 1, "m1": [candle(7200, c=67500.0)]}
+        ordre = {"d": 1, "e": 67510.0, "za": 67490.0, "zb": 67520.0, "sl": 67400.0}
+        with (
+            patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "Attendre le retour en zone")),
+            patch.object(align_bot, "raison_attente", return_value="Le prix doit revenir en zone"),
+            patch.object(align_bot, "prochaine", return_value="Prochaine entrée LONG sur repli"),
+            patch.object(align_bot, "heure", return_value="03:00"),
+            patch.object(align_bot, "alignement", return_value=(2, 2)),
+            patch.object(align_bot, "meche_sl", return_value="sous la mèche"),
+        ):
+            msg = align_bot.texte_cloture("BTC", "5m", candle(7200), r, {"ordre": ordre})
+        self.assertIn("POSITION À VENIR", msg)
+        self.assertIn("ordre en attente", msg)
+        self.assertNotIn("POSITION EN COURS", msg)
 
     def test_candle_close_countdown_uses_next_real_candle_boundary(self):
         from unittest.mock import patch
