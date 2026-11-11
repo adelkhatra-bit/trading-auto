@@ -1,0 +1,34 @@
+name: ALIGN contrôle IA (manuel)
+
+# Contrôle réel de la chaîne IA, en 30 secondes, SANS toucher au worker de production (groupe de concurrence séparé).
+# Affiche AI_PROVIDER_STATUS / AI_EXTERNAL_STATUS et le code HTTP des fournisseurs ; aucune clé n'est jamais affichée.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: align-ai-check
+  cancel-in-progress: true
+
+jobs:
+  ia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: align-bot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: align-bot
+      - name: Contrôle IA réel (même chaîne que le bot)
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+        run: python3 ai_healthcheck.py
