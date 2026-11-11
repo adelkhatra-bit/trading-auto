@@ -1860,6 +1860,47 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
             align_bot.traiter({}, set(), [update])
         subscribe.assert_called_once_with(unittest.mock.ANY, "101", "BTC", notifier=False)
 
+    def test_followmarket_btc_registers_only_btc(self):
+        from unittest.mock import patch
+        state = {
+            "auto": {"BTC": [], "GOLD": ["101"]},
+            "veille_cloture": {"GOLD": {"101": {"multi": True}}},
+            "marches_par_chat": {"101": "BOTH"}
+        }
+        update = {"update_id": 99001, "callback_query": {
+            "id": "follow-btc", "data": "followmarket:BTC",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "inscrire_auto") as subscribe, \
+             patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
+            align_bot.traiter(state, set(), [update])
+        subscribe.assert_called_once_with(unittest.mock.ANY, "101", "BTC", notifier=False)
+        self.assertEqual(state["marches_par_chat"]["101"], "BTC")
+        self.assertNotIn("101", state["auto"]["GOLD"])
+        self.assertNotIn("101", state["veille_cloture"]["GOLD"])
+
+    def test_followmarket_gold_sets_exclusive_preference_and_clears_stale_btc_watch(self):
+        from unittest.mock import patch
+        state = {
+            "auto": {"BTC": ["101", "202"], "GOLD": []},
+            "veille_cloture": {"BTC": {"101": {"multi": True}, "202": {"multi": True}}},
+            "marches_par_chat": {"101": "BOTH"}
+        }
+        update = {"update_id": 99003, "callback_query": {
+            "id": "follow-gold", "data": "followmarket:GOLD",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "inscrire_auto") as subscribe, \
+             patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
+            align_bot.traiter(state, set(), [update])
+        subscribe.assert_called_once_with(unittest.mock.ANY, "101", "GOLD", notifier=False)
+        self.assertEqual(state["marches_par_chat"]["101"], "GOLD")
+        self.assertEqual(state["auto"]["BTC"], ["202"])
+        self.assertNotIn("101", state["veille_cloture"]["BTC"])
+        self.assertIn("202", state["veille_cloture"]["BTC"])
+
     def test_followmarket_both_registers_btc_and_gold(self):
         from unittest.mock import patch
         state = {}
@@ -1872,3 +1913,4 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
              patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
             align_bot.traiter(state, set(), [update])
         self.assertEqual([call.args[2] for call in subscribe.call_args_list], ["BTC", "GOLD"])
+        self.assertEqual(state["marches_par_chat"]["102"], "BOTH")
