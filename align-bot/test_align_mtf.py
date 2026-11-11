@@ -808,6 +808,43 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Attendre un nouveau message explicite", message)
         self.assertNotIn("Prochaine entrée SHORT", message)
 
+    def test_all_timeframe_breakdown_lists_every_calculated_unit_and_strategy_role(self):
+        r = {
+            "dirs": [1, -1, 1, 0, -1, 1, 0, 1, -1, 1, 1],
+            "rsis": [61, 45, 65, 50, 38, 54, 49, 63, 42, 68, 71],
+        }
+        message = align_bot.texte_timeframes("GOLD", r)
+        for label in ("1 min", "2 min", "5 min", "10 min", "15 min", "30 min",
+                      "45 min", "1 heure", "2 heures", "4 heures", "Daily"):
+            self.assertIn(label, message)
+        self.assertIn("4 h : tendance principale", message)
+        self.assertIn("1 h : confirmation obligatoire", message)
+        self.assertIn("5 min : déclencheur après clôture", message)
+        self.assertIn("RSI 68", message)
+
+    def test_all_timeframe_button_is_present_and_callback_is_handled(self):
+        import json
+        keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        self.assertIn("timeframes:BTC", callbacks)
+        update = {"update_id": 9210, "callback_query": {
+            "id": "cb-timeframes", "data": "timeframes:BTC",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        r = {
+            "dirs": [1] * 11, "rsis": [55] * 11,
+            "m1": [candle(1, c=100.0)], "confirme": 1
+        }
+        with (
+            patch.object(align_bot, "autorise", return_value=True),
+            patch.dict(align_bot.DERNIERS, {"BTC": r}),
+            patch.object(align_bot, "_envoi_sur") as send,
+            patch.object(align_bot, "telegram"),
+        ):
+            align_bot.traiter({}, set(), [update])
+        self.assertIn("TOUTES LES UNITÉS", send.call_args.kwargs["text"])
+        self.assertIn("45 min", send.call_args.kwargs["text"])
+
     def test_compact_analysis_buttons_expose_why_full_analysis_and_levels(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
