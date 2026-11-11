@@ -1969,6 +1969,22 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         self.assertNotIn("__global__", align_bot.TELEGRAM_RETRY_UNTIL)
         align_bot.TELEGRAM_RETRY_UNTIL.clear()
 
+    def test_bot_name_is_never_changed_by_code(self):
+        from unittest.mock import patch
+        with patch.object(align_bot, "telegram", return_value={"ok": True, "result": {}}) as tg:
+            align_bot.installer_menu({})
+        self.assertNotIn("setMyName", [c.args[0] for c in tg.call_args_list])
+
+    def test_real_time_ai_comes_back_once_per_key_moment(self):
+        from unittest.mock import patch
+        st = {}
+        with patch.object(align_bot, "ia", return_value="🔥 Tiens-toi prêt"), patch.object(align_bot, "donnees_ia", return_value={}):
+            a = align_bot.commentaires_ia_temps_reel(st, "GOLD", {}, {}, ["🎯 TP1 TOUCHÉ — 🥇 GOLD\nx"])
+            b = align_bot.commentaires_ia_temps_reel(st, "GOLD", {}, {}, ["🎯 TP1 TOUCHÉ — 🥇 GOLD\nx"])
+        self.assertEqual(len(a), 1)
+        self.assertIn("L'IA ALIGN EN DIRECT", a[0])
+        self.assertEqual(b, [])
+
     def test_coach_speaks_with_first_name(self):
         etat = {}
         align_bot.retenir_prenom(etat, 5, {"first_name": "Adel K"})
