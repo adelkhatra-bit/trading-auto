@@ -1928,6 +1928,14 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
         self.assertEqual(state["auto"]["BTC"], ["202"])
         self.assertNotIn("101", state["veille_cloture"]["BTC"])
         self.assertIn("202", state["veille_cloture"]["BTC"])
+        self.assertEqual(
+            align_bot.destinataires_message(state, {"101", "202"}, "🔴 BTC — SIGNAL NON CONFIRMÉ"),
+            ["202"]
+        )
+        self.assertEqual(
+            align_bot.destinataires_message(state, {"101", "202"}, "🥇 GOLD — SIGNAL NON CONFIRMÉ"),
+            ["101", "202"]
+        )
 
     def test_followmarket_both_registers_btc_and_gold(self):
         from unittest.mock import patch
