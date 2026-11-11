@@ -163,7 +163,14 @@ app.get('/bridge/robot-v12/mtf', (req, res) => {
   const frames = tvMtfStore[symbol] || {};
   const now = Date.now();
   const snapshots = {};
+  let activeTimeframe = null;
+  let activeStoredAt = -1;
   for (const [tf, entry] of Object.entries(frames)) {
+    const updatedAt = Number(entry.storedAt || 0);
+    if (updatedAt > activeStoredAt) {
+      activeStoredAt = updatedAt;
+      activeTimeframe = tf;
+    }
     const hasIndicatorPlan = !!entry.robotV12;
     const ageMs = Math.max(0, now - Number(hasIndicatorPlan ? entry.planStoredAt : entry.storedAt || 0));
     const maxAgeMs = timeframeFreshnessMs(tf);
@@ -176,7 +183,7 @@ app.get('/bridge/robot-v12/mtf', (req, res) => {
         || entry.robotV12?.bar_confirmed === true
     };
   }
-  return res.json({ ok: true, symbol, snapshots, receivedTimeframes: Object.keys(snapshots) });
+  return res.json({ ok: true, symbol, activeTimeframe, snapshots, receivedTimeframes: Object.keys(snapshots) });
 });
 
 function requireLivePrice(symbol, res) {
