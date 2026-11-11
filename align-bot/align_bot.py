@@ -1284,7 +1284,7 @@ LIEN_INDICATEUR = os.environ.get("LIEN_INDICATEUR", "")   # lien du script Tradi
 PRIX_STARS = int(os.environ.get("PRIX_STARS", "2500"))   # abonnement VIP mensuel : 2 500 ⭐ ≈ 49,90 €
 ECOUTE_SEC = int(os.environ.get("ECOUTE_SEC", "200"))   # (ancien réglage, gardé pour compatibilité)
 DUREE_SEC = int(os.environ.get("DUREE_SEC", str(ECOUTE_SEC)))   # durée d'un lancement (5 h 40 sur GitHub = bot toujours allumé)
-PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "20"))   # une analyse complète BTC + Gold toutes les 20 s
+PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "5"))    # surveillance rapprochée : contrôle des setups toutes les 5 s (données marché mises en cache)
 
 def marche_demande(txt):
     """Marché demandé : Gold par défaut ; BTC seul si cité ; les deux si BTC et Gold sont cités."""
