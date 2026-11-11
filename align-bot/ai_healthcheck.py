@@ -1,64 +1,51 @@
 #!/usr/bin/env python3
-"""Vérifie une vraie réponse IA via le premier fournisseur disponible de la chaîne ALIGN."""
-import json
+"""Contrôle IA externe avec EXACTEMENT la chaîne et le parseur utilisés par le bot ALIGN.
+
+Ce contrôle est informatif : le bot possède un repli interne déterministe et doit
+continuer à surveiller les marchés même si tous les fournisseurs externes sont indisponibles.
+"""
 import os
 import sys
-import urllib.error
-import urllib.request
 
-PROVIDERS = [
-    ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-     "gemini-flash-latest", os.environ.get("GEMINI_API_KEY", "").strip()),
-    ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
-     "Meta-Llama-3_3-70B-Instruct", ""),
-    ("OVH Mistral", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
-     "Mistral-Small-3.2-24B-Instruct", ""),
-    ("Pollinations", "https://text.pollinations.ai/openai", "openai", ""),
-    ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", ""),
-]
+import align_bot
+
 
 def write_summary(status, provider, attempts):
     print(f"AI_EXTERNAL_STATUS={status} provider={provider or 'NONE'} attempts={attempts}", flush=True)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as f:
-            f.write("## Contrôle réel IA — ALIGN\n\n")
+            f.write("## Contrôle réel IA externe — ALIGN\n\n")
             f.write(f"- **Statut :** {status}\n")
             f.write(f"- **Fournisseur utilisable :** {provider or 'aucun'}\n")
-            f.write(f"- **Fournisseurs testés :** {attempts}\n")
+            f.write(f"- **Fournisseurs testés :** {attempts or 'aucun'}\n")
+            f.write("- **Repli interne :** disponible dans align_bot.ia()\n")
 
+
+messages = [
+    {"role": "system", "content": align_bot.IA_REGLES},
+    {"role": "user", "content": (
+        "Contrôle technique de connexion ALIGN. Réponds en français par une phrase "
+        "courte confirmant que tu as reçu ce test. N'invente aucun prix ni signal."
+    )},
+]
 attempts = []
-for name, url, model, key in PROVIDERS:
-    if name == "Gemini" and not key:
-        attempts.append("Gemini=NOT_CONFIGURED")
+for name, url, model, key, needs_key in align_bot.IA_FOURNISSEURS:
+    if needs_key and not key:
+        attempts.append(name + "=NOT_CONFIGURED")
         continue
-    payload = {
-        "model": model,
-        "temperature": 0,
-        "max_tokens": 24,
-        "messages": [{"role": "user", "content": "Réponds uniquement OK au test de connexion ALIGN."}],
-    }
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "User-Agent": "ALIGN-AI-healthcheck",
-    }
-    if key:
-        headers["Authorization"] = "Bearer " + key
-    request = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        answer = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
-        if isinstance(answer, str) and len(answer.strip()) >= 2:
-            attempts.append(name + "=CONNECTED")
-            write_summary("CONNECTED", name, ", ".join(attempts))
-            sys.exit(0)
-        attempts.append(name + "=EMPTY_RESPONSE")
-    except urllib.error.HTTPError as exc:
-        attempts.append(name + "=" + ("AUTH_REJECTED" if exc.code in (401, 403) else "HTTP_" + str(exc.code)))
+        # Même fonction HTTP, même modèle, même extraction et même seuil
+        # minimal que le véritable commentaire produit par le bot.
+        answer = align_bot._appel_ia(url, model, key, messages)
+        attempts.append(name + "=CONNECTED")
+        write_summary("CONNECTED", name, ", ".join(attempts))
+        sys.exit(0)
     except Exception as exc:
         attempts.append(name + "=" + type(exc).__name__)
+        print("AI_PROVIDER_CHECK_FAILED", name, type(exc).__name__, flush=True)
 
 write_summary("UNAVAILABLE", "", ", ".join(attempts))
+# Code non nul pour signaler l'indisponibilité ; le workflow est non bloquant
+# et align_bot.ia() utilise son analyse interne si tous les fournisseurs tombent.
 sys.exit(1)
