@@ -1852,7 +1852,7 @@ def boutons_canal(etat, texte):
 # 1) Google Gemini (si la clé GEMINI_API_KEY existe)  2) OVHcloud Llama 3.3 70B (sans clé)  3) OVHcloud Mistral (sans clé)
 # 4) Pollinations (sans clé)  5) LLM7 (sans clé). Et si TOUT tombe : l'analyse interne du bot répond quand même.
 IA_FOURNISSEURS = [
-    ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL", "chat-latest"), os.environ.get("OPENAI_API_KEY", ""), True),
+    ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL") or "chat-latest", os.environ.get("OPENAI_API_KEY", ""), True),
     ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-flash-latest", os.environ.get("GEMINI_API_KEY", ""), True),
     ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta-Llama-3_3-70B-Instruct", "", False),
     ("OVH Mistral", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Mistral-Small-3.2-24B-Instruct", "", False),
