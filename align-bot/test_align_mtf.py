@@ -420,8 +420,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
         self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 1 h 00 min 00 s\n🕒 Heure prévue : 04:00:00 (heure de Paris)", message)
         formatted = align_bot.mise_en_forme(message)
-        self.assertIn("⏱ Temps restant : 1 h 00 min 00 s", formatted)
-        self.assertIn("🕒 Heure prévue : 04:00:00 (heure de Paris)", formatted)
+        self.assertIn("⏱ Temps restant\\n1 h 00 min 00 s", formatted)
+        self.assertIn("🕒 Heure prévue\\n04:00:00 (heure de Paris)", formatted)
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
         from unittest.mock import patch
