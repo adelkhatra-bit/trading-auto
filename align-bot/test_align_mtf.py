@@ -867,6 +867,22 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("STOP À BE", message)
         self.assertIn("ne passe aucun ordre", message)
 
+    def test_telegram_journal_records_incoming_media_without_text(self):
+        from unittest.mock import patch
+        update = {"update_id": 9250, "message": {
+            "chat": {"id": 123}, "from": {"id": 456},
+            "photo": [{"file_id": "photo-id"}]
+        }}
+        state = {}
+        with patch.object(align_bot, "telegram"):
+            align_bot.traiter(state, set(), [update])
+        event = state["journal_telegram"][-1]
+        self.assertEqual(event["direction"], "entrant")
+        self.assertEqual(event["chat_id"], "123")
+        self.assertEqual(event["user_id"], "456")
+        self.assertEqual(event["type"], "photo")
+        self.assertEqual(event["text"], "[photo]")
+
     def test_history_callback_supports_older_and_newer_pages(self):
         import json
         from unittest.mock import patch
