@@ -652,6 +652,85 @@ class AlignMtfRulesTest(unittest.TestCase):
                 else:
                     self.assertTrue(state["indic"]["456"]["ok"])
 
+    def test_bottom_keyboard_actions_are_connected_to_handlers(self):
+        from unittest.mock import patch
+        cases = [
+            ("🟠 Analyse BTC", "analysis"),
+            ("🥇 Analyse Gold", "analysis"),
+            ("🤖 Mon bot", "bot"),
+            ("📈 Mes résultats", "results"),
+            ("📸 Partager mon gain", "gain"),
+            ("🧩 Indicateur TradingView", "indicator"),
+            ("🌐 English", "language"),
+            ("✅ Je suis rentré", "entry"),
+            ("🚪 Je suis sorti", "exit"),
+        ]
+        for text, action in cases:
+            state = {"proprio": ["123"]}
+            message = {"update_id": 9140, "message": {
+                "text": text, "chat": {"id": 123, "type": "private"},
+                "from": {"id": 123, "first_name": "Test"}
+            }}
+            with (
+                patch.object(align_bot, "autorise", return_value=True),
+                patch.object(align_bot, "menu_bot") as bot,
+                patch.object(align_bot, "texte_resultats", return_value="results-card"),
+                patch.object(align_bot, "menu_indicateur") as indicator,
+                patch.object(align_bot, "changer_langue") as language,
+                patch.object(align_bot, "repondre") as reply,
+                patch.object(align_bot, "_envoi_sur") as send,
+            ):
+                demandes = align_bot.traiter(state, set(), [message])
+                if action == "analysis":
+                    expected = "BTC" if "BTC" in text else "GOLD"
+                    self.assertEqual(demandes, [("123", expected)])
+                elif action == "bot":
+                    bot.assert_called_once()
+                elif action == "results":
+                    self.assertTrue(send.called)
+                    self.assertIn("results-card", send.call_args.kwargs["text"])
+                elif action == "gain":
+                    self.assertIn("123", state.get("attente_photo", {}))
+                elif action == "indicator":
+                    indicator.assert_called_once()
+                elif action == "language":
+                    language.assert_called_once()
+                    self.assertTrue(language.call_args.args[2])
+                elif action == "entry":
+                    reply.assert_called_once_with(state, "123", True)
+                elif action == "exit":
+                    reply.assert_called_once_with(state, "123", False)
+
+    def test_visitor_vip_button_returns_purchase_information(self):
+        from unittest.mock import patch
+        message = {"update_id": 9150, "message": {
+            "text": "💎 Devenir VIP", "chat": {"id": 456, "type": "private"},
+            "from": {"id": 456, "first_name": "Visitor"}
+        }}
+        with patch.object(align_bot, "autorise", return_value=False), \\
+             patch.object(align_bot, "refuser") as refuse:
+            align_bot.traiter({}, set(), [message])
+        refuse.assert_called_once()
+
+    def test_owner_access_grant_and_revoke_buttons_are_idempotent(self):
+        from unittest.mock import patch
+        grant = {"update_id": 9160, "callback_query": {
+            "id": "cb-grant", "data": "offrir:456",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        revoke = {"update_id": 9161, "callback_query": {
+            "id": "cb-revoke", "data": "retirer:456",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        state = {"proprio": ["123"], "offerts": ["456"], "noms": {"456": "Member"}}
+        chats = {"456"}
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.traiter(state, chats, [grant])
+            self.assertIn("possède déjà", send.call_args.kwargs["text"])
+            align_bot.traiter(state, chats, [revoke])
+        self.assertNotIn("456", state["offerts"])
+        self.assertNotIn("456", chats)
+
     def test_resume_button_reports_missing_analysis_instead_of_silence(self):
         from unittest.mock import patch
         update = {"update_id": 9130, "callback_query": {
