@@ -1,9 +1,11 @@
+import datetime
 import json
 import os
 import sys
 import unittest
 import unittest.mock
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import align_bot
@@ -1828,6 +1830,112 @@ class TelegramRateLimitTest(unittest.TestCase):
         request.assert_called_once()
 
 
+
+class AlignHeartbeatAndGeminiTest(unittest.TestCase):
+    NOW = 1_800_000_000  # peu importe : on injecte now
+
+    def _bars(self, n=25, rng=1.0, last_rng=None, t0=None, pas=300):
+        t0 = t0 or (self.NOW - n * pas)
+        out = []
+        for i in range(n):
+            r_ = last_rng if (last_rng is not None and i == n - 1) else rng
+            out.append({"t": t0 + i * pas, "o": 100.0, "h": 100.0 + r_, "l": 100.0, "c": 100.0 + r_ / 2})
+        return out
+
+    def _r(self, **kw):
+        b5 = kw.pop("b5", None) or self._bars()
+        return {"b5": b5, "m1": [{"t": self.NOW - 30, "c": 100.4}], **kw}
+
+    def _state(self, cid="501", m="GOLD", vip=True):
+        return {"veille_cloture": {m: {cid: {"multi": True, "derniers_t": {}, "expire": 9e12}}},
+                "offerts": [cid] if vip else [], "bienvenue": {} if vip else {cid: 1}}
+
+    def _run(self, state, r, m="GOLD", cle=None, cid="501", now=None):
+        from unittest.mock import patch
+        sent = []
+        with patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: sent.append((c, k["text"])) or {"ok": True}), \
+             patch.object(align_bot, "verdict", return_value=("⏳ ATTEND", "")), \
+             patch.object(align_bot, "cme_ouvert", return_value=True), \
+             patch.object(align_bot, "POSITIONS_GRATUITES", False):
+            n_ = now or self.NOW
+            r = dict(r, m1=[{"t": n_ - 30, "c": 100.4}]) if r.get("m1") and r["m1"][0]["t"] > self.NOW - 100 else r
+            align_bot.battement_coeur(state, m, r, cle or {}, now=n_)
+        return sent
+
+    def test_calm_heartbeat_real_data_then_no_spam(self):
+        st = self._state()
+        r = self._r(b5=self._bars(rng=1.0, last_rng=0.3))
+        sent = self._run(st, r)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("marché calme, pas d'entrée pour l'instant", sent[0][1])
+        self.assertIn("Je surveille", sent[0][1])
+        self.assertEqual(self._run(st, r, now=self.NOW + 60), [])           # même bougie : rien
+        r2 = self._r(b5=self._bars(rng=1.0, last_rng=0.3, t0=self.NOW - 25 * 300 + 300))
+        self.assertEqual(self._run(st, r2, now=self.NOW + 120), [])         # < 5 min : pas de spam
+        self.assertEqual(len(self._run(st, r2, now=self.NOW + 400)), 1)     # ≥ 5 min : nouvelle info
+
+    def test_moving_market_is_not_called_calm(self):
+        sent = self._run(self._state(), self._r(b5=self._bars(rng=1.0, last_rng=2.5)))
+        self.assertIn("ça bouge", sent[0][1])
+        self.assertNotIn("marché calme", sent[0][1])
+
+    def test_free_heartbeat_is_spaced(self):
+        st = self._state(vip=False)
+        r = self._r(b5=self._bars(rng=1.0, last_rng=0.3))
+        self.assertEqual(len(self._run(st, r)), 1)
+        r2 = self._r(b5=self._bars(rng=1.0, last_rng=0.3, t0=self.NOW - 25 * 300 + 300))
+        self.assertEqual(self._run(st, r2, now=self.NOW + 900), [])         # gratuit : 30 min
+        self.assertEqual(len(self._run(st, r2, now=self.NOW + 1900)), 1)
+
+    def test_no_heartbeat_with_open_trade_or_missing_data(self):
+        self.assertEqual(self._run(self._state(), self._r(), cle={"trade": {"d": 1}}), [])
+        self.assertEqual(self._run(self._state(), {"b5": [], "m1": [{"t": self.NOW, "c": 1}]}), [])
+
+    def test_stale_data_is_said_once_not_invented(self):
+        st = self._state()
+        r = self._r()
+        r["m1"] = [{"t": self.NOW - 3000, "c": 100.0}]
+        sent = self._run(st, r)
+        self.assertIn("données pas à jour", sent[0][1])
+        self.assertEqual(self._run(st, r, now=self.NOW + 400), [])
+
+    def test_closed_market_says_it_once_with_reopening(self):
+        from unittest.mock import patch
+        sat = datetime.datetime(2026, 11, 14, 12, 0, tzinfo=ZoneInfo("Europe/Paris")).timestamp()
+        st = self._state()
+        sent = []
+        with patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: sent.append(k["text"]) or {"ok": True}), \
+             patch.object(align_bot, "verdict", return_value=("⏳ ATTEND", "")):
+            r = self._r()
+            align_bot.battement_coeur(st, "GOLD", r, {}, now=sat)
+            align_bot.battement_coeur(st, "GOLD", r, {}, now=sat + 900)
+            align_bot.battement_coeur(st, "BTC", r, {}, now=sat)           # BTC ne ferme jamais
+        self.assertEqual(len(sent), 1)
+        self.assertIn("⏸ GOLD : marché fermé, reprise à", sent[0])
+        self.assertRegex(sent[0], r"reprise à lundi 00:00")
+
+    def test_english_heartbeat(self):
+        align_bot.LANG_EN.add("501")
+        try:
+            sent = self._run(self._state(), self._r(b5=self._bars(rng=1.0, last_rng=0.3)))
+        finally:
+            align_bot.LANG_EN.discard("501")
+        self.assertIn("market is calm, no entry for now", sent[0][1])
+
+    def test_gemini_error_shows_http_code_without_key(self):
+        import io
+        import urllib.error
+        key = "AIzaSyFAKEKEYFAKEKEYFAKEKEY123456"
+        body = io.BytesIO(('{"error":{"code":404,"status":"NOT_FOUND","message":"model x not found ' + key + '"}}').encode())
+        ex = urllib.error.HTTPError("https://x", 404, "Not Found", {}, body)
+        out = align_bot.detail_erreur_ia(ex, key)
+        self.assertIn("HTTP 404 NOT_FOUND", out)
+        self.assertNotIn(key, out)
+        names = [p[0] for p in align_bot.IA_FOURNISSEURS]
+        self.assertIn("OVH Llama", names)
+        self.assertEqual(sum(1 for n in names if n.startswith("Gemini")), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -2672,7 +2780,24 @@ class TestTelegramMarketButtonsJourney(unittest.TestCase):
         self.assertIn("501", [str(x) for x in state["auto"]["GOLD"]])
         self.assertIn("501", [str(x) for x in state["auto"]["NASDAQ"]])
         self.assertNotIn("501", [str(x) for x in state["auto"].get("BTC", [])])
-        self.assertTrue(any("MARCHÉS VALIDÉS" in k.get("text", "") for k in sent))
+        self.assertTrue(any("Suivi activé : GOLD + NASDAQ" in k.get("text", "") for k in sent))
+
+    def test_markets_confirm_message_is_clear_and_menu_closed(self):
+        from unittest.mock import patch
+        state = {"marches_par_chat": {"501": ["GOLD"]}}
+        with patch.object(align_bot, "telegram") as tg, patch.object(align_bot, "_envoi_sur") as send:
+            ok = align_bot.valider_et_suivre_marches(state, "501", 501, 77)
+        self.assertTrue(ok)
+        self.assertEqual(tg.call_args.args[0], "deleteMessage")
+        self.assertIn("✅ Suivi activé : GOLD", send.call_args.kwargs["text"])
+        self.assertIn("501", [str(x) for x in state["auto"]["GOLD"]])
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.LANG_EN.add("502")
+            try:
+                align_bot.valider_et_suivre_marches({"marches_par_chat": {"502": ["BTC"]}}, "502", 502)
+            finally:
+                align_bot.LANG_EN.discard("502")
+        self.assertIn("✅ Tracking on: BTC", send.call_args.kwargs["text"])
 
     def test_both_label_translated_in_english(self):
         self.assertEqual(align_bot.traduire("🥇 + 🟠 Les deux"), "🥇 + 🟠 Both")
