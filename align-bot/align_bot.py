@@ -2910,14 +2910,14 @@ def changer_langue(etat, cid, anglais, membre_ok):
     except Exception as ex:
         print("regles langue", ex)
 
-COMMANDES = {"/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
+COMMANDES = {"/faire_analyse": "📊 Faire une analyse", "/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
              "/resultats": "📈 Mes résultats", "/gain": "📸 Partager mon gain", "/vip": "💎 Devenir VIP",
              "/english": "🌐 English", "/francais": "🌐 Français", "/rentre": "✅ Je suis rentré", "/sorti": "🚪 Je suis sorti",
              "/indicateur": "🧩 Indicateur TradingView", "/marches": "📡 Mes marchés"}
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
-    if etat.get("menu") == 4:
+    if etat.get("menu") == 5:
         return
     fr = [("faire_analyse", "📊 Faire une analyse"), ("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
           ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"), ("marches", "📡 Mes marchés"),
@@ -2938,7 +2938,7 @@ def installer_menu(etat):
                                                   "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n📰 News et discours Fed gratuits\n\n"
                                                   "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux, le coach (BE, TP)\n\n"
                                                   "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
-        etat["menu"] = 4
+        etat["menu"] = 5
     except Exception as ex:
         print("menu", ex)
 
