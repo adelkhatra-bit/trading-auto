@@ -199,7 +199,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         r = {
             "b5": bars, "atr5": 1.0, "atr": 1.0, "r5": [50.0],
             "m1": [candle(22, o=101.0, h=102.0, l=100.8, c=102.0)],
-            "b15": [candle(0, l=98.0), candle(900, l=98.5), candle(1800, l=99.0)],
+            "b15": [candle(0, l=101.5), candle(900, l=101.4), candle(1800, l=101.3)],
             "grosses": []
         }
         plan = align_bot.plan_cassure(r, 1)
