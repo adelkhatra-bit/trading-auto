@@ -2825,3 +2825,14 @@ class TestTradeCardShowsStrategy(unittest.TestCase):
         tr = {"d": 1, "e": 100.0, "sl": 99.0, "tp1": 103.0, "tp2": 105.0, "rr": 3.0, "n1": "r 1h", "n2": "r 4h"}
         tr.update(align_bot.strategie_trade({"dirs": [0] * 11}, 1))
         self.assertNotIn("🏷 Type", align_bot.fmt_trade("BTC", tr))
+
+
+class TestNextValidationCountdown(unittest.TestCase):
+    def test_countdown_and_time_on_waiting_card(self):
+        from unittest.mock import patch
+        now = 1_700_000_000.0
+        r = {"b1h": [{"t": int(now // 3600 * 3600) - 3600}]}
+        with patch.object(align_bot.time, "time", return_value=now):
+            fin = align_bot.prochaine_cloture_bougie(r, "1h", now)
+        self.assertGreater(fin, now)
+        self.assertRegex(align_bot.duree_cloture(fin - now), r"^\d\d:\d\d$")
