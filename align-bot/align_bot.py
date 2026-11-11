@@ -1989,6 +1989,17 @@ def donnees_ia(m, r, cle):
         }
     else:
         data["estimation_approche_entree"] = {"disponible": False, "raison": "pas de plan d'entrée exploitable ou historique 5m insuffisant"}
+    # Les dernières bougies fournissent à l'IA une vraie lecture de structure (rebond, retracement, range).
+    structure = {}
+    for label, key in (("M5", "b5"), ("M15", "b15"), ("H1", "b1h"), ("H4", "b4h")):
+        bars = (r.get(key) or [])[-4:]
+        structure[label] = [
+            {"o": round(float(b["o"]), 5), "h": round(float(b["h"]), 5),
+             "l": round(float(b["l"]), 5), "c": round(float(b["c"]), 5)}
+            for b in bars if all(b.get(k) is not None for k in ("o", "h", "l", "c"))
+        ]
+    data["structure_bougies_recentes"] = structure
+    data["ATR_15m"] = round(float(r.get("atr") or 0), 5) or None
     tf = timeframe_attendu(r, cle or {})
     close_ts = prochaine_cloture_bougie(r, tf, time.time())
     data["prochaine_reevaluation"] = {
