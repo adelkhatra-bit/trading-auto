@@ -2864,15 +2864,20 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
         if avis:
             _envoi_sur(cid, text=avis, reply_markup=CLAVIER)
         return
-    vu[str(cid)] = {"sig": sig, "t": time.time()}
     armer_cloture(etat, cid, m, r, cle)
-    res = telegram("sendMessage", chat_id=cid, text=texte_apercu(m, r, cle),
-                   reply_markup=markup_analyse(etat, m, r, cid))
+    # Toutes les analyses passent par le même garde-fou 429 que les autres messages.
+    # Une analyse refusée par Telegram n'est pas marquée comme livrée et pourra être retentée.
+    res = _envoi_sur(cid, text=texte_apercu(m, r, cle),
+                     reply_markup=markup_analyse(etat, m, r, cid))
+    if not isinstance(res, dict) or res.get("ok") is not True:
+        print(f"ANALYSE_NON_LIVREE market={m} chat={cid} reason=telegram_send_not_confirmed")
+        return
+    vu[str(cid)] = {"sig": sig, "t": time.time()}
     try:
         vu[str(cid)]["mid"] = res["result"]["message_id"]
     except (KeyError, TypeError):
         pass
-    # L'avis IA reste envoyé séparément : aucune information existante n'est supprimée.
+    # L'avis IA reste envoyé séparément ; aucune information existante n'est supprimée.
     a_ = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
     if a_:
         _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
