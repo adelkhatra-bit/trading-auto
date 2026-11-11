@@ -172,7 +172,8 @@ def _kraken(pair, interval):
     rows = rows[:-1]  # on enlève la bougie en cours : calcul à la clôture, comme l'alerte TradingView
     return [dict(t=int(r[0]), o=float(r[1]), h=float(r[2]), l=float(r[3]), c=float(r[4]),
                  v=float(r[6]) if len(r) > 6 and r[6] not in (None, "") else None,
-                 trades=int(r[7]) if len(r) > 7 and r[7] not in (None, "") else None) for r in rows]
+                 trades=int(r[7]) if len(r) > 7 and r[7] not in (None, "") else None,
+                 volume_source=f"Kraken {pair}") for r in rows]
 
 # ───────── Gold = XAUUSD spot (même prix que FOREXCOM:XAUUSD sur TradingView) ─────────
 _CACHE = {}
@@ -210,7 +211,8 @@ def yahoo_or(interval):
         res = j["chart"]["result"][0]; q = res["indicators"]["quote"][0]
         volumes = q.get("volume") or []
         rows = [dict(t=int(t), o=o, h=h, l=l, c=cl,
-                     v=float(volumes[i]) if i < len(volumes) and volumes[i] is not None else None)
+                     v=float(volumes[i]) if i < len(volumes) and volumes[i] is not None else None,
+                     volume_source="COMEX GC=F Yahoo proxy")
                 for i, (t, o, h, l, cl) in enumerate(zip(res["timestamp"], q["open"], q["high"], q["low"], q["close"]))
                 if None not in (o, h, l, cl)]
         _CACHE[("gc", interval)] = (time.time(), rows[:-1][-720:], res["meta"].get("regularMarketPrice") or rows[-1]["c"])
@@ -305,6 +307,7 @@ def regrouper(bars, n, base_sec, now_ts=None):
             "c": groupe[-1]["c"],
             "v": sum(float(x.get("v") or 0) for x in groupe) if any(x.get("v") is not None for x in groupe) else None,
             "trades": sum(int(x.get("trades") or 0) for x in groupe) if any(x.get("trades") is not None for x in groupe) else None,
+            "volume_source": next((x.get("volume_source") for x in groupe if x.get("volume_source")), None),
         })
     return out
 
@@ -1948,7 +1951,9 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
 
 def resume_volume(bars, provenance):
     """Résumé de volume sur bougies clôturées. La provenance indique si c'est un flux réel ou proxy."""
-    valeurs = [float(b["v"]) for b in (bars or []) if b.get("v") is not None and float(b["v"]) >= 0]
+    bars = bars or []
+    provenance = next((b.get("volume_source") for b in reversed(bars) if b.get("volume_source")), provenance)
+    valeurs = [float(b["v"]) for b in bars if b.get("v") is not None and float(b["v"]) >= 0]
     if not valeurs:
         return {"disponible": False, "provenance": provenance, "interpretation": "volume indisponible : ne pas en tirer de confirmation"}
     recent = valeurs[-1]
@@ -1983,7 +1988,7 @@ def donnees_ia(m, r, cle):
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
             "contexte_macro_dollar": r.get("macro_data") or {},
             "volume": {
-                "M5": resume_volume(r.get("b5"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
+                "M5": resume_volume(r.get("b5"), "Kraken BTC spot" if m == "BTC" else "Volume proxy GOLD (PAXG ou COMEX selon la source active)"),
                 "M15": resume_volume(r.get("b15"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
                 "H1": resume_volume(r.get("b1h"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
                 "H4": resume_volume(r.get("b4h"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD")
