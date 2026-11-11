@@ -1892,6 +1892,10 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
     jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
     compte = etat.setdefault("ia_jour", {})
     if compte.get(jour, 0) >= IA_MAX_JOUR:
+        etat["ia_dernier_fournisseur"] = "INTERNAL_FALLBACK"
+        etat["ia_dernier_modele"] = None
+        etat["ia_dernier_statut"] = "DAILY_LIMIT_INTERNAL_FALLBACK"
+        print("AI_PROVIDER_USED=INTERNAL_FALLBACK reason=DAILY_LIMIT", flush=True)
         return ""
     messages = [{"role": "system", "content": IA_REGLES},
                 {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]
@@ -1965,6 +1969,12 @@ def avis_ia(etat, m, r, cle, anglais=False):
            cle_cache=f"analyse_{m}_{langue_cache}_{int(time.time() // 600)}")
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
+        fournisseur = etat.get("ia_dernier_fournisseur")
+        modele = etat.get("ia_dernier_modele")
+        # Le fournisseur n'est affiché que si un appel externe réel a abouti.
+        if etat.get("ia_dernier_statut") == "CONNECTED" and fournisseur:
+            origine = f" • {fournisseur}" + (f" / {modele}" if modele else "")
+            titre += origine
         return f"{titre}\n{t}"
     # Toutes les IA en panne : l'analyse interne du bot répond (jamais de silence)
     titre, raison = verdict(r, cle)
