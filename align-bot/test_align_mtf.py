@@ -827,8 +827,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_telegram_wrapper_records_successful_outgoing_messages(self):
         from unittest.mock import patch
         align_bot.JOURNAL_SORTANT.clear()
-        with patch.object(align_bot, "TOKEN", "test-token"), \\
-             patch.object(align_bot, "http_json", return_value={"ok": True, "result": {"message_id": 88}}):
+        with patch.object(align_bot, "TOKEN", "test-token"), patch.object(align_bot, "http_json", return_value={"ok": True, "result": {"message_id": 88}}):
             align_bot.telegram("sendMessage", chat_id="123", text="Message ALIGN")
         self.assertEqual(len(align_bot.JOURNAL_SORTANT), 1)
         self.assertEqual(align_bot.JOURNAL_SORTANT[0]["direction"], "sortant")
