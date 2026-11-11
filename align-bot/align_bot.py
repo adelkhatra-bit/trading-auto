@@ -2,7 +2,7 @@
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
 Prix gratuits : BTC = Kraken XBTUSD, Gold = XAUUSD spot (bougies COMEX Yahoo recalées sur le prix spot Swissquote).
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
-import json, os, re, time, hashlib, urllib.request, urllib.error, urllib.parse, datetime, threading
+import json, os, re, time, hashlib, urllib.request, urllib.error, urllib.parse, datetime, threading, queue, signal
 from zoneinfo import ZoneInfo
 import sys
 try:
@@ -13,6 +13,10 @@ PARIS = ZoneInfo("Europe/Paris")
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 ETAT_FICHIER = os.environ.get("STATE_FILE", "state.json")
+TELEGRAM_UPDATES = queue.Queue()
+TELEGRAM_POLL_STOP = threading.Event()
+SHUTDOWN_REQUESTED = threading.Event()
+CALLBACKS_ACKNOWLEDGED = set()
 MARCHES = {"BTC": "XBTUSD", "GOLD": "XAUUSD"}  # BTC → FTMO (CFD 24/7) • GOLD → Topstep (MGC) / FTMO
 MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 2.0
 LIEN_RESULTATS = "https://t.me/+RajFd_hMgl1kNmQ0"     # groupe ALIGN Résultats (lien privé)
@@ -1766,6 +1770,11 @@ def _telegram_enregistre_429(chat_id, erreur, maintenant=None):
 
 
 def telegram(methode, **params):
+    if methode == "answerCallbackQuery":
+        callback_id = str(params.get("callback_query_id", ""))
+        if callback_id and callback_id in CALLBACKS_ACKNOWLEDGED:
+            CALLBACKS_ACKNOWLEDGED.discard(callback_id)
+            return {"ok": True, "result": True}
     if methode in ("sendMessage", "editMessageText", "sendPhoto") and str(params.get("chat_id")) in LANG_EN:
         if "text" in params:
             params["text"] = traduire(params["text"])
@@ -2654,7 +2663,9 @@ def stats_bot(etat, cid):
     return etat.setdefault("stats_bot", {}).setdefault(cid, {"arrets": 0, "auto": 0})
 
 def menu_bot(etat, cid):
-    on = bot_on(etat, cid); st = stats_bot(etat, cid)
+    on = bot_on(etat, cid)
+    # Lecture sans écriture : ce menu peut être affiché pendant une analyse en cours.
+    st = etat.get("stats_bot", {}).get(str(cid), {"arrets": 0, "auto": 0})
     _envoi_sur(cid, text=(f"🤖 MON BOT   {'▶️ ON' if on else '⏸ OFF'}\n━━━━━━━━━━━━\n"
                           + ("✅ Il entre tout seul dans chaque position\n👀 Vue 15 min • SL un peu sous / au-dessus de la mèche\n🎯 Le coach te suit jusqu'au TP\n"
                              if on else "⏸ Il n'entre plus pour toi\n🔔 Tu reçois quand même les positions\n")
@@ -3238,6 +3249,9 @@ def traiter(etat, chats, updates):
                     "chat_join_request" if demande_recue else "my_chat_member" if statut_recu else "update",
             "text": str(contenu_recu or "")[:4096]
         })
+        # Le poller indépendant a déjà répondu aux actions de lecture seule.
+        if u.get("_align_fast_handled"):
+            continue
         mcm = u.get("my_chat_member")
         if mcm and mcm["chat"].get("type") in ("channel", "supergroup"):
             connecter_canal(etat, mcm)
@@ -5056,19 +5070,122 @@ def agent(m, r, cle, ferme):
     return out
 
 # ───────── Programme ─────────
+def _menu_analyse_rapide(cid):
+    _envoi_sur(cid, text="📊 Quel marché veux-tu analyser ?",
+               reply_markup=json.dumps({"inline_keyboard": [
+                   [{"text": "🥇 GOLD", "callback_data": "analysechoice:GOLD"}],
+                   [{"text": "🟠 BTC", "callback_data": "analysechoice:BTC"}],
+                   [{"text": "🥇 + 🟠 Les deux", "callback_data": "analysechoice:BOTH"}]
+               ]}))
+
+
+def _traiter_lecture_rapide(etat, chats, update):
+    """Répond sans attendre l'analyse aux commandes Telegram qui ne modifient pas le trading."""
+    msg = update.get("message") or update.get("edited_message") or {}
+    if not msg or not msg.get("text"):
+        return False
+    chat = msg.get("chat") or {}
+    cid = str(chat.get("id", ""))
+    if not cid or chat.get("type") != "private":
+        return False
+    localement_autorise = (POSITIONS_GRATUITES or cid in chats or cid in proprio(etat)
+                           or cid in etat.get("offerts", []))
+    text = msg.get("text", "").strip()
+    words = text.split() if text.startswith("/") else []
+    cmd = words[0].split("@")[0].lower() if words else ""
+    payload = words[1].lower() if len(words) > 1 else ""
+    if cmd == "/start":
+        if payload:
+            return False
+        if not localement_autorise:
+            return False  # laisse le handler principal vérifier les abonnements Telegram
+        _envoi_sur(cid, text="⬇️ Tes boutons sont là 👇\n💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ",
+                   reply_markup=CLAVIER)
+        update["_align_fast_handled"] = True
+        return True
+    if cmd == "/boutons":
+        if not localement_autorise:
+            return False
+        _envoi_sur(cid, text="⬇️ Tes boutons sont là 👇", reply_markup=CLAVIER)
+        update["_align_fast_handled"] = True
+        return True
+    if cmd in COMMANDES:
+        text = COMMANDES[cmd]
+    normalized = text.lower().replace("é", "e").replace("è", "e")
+    if "mon bot" in normalized or "mon_bot" in normalized:
+        if not localement_autorise:
+            return False
+        menu_bot(etat, cid)
+        update["_align_fast_handled"] = True
+        return True
+    if "mes resultats" in normalized or "my results" in normalized or "resultat" in normalized:
+        if not localement_autorise:
+            return False
+        _envoi_sur(cid, text=texte_resultats(etat, cid), reply_markup=CLAVIER)
+        update["_align_fast_handled"] = True
+        return True
+    if "faire une analyse" in normalized or "run an analysis" in normalized:
+        _menu_analyse_rapide(cid)
+        update["_align_fast_handled"] = True
+        return True
+    return False
+
+
+def _ack_callback_rapide(cb, text):
+    try:
+        telegram("answerCallbackQuery", callback_query_id=cb["id"], text=text)
+        CALLBACKS_ACKNOWLEDGED.add(str(cb["id"]))
+    except Exception as ex:
+        print("callback ack", ex)
+
+
+def boucle_polling_telegram(etat, chats):
+    """Poll Telegram indépendamment des analyses longues; les actions d'écriture restent dans le thread principal."""
+    offset = int(etat.get("offset", 0) or 0)
+    while TOKEN and not TELEGRAM_POLL_STOP.is_set():
+        try:
+            updates = telegram("getUpdates", offset=offset, timeout=1).get("result", [])
+        except Exception as ex:
+            if not TELEGRAM_POLL_STOP.is_set():
+                print("poller Telegram", ex)
+                time.sleep(1)
+            continue
+        for update in updates:
+            offset = max(offset, int(update.get("update_id", offset - 1)) + 1)
+            cb = update.get("callback_query")
+            if cb:
+                chat = (cb.get("message") or {}).get("chat") or {}
+                user_id = str((cb.get("from") or {}).get("id", ""))
+                anglais = user_id in etat.get("en", [])
+                if chat.get("type") != "private" or str(chat.get("id", "")) != user_id:
+                    _ack_callback_rapide(cb, "🔒 Open the bot in a private chat." if anglais else "🔒 Ouvre le bot en conversation privée.")
+                    update["_align_fast_handled"] = True
+                else:
+                    _ack_callback_rapide(cb, "⌛ Action received, processing." if anglais else "⌛ Action reçue, traitement en cours.")
+            else:
+                _traiter_lecture_rapide(etat, chats, update)
+            TELEGRAM_UPDATES.put(update)
+
+
 def recevoir_updates_telegram(etat, chats, demandes):
-    """Vide rapidement la file Telegram entre les étapes d'analyse, sans attendre la fin du tour BTC + Gold."""
+    """Traite sur le thread principal les mises à jour reçues par le poller indépendant."""
     if not TOKEN:
         return 0
-    try:
-        updates = telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", [])
-    except Exception as ex:
-        print("ecoute Telegram", ex)
-        return 0
-    if not updates:
-        return 0
-    demandes.extend(traiter(etat, chats, updates))
+    updates = []
+    while True:
+        try:
+            updates.append(TELEGRAM_UPDATES.get_nowait())
+        except queue.Empty:
+            break
+    if updates:
+        demandes.extend(traiter(etat, chats, updates))
     return len(updates)
+
+
+def _demander_arret(signum, frame):
+    SHUTDOWN_REQUESTED.set()
+    TELEGRAM_POLL_STOP.set()
+    print(f"ALIGN_SHUTDOWN_REQUESTED signal={signum}", flush=True)
 
 
 def un_tour(etat, chats):
@@ -5081,6 +5198,8 @@ def un_tour(etat, chats):
     demandes_servies = set()
     if TOKEN:
         recevoir_updates_telegram(etat, chats, demandes)
+        if SHUTDOWN_REQUESTED.is_set():
+            return
         if etat.get("clavier") != 9:
             # Le nouveau clavier sera joint au prochain vrai message du bot.
             # Aucun message vide, promotionnel ou de démarrage n'est envoyé.
@@ -5129,11 +5248,17 @@ def un_tour(etat, chats):
     except Exception as ex:
         print("macro", ex)
     recevoir_updates_telegram(etat, chats, demandes)
+    if SHUTDOWN_REQUESTED.is_set():
+        return
     for nom_marche, pair in MARCHES.items():
         recevoir_updates_telegram(etat, chats, demandes)
+        if SHUTDOWN_REQUESTED.is_set():
+            return
         try:
             r = analyser(pair)
             recevoir_updates_telegram(etat, chats, demandes)
+            if SHUTDOWN_REQUESTED.is_set():
+                return
             r["tv_indicator_mtf"] = fetch_tv_mtf(pair)
             fusionne_lectures_tradingview(r)
         except Exception as ex:
@@ -5158,6 +5283,8 @@ def un_tour(etat, chats):
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
         recevoir_updates_telegram(etat, chats, demandes)
+        if SHUTDOWN_REQUESTED.is_set():
+            return
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
             cle["trade"]["auto_fait"] = True
             trx = cle["trade"]
@@ -5169,6 +5296,8 @@ def un_tour(etat, chats):
             entrer_inscrits(etat, nom_marche, cle["trade"], chats)
         if TOKEN:
             coach(etat, nom_marche, r, cle)
+            if SHUTDOWN_REQUESTED.is_set():
+                return
             if cle.get("fin"):
                 trf, sortie, motif = cle.pop("fin")
                 cloturer_abonnes(etat, nom_marche, trf, sortie, motif)
@@ -5262,6 +5391,8 @@ def un_tour(etat, chats):
                     print("chronos", ex)
     # Dernière relève : une demande reçue pendant le calcul du second marché ne reste pas en attente.
     recevoir_updates_telegram(etat, chats, demandes)
+    if SHUTDOWN_REQUESTED.is_set():
+        return
     for index, (cid, mq) in enumerate(demandes):
         marches_a_traiter = tuple(MARCHES) if mq is None else (mq,)
         for marche in marches_a_traiter:
@@ -5320,6 +5451,8 @@ def sauver_etat(etat, chats=None):
 
 def main():
     etat = charger_etat()
+    LANG_EN.clear(); LANG_EN.update(etat.get("en", []))
+    MEMOIRE[:] = etat.get("memoire", [])
     maintenant_paris = datetime.datetime.now(PARIS)
     print(f"ALIGN_TZ=Europe/Paris LOCAL_NOW={maintenant_paris.isoformat()} UTC_NOW={datetime.datetime.now(datetime.timezone.utc).isoformat()}", flush=True)
     chats = set(etat.get("chats", []))
@@ -5330,43 +5463,44 @@ def main():
     if POSITIONS_GRATUITES and etat.get("prospects"):
         chats |= set(etat["prospects"]); etat["prospects"] = []
 
-    # Worker indépendant : le chronomètre ne dépend plus de la durée d'un tour
-    # d'analyse BTC/Gold, d'un appel IA ou d'une requête réseau lente.
+    signal.signal(signal.SIGINT, _demander_arret)
+    signal.signal(signal.SIGTERM, _demander_arret)
+    # Un seul poller lit getUpdates. Il accuse réception des callbacks et répond aux
+    # menus simples pendant que le thread principal calcule les marchés.
     if TOKEN:
-        threading.Thread(target=boucle_chronos, args=(etat,), name="ALIGN-Telegram-Chrono", daemon=True).start()
+        threading.Thread(target=boucle_polling_telegram, args=(etat, chats),
+                         name="ALIGN-Telegram-Poller", daemon=True).start()
+        threading.Thread(target=boucle_chronos, args=(etat,),
+                         name="ALIGN-Telegram-Chrono", daemon=True).start()
 
-    # Bot toujours allumé : un tour toutes les PAUSE_SEC secondes pendant DUREE_SEC,
-    # et entre deux tours il écoute Telegram en continu (réponse immédiate aux boutons).
     debut = time.time()
-    while True:
+    while not SHUTDOWN_REQUESTED.is_set():
         try:
             un_tour(etat, chats)
         except Exception as ex:
             print("tour", ex)
+        if SHUTDOWN_REQUESTED.is_set():
+            break
         prochain = time.time() + PAUSE_SEC
-        while TOKEN and time.time() < min(prochain, debut + DUREE_SEC):
-            reste = int(min(prochain, debut + DUREE_SEC) - time.time())
-            try:
-                maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=1).get("result", [])
-            except Exception as ex:
-                print("ecoute", ex); time.sleep(5); continue
-            # Priorité au chronomètre : l'édition Telegram passe AVANT les callbacks
-            # qui peuvent lancer une analyse IA ou une requête réseau plus lente.
+        while TOKEN and time.time() < min(prochain, debut + DUREE_SEC) and not SHUTDOWN_REQUESTED.is_set():
+            demandes = []
+            recevoir_updates_telegram(etat, chats, demandes)
             for marche, derniere in list(DERNIERS.items()):
                 try:
                     maj_chronos(etat, marche, derniere)
                 except Exception as ex:
                     print("tick chrono", marche, ex)
-            for cid, mq in traiter(etat, chats, maj):
+            for cid, mq in demandes:
                 envoyer_analyse(cid, etat, mq)
-            # Le polling Telegram reste à 1 s ; l'horloge n'attend plus le traitement
-            # des demandes d'analyse avant d'actualiser le message du compte à rebours.
             sauver_etat(etat, chats)
-        if time.time() >= debut + DUREE_SEC:
+            time.sleep(0.5)
+        if SHUTDOWN_REQUESTED.is_set() or time.time() >= debut + DUREE_SEC:
             break
         if not TOKEN:
             time.sleep(max(0, prochain - time.time()))
+    TELEGRAM_POLL_STOP.set()
     sauver_etat(etat, chats)
+    print("ALIGN_STATE_SAVED_ON_SHUTDOWN", flush=True)
 
 if __name__ == "__main__":
     main()
