@@ -1067,20 +1067,6 @@ TRAD = {
 "ℹ️ Une bougie clôturée ne déclenche jamais une entrée à elle seule. Aucun ordre n'est envoyé à ton broker.": "ℹ️ A candle close alone never triggers an entry. No order is sent to your broker.",
 
 "🔴🔴 N'ENTRE PAS": "🔴🔴 DON'T ENTER",
-"🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ": "🔴 NO ENTRY — SIGNAL NOT CONFIRMED",
-"🟢 POSITION EN COURS": "🟢 POSITION OPEN",
-"🟢 SIGNAL VALIDÉ — VÉRIFIE LES NIVEAUX": "🟢 SIGNAL CONFIRMED — CHECK LEVELS",
-"🟡 EN ATTENTE — PAS D'ENTRÉE": "🟡 WAITING — NO ENTRY",
-"clôturée": "closed",
-"CLÔTURES MULTI-UT": "MULTI-TF CLOSES",
-"Prochaine validation : clôture": "Next confirmation: candle close",
-"HAUSSE": "UP",
-"BAISSE": "DOWN",
-"NEUTRE": "NEUTRAL",
-" · ALIGN ": " · ALIGN ",
-" · H1 ": " · H1 ",
-" · H4 ": " · H4 ",
-"🚫 Aucun ordre envoyé au broker.": "🚫 No order is sent to the broker.",
 "🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
 "⛔ TROP TARD — le marché est déjà parti": "⛔ TOO LATE — the market has already moved",
 "😎 Patience, on trouve une autre entrée": "😎 Be patient, we'll find another entry",
@@ -1476,6 +1462,20 @@ TRAD = {
 "📰 News : calendrier indisponible": "📰 News: calendar unavailable",
 
 }
+
+TRAD.update({
+    "🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ": "🔴 NO ENTRY — SIGNAL NOT CONFIRMED",
+    "🟢 POSITION EN COURS": "🟢 POSITION OPEN",
+    "🟢 SIGNAL VALIDÉ — VÉRIFIE LES NIVEAUX": "🟢 SIGNAL CONFIRMED — CHECK LEVELS",
+    "🟡 EN ATTENTE — PAS D'ENTRÉE": "🟡 WAITING — NO ENTRY",
+    "clôturée": "closed",
+    "CLÔTURES MULTI-UT": "MULTI-TF CLOSES",
+    "Prochaine validation : clôture": "Next confirmation: candle close",
+    "HAUSSE": "UP",
+    "BAISSE": "DOWN",
+    "NEUTRE": "NEUTRAL",
+    "🚫 Aucun ordre envoyé au broker.": "🚫 No order is sent to the broker."
+})
 
 
 # Libellés des claviers inline et règle de risque : traduction explicite, sans changer les callbacks.
