@@ -4604,7 +4604,7 @@ def charger_etat():
     return etat
 
 
-def sauver_etat(etat, chats=None):
+def _sauver_etat_sous_verrou(etat, chats=None):
     """Écriture atomique : un arrêt du runner ne laisse pas un state.json tronqué."""
     if chats is not None:
         etat["chats"] = sorted(str(x) for x in chats)
@@ -4617,6 +4617,11 @@ def sauver_etat(etat, chats=None):
         f.flush()
         os.fsync(f.fileno())
     os.replace(temporaire, ETAT_FICHIER)
+
+def sauver_etat(etat, chats=None):
+    """Empêche le worker du chronomètre de modifier l'état pendant l'écriture atomique."""
+    with CHRONO_LOCK:
+        return _sauver_etat_sous_verrou(etat, chats)
 
 
 def main():
