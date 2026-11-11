@@ -265,7 +265,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("🚦 DÉCISION ALIGN", message)
                 self.assertIn("🎯 DIRECTION À SURVEILLER : 🟩 LONG", message)
                 self.assertIn("⏳ Prochaine entrée : attendre le signal", message)
-                self.assertIn("67500.00", message)
+                self.assertIn("67500,00", message)
                 self.assertIn("\n💹 Prix actuel", message)
                 self.assertNotIn("\\n", message)
                 self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None
