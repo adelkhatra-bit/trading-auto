@@ -101,6 +101,34 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertNotIn("PROCHAINE CLÔTURE 5m", message)
         self.assertIn("J'attends une clôture 1 h", message)
 
+    def test_h1_blocker_has_priority_over_a_stale_entry_order(self):
+        from unittest.mock import patch
+        dirs = [0] * 11
+        dirs[9] = 1  # 4h haussière
+        r = {
+            "m1": [candle(7200, c=4031.42)],
+            "dirs": dirs, "confirme": 0, "atr": 1.0,
+            "b5": [candle(6900)], "b1h": [candle(3600)], "b4h": [candle(0)]
+        }
+        stale_order = {"d": 1, "e": 4030.0, "za": 4029.0, "zb": 4031.0, "sl": 4025.0}
+        with patch.object(align_bot.time, "time", return_value=7200):
+            message = align_bot.chrono_txt("GOLD", r, {"ordre": stale_order}, 0)
+        self.assertIn("confirmation 1 h manquante", message)
+        self.assertIn("PROCHAINE CLÔTURE 1h", message)
+        self.assertNotIn("PROCHAINE CLÔTURE 5m", message)
+
+    def test_neutral_4h_has_priority_over_a_stale_entry_order(self):
+        dirs = [0] * 11
+        dirs[7] = 1
+        r = {"dirs": dirs, "confirme": 0}
+        self.assertEqual(align_bot.timeframe_attendu(r, {"ordre": {"e": 100.0}}), "4h")
+
+    def test_confirmed_bias_with_entry_order_waits_for_5m_trigger(self):
+        dirs = [0] * 11
+        dirs[7] = dirs[9] = 1
+        r = {"dirs": dirs, "confirme": 1}
+        self.assertEqual(align_bot.timeframe_attendu(r, {"ordre": {"e": 100.0}}), "5m")
+
     def test_neutral_market_is_explained_without_inventing_long_or_short(self):
         r = {"dirs": [0] * 11, "confirme": 0, "m1": [candle(1, c=100.0)]}
         reason = align_bot.raison_attente(r, {})
