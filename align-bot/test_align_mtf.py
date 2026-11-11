@@ -813,10 +813,10 @@ class AlignMtfRulesTest(unittest.TestCase):
         }
         with patch.object(align_bot.time, "time", return_value=7200):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
-        self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 60:00\n🕒 Heure prévue : 04:00:00 (heure de Paris)", message)
+        self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 60:00\n🕒 Heure prévue : 04:00 (heure de Paris)", message)
         formatted = align_bot.mise_en_forme(message)
         self.assertIn("⏱ Temps restant\n60:00", formatted)
-        self.assertIn("🕒 Heure prévue\n04:00:00 (heure de Paris)", formatted)
+        self.assertIn("🕒 Heure prévue\n04:00 (heure de Paris)", formatted)
 
     def test_independent_chronometer_tick_updates_every_market_with_cached_data(self):
         from unittest.mock import patch
@@ -1061,12 +1061,14 @@ class AlignMtfRulesTest(unittest.TestCase):
         register.assert_called_once_with(unittest.mock.ANY, "123", "BTC", notifier=False)
         menu.assert_not_called()
 
-    def test_main_keyboards_do_not_show_redundant_markets_button(self):
+    def test_main_keyboards_show_gold_btc_and_markets_buttons(self):
         import json
         for keyboard in (align_bot.CLAVIER, align_bot.CLAVIER_VISITEUR):
             parsed = json.loads(keyboard)
             labels = [b["text"] for row in parsed["keyboard"] for b in row]
-            self.assertFalse(any("Mes marchés" in label or "My markets" in label for label in labels))
+            for attendu in ("🥇 Analyse Gold", "🟠 Analyse BTC", "📡 Mes marchés", "📊 Faire une analyse"):
+                self.assertIn(attendu, labels)
+            self.assertEqual(len(labels), len(set(labels)))   # aucun doublon
 
 
     def test_user_facing_ai_commentary_uses_internal_analysis_when_providers_fail(self):
@@ -2580,3 +2582,51 @@ class TestTelegramFloodProtection(unittest.TestCase):
         edits = [c for c in tg.call_args_list if c.args[0] == "editMessageText"]
         self.assertEqual(len(edits), 1)
         self.assertEqual(edits[0].kwargs["text"], "p3")
+
+
+class TestCandleCloseClarity(unittest.TestCase):
+    def test_chrono_shows_m5_m15_closes_in_mmss_and_explains(self):
+        from unittest.mock import patch
+        now = 1_700_000_100.0   # 100 s après une clôture 5 min alignée
+        r = {"dirs": [0] * 11, "m1": [{"c": 100.0}], "prix": 100.0}
+        with patch.object(align_bot.time, "time", return_value=now):
+            txt = align_bot.chrono_txt("GOLD", r, {}, now - 10)
+        import re
+        self.assertRegex(txt, r"🕯 Clôture 5 min : \d\d:\d\d\n🕯 Clôture 15 min : \d\d:\d\d")
+        self.assertIn("👉 À la clôture 4 h", txt)
+        self.assertRegex(txt, r"Heure prévue : \d\d:\d\d \(heure")
+        en = align_bot.traduire(txt)
+        self.assertIn("5m close", en)
+        self.assertEqual(align_bot.duree_cloture(2 * 3600 + 42 * 60 + 5), "2 h 42")
+        self.assertEqual(align_bot.duree_cloture(3600), "60:00")
+        self.assertIn("At the 4h close", en)
+
+
+class TestMainKeyboardButtonsRouting(unittest.TestCase):
+    """Chaque bouton du clavier principal déclenche une vraie action (FR et EN)."""
+
+    def _send(self, text, en=False):
+        from unittest.mock import patch
+        upd = {"update_id": 880001, "message": {"message_id": 1, "text": text, "date": 0,
+               "chat": {"id": 601, "type": "private"}, "from": {"id": 601, "first_name": "T"}}}
+        state = {"bienvenue": {"601": 1}, "en": ["601"] if en else []}
+        align_bot.LANG_EN.clear(); align_bot.LANG_EN.update(state["en"])
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "_envoi_sur") as envoi, \
+             patch.object(align_bot, "menu_marches") as marches, \
+             patch.object(align_bot, "telegram"):
+            demandes = align_bot.traiter(state, {"601"}, [upd])
+        align_bot.LANG_EN.clear()
+        return demandes, envoi, marches
+
+    def test_gold_and_btc_buttons_request_only_their_market(self):
+        self.assertEqual(self._send("🥇 Analyse Gold")[0], [("601", "GOLD")])
+        self.assertEqual(self._send("🟠 Analyse BTC")[0], [("601", "BTC")])
+
+    def test_english_gold_and_btc_buttons_route_identically(self):
+        self.assertEqual(self._send(align_bot.TRAD["🥇 Analyse Gold"], en=True)[0], [("601", "GOLD")])
+        self.assertEqual(self._send(align_bot.TRAD["🟠 Analyse BTC"], en=True)[0], [("601", "BTC")])
+
+    def test_markets_button_opens_market_selector(self):
+        self.assertTrue(self._send("📡 Mes marchés")[2].called)
+        self.assertTrue(self._send(align_bot.TRAD["📡 Mes marchés"], en=True)[2].called)

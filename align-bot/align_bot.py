@@ -1081,7 +1081,7 @@ TRAD = {
 "🕒 Heure de clôture de la bougie :": "🕒 Candle close time:",
 "⏳ PROCHAINE CLÔTURE ": "⏳ NEXT CANDLE CLOSE ",
 "⏱ Temps restant :": "⏱ Time remaining:",
-"🕒 Heure prévue :": "🕒 Scheduled time:",
+"🕒 Heure prévue :": "🕒 Scheduled time:", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
 "🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
 "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
 "🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
@@ -1812,12 +1812,14 @@ def telegram(methode, **params):
     return resultat
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Faire une analyse"}],
+CLAVIER = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "🟠 Analyse BTC"}],
+                                   [{"text": "📊 Faire une analyse"}, {"text": "📡 Mes marchés"}],
                                    [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
                                    [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
                                    [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Faire une analyse"}],
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "🟠 Analyse BTC"}],
+                                            [{"text": "📊 Faire une analyse"}, {"text": "📡 Mes marchés"}],
                                             [{"text": "💎 Devenir VIP"}],
                                             [{"text": "📸 Partager mon gain"}],
                                             [{"text": "🌐 English"}]],
@@ -2407,6 +2409,15 @@ def mmss(sec):
     return f"{minutes:02d}:{secondes:02d}"
 
 
+def duree_cloture(sec):
+    """MM:SS jusqu'à 1 h ; au-delà « 2 h 42 » (lisible) au lieu de « 162:25 »."""
+    total = max(0, int(sec))
+    if total > 3600:
+        heures, reste = divmod(total, 3600)
+        return f"{heures} h {reste // 60:02d}"
+    return mmss(total)
+
+
 TF_SECONDES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "D": 86400, "W": 604800}
 TF_CHAMPS = {"5m": "b5", "15m": "b15", "1h": "b1h", "4h": "b4h", "D": "bd", "W": "bw"}
 
@@ -2424,6 +2435,14 @@ def prochaine_cloture_bougie(r, tf, now_ts=None):
     # Le dernier timestamp désigne l'ouverture de la dernière bougie déjà clôturée.
     pas = max(1, int((now_ts - derniere_ouverture) // interval) + 1)
     return derniere_ouverture + pas * interval
+
+
+CLOTURE_EXPLICATION = {
+    "4h": "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.",
+    "1h": "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.",
+    "15m": "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.",
+    "5m": "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.",
+}
 
 
 def raison_attente(r, cle):
@@ -2508,8 +2527,11 @@ def chrono_txt(m, r, cle, t0):
         ]
     l += [
         f"⏳ PROCHAINE CLÔTURE {tf}",
-        f"⏱ Temps restant : {mmss(restant)}",
-        f"🕒 Heure prévue : {datetime.datetime.fromtimestamp(cible, PARIS).strftime('%H:%M:%S')} (heure de Paris)",
+        f"⏱ Temps restant : {duree_cloture(restant)}",
+        f"🕒 Heure prévue : {datetime.datetime.fromtimestamp(cible, PARIS).strftime('%H:%M')} (heure de Paris)",
+        f"👉 {CLOTURE_EXPLICATION.get(tf, '')}",
+        f"🕯 Clôture 5 min : {mmss(prochaine_cloture_bougie(r, '5m', now) - now)}",
+        f"🕯 Clôture 15 min : {mmss(prochaine_cloture_bougie(r, '15m', now) - now)}",
         f"⌛ Fin du suivi si aucun setup avant {heure(t0 + CHRONO_MAX)} — aucune entrée forcée",
         f"🔄 Actualisé à {datetime.datetime.fromtimestamp(now, PARIS).strftime('%H:%M:%S')}"
     ]
