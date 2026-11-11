@@ -159,18 +159,24 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("CLÔTURE CONFIRMÉE", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
-    def test_chronometer_edits_again_on_the_next_second(self):
+    def test_next_candle_close_is_always_in_the_future(self):
+        self.assertEqual(align_bot.prochaine_cloture(601, 300), 900)
+        self.assertEqual(align_bot.prochaine_cloture(899, 300), 900)
+        self.assertEqual(align_bot.prochaine_cloture(900, 300), 1200)
+        self.assertGreater(align_bot.prochaine_cloture(1000, 300), 1000)
+
+    def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
         from unittest.mock import patch
-        state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1}}}, "GOLD": {}}
-        with patch.object(align_bot.time, "time", side_effect=[100.1, 101.1]), \
-             patch.object(align_bot, "chrono_txt", side_effect=["tick-100", "tick-101"]), \
+        state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1, "maj": 100.0}}}, "GOLD": {}}
+        with patch.object(align_bot.time, "time", side_effect=[100.1, 104.9, 105.1]), \
+             patch.object(align_bot, "chrono_txt", return_value="tick-105") as render, \
              patch.object(align_bot, "telegram") as send:
             align_bot.maj_chronos(state, "GOLD", {})
             align_bot.maj_chronos(state, "GOLD", {})
-        self.assertEqual(send.call_count, 2)
-        self.assertEqual(send.call_args_list[0].kwargs["text"], "tick-100")
-        self.assertEqual(send.call_args_list[1].kwargs["text"], "tick-101")
-
+            align_bot.maj_chronos(state, "GOLD", {})
+        self.assertEqual(send.call_count, 1)
+        self.assertEqual(render.call_count, 1)
+        self.assertEqual(send.call_args.kwargs["text"], "tick-105")
     def test_analysis_keyboard_exposes_details_levels_and_explicit_position_action(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
@@ -276,6 +282,16 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("L'analyse de l'IA ALIGN après l'annonce", reaction)
         self.assertIn("doit être confirmé en clôture", reaction)
         ai.assert_called_once()
+
+    def test_telegram_wrapper_formats_every_outgoing_message(self):
+        import urllib.parse
+        from unittest.mock import patch
+        with patch.object(align_bot, "TOKEN", "test-token"), patch.object(align_bot, "http_json", return_value={"ok": True}) as request:
+            align_bot.telegram("sendMessage", chat_id="123", text="PLAN\n💰 TP1 : 4 075,50")
+        url = request.call_args.args[0]
+        payload = urllib.parse.parse_qs(request.call_args.args[1].decode())
+        self.assertIn("test-token", url)
+        self.assertIn("💰 TP1\n4075,50", payload["text"][0])
 
     def test_gold_market_closure_warns_40_minutes_before(self):
         from unittest.mock import patch
