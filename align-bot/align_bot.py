@@ -2148,7 +2148,7 @@ def texte_cloture(m, tf, bougie, r, cle):
     if cle.get("trade"):
         decision = "🟢 POSITION DÉJÀ OUVERTE : NE RAJOUTE PAS UNE ENTRÉE"
         statut = "🟢 SUIVI DE LA POSITION EN COURS"
-    elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTENDS" in titre or "PATIENCE" in titre:
+    elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTEND" in titre or "PATIENCE" in titre:
         decision = "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL"
         statut = "🔴 SIGNAL NON CONFIRMÉ"
     elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
