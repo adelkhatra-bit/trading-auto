@@ -1579,11 +1579,12 @@ IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds 
              "Tu t'appuies UNIQUEMENT sur les données fournies : aucun prix inventé, jamais de contradiction avec le verdict du bot. "
              "Si le prix est en haut de sa zone Daily/Weekly, près d'une résistance, avec divergence ou essoufflement, déconseille de poursuivre un LONG; "
              "ne propose un SHORT que si le retournement est confirmé par les clôtures et le contexte 1h. "
-             "Analyse aussi le DXY et EUR/USD : le DXY mesure la force du dollar face à un panier de devises, dominé par l'euro. "
+             "Analyse le DXY comme mesure de la force du dollar face à son panier de devises. Contrôle EUR/USD seulement en vérification secondaire. "
+             "Analyse aussi le rendement US Treasury 10 ans (US10Y), sa dernière date officielle de publication et sa variation en points de base. "
              "Compare leur direction et leur variation sur 1h avec le BTC ou le Gold. Signale une impulsion forte du dollar, "
              "une relation inverse cohérente ou une divergence haussière/baissière de l'actif. "
              "Ne déduis JAMAIS un signal inverse automatique : le DXY est un contexte, pas un déclencheur. "
-             "Si les données macro sont absentes ou trop anciennes, dis-le explicitement et n'invente rien. "
+             "Si les données macro sont absentes ou trop anciennes, dis-le explicitement et n'invente rien. US10Y est une donnée officielle quotidienne, jamais une cotation intraday. "
              "Une confluence en % n'est pas une probabilité de gain. Rappelle le SL et le risque. Pas de promesse de gain.")
 
 def _appel_ia(url, modele, cle, messages):
@@ -1874,11 +1875,10 @@ def prochaine_cloture(ts, interval_sec=300):
 
 
 def mmss(sec):
-    """Durée restante exacte, secondes toujours visibles, même au-delà d'une heure."""
-    sec = max(0, int(sec))
-    heures, reste = divmod(sec, 3600)
-    minutes, secondes = divmod(reste, 60)
-    return f"{heures} h {minutes:02d} min {secondes:02d} s" if heures else f"{minutes} min {secondes:02d} s"
+    """Affichage compact Telegram : MM:SS, sans texte ni chiffres parasites."""
+    total = max(0, int(sec))
+    minutes, secondes = divmod(total, 60)
+    return f"{minutes:02d}:{secondes:02d}"
 
 
 TF_SECONDES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "D": 86400, "W": 604800}
@@ -3840,12 +3840,43 @@ def dxy_info(etat):
     ch, mn = variation
     return h[-1][1], ch, mn
 
+def us10_info(etat):
+    """Dernier rendement US Treasury 10 ans publié, avec date et fraîcheur contrôlées."""
+    us = (etat.get("macro") or {}).get("us10")
+    if not us:
+        return {"disponible": False, "statut": "DONNÉES US10Y INDISPONIBLES"}
+    try:
+        valeur, precedente, date_txt = us
+        date_pub = None
+        for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d-%b-%Y"):
+            try:
+                date_pub = datetime.datetime.strptime(str(date_txt), fmt).date()
+                break
+            except ValueError:
+                continue
+        if date_pub is None:
+            return {"disponible": False, "statut": "DATE US10Y ILLISIBLE"}
+        age_jours = (datetime.datetime.now(PARIS).date() - date_pub).days
+        if age_jours < 0 or age_jours > 5:
+            return {"disponible": False, "statut": "US10Y TROP ANCIEN", "date_publication": str(date_pub), "age_jours": age_jours}
+        return {
+            "disponible": True, "rendement_pct": float(valeur),
+            "precedent_pct": float(precedente),
+            "variation_points_base": round((float(valeur) - float(precedente)) * 100, 1),
+            "date_publication": str(date_pub), "age_jours": age_jours,
+            "frequence": "QUOTIDIENNE — PAS UNE DONNÉE INTRADAY"
+        }
+    except (TypeError, ValueError, IndexError):
+        return {"disponible": False, "statut": "FORMAT US10Y INVALIDE"}
+
+
 def macro_confluence(etat, m, r=None):
-    """Biais dollar/EURUSD et divergence avec l'actif ; contexte seulement, jamais un déclencheur."""
+    """Biais DXY, contrôle EUR/USD, US10Y officiel et divergences avec l'actif."""
     mc = etat.get("macro") or {}
     di = dxy_info(etat)
+    taux = us10_info(etat)
     if not di:
-        return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES"}
+        return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES", "us10y": taux}
     dxy, variation, age_min = di
     hist_eur = mc.get("eurusd") or []
     eur_change = None
@@ -3893,6 +3924,7 @@ def macro_confluence(etat, m, r=None):
         "controle_dxy_eurusd": fx_check, "actif": m,
         "actif_variation_1h_pct": round(asset_change, 4) if asset_change is not None else None,
         "divergence_actif_dollar": divergence,
+        "us10y": taux,
         "regle": "Contexte macro uniquement : ne jamais inverser LONG/SHORT ni autoriser une entrée sans confirmations 4h/1h/15m/5m."
     }
 
@@ -3908,11 +3940,14 @@ def contexte_macro(etat, m, r=None):
         l.append(f"💶 EUR/USD : {mc['controle_dxy_eurusd']}" +
                  (f" ({mc['eurusd_variation_1h_pct']:+.2f} % / 1 h)" if mc["eurusd_variation_1h_pct"] is not None else " (historique en constitution)"))
         l.append(f"🔀 {m} / dollar : {mc['divergence_actif_dollar']}")
-    us = (etat.get("macro") or {}).get("us10")
-    if us and m == "GOLD":
-        dv = us[0] - us[1]
-        l.append(f"🏦 Taux US 10 ans {us[0]:.2f} % {'⬆️' if dv > 0 else '⬇️' if dv < 0 else '➖'} {dv:+.2f} sur la journée → "
-                 + ("frein pour le Gold" if dv > 0 else "favorable au Gold" if dv < 0 else "neutre"))
+    taux = mc.get("us10y") or {}
+    if taux.get("disponible"):
+        bp = taux["variation_points_base"]
+        effet = "pression haussière sur les rendements" if bp > 0 else "détente des rendements" if bp < 0 else "rendement stable"
+        l.append(f"🏦 US10Y : {taux['rendement_pct']:.2f} % — variation {bp:+.1f} points de base")
+        l.append(f"📅 Dernière publication officielle : {taux['date_publication']} ({taux['frequence']}) — {effet}")
+    else:
+        l.append("🏦 US10Y : " + taux.get("statut", "DONNÉES INDISPONIBLES"))
     return l
 
 def niveaux_cles(out, m, r, cle):
