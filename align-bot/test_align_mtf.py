@@ -533,17 +533,9 @@ class AlignMtfRulesTest(unittest.TestCase):
         english = json.loads(align_bot.traduire_clavier(align_bot.markup_analyse(state, "GOLD", {})))
         fr_buttons = [b for row in french["inline_keyboard"] for b in row]
         en_buttons = [b for row in english["inline_keyboard"] for b in row]
-        self.assertEqual([b.get("callback_data") or b.get("url") for b in fr_buttons], [b.get("callback_data") or b.get("url") for b in en_buttons])
-        self.assertEqual(
-            [align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons],
-            [b["text"] for b in en_buttons],
-        )
-        self.assertIn("❓ Why this decision?", [b["text"] for b in en_buttons])
-        self.assertIn("📊 Full analysis", [b["text"] for b in en_buttons])
-        self.assertIn("🎯 Levels / prices", [b["text"] for b in en_buttons])
-        self.assertIn("⏱ All timeframes", [b["text"] for b in en_buttons])
-        self.assertIn("🗂 Message history", [b["text"] for b in en_buttons])
-        self.assertIn("🔔 Follow the next position", [b["text"] for b in en_buttons])
+        self.assertEqual([b.get("callback_data") for b in fr_buttons], [b.get("callback_data") for b in en_buttons])
+        self.assertEqual([align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons], [b["text"] for b in en_buttons])
+        self.assertEqual([b["text"] for b in en_buttons], ["🔔 Follow the next position"])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):
         labels = [
@@ -795,19 +787,13 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(send.call_count, 1)
         self.assertEqual(render.call_count, 1)
         self.assertEqual(send.call_args.kwargs["text"], "tick-105")
-    def test_analysis_keyboard_exposes_details_levels_and_explicit_position_action(self):
+    def test_analysis_keyboard_exposes_only_the_next_position_follow_action(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
         labels = [button["text"] for row in keyboard for button in row]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("❓ Pourquoi cette décision ?", labels)
-        self.assertIn("📊 Analyse complète", labels)
-        self.assertIn("🎯 Niveaux / prix", labels)
-        self.assertIn("🔔 Suivre la prochaine position", labels)
-        self.assertIn("why:GOLD", callbacks)
-        self.assertIn("details:GOLD", callbacks)
-        self.assertIn("levels:GOLD", callbacks)
-        self.assertIn("auto:GOLD", callbacks)
+        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
+        self.assertEqual(callbacks, ["auto:GOLD"])
 
     def test_active_trade_keyboard_has_manual_entry_and_exit_controls(self):
         import json
@@ -1581,20 +1567,17 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("5 min : timing", message)
         self.assertIn("RSI 68", message)
 
-    def test_all_timeframe_button_is_present_and_callback_is_handled(self):
+    def test_all_timeframe_callback_remains_available_without_cluttering_default_analysis(self):
         import json
         from unittest.mock import patch
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("timeframes:BTC", callbacks)
+        self.assertEqual(callbacks, ["auto:BTC"])
         update = {"update_id": 9210, "callback_query": {
             "id": "cb-timeframes", "data": "timeframes:BTC",
             "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
-        r = {
-            "dirs": [1] * 11, "rsis": [55] * 11,
-            "m1": [candle(1, c=100.0)], "confirme": 1
-        }
+        r = {"dirs": [1] * 11, "rsis": [55] * 11, "m1": [candle(1, c=100.0)], "confirme": 1}
         with (
             patch.object(align_bot, "autorise", return_value=True),
             patch.dict(align_bot.DERNIERS, {"BTC": r}),
@@ -1605,17 +1588,13 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("TOUTES LES UNITÉS", send.call_args.kwargs["text"])
         self.assertIn("45 min", send.call_args.kwargs["text"])
 
-    def test_compact_analysis_buttons_expose_why_full_analysis_and_levels(self):
+    def test_default_analysis_keyboard_is_compact_and_keeps_follow_action(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         labels = [button["text"] for row in keyboard for button in row]
-        self.assertIn("why:BTC", callbacks)
-        self.assertIn("details:BTC", callbacks)
-        self.assertIn("levels:BTC", callbacks)
-        self.assertIn("Pourquoi cette décision ?", " ".join(labels))
-        self.assertIn("Analyse complète", " ".join(labels))
-        self.assertIn("Niveaux / prix", " ".join(labels))
+        self.assertEqual(callbacks, ["auto:BTC"])
+        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
 
     def test_why_callback_returns_short_explanation_and_more_detail_buttons(self):
         from unittest.mock import patch
