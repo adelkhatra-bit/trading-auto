@@ -19,7 +19,7 @@ def write_summary(status, provider, attempts):
             f.write(f"- **Statut :** {status}\n")
             f.write(f"- **Fournisseur utilisable :** {provider or 'aucun'}\n")
             f.write(f"- **Fournisseurs testés :** {attempts or 'aucun'}\n")
-            f.write("- **Repli interne :** disponible dans align_bot.ia()\n")
+            f.write("- **Repli interne :** disponible dans align_bot.avis_ia()\n")
 
 
 messages = [
@@ -47,5 +47,5 @@ for name, url, model, key, needs_key in align_bot.IA_FOURNISSEURS:
 
 write_summary("UNAVAILABLE", "", ", ".join(attempts))
 # Code non nul pour signaler l'indisponibilité ; le workflow est non bloquant
-# et align_bot.ia() utilise son analyse interne si tous les fournisseurs tombent.
+# et align_bot.avis_ia() affiche l'analyse interne déterministe si tous les fournisseurs tombent.
 sys.exit(1)
