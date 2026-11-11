@@ -439,7 +439,8 @@ def _normalise_prix_dans_texte(texte):
     return re.sub(motif, lambda m: _compacte_prix(m.group(1)), texte)
 
 def cme_ouvert(ts):
-    ct = datetime.datetime.fromtimestamp(ts, datetime.timezone(datetime.timedelta(hours=-6)))  # heure de Chicago (approx. hiver)
+    """Session CME en heure locale Chicago avec bascule DST automatique."""
+    ct = datetime.datetime.fromtimestamp(ts, ZoneInfo("America/Chicago"))
     if ct.weekday() == 5 or (ct.weekday() == 4 and ct.hour >= 16) or (ct.weekday() == 6 and ct.hour < 17):
         return False
     return ct.hour != 16
@@ -4300,6 +4301,8 @@ def sauver_etat(etat, chats=None):
 
 def main():
     etat = charger_etat()
+    maintenant_paris = datetime.datetime.now(PARIS)
+    print(f"ALIGN_TZ=Europe/Paris LOCAL_NOW={maintenant_paris.isoformat()} UTC_NOW={datetime.datetime.now(datetime.timezone.utc).isoformat()}", flush=True)
     chats = set(etat.get("chats", []))
     if os.environ.get("TELEGRAM_CHAT_ID"):
         chats.add(os.environ["TELEGRAM_CHAT_ID"].strip())
