@@ -2,7 +2,7 @@
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
 Prix gratuits : BTC = Kraken XBTUSD, Gold = XAUUSD spot (bougies COMEX Yahoo recalées sur le prix spot Swissquote).
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
-import json, os, re, time, urllib.request, urllib.error, urllib.parse, datetime
+import json, os, re, time, urllib.request, urllib.error, urllib.parse, datetime, threading
 from zoneinfo import ZoneInfo
 import sys
 try:
@@ -1874,6 +1874,7 @@ def texte_apercu(m, r, cle):
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
 CHRONO_REFRESH_SEC = 5       # édition du compte à rebours toutes les 5 s pour limiter les rafales Telegram
+CHRONO_LOCK = threading.RLock()  # un seul éditeur Telegram par chronomètre, même pendant l'analyse réseau
 
 def prochaine_cloture(ts, interval_sec=300):
     """Retourne la prochaine clôture strictement future (horodatage UTC)."""
@@ -2023,7 +2024,7 @@ def _editer_chrono_ou_recreer(cid, chrono, texte):
         raise
 
 
-def maj_chronos(etat, m, r):
+def _maj_chronos_verrouille(etat, m, r):
     """Actualise le compte à rebours et recrée son message si Telegram l'a rendu invalide."""
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
     cle = etat.get(m, {})
@@ -2051,7 +2052,13 @@ def maj_chronos(etat, m, r):
         except Exception as ex:
             print("chrono", cid, ex)
 
-def lancer_chrono(etat, cid, m, r=None):
+def maj_chronos(etat, m, r):
+    """Sérialise les éditions du chrono entre la boucle principale et le worker indépendant."""
+    with CHRONO_LOCK:
+        return _maj_chronos_verrouille(etat, m, r)
+
+
+def _lancer_chrono_verrouille(etat, cid, m, r=None):
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
     if str(cid) in ch:                     # déjà un chrono : on le redescend en bas de la conversation
         try:
@@ -2068,6 +2075,28 @@ def lancer_chrono(etat, cid, m, r=None):
         ch[str(cid)] = {"mid": res["result"]["message_id"], "t0": t0, "maj": t0}
     except Exception as ex:
         print("chrono", ex)
+
+def lancer_chrono(etat, cid, m, r=None):
+    """Crée le message de suivi sous le même verrou que son rafraîchissement."""
+    with CHRONO_LOCK:
+        return _lancer_chrono_verrouille(etat, cid, m, r)
+
+
+def tick_chronos(etat):
+    """Un tick indépendant de l'analyse des marchés et des appels aux IA."""
+    for marche, derniere in list(DERNIERS.items()):
+        try:
+            maj_chronos(etat, marche, derniere)
+        except Exception as ex:
+            print("worker chrono", marche, ex)
+
+
+def boucle_chronos(etat):
+    """Garde les chronomètres Telegram vivants même si un flux de marché ou une IA ralentit."""
+    while True:
+        tick_chronos(etat)
+        time.sleep(1)
+
 
 def inscrire_auto(etat, cid, m):
     """Active le suivi de la prochaine position sans faire croire qu'un ordre broker est placé."""
@@ -4601,6 +4630,11 @@ def main():
         etat["proprio"] = sorted(chats)
     if POSITIONS_GRATUITES and etat.get("prospects"):
         chats |= set(etat["prospects"]); etat["prospects"] = []
+
+    # Worker indépendant : le chronomètre ne dépend plus de la durée d'un tour
+    # d'analyse BTC/Gold, d'un appel IA ou d'une requête réseau lente.
+    if TOKEN:
+        threading.Thread(target=boucle_chronos, args=(etat,), name="ALIGN-Telegram-Chrono", daemon=True).start()
 
     # Bot toujours allumé : un tour toutes les PAUSE_SEC secondes pendant DUREE_SEC,
     # et entre deux tours il écoute Telegram en continu (réponse immédiate aux boutons).
