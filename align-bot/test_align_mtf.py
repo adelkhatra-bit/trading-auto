@@ -1951,6 +1951,14 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         self.assertIn(align_bot.SEPARATEUR + "\n<b>POURQUOI J'ATTENDS</b>", html)
         self.assertIn("<i>ℹ️ note</i>", html)
 
+    def test_coach_speaks_with_first_name(self):
+        etat = {}
+        align_bot.retenir_prenom(etat, 5, {"first_name": "Adel K"})
+        txt = align_bot.humaniser(etat, "5", "🔒 METS-TOI À BE — 🟠 BTC\n🛑 SL : 100")
+        self.assertTrue(txt.startswith("🔒 Adel, METS-TOI À BE"))
+        self.assertIn("protégé", txt)
+        self.assertEqual(align_bot.humaniser({}, "9", "X"), "X")
+
     def test_free_flow_one_proposed_position_then_masked(self):
         from unittest.mock import patch
         state = {"prospects": ["7"], "proprio": ["1"], "proprio_gratuit": True, "lien": "https://t.me/+x", "GOLD": {"trade": {"cree": 5, "qui": {}}}}
