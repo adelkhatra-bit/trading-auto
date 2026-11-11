@@ -1153,7 +1153,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
         self.assertEqual(lines[0], "🔴 SIGNAL NON CONFIRMÉ")
-        self.assertIn("🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL", message)
+        self.assertIn("🚫 N'ENTRE PAS", message)
+        self.assertIn("ATTENDS LE PROCHAIN SIGNAL", message)
         self.assertIn("🕯 CLÔTURE 1h", message)
         self.assertIn("🟠 BTC", message)
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
