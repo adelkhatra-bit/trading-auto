@@ -1287,9 +1287,17 @@ DUREE_SEC = int(os.environ.get("DUREE_SEC", str(ECOUTE_SEC)))   # durée d'un la
 PAUSE_SEC = int(os.environ.get("PAUSE_SEC", "20"))   # une analyse complète BTC + Gold toutes les 20 s
 
 def marche_demande(txt):
-    """« Analyse BTC » → BTC, « Analyse Gold » → GOLD, « Analyse » seul → les deux (None)."""
-    t = txt.lower()
-    return "BTC" if "btc" in t else "GOLD" if ("gold" in t or "or" in t.split()) else None
+    """Marché demandé : Gold par défaut ; BTC seul si cité ; les deux si BTC et Gold sont cités."""
+    t = str(txt or "").lower()
+    # Normaliser les variantes courantes sans dépendance externe.
+    t = t.replace("é", "e").replace("è", "e").replace("ê", "e")
+    btc = "btc" in t or "bitcoin" in t
+    gold = "gold" in t or " xau" in t or "xauusd" in t or "or" in t.split()
+    if btc and gold:
+        return None                 # demande explicite des deux marchés
+    if btc:
+        return "BTC"
+    return "GOLD"                   # une demande générale porte sur Gold uniquement
 
 def tendance_armee(r, cle):
     """Une fois 4h + 1h alignées, la tendance reste armée pendant le repli 5m tant que les deux UT ne s'inversent pas."""
