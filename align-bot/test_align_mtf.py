@@ -1071,13 +1071,27 @@ class AlignMtfRulesTest(unittest.TestCase):
             raw = align_bot.texte_cloture("BTC", "1h", b, r, {})
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
-        self.assertEqual(lines[0], "🕯 CLÔTURE CONFIRMÉE")
+        self.assertEqual(lines[0], "🕯 CLÔTURE 1h — SIGNAL NON CONFIRMÉ")
         self.assertEqual(lines[1], "1h — 🟠 BTC")
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
                          "TENDANCE MULTI-UNITÉS", "4 h\nSHORT", "Confirmation 1 h\nSHORT", "2/2", "DÉCISION ALIGN",
                          "N'ENTRE PAS", "POURQUOI", "La zone Daily/Weekly est extrême", "j'attends un meilleur prix", "PROCHAINE ÉTAPE",
                          "Prochaine entrée SHORT", "Une clôture seule ne déclenche pas une entrée", "Aucun ordre n'est envoyé à ton broker"):
             self.assertIn(required, message)
+
+
+    def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
+        from unittest.mock import patch
+        r = {"dirs": [0] * 11, "confirme": 1, "m1": [candle(7200, c=73498.30)]}
+        b = candle(7200, o=73444.10, h=73510.0, l=73430.0, c=73498.30)
+        with (
+            patch.object(align_bot, "verdict", return_value=("🟢 TU PEUX ENTRER\\n⬆️ ACHAT", "Conditions réunies")),
+            patch.object(align_bot, "raison_attente", return_value="Conditions réunies."),
+            patch.object(align_bot, "prochaine", return_value="Entrée autorisée"),
+            patch.object(align_bot, "heure", return_value="03:00"),
+        ):
+            message = align_bot.texte_cloture("BTC", "5m", b, r, {})
+        self.assertEqual(message.splitlines()[0], "🕯 CLÔTURE 5m — SIGNAL CONFIRMÉ")
 
 if __name__ == "__main__":
     unittest.main()
