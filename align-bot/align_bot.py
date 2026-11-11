@@ -2499,17 +2499,27 @@ def traiter(etat, chats, updates):
         message_recu = (u.get("message") or u.get("edited_message") or
                         u.get("channel_post") or u.get("edited_channel_post") or {})
         callback_recu = u.get("callback_query") or {}
+        demande_recue = u.get("chat_join_request") or {}
+        statut_recu = u.get("my_chat_member") or {}
         chat_recu = (message_recu.get("chat") or
-                     (callback_recu.get("message") or {}).get("chat") or {})
+                     (callback_recu.get("message") or {}).get("chat") or
+                     demande_recue.get("chat") or statut_recu.get("chat") or {})
+        type_message = next((k for k in ("photo", "document", "video", "voice", "audio",
+                                         "sticker", "animation", "video_note", "location",
+                                         "contact", "poll", "dice", "venue") if k in message_recu), "message")
         contenu_recu = (message_recu.get("text") or message_recu.get("caption") or
                         callback_recu.get("data") or
-                        ("Demande d'entrée dans un canal" if u.get("chat_join_request") else
-                         "Mise à jour du statut du bot" if u.get("my_chat_member") else ""))
+                        ("[" + type_message + "]" if message_recu else
+                         "Demande d'entrée dans un canal" if demande_recue else
+                         "Mise à jour du statut du bot" if statut_recu else ""))
+        expediteur = (message_recu.get("from") or callback_recu.get("from") or
+                      demande_recue.get("from") or {})
         journal_ajouter(etat, {
             "direction": "entrant", "timestamp": time.time(),
             "update_id": u.get("update_id"), "chat_id": str(chat_recu.get("id", "")),
-            "user_id": str((message_recu.get("from") or callback_recu.get("from") or {}).get("id", "")),
-            "type": "callback" if callback_recu else "message" if message_recu else "update",
+            "user_id": str(expediteur.get("id", "")),
+            "type": "callback" if callback_recu else type_message if message_recu else
+                    "chat_join_request" if demande_recue else "my_chat_member" if statut_recu else "update",
             "text": str(contenu_recu or "")[:4096]
         })
         mcm = u.get("my_chat_member")
