@@ -1406,7 +1406,7 @@ TRAD = {
 ": le prix est parti sans toucher le point d'entrée. Trop tard, je recalcule le prochain point.": ": price left without touching the entry. Too late, recalculating the next one.",
 ": prix DANS la zone 🟨 — j'attends la confirmation RSI ⏳": ": price IN the zone 🟨 — waiting for RSI confirmation ⏳",
 ": prix sur le point d'entrée, mais annonce économique dans moins de 15 min. On ne rentre pas.": ": price at entry, but economic news in less than 15 min. Not entering.",
-": tu peux encore rentrer (": ": you can still enter (", ": trop tard pour rentrer. On attend le prochain setup.": ": too late to enter. Waiting for the next setup.",
+": tu peux encore rentrer (": ": you can still enter (", "✅ ENTRÉE ENCORE POSSIBLE": "✅ ENTRY STILL POSSIBLE", "❌ STOP TOUCHÉ": "❌ STOP HIT", "📈 TP2 TOUCHÉ": "📈 TP2 HIT", "🔥 La tendance continue": "🔥 The trend continues", "🛑 Nouveau stop": "🛑 New stop", "(au TP1)": "(at TP1)", "🎯 Nouvel objectif": "🎯 New target", "🏆 OBJECTIF FINAL ATTEINT": "🏆 FINAL TARGET REACHED", "✅ Trade terminé, bravo !": "✅ Trade closed, well done!", "↩️ SORTIE AU STOP SÉCURISÉ": "↩️ EXIT AT SECURED STOP", "🛑 Sortie": "🛑 Exit", "✅ TP1 encaissé, pas de perte": "✅ TP1 banked, no loss", "🎯 OBJECTIFS REMIS DANS L'ORDRE": "🎯 TARGETS PUT BACK IN ORDER", "📍 Tu prends la position ? Active le suivi avec le bouton ci-dessous": "📍 Taking the trade? Turn on tracking with the button below", "⛔ TROP TARD POUR ENTRER": "⛔ TOO LATE TO ENTER", "🙅 N'entre plus maintenant : le prix est trop loin de l'entrée": "🙅 Don't enter now: price is too far from the entry", "🟢 Déjà en position : on continue": "🟢 Already in: we carry on", ": trop tard pour rentrer. On attend le prochain setup.": ": too late to enter. Waiting for the next setup.",
 ": trop tard pour rentrer maintenant. Ceux qui sont dedans : on continue vers le TP1": ": too late to enter now. Those already in: we keep going to TP1",
 "touché. On coupe, prochain setup bientôt.": "hit. We close, next setup soon.", "touché !": "hit!",
 "→ Sécurise une partie": "→ Secure part of it", "→ Mets ton SL à BE (prix d'entrée)": "→ Move your SL to BE (entry price)", "→ On vise TP2": "→ Aiming for TP2",
@@ -2304,12 +2304,37 @@ def donnees_ia(m, r, cle):
     }
     return data
 
+IA_LIGNES_MAX = 6
+IA_LIGNE_MAX_CAR = 110
+
+
+def compacter_ia(t):
+    """Réponse IA rangée comme le reste : lignes courtes, une info par ligne, pas de pavé ni de conclusion."""
+    if not isinstance(t, str) or not t.strip():
+        return t
+    lignes = []
+    for brut in t.replace("**", "").split("\n"):
+        l = re.sub(r"^[\s\-*•#>]+", "", brut).strip()
+        if not l or re.match(r"(?i)^(en conclusion|in conclusion|en résumé|in summary|pour conclure|to conclude)\b", l):
+            continue
+        # Un paragraphe devient des phrases, une par ligne
+        for phrase in re.split(r"(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ0-9🟩🟥📈📉🎯🛑⏱📊🧭⚡])", l):
+            phrase = phrase.strip()
+            if not phrase or re.match(r"(?i)^(en conclusion|in conclusion|en résumé|in summary)\b", phrase):
+                continue
+            if len(phrase) > IA_LIGNE_MAX_CAR:
+                coupe = phrase[:IA_LIGNE_MAX_CAR].rsplit(" ", 1)[0].rstrip(",;: ")
+                phrase = coupe + "…"
+            lignes.append(phrase)
+    return "\n".join(lignes[:IA_LIGNES_MAX])
+
+
 def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
     consigne = (
-        "Give a concise, decision-ready desk brief in English: current move (rising/falling/ranging/rebound/pullback), H4/H1 bias, M15 structure and intended direction, M5 entry trigger, volume context on M5/M15/H1/H4 including source provenance and relative spike/weakness when available (never treat GOLD proxy volume as actual XAUUSD spot volume), exact planned entry/SL/TP only from supplied live plan, distance from current price to entry, indicative minutes based on observed 5m candle ranges, and what to do now. If the target is far, say plainly whether it is worth waiting and give the indicative check-back window; never tell the user to wait for hours when the supplied distance/range data show otherwise. Label the time estimate as mechanical and uncertain, never a promise. If no fresh entry plan exists, say NO VALID ENTRY PRICE and do not invent one. Mention the next blocking candle close only as the next review, not an entry time. No broker, macro filler, generic warnings, or indicator dump. Never override ALIGN's internal verdict."
+        "Give a concise, decision-ready desk brief in English: current move (rising/falling/ranging/rebound/pullback), H4/H1 bias, M15 structure and intended direction, M5 entry trigger, volume context on M5/M15/H1/H4 including source provenance and relative spike/weakness when available (never treat GOLD proxy volume as actual XAUUSD spot volume), exact planned entry/SL/TP only from supplied live plan, distance from current price to entry, indicative minutes based on observed 5m candle ranges, and what to do now. If the target is far, say plainly whether it is worth waiting and give the indicative check-back window; never tell the user to wait for hours when the supplied distance/range data show otherwise. Label the time estimate as mechanical and uncertain, never a promise. If no fresh entry plan exists, say NO VALID ENTRY PRICE and do not invent one. Mention the next blocking candle close only as the next review, not an entry time. No broker, macro filler, generic warnings, or indicator dump. Never override ALIGN's internal verdict. FORMAT: at most 6 short lines, one fact per line, each line starts with an emoji then 'Label: value' (e.g. '📈 Move: falling'), max 12 words per line, no paragraph, no conclusion sentence."
         if anglais else
-        "Fais un briefing de trading court et directement exploitable : mouvement actuel (hausse, baisse, range, rebond ou retracement), biais H4/H1, structure M15 et direction visée, déclencheur d'entrée M5, lecture des volumes M5/M15/H1/H4 avec provenance et comparaison à la moyenne lorsqu'elle est disponible (ne jamais présenter le volume proxy GOLD comme le volume réel du spot XAUUSD), prix d'entrée/SL/TP exacts uniquement s'ils viennent d'un plan actif et frais, distance entre prix actuel et entrée, estimation indicative en minutes fondée sur les amplitudes réellement observées des bougies 5 min, puis quoi faire maintenant. Si l'entrée est loin, dis clairement si cela vaut la peine d'attendre et dans combien de temps revenir vérifier ; ne demande pas d'attendre des heures si la distance et le rythme observé indiquent le contraire. Présente le délai comme une projection mécanique incertaine, jamais comme une promesse. Sans plan d'entrée frais, écris AUCUN PRIX D'ENTRÉE VALIDE et n'invente rien. La prochaine clôture de l'unité bloquante est une réévaluation, pas une heure d'entrée. Aucun broker, remplissage macro, avertissement générique ou catalogue d'indicateurs. Ne contredis jamais le verdict interne."
+        "Fais un briefing de trading court et directement exploitable : mouvement actuel (hausse, baisse, range, rebond ou retracement), biais H4/H1, structure M15 et direction visée, déclencheur d'entrée M5, lecture des volumes M5/M15/H1/H4 avec provenance et comparaison à la moyenne lorsqu'elle est disponible (ne jamais présenter le volume proxy GOLD comme le volume réel du spot XAUUSD), prix d'entrée/SL/TP exacts uniquement s'ils viennent d'un plan actif et frais, distance entre prix actuel et entrée, estimation indicative en minutes fondée sur les amplitudes réellement observées des bougies 5 min, puis quoi faire maintenant. Si l'entrée est loin, dis clairement si cela vaut la peine d'attendre et dans combien de temps revenir vérifier ; ne demande pas d'attendre des heures si la distance et le rythme observé indiquent le contraire. Présente le délai comme une projection mécanique incertaine, jamais comme une promesse. Sans plan d'entrée frais, écris AUCUN PRIX D'ENTRÉE VALIDE et n'invente rien. La prochaine clôture de l'unité bloquante est une réévaluation, pas une heure d'entrée. Aucun broker, remplissage macro, avertissement générique ou catalogue d'indicateurs. Ne contredis jamais le verdict interne. FORMAT : 6 lignes courtes au maximum, une seule info par ligne, chaque ligne commence par un emoji puis « Intitulé : valeur » (ex. « 📈 Mouvement : baisse »), 12 mots maximum par ligne, aucun paragraphe, aucune phrase de conclusion."
     )
     langue_cache = "en" if anglais else "fr"
     donnees = donnees_ia(m, r, cle)
@@ -2320,6 +2345,7 @@ def avis_ia(etat, m, r, cle, anglais=False):
     signature = hashlib.sha256(json.dumps(empreinte, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
     t = ia(etat, consigne, donnees,
            cle_cache=f"analyse_{m}_{langue_cache}_{signature}")
+    t = compacter_ia(t)
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
         fournisseur = etat.get("ia_dernier_fournisseur")
@@ -4018,10 +4044,10 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
     fomo = None
     if m and ("TP1" in tete and "touché" in tete) and pct_tp:
         fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : TP1 TOUCHÉ 🔥🔥🔥\n💰 +{pct_tp:.2f} % pour les VIP\n😬 Tu n'étais pas dedans ?\n💎 Les prochaines : VIP 👇"
-    elif m and ("objectif final" in tete or "TP2 touché" in tete):
+    elif m and ("objectif final" in tete.lower() or "tp2 touché" in tete.lower()):
         g = etat.get(m, {}).get("dernier")
         fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : OBJECTIF ATTEINT 🔥🔥🔥\n" + (f"💰 +{g:.2f} % pour les VIP\n" if g else "") + "😬 Tu as loupé ça\n💎 Rejoins le VIP 👇"
-    elif m and "stop" in tete.lower() and "touché" in tete:
+    elif m and "stop" in tete.lower() and "touché" in tete.lower() and "sécurisé" not in tete.lower():
         fomo = f"❌ {ICONE.get(m, '')} {m} : SL touché pour les VIP\n🛡 Risque maîtrisé, on repart\n💎 Toutes les positions et les résultats : VIP 👇"
     elif m and ("ÇA ARRIVE" in tete or "POINT D'ENTRÉE À VENIR" in tete or "CASSURE EN VUE" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
         fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
@@ -5275,7 +5301,7 @@ def agent(m, r, cle, ferme):
         for c_, pos in tr.get("qui", {}).items():
             if isinstance(pos, dict):
                 pos["tp1"] = n1v
-        out.append(f"🎯 {ICONE.get(m, '')} {m} : objectifs remis dans l'ordre\n🚦 🟢 ON RESTE EN POSITION\n💰 TP1 ≈ {px(n1v)} ({n1n})\n🏁 TP2 ≈ {px(n2v)} ({n2n})\n🛑 SL inchangé ≈ {px(tr['sl'])}")
+        out.append(f"🎯 OBJECTIFS REMIS DANS L'ORDRE — {ICONE.get(m, '')} {m}\n🚦 🟢 ON RESTE EN POSITION\n💰 TP1 ≈ {px(n1v)} ({n1n})\n🏁 TP2 ≈ {px(n2v)} ({n2n})\n🛑 SL inchangé ≈ {px(tr['sl'])}")
     d, e, sl, t1, t2 = tr["d"], tr["e"], tr["sl"], tr["tp1"], tr["tp2"]
     touche_sl = (lo <= sl) if d == 1 else (hi >= sl)
     touche_t1 = (hi >= t1) if d == 1 else (lo <= t1)
@@ -5288,7 +5314,7 @@ def agent(m, r, cle, ferme):
                 out.append(f"🔒 {ICONE.get(m, '')} {m} : sorti à BE\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n🛡 Aucune perte\n🔎 Je cherche la prochaine entrée")
             else:
                 inverse = "LONG" if d == -1 else "SHORT"
-                out.append(f"❌ {ICONE.get(m, '')} {m} : stop {px(sl)} touché\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n😎 On coupe, prochain setup bientôt\n"
+                out.append(f"❌ STOP TOUCHÉ — {ICONE.get(m, '')} {m}\n🛑 Stop : {px(sl)}\n🚦 🙅 JE NE SUIS PLUS EN POSITION\n😎 On coupe, prochain setup bientôt\n"
                            f"↩ RETOURNEMENT possible vers le {inverse} : j'entre seulement si le 15 min et la 1 h le confirment")
                 cle["retournement"] = {"d": -d, "t": r["t"]}
             cle["fin"] = [tr, sl, "🔒 Sorti à BE" if tr.get("be_dit") else "🛑 Stop touché"]; cle["stop_t"] = r["t"]
@@ -5311,11 +5337,12 @@ def agent(m, r, cle, ferme):
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
                 tr["encore"] += 1
                 if True:
-                    out.append((f"👍 {m} : tu peux encore rentrer ({px(p)}). Stop {px(sl)} • TP1 {px(t1)}\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", boutons(m)))
+                    out.append((f"✅ ENTRÉE ENCORE POSSIBLE — {ICONE.get(m, '')} {m}\n{SENS[d]}\n📌 Entrée : {px(p)}\n🛑 Stop : {px(sl)}\n🎯 TP1 : {px(t1)}\n"
+                                f"📍 Tu prends la position ? Active le suivi avec le bouton ci-dessous", boutons(m)))
         elif not tr.get("tard"):
             tr["tard"] = True
             # Le bot reste en position jusqu'au TP ou au SL (son bilan compte toutes ses positions)
-            out.append(f"⛔ {m} : trop tard pour rentrer maintenant. Ceux qui sont dedans : on continue vers le TP1 {px(t1)}.")
+            out.append(f"⛔ TROP TARD POUR ENTRER — {ICONE.get(m, '')} {m}\n🙅 N'entre plus maintenant : le prix est trop loin de l'entrée\n🟢 Déjà en position : on continue\n🎯 TP1 : {px(t1)}")
         return out
 
     if tr["statut"] == "tp1":
@@ -5325,13 +5352,13 @@ def agent(m, r, cle, ferme):
             excès = (r["r15"] >= 70) if d == 1 else (r["r15"] <= 30)
             if r["dirs"][9] == d and not excès and suivants and not tr.get("etendu"):
                 tr["etendu"] = True; tr["sl"] = t1; tr["tp2"] = suivants[0][0]
-                out.append(f"📈 {m} : TP2 touché, la tendance continue.\n→ Stop au TP1 {px(t1)}\n→ Nouvel objectif {px(suivants[0][0])}")
+                out.append(f"📈 TP2 TOUCHÉ — {ICONE.get(m, '')} {m}\n🚦 🟢 ON RESTE EN POSITION\n🔥 La tendance continue\n🛑 Nouveau stop : {px(t1)} (au TP1)\n🎯 Nouvel objectif : {px(suivants[0][0])}")
                 return out
-            out.append(f"🏆 {m} : objectif final {px(t2)} atteint. Trade terminé, bravo !")
+            out.append(f"🏆 OBJECTIF FINAL ATTEINT — {ICONE.get(m, '')} {m}\n🎯 TP2 : {px(t2)}\n✅ Trade terminé, bravo !")
             cle["fin"] = [tr, t2, "🏆 Objectif final"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
-            out.append(f"↩️ {m} : sortie au stop sécurisé {px(tr['sl'])}. TP1 encaissé, pas de perte.")
+            out.append(f"↩️ SORTIE AU STOP SÉCURISÉ — {ICONE.get(m, '')} {m}\n🛑 Sortie : {px(tr['sl'])}\n✅ TP1 encaissé, pas de perte")
             cle["fin"] = [tr, t1 if d * (tr["sl"] - t1) < 0 else tr["sl"], "💰 TP1 encaissé"]
             cle.pop("trade"); cle["aligne"] = 0; return out
     return out

@@ -2849,3 +2849,18 @@ class TestReversalAfterStop(unittest.TestCase):
     def test_old_or_same_direction_is_not_reversal(self):
         self.assertFalse(align_bot.retournement_confirme({"retournement": {"d": 1, "t": 0}}, 1, {"t": 5 * 3600}))
         self.assertFalse(align_bot.retournement_confirme({"retournement": {"d": -1, "t": 0}}, 1, {"t": 10}))
+
+
+class TestMessagesPropres(unittest.TestCase):
+    def test_compacter_ia_sans_paves_ni_conclusion(self):
+        t = align_bot.compacter_ia("**Mouvement** : baisse. Le H4 est baissier.\nEn conclusion, belle opportunité.")
+        self.assertEqual(t.split("\n"), ["Mouvement : baisse.", "Le H4 est baissier."])
+        long = align_bot.compacter_ia("x " * 200)
+        self.assertLessEqual(len(long), align_bot.IA_LIGNE_MAX_CAR + 1)
+
+    def test_entree_encore_possible_en_carte(self):
+        t = align_bot.mise_en_forme("✅ ENTRÉE ENCORE POSSIBLE — 🟠 BTC\n🟥 SHORT ⬇️\n📌 Entrée : 74508.80\n🛑 Stop : 74824.57\n🎯 TP1 : 73672.44")
+        lignes = t.split("\n")
+        self.assertIn("📌 Entrée", lignes)
+        self.assertEqual(lignes[lignes.index("📌 Entrée") + 1], "74508,80")
+        self.assertEqual(lignes[lignes.index("🛑 Stop") + 1], "74824,57")
