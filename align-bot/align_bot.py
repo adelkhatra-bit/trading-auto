@@ -1318,6 +1318,17 @@ TRAD.update({
     "🔔 Suivre le prochain setup": "🔔 Follow the next setup",
     "Choisis une action ALIGN": "Choose an ALIGN action",
     "7️⃣ ⚖️ Risque conseillé : 0,5 à 1 % du compte par position ; jamais sans SL": "7️⃣ ⚖️ Suggested risk: 0.5 to 1% of the account per position; never trade without an SL",
+
+    "🎯 Suivre la prochaine position": "🎯 Follow the next position",
+    "✅ Publier": "✅ Publish",
+    "❌ Refuser": "❌ Decline",
+    "✅ Accepter": "✅ Accept",
+    "👀 Voir son profil": "👀 View profile",
+    "⬅️ Plus récents": "⬅️ Newer",
+    "Plus anciens ➡️": "Older ➡️",
+    "↩️ Retour à l'analyse": "↩️ Back to analysis",
+    "🎯 Voir les niveaux": "🎯 View levels",
+    "ℹ️ Comprendre l'analyse": "ℹ️ Understand the analysis",
 })
 
 LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
