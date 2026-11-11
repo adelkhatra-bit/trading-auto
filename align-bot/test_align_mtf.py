@@ -584,5 +584,78 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertTrue(state.get("ia_err"))
 
 
+    def test_all_analysis_inline_buttons_route_without_silent_failure(self):
+        from unittest.mock import patch
+        r = {"m1": [candle(1, c=100.0)], "dirs": [0] * 11, "confirme": 0}
+        for action in ("details", "levels", "resume", "previous"):
+            update = {"update_id": 9100, "callback_query": {
+                "id": "cb-" + action, "data": action + ":GOLD",
+                "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            }}
+            with patch.object(align_bot, "autorise", return_value=True), \\
+                 patch.dict(align_bot.DERNIERS, {"GOLD": r}), \\
+                 patch.object(align_bot, "texte_apercu", return_value="analysis-card"), \\
+                 patch.object(align_bot, "texte_etat", return_value="analysis-details"), \\
+                 patch.object(align_bot, "_envoi_sur") as send, \\
+                 patch.object(align_bot, "telegram", return_value={"ok": True}):
+                align_bot.traiter({}, set(), [update])
+                self.assertTrue(send.called, action + " did not send a response")
+
+    def test_bot_on_off_buttons_route_to_personal_bot_setting(self):
+        from unittest.mock import patch
+        for action, enabled in (("boton", True), ("botoff", False)):
+            update = {"update_id": 9110, "callback_query": {
+                "id": "cb-" + action, "data": action + ":x",
+                "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            }}
+            with patch.object(align_bot, "regler_bot") as toggle, \\
+                 patch.object(align_bot, "telegram"):
+                align_bot.traiter({}, set(), [update])
+            toggle.assert_called_once_with({}, "123", enabled)
+
+    def test_owner_admin_buttons_are_routed_to_their_handlers(self):
+        from unittest.mock import patch
+        cases = [
+            ("jok:gold", "decider_entree"),
+            ("jno:gold", "decider_entree"),
+            ("pub:photo1", "valider_gain"),
+            ("refus:photo1", "valider_gain"),
+            ("tvoffre:456", None),
+            ("tvok:456", None),
+        ]
+        for data, handler in cases:
+            update = {"update_id": 9120, "callback_query": {
+                "id": "cb-admin", "data": data,
+                "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            }}
+            state = {"proprio": ["123"], "indic": {"456": {"tv": "trader456"}}}
+            with patch.object(align_bot, "telegram"), \\
+                 patch.object(align_bot, "_envoi_sur"), \\
+                 patch.object(align_bot, "decider_entree") as decision, \\
+                 patch.object(align_bot, "valider_gain") as gain:
+                align_bot.traiter(state, set(), [update])
+                if handler == "decider_entree":
+                    decision.assert_called_once()
+                elif handler == "valider_gain":
+                    gain.assert_called_once()
+                elif data.startswith("tvoffre"):
+                    self.assertIn("456", state.get("indic_offert", []))
+                else:
+                    self.assertTrue(state["indic"]["456"]["ok"])
+
+    def test_resume_button_reports_missing_analysis_instead_of_silence(self):
+        from unittest.mock import patch
+        update = {"update_id": 9130, "callback_query": {
+            "id": "cb-resume", "data": "resume:BTC",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \\
+             patch.dict(align_bot.DERNIERS, {}, clear=True), \\
+             patch.object(align_bot, "analyse_marche", side_effect=RuntimeError("offline")), \\
+             patch.object(align_bot, "_envoi_sur") as send, \\
+             patch.object(align_bot, "telegram"):
+            align_bot.traiter({}, set(), [update])
+        self.assertIn("n'est pas disponible", send.call_args.kwargs["text"])
+
 if __name__ == "__main__":
     unittest.main()
