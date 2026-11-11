@@ -47,6 +47,50 @@ def http_json(url, data=None):
                 raise
             time.sleep(2 * (essai + 1))
 
+ALIGN_TV_API_URL = os.environ.get("ALIGN_TV_API_URL", "").strip().rstrip("/")
+ALIGN_TV_READ_TOKEN = os.environ.get("ALIGN_TV_READ_TOKEN", "").strip()
+
+def fetch_tv_mtf(pair):
+    """Lit les snapshots Pine/ROBOT V12 conservés par symbole et timeframe ; jamais de données inventées."""
+    if not ALIGN_TV_API_URL or not ALIGN_TV_READ_TOKEN:
+        return {"available": False, "reason": "bridge TradingView non configuré", "snapshots": {}}
+    symbol = "BTCUSD" if pair == "XBTUSD" else pair.upper()
+    url = ALIGN_TV_API_URL + "/bridge/robot-v12/mtf?symbol=" + urllib.parse.quote(symbol)
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + ALIGN_TV_READ_TOKEN, "User-Agent": "ALIGN-MTF-BOT"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if not payload.get("ok") or not isinstance(payload.get("snapshots"), dict):
+            return {"available": False, "reason": "réponse bridge invalide", "snapshots": {}}
+        return {"available": True, "reason": None, "snapshots": payload["snapshots"]}
+    except Exception as ex:
+        print("TradingView MTF bridge:", ex, flush=True)
+        return {"available": False, "reason": "bridge inaccessible", "snapshots": {}}
+
+def plan_indicateur(r):
+    """Sélectionne le plan Pine correspondant au profil sans transformer un plan non confirmé en entrée."""
+    profile = profil_strategie(r)
+    preferred = "M5" if profile["mode"].startswith("SCALPING") else "H4" if profile["mode"] == "SWING" else "M15"
+    bridge = r.get("tv_indicator_mtf") or {}
+    snap = (bridge.get("snapshots") or {}).get(preferred) or {}
+    robot = snap.get("robotV12") or {}
+    entry, sl, tp = robot.get("entry"), robot.get("sl"), robot.get("tp")
+    try:
+        entry, sl, tp = float(entry), float(sl), float(tp)
+    except (TypeError, ValueError):
+        return {"timeframe": preferred, "available": False, "reason": "aucun plan Pine complet sur cette unité"}
+    if not snap.get("fresh"):
+        return {"timeframe": preferred, "available": False, "reason": "snapshot TradingView périmé"}
+    signal = str(robot.get("signal") or robot.get("verdict") or "").upper()
+    direction = 1 if "LONG" in signal or "BUY" in signal else -1 if "SHORT" in signal or "SELL" in signal else 0
+    if not direction or entry <= 0 or sl <= 0 or tp <= 0:
+        return {"timeframe": preferred, "available": False, "reason": "direction ou niveaux Pine incomplets"}
+    if (direction == 1 and not sl < entry < tp) or (direction == -1 and not tp < entry < sl):
+        return {"timeframe": preferred, "available": False, "reason": "géométrie entrée/SL/TP incohérente"}
+    return {"timeframe": preferred, "available": True, "direction": direction, "entry": entry, "sl": sl, "tp": tp,
+            "confirmed": snap.get("confirmed") is True, "verdict": robot.get("verdict"),
+            "timestamp": robot.get("receivedAt") or snap.get("timestamp"), "ageMs": snap.get("ageMs")}
+
 TTL_KRAKEN = {1: 5, 5: 10, 15: 30, 30: 60, 60: 120, 240: 300, 1440: 900, 10080: 1800}
 
 def kraken(pair, interval):
@@ -595,6 +639,16 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
                             etat_pos, r.get("news") or "📰 Calendrier économique indisponible",
                             "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
                             "💎 Accès VIP : 49,90 € / mois"])
+    tv_plan = plan_indicateur(r)
+    if tv_plan["available"]:
+        l += ["━━━━━━━━━━━━━━━━━━", "📡 PLAN DE L'INDICATEUR TRADINGVIEW",
+              f"Unité sélectionnée : {tv_plan['timeframe']}",
+              f"Entrée indicateur : {px(tv_plan['entry'])} • SL : {px(tv_plan['sl'])} • TP : {px(tv_plan['tp'])}",
+              "Clôture confirmée par l'indicateur : " + ("OUI" if tv_plan["confirmed"] else "NON / NON FOURNIE"),
+              "⚠️ Plan indicateur affiché séparément : il ne remplace pas le verdict de sécurité ALIGN."]
+    elif r.get("tv_indicator_mtf", {}).get("available"):
+        l += ["━━━━━━━━━━━━━━━━━━", "📡 PLAN TRADINGVIEW",
+              f"{tv_plan['timeframe']} : {tv_plan['reason']}"]
     D, R = r["dirs"], r["rsis"]
     maj, n_ok = alignement(r)
     ut = [("1m", 0), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("Daily", 10)]
@@ -1806,6 +1860,8 @@ def donnees_ia(m, r, cle):
             "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
             "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
             "profil_strategie": profil_strategie(r),
+            "plan_indicateur_tradingview": plan_indicateur(r),
+            "snapshots_indicateur_tradingview": (r.get("tv_indicator_mtf") or {}).get("snapshots", {}),
             "lecture_multi_unites": {"M5": r["dirs"][2], "M15": r["dirs"][4], "H1": r["dirs"][7], "H4": r["dirs"][9]},
             "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
@@ -4639,6 +4695,7 @@ def un_tour(etat, chats):
     for nom_marche, pair in MARCHES.items():
         try:
             r = analyser(pair)
+            r["tv_indicator_mtf"] = fetch_tv_mtf(pair)
         except Exception as ex:
             print(nom_marche, "erreur", ex); continue
         cle = etat.setdefault(nom_marche, {})
