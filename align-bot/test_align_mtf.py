@@ -436,6 +436,15 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(align_bot.traduire("📊 INDICATEURS PAR UNITÉ DE TEMPS"), "📊 TIMEFRAME INDICATORS")
         self.assertEqual(align_bot.traduire("📈 RSI PAR UNITÉ DE TEMPS"), "📈 RSI BY TIMEFRAME")
 
+    def test_multi_timeframe_strategy_uses_consistent_direction_colors(self):
+        r = {"dirs": [1, 1, 1, 1, -1, 0, 0, -1, 0, 1, 0], "confirme": 0}
+        message = "\\n".join(align_bot.strategie_mtf(r))
+        self.assertIn("Tendance principale 4 h : 🟢⬆️", message)
+        self.assertIn("Tendance Daily : 🟠➖", message)
+        self.assertIn("Confirmation 1 h : 🔴⬇️", message)
+        self.assertIn("Contexte 15 min   🔴⬇️", message)
+        self.assertIn("Déclencheur 5 min   🟢⬆️", message)
+
     def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
         r = {"m1": [candle(1, c=67500.0)], "news": "📰 Calendrier économique"}
         message = align_bot.texte_etat("BTC", r, {}, vip=False)
