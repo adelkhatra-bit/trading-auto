@@ -1725,7 +1725,7 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
             "message": {"chat": {"id": 101, "type": "private"}},
             "data": "markets:BTC"
         }}
-        with patch.object(align_bot, "telegram", return_value={"ok": True}), \\
+        with patch.object(align_bot, "telegram", return_value={"ok": True}), \
              patch.object(align_bot, "_envoi_sur") as send:
             align_bot.traiter(state, {"101", "202"}, [update])
         self.assertEqual(align_bot.marche_selection(state, "101"), "BTC")
