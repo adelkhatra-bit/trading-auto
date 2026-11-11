@@ -2068,15 +2068,9 @@ def bouton_rappel(m):
     ]})
 
 def markup_analyse(etat, m, r):
-    """Clavier progressif : décision, explication, analyse complète et niveaux."""
+    """Un seul choix utile sous l'analyse : suivre la prochaine position de ce marché."""
     cle = etat.get(m, {})
-    lignes = [
-        [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
-         {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
-        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
-         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
-    ]
+    lignes = []
     if cle.get("trade"):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
                        {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
@@ -2918,10 +2912,10 @@ def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
     if etat.get("menu") == 5:
         return
-    fr = [("faire_analyse", "📊 Faire une analyse"), ("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
+    fr = [("faire_analyse", "📊 Faire une analyse"), ("mon_bot", "🤖 Mon bot ON / OFF"),
           ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
           ("boutons", "⌨️ Faire revenir les boutons"), ("english", "🌐 English")]
-    en = [("faire_analyse", "📊 Run an analysis"), ("analyse_btc", "🟠 BTC Analysis"), ("analyse_gold", "🥇 Gold Analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
+    en = [("faire_analyse", "📊 Run an analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
           ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"),
           ("boutons", "⌨️ Bring back the buttons"), ("francais", "🌐 Français")]
     try:
