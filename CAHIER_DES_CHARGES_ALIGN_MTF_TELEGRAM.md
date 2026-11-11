@@ -79,9 +79,9 @@ Les callbacks doivent répondre à Telegram, contrôler les droits avant toute a
 
 - Le contrôle de disponibilité doit utiliser la même liste de fournisseurs, les mêmes modèles, le même format de requête et le même parseur que le bot de production.
 - La disponibilité IA externe est informative et ne doit pas empêcher le moteur de marché de tourner.
-- Le bot doit enregistrer le fournisseur réellement utilisé et distinguer connexion externe, réponse invalide, indisponibilité et repli interne.
+- Le bot doit enregistrer le fournisseur réellement utilisé et distinguer connexion externe, réponse invalide, indisponibilité et repli interne. Le helper `ia()` ne doit jamais inventer une réponse : lorsqu'aucun fournisseur ne répond, il renvoie une chaîne vide ; `avis_ia()` affiche alors un commentaire déterministe fondé sur la stratégie interne.
 - Le commentaire IA ne peut utiliser que les données fournies ; aucun prix, niveau, probabilité ou signal ne peut être inventé.
-- Le repli interne doit rester explicite et ne jamais être présenté comme une réponse d'IA externe.
+- Le repli interne de `avis_ia()` doit rester explicite et ne jamais être présenté comme une réponse d'IA externe. Les autres commentaires IA spécifiques peuvent être omis si aucun fournisseur n'a répondu.
 
 ### 3.6 Mémoire et production
 
