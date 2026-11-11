@@ -64,11 +64,15 @@ jobs:
           PY
 
       - name: Vérifier une connexion IA réelle (même chaîne que le bot)
+        continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python3 ai_healthcheck.py
+        # Une IA externe indisponible ne doit JAMAIS empêcher le moteur MTF interne
+        # ni les notifications Telegram de démarrer. Le statut est visible dans les logs.
 
       - name: Vérifier le bridge TradingView ROBOT V12 (BTC + GOLD)
+        continue-on-error: true
         env:
           ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
@@ -78,14 +82,21 @@ jobs:
           base = os.environ.get("ALIGN_TV_API_URL", "").strip().rstrip("/")
           token = os.environ.get("ALIGN_TV_READ_TOKEN", "").strip()
           if not base or not token:
-              raise SystemExit("ÉCHEC: secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents — bridge indicateur non raccordé au bot.")
+              print("BRIDGE_OPTIONAL_UNAVAILABLE: secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents.")
+              print("Le moteur ALIGN natif BTC + GOLD et Telegram continuent sans les données Pine.")
+              raise SystemExit(0)
           for symbol in ("BTCUSD", "XAUUSD"):
               url = base + "/bridge/robot-v12/mtf?symbol=" + urllib.parse.quote(symbol)
               req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "ALIGN-bridge-preflight"})
-              with urllib.request.urlopen(req, timeout=12) as response:
-                  payload = json.loads(response.read().decode("utf-8"))
+              try:
+                  with urllib.request.urlopen(req, timeout=12) as response:
+                      payload = json.loads(response.read().decode("utf-8"))
+              except Exception as exc:
+                  print(f"BRIDGE_OPTIONAL_UNAVAILABLE symbol={symbol} error={type(exc).__name__}: {exc}")
+                  continue
               if payload.get("ok") is not True or not isinstance(payload.get("snapshots"), dict):
-                  raise SystemExit("ÉCHEC: réponse bridge invalide pour " + symbol)
+                  print("BRIDGE_OPTIONAL_INVALID_RESPONSE symbol=" + symbol)
+                  continue
               snapshots = payload["snapshots"]
               fresh = [tf for tf, snap in snapshots.items() if isinstance(snap, dict) and snap.get("fresh") is True]
               active = payload.get("activeTimeframe") or "aucune UT active récente"
