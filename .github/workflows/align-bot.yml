@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: align-bot
-  # Remplacer immédiatement l'ancien worker lors d'une mise à jour ; son état est sauvegardé dans le cache avant le relais.
+  # Remplacer immédiatement l'ancien worker lors d'une mise à jour ; son état est sauvegardé dans le cache avant le relais. Les tests précèdent toujours le redémarrage.
   cancel-in-progress: true
 
 jobs:
