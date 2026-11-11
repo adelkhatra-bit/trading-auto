@@ -2683,7 +2683,16 @@ def annonces_et_sessions(etat, maintenant, derniers):
                     o0 = apres[0]["o"]; c1 = apres[-1]["c"]; hh = max(x["h"] for x in apres); ll = min(x["l"] for x in apres)
                     lr.append(f"{ICONE.get(mk, '')} {mk} : {c1 - o0:+.1f} $ en {len(apres)} min {'⬆️' if c1 > o0 else '⬇️'} (écart haut-bas {hh - ll:.1f} $)")
             if lr:
-                out.append(f"📰 RÉACTION À LA NEWS — {e['titre']}\n" + "\n".join(lr) + "\n⏳ J'attends la clôture de la bougie 15 min avant de reprendre")
+                avis_apres = ia(
+                    etat,
+                    "Après cette annonce économique, interprète uniquement la réaction de prix observée sur BTC et Gold. Dis si le mouvement est net ou limité, rappelle que les deux sens restent possibles et indique d'attendre la clôture 15 min avant toute reprise. N'invente aucun chiffre et ne donne pas d'ordre d'entrée.",
+                    {"annonce": e["titre"], "réaction observée": lr, "consigne": "aucune entrée avant clôture 15 min"},
+                    cle_cache=f"newsreaction{e['t']}{e['titre']}", duree=3600)
+                message = f"📰 RÉACTION À LA NEWS — {e['titre']}\n" + "\n".join(lr)
+                message += "\n⏳ J'attends la clôture de la bougie 15 min avant de reprendre"
+                if avis_apres:
+                    message += "\n\n🧠 L'analyse de l'IA ALIGN après l'annonce\n" + avis_apres
+                out.append(message)
         if 6 * 60 < reste <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev{e['t']}{e['titre']}")
             avis = ia(etat, "Explique en 2 lignes très simples ce que cette annonce peut faire au Gold et au BTC (sans donner de sens à trader, juste le risque).",

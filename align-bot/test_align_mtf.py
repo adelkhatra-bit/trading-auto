@@ -261,6 +261,22 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Discours Fed", alerts[0])
         self.assertIn("Vérifie ton SL", alerts[0])
 
+    def test_post_news_reaction_includes_ai_commentary(self):
+        from unittest.mock import patch
+        now = align_bot.datetime.datetime(2026, 11, 11, 12, 10, tzinfo=align_bot.PARIS).timestamp()
+        event_time = int(now - 7 * 60)
+        event = {"t": event_time, "titre": "Discours Fed", "prev": "?", "avant": "?"}
+        bars = [candle(event_time + 60, o=100.0, h=102.0, l=99.0, c=101.5)]
+        with patch.object(align_bot, "calendrier", return_value=[event]), \
+             patch.object(align_bot, "minutes_avant_fermeture_gold", return_value=100), \
+             patch.object(align_bot, "horaires_gold", return_value=(now + 100 * 60, now + 200 * 60, now + 300 * 60)), \
+             patch.object(align_bot, "ia", return_value="Le mouvement observé est haussier mais doit être confirmé en clôture.") as ai:
+            messages = align_bot.annonces_et_sessions({}, now, {"GOLD": {"m1": bars}})
+        reaction = next(x for x in messages if "RÉACTION À LA NEWS" in x)
+        self.assertIn("L'analyse de l'IA ALIGN après l'annonce", reaction)
+        self.assertIn("doit être confirmé en clôture", reaction)
+        ai.assert_called_once()
+
     def test_gold_market_closure_warns_40_minutes_before(self):
         from unittest.mock import patch
         now = align_bot.datetime.datetime(2026, 11, 11, 12, 0, tzinfo=align_bot.PARIS).timestamp()
