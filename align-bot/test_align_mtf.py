@@ -1332,7 +1332,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             self.assertIn(label, message)
         self.assertIn("4 h : tendance principale", message)
         self.assertIn("1 h : confirme ou contredit", message)
-        self.assertIn("5 min : déclencheur après clôture", message)
+        self.assertIn("5 min : timing", message)
         self.assertIn("RSI 68", message)
 
     def test_all_timeframe_button_is_present_and_callback_is_handled(self):
