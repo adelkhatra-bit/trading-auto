@@ -16,7 +16,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 12
     steps:
       - name: Retire older production workers after validation
         env:
@@ -73,15 +73,27 @@ jobs:
                       raise
                   print(f"ROLL_OVER_RACE old_run={run_id} http={exc.code}")
 
-          # Standard cancellation may leave a runner/process stuck. Escalate to
-          # GitHub's force-cancel endpoint if the old run remains active.
-          grace_deadline = time.time() + 15
+          # Give the old worker time to receive SIGINT, finish its current operation,
+          # and run its always() cache-save step before escalating.
+          grace_deadline = time.time() + 300
+          next_retry = time.time() + 30
           while time.time() < grace_deadline:
               remaining = older_active_runs()
               if not remaining:
+                  print("ALIGN_OLD_WORKERS_STOPPED_GRACEFULLY validated_sha=" + current_sha[:12])
                   break
-              time.sleep(3)
+              if time.time() >= next_retry:
+                  for run in remaining:
+                      try:
+                          request(f"/actions/runs/{run['id']}/cancel", method="POST")
+                          print(f"ROLLING_OVER_RETRY old_run={run['id']}")
+                      except urllib.error.HTTPError as exc:
+                          if exc.code not in (404, 409):
+                              raise
+                  next_retry = time.time() + 30
+              time.sleep(5)
 
+          # Escalate only after the full graceful window; never overlap two pollers.
           for run in older_active_runs():
               run_id = run["id"]
               try:
