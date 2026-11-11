@@ -2123,7 +2123,7 @@ def texte_cloture(m, tf, bougie, r, cle):
     maj, n_ok = alignement(r)
     confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (4 h + 1 h)"
     lignes = [
-        f"🕯 CLÔTURE CONFIRMÉE — {tf} — {ICONE.get(m, '📊')} {m}",
+        f"🕯 CLÔTURE CONFIRMÉE — BOUGIE {tf} — {ICONE.get(m, '📊')} {m}",
         f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
         f"📊 Résultat : bougie {couleur} — ouverture {px(bougie['o'])}, clôture {px(bougie['c'])}",
         f"🧭 Tendance : 4 h {'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'} ; confirmation 1 h {'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'}",
@@ -2219,23 +2219,30 @@ def prix_actuel(m):
         print("prix", ex); return None
 
 def noter(etat, cid, m, pos, sortie, motif):
-    """Enregistre le résultat d'un abonné : points, %, TP ou SL."""
+    """Enregistre la clôture réelle et distingue TP/SL et sortie manuelle."""
     pts = pos["d"] * (sortie - pos["e"])
     pct = pts / pos["e"] * 100
+    motif_haut = str(motif).upper()
+    nature = "TP" if "TP" in motif_haut else "SL" if "SL" in motif_haut or "STOP" in motif_haut else "SORTIE MANUELLE"
     st = etat.setdefault("stats", {}).setdefault(cid, {"tp": 0, "sl": 0, "pts": {}, "pct": 0.0, "hist": []})
-    st["tp" if pts > 0 else "sl"] += 1
+    if nature == "TP":
+        st["tp"] += 1
+    elif nature == "SL":
+        st["sl"] += 1
     st["pts"][m] = st["pts"].get(m, 0) + pts
     st["pct"] += pct
     st["hist"] = (st["hist"] + [[m, round(pts, 2), round(pct, 2), motif, int(time.time()), pos["e"], sortie]])[-20:]
     pos["fini"] = True
+    resultat = "GAIN" if pts > 0 else "PERTE" if pts < 0 else "ÉGALITÉ"
+    titre = f"🏁 CLÔTURE CONFIRMÉE — {nature} — {m}"
     _envoi_sur(cid, reply_markup=markup_cloture(m), text=(
-        f"{'✅' if pts > 0 else '❌'} {m} clôturé\n"
-        f"{motif}\n"
-        f"📌 Entrée   {px(pos['e'])}\n"
-        f"🚪 Sortie   {px(sortie)}\n"
-        f"{'⬆️' if pts > 0 else '⬇️'} {pts:+,.2f} pts\n".replace(",", " ")
-        + f"📊 {pct:+.2f} %\n"
-        + ("🎉 Bravo !\n📸 Partage ton gain : bouton 📸 en bas" if pts > 0 else "💪 On repart au prochain")))
+        f"{titre}\\n"
+        f"{'✅' if pts > 0 else '❌' if pts < 0 else '➖'} Résultat : {resultat}\\n"
+        f"📌 Entrée : {px(pos['e'])}\\n"
+        f"🚪 Sortie confirmée : {px(sortie)}\\n"
+        f"📊 Performance : {pts:+,.2f} pts • {pct:+.2f} %\\n".replace(",", " ")
+        + f"🧾 Motif : {motif}\\n"
+        + ("🎉 Objectif positif enregistré." if pts > 0 else "🛡 Risque clôturé. Le prochain signal sera traité séparément." if pts < 0 else "Position clôturée à l’équilibre.")))
 
 def texte_bilan(etat):
     b = etat.get("bilan")
@@ -2430,7 +2437,8 @@ def valider_gain(etat, chats, pid, publier, cb):
 def publier_resultat(etat, m, tr, sortie, motif, gain):
     """Chaque TP ou SL du bot part aussi dans ALIGN Résultats (transparence), + invitation à partager sa capture."""
     duree = int((time.time() - tr.get("cree", time.time())) // 60)
-    txt = (f"{'✅' if gain > 0 else '🔒' if abs(gain) < 0.02 else '❌'} RÉSULTAT ALIGN — {ICONE.get(m, '')} {m}\n"
+    nature = "TP ATTEINT" if "TP" in str(motif).upper() or "OBJECTIF" in str(motif).upper() else "STOP TOUCHÉ" if "SL" in str(motif).upper() or "STOP" in str(motif).upper() else "CLÔTURE DU SIGNAL"
+    txt = (f"🏁 CLÔTURE CONFIRMÉE — {nature} — {ICONE.get(m, '')} {m}\n"
            f"🚦 {motif}\n{SENS[tr['d']]}\n"
            f"📌 Entrée ≈ {px(tr['e'])}\n🏁 Sortie ≈ {px(sortie)}\n"
            f"📈 Résultat : {gain:+.2f} %\n⏱ Durée : {duree // 60} h {duree % 60:02d}\n"
@@ -2544,8 +2552,17 @@ def traiter(etat, chats, updates):
             continue
         cb = u.get("callback_query")
         if cb:
+            cb_chat = (cb.get("message") or {}).get("chat") or {}
+            cb_user = str((cb.get("from") or {}).get("id", ""))
+            # Actions du coach uniquement en conversation privée appartenant au demandeur.
+            if cb_chat.get("type") != "private" or str(cb_chat.get("id", "")) != cb_user:
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Ouvre le bot en conversation privée.")
+                except Exception:
+                    pass
+                continue
             choix, _, mk = cb.get("data", "").partition(":")
-            qui = str(cb["message"]["chat"]["id"])
+            qui = str(cb_chat["id"])
             if choix == "results":
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📈 Tes résultats")
@@ -2857,8 +2874,9 @@ def traiter(etat, chats, updates):
             repondre(etat, cid, False)
         elif "resultat" in txt:
             _envoi_sur(cid, text=texte_resultats(etat, cid), reply_markup=CLAVIER)
-        elif cid not in proprio(etat) and not txt.startswith("/start"):
-            _envoi_sur(cid, text="⌨️ Utilise les boutons en bas 👇", reply_markup=CLAVIER)
+        # Pas de conversation libre : seuls les boutons et retours explicitement sollicités
+        # (photo de gain ou pseudo TradingView après demande) sont traités.
+        # Tout texte libre est ignoré, pour les visiteurs comme pour les abonnés.
     return demandes
 def proprio(etat):
     return set(etat.get("proprio", []))
