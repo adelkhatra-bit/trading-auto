@@ -2175,19 +2175,34 @@ def bouton_rappel(m):
     ]})
 
 def markup_analyse(etat, m, r, cid=None):
-    """Clavier personnalisé : position réelle si l'utilisateur est inscrit, sinon suivi explicite."""
+    """Carte compacte : les détails et toutes les actions restent visibles sans masquer les fonctions."""
     cle = etat.get(m, {})
     tr = cle.get("trade") or {}
     pos = (tr.get("qui") or {}).get(str(cid)) if cid is not None else None
+    lignes = []
     if tr and (cid is None or (isinstance(pos, dict) and not pos.get("fini"))):
-        lignes = [
-            [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"}],
-            [{"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}],
-        ]
+        lignes.append([
+            {"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
+            {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"},
+        ])
     elif tr:
-        lignes = [[{"text": "📍 Suivre cette position", "callback_data": f"in:{m}"}]]
-    else:
-        lignes = [[{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]
+        lignes.append([{"text": "📍 Suivre cette position", "callback_data": f"in:{m}"}])
+    lignes.extend([
+        [
+            {"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
+            {"text": "📊 Analyse complète", "callback_data": f"details:{m}"},
+        ],
+        [
+            {"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
+            {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"},
+        ],
+    ])
+    actions = [
+        {"text": "🗂 Historique des messages", "callback_data": f"history:{m}"},
+    ]
+    if not tr:
+        actions.append({"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"})
+    lignes.append(actions)
     return json.dumps({"inline_keyboard": lignes})
 
 

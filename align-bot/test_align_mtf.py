@@ -581,7 +581,10 @@ class AlignMtfRulesTest(unittest.TestCase):
         en_buttons = [b for row in english["inline_keyboard"] for b in row]
         self.assertEqual([b.get("callback_data") for b in fr_buttons], [b.get("callback_data") for b in en_buttons])
         self.assertEqual([align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons], [b["text"] for b in en_buttons])
-        self.assertEqual([b["text"] for b in en_buttons], ["🔔 Follow the next position"])
+        self.assertEqual([b["text"] for b in en_buttons], [
+            "❓ Why this decision?", "📊 Full analysis", "🎯 Levels / prices",
+            "⏱ All timeframes", "🗂 Message history", "🔔 Follow the next position"
+        ])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):
         labels = [
@@ -838,14 +841,18 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
         labels = [button["text"] for row in keyboard for button in row]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
-        self.assertEqual(callbacks, ["auto:GOLD"])
+        self.assertTrue({"❓ Pourquoi cette décision ?", "📊 Analyse complète", "🎯 Niveaux / prix",
+                         "⏱ Toutes les unités", "🗂 Historique des messages",
+                         "🔔 Suivre la prochaine position"}.issubset(set(labels)))
+        self.assertTrue({"why:GOLD", "details:GOLD", "levels:GOLD", "timeframes:GOLD",
+                         "history:GOLD", "auto:GOLD"}.issubset(set(callbacks)))
 
     def test_active_trade_keyboard_has_manual_entry_and_exit_controls(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertEqual(callbacks, ["position:GOLD", "out:GOLD"])
+        self.assertTrue({"position:GOLD", "out:GOLD", "why:GOLD", "details:GOLD",
+                         "levels:GOLD", "timeframes:GOLD", "history:GOLD"}.issubset(set(callbacks)))
         self.assertNotIn("in:GOLD", callbacks)
         self.assertNotIn("auto:GOLD", callbacks)
 
@@ -1622,7 +1629,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertEqual(callbacks, ["auto:BTC"])
+        self.assertTrue({"why:BTC", "details:BTC", "levels:BTC", "timeframes:BTC",
+                         "history:BTC", "auto:BTC"}.issubset(set(callbacks)))
         update = {"update_id": 9210, "callback_query": {
             "id": "cb-timeframes", "data": "timeframes:BTC",
             "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
@@ -1643,8 +1651,10 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         labels = [button["text"] for row in keyboard for button in row]
-        self.assertEqual(callbacks, ["auto:BTC"])
-        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
+        self.assertTrue({"why:BTC", "details:BTC", "levels:BTC", "timeframes:BTC",
+                         "history:BTC", "auto:BTC"}.issubset(set(callbacks)))
+        self.assertIn("❓ Pourquoi cette décision ?", labels)
+        self.assertIn("📊 Analyse complète", labels)
 
     def test_why_callback_returns_short_explanation_and_more_detail_buttons(self):
         from unittest.mock import patch
@@ -1987,7 +1997,8 @@ class TestTelegramCompactKeyboards(unittest.TestCase):
             self.assertFalse(any("tradingview.com" in url for url in urls))
         analysis = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in analysis for button in row]
-        self.assertEqual(callbacks, ["auto:BTC"])
+        self.assertTrue({"why:BTC", "details:BTC", "levels:BTC", "timeframes:BTC",
+                         "history:BTC", "auto:BTC"}.issubset(set(callbacks)))
 
 
 class TestTradingViewReportRegression(unittest.TestCase):
@@ -2155,13 +2166,15 @@ class TestTelegramSimpleAnalysisLayout(unittest.TestCase):
         import json
         markup = json.loads(align_bot.markup_analyse({}, "GOLD", {}))
         callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
-        self.assertEqual(callbacks, ["auto:GOLD"])
+        self.assertTrue({"why:GOLD", "details:GOLD", "levels:GOLD", "timeframes:GOLD",
+                         "history:GOLD", "auto:GOLD"}.issubset(set(callbacks)))
 
     def test_active_position_keeps_only_position_and_exit_actions(self):
         import json
         markup = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))
         callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
-        self.assertEqual(callbacks, ["position:GOLD", "out:GOLD"])
+        self.assertTrue({"position:GOLD", "out:GOLD", "why:GOLD", "details:GOLD",
+                         "levels:GOLD", "timeframes:GOLD", "history:GOLD"}.issubset(set(callbacks)))
 
     def test_telegram_command_menu_has_one_analysis_entry_not_separate_btc_gold_entries(self):
         from unittest.mock import patch
@@ -2192,8 +2205,12 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
         state = {"GOLD": {"trade": {"e": 100, "qui": {"101": {"e": 100, "sl": 98, "tp1": 104}}}}}
         untracked = json.loads(align_bot.markup_analyse(state, "GOLD", {}, "202"))["inline_keyboard"]
         tracked = json.loads(align_bot.markup_analyse(state, "GOLD", {}, "101"))["inline_keyboard"]
-        self.assertEqual([b["callback_data"] for row in untracked for b in row], ["in:GOLD"])
-        self.assertEqual([b["callback_data"] for row in tracked for b in row], ["position:GOLD", "out:GOLD"])
+        self.assertTrue({"in:GOLD", "why:GOLD", "details:GOLD", "levels:GOLD",
+                         "timeframes:GOLD", "history:GOLD"}.issubset(
+                             {b["callback_data"] for row in untracked for b in row}))
+        self.assertTrue({"position:GOLD", "out:GOLD", "why:GOLD", "details:GOLD",
+                         "levels:GOLD", "timeframes:GOLD", "history:GOLD"}.issubset(
+                             {b["callback_data"] for row in tracked for b in row}))
 
     def test_position_details_never_call_unregistered_user_a_position_holder(self):
         state = {"GOLD": {"trade": {"e": 100, "sl": 98, "tp1": 104, "tp2": 108, "d": 1, "qui": {}}}}
@@ -2297,3 +2314,33 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
         result = align_bot.resume_volume(bars, "Kraken BTC", timeframe_sec=300, now_ts=500)
         self.assertFalse(result["disponible"])
         self.assertIn("indisponible", result["interpretation"])
+
+
+class TelegramAnalysisActionsRegressionTest(unittest.TestCase):
+    def test_analysis_keyboard_exposes_every_existing_detail_action(self):
+        import json
+        for market in ("BTC", "GOLD"):
+            markup = json.loads(align_bot.markup_analyse({}, market, {}))
+            callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
+            self.assertEqual(set(callbacks), {
+                f"why:{market}", f"details:{market}", f"levels:{market}",
+                f"timeframes:{market}", f"history:{market}", f"auto:{market}"
+            })
+
+    def test_registered_trade_keeps_position_and_exit_actions_with_details(self):
+        import json
+        state = {"GOLD": {"trade": {"qui": {"123": {"e": 100, "fini": False}}}}}
+        markup = json.loads(align_bot.markup_analyse(state, "GOLD", {}, "123"))
+        callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
+        self.assertTrue({"position:GOLD", "out:GOLD", "why:GOLD", "details:GOLD",
+                         "levels:GOLD", "timeframes:GOLD", "history:GOLD"}.issubset(set(callbacks)))
+        self.assertNotIn("auto:GOLD", callbacks)
+
+    def test_unregistered_user_sees_follow_current_trade_and_detail_actions(self):
+        import json
+        state = {"BTC": {"trade": {"qui": {}}}}
+        markup = json.loads(align_bot.markup_analyse(state, "BTC", {}, "456"))
+        callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
+        self.assertIn("in:BTC", callbacks)
+        self.assertIn("why:BTC", callbacks)
+        self.assertIn("timeframes:BTC", callbacks)
