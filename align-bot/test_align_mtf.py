@@ -491,7 +491,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "callback_query": {
                 "id": "cb-unknown",
                 "data": "unknown:GOLD",
-                "message": {"chat": {"id": 123}},
+                "message": {"chat": {"id": 123, "type": "private"}},
                 "from": {"id": 123}
             }
         }
@@ -510,7 +510,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "callback_query": {
                 "id": "cb-auto-invalid",
                 "data": "auto:UNKNOWN",
-                "message": {"chat": {"id": 123}},
+                "message": {"chat": {"id": 123, "type": "private"}},
                 "from": {"id": 123}
             }
         }
@@ -527,7 +527,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 "callback_query": {
                     "id": "cb-" + action,
                     "data": action + ":GOLD",
-                    "message": {"chat": {"id": 123}},
+                    "message": {"chat": {"id": 123, "type": "private"}},
                     "from": {"id": 123}
                 }
             }
@@ -545,7 +545,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "callback_query": {
                 "id": "cb-auto",
                 "data": "auto:BTC",
-                "message": {"chat": {"id": 123}},
+                "message": {"chat": {"id": 123, "type": "private"}},
                 "from": {"id": 123}
             }
         }
@@ -593,7 +593,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         for action in ("why", "details", "levels", "resume", "previous"):
             update = {"update_id": 9100, "callback_query": {
                 "id": "cb-" + action, "data": action + ":GOLD",
-                "message": {"chat": {"id": 123}}, "from": {"id": 123}
+                "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
             }}
             with (
                 patch.object(align_bot, "autorise", return_value=True),
@@ -612,7 +612,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         for action, enabled in (("boton", True), ("botoff", False)):
             update = {"update_id": 9110, "callback_query": {
                 "id": "cb-" + action, "data": action + ":x",
-                "message": {"chat": {"id": 123}}, "from": {"id": 123}
+                "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
             }}
             with (
                 patch.object(align_bot, "regler_bot") as toggle,
@@ -637,7 +637,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         for data, handler in cases:
             update = {"update_id": 9120, "callback_query": {
                 "id": "cb-admin", "data": data,
-                "message": {"chat": {"id": 123}}, "from": {"id": 123}
+                "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
             }}
             state = {"proprio": ["123"], "indic": {"456": {"tv": "trader456"}}}
             with (
@@ -722,11 +722,11 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         grant = {"update_id": 9160, "callback_query": {
             "id": "cb-grant", "data": "offrir:456",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         revoke = {"update_id": 9161, "callback_query": {
             "id": "cb-revoke", "data": "retirer:456",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         state = {"proprio": ["123"], "offerts": ["456"], "noms": {"456": "Member"}}
         chats = {"456"}
@@ -741,7 +741,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         update = {"update_id": 9130, "callback_query": {
             "id": "cb-resume", "data": "resume:BTC",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         with (
             patch.object(align_bot, "autorise", return_value=True),
@@ -863,7 +863,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         update = {"update_id": 9220, "callback_query": {
             "id": "cb-history", "data": "history:BTC",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         state = {"journal_telegram": [
             {"direction": "sortant", "chat_id": "123", "timestamp": align_bot.time.time(), "text": "Signal GOLD"},
@@ -916,7 +916,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         ]}
         update = {"update_id": 9240, "callback_query": {
             "id": "cb-history-page", "data": "history:BTC:8",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
             align_bot.traiter(state, set(), [update])
@@ -947,7 +947,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         update = {"update_id": 9230, "callback_query": {
             "id": "cb-results", "data": "results:x",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
             align_bot.traiter({}, set(), [update])
@@ -983,7 +983,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("timeframes:BTC", callbacks)
         update = {"update_id": 9210, "callback_query": {
             "id": "cb-timeframes", "data": "timeframes:BTC",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         r = {
             "dirs": [1] * 11, "rsis": [55] * 11,
@@ -1015,7 +1015,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         update = {"update_id": 9200, "callback_query": {
             "id": "cb-why", "data": "why:BTC",
-            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+            "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         r = {"dirs": [0] * 11, "confirme": -1, "m1": [candle(1, c=73665.2)]}
         r["dirs"][7] = r["dirs"][9] = -1
@@ -1031,6 +1031,29 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Direction à surveiller : SHORT", send.call_args.kwargs["text"])
         self.assertIn("Zone Daily/Weekly extrême", send.call_args.kwargs["text"])
         self.assertIn("details:BTC", send.call_args.kwargs["reply_markup"])
+
+    def test_callback_from_group_is_rejected_before_any_action(self):
+        from unittest.mock import patch
+        update = {"update_id": 9901, "callback_query": {
+            "id": "cb-group", "data": "in:BTC",
+            "message": {"chat": {"id": -100123, "type": "supergroup"}},
+            "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "telegram") as api, patch.object(align_bot, "repondre") as reply:
+            align_bot.traiter({}, set(), [update])
+        reply.assert_not_called()
+        api.assert_called_once()
+        self.assertIn("conversation privée", api.call_args.kwargs["text"])
+
+    def test_free_text_from_subscriber_is_ignored(self):
+        from unittest.mock import patch
+        update = {"update_id": 9902, "message": {
+            "chat": {"id": 123, "type": "private"}, "from": {"id": 123},
+            "text": "Bonjour, donne-moi une position"
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.traiter({}, {"123"}, [update])
+        send.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()
