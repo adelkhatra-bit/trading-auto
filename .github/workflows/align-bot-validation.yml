@@ -3,30 +3,38 @@ name: ALIGN MTF validation
 on:
   workflow_call:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/align-*"
     paths:
       - "align-bot/**"
-      - ".github/workflows/align-bot-validation.yml"
+      - ".github/workflows/**"
   pull_request:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "align-bot/**"
-      - ".github/workflows/align-bot-validation.yml"
+      - ".github/workflows/**"
+
 permissions:
   contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Compile every Python file before importing tests
+      - name: Compile all Python files
         run: python -m compileall -q align-bot
-      - name: Compile bot and AI healthcheck
-        run: python -m py_compile align-bot/align_bot.py align-bot/ai_healthcheck.py
-      - name: Run MTF regression tests
+      - name: Prepare Go for actionlint
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.3"
+      - name: Validate ALIGN workflow with actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/align-bot-validation.yml
+      - name: Run complete MTF regression suite
         run: python -m unittest discover -s align-bot -p "test_*.py" -v

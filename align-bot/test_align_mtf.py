@@ -340,8 +340,69 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertIn("CLÔTURE 5m / SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
+        self.assertTrue(send.call_args.kwargs["text"].startswith("🔴 SIGNAL NON CONFIRMÉ"))
+        self.assertIn("🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL", send.call_args.kwargs["text"])
+        self.assertIn("N'ENTRE PAS", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
+
+    def test_candle_alert_puts_clear_no_entry_verdict_before_market_details(self):
+        from unittest.mock import patch
+        r = {
+            "m1": [candle(600, c=4031.11)],
+            "dirs": [0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0],
+            "rsis": [50] * 11,
+            "confirme": 0,
+            "b5": [candle(300, o=4029.73, h=4032, l=4028, c=4031.11)],
+        }
+        with patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "Le 1h ne confirme pas la tendance 4h")):
+            with patch.object(align_bot, "raison_attente", return_value="La 1 h doit confirmer la 4 h"):
+                with patch.object(align_bot, "prochaine", return_value="Pas encore de sens"):
+                    msg = align_bot.texte_cloture("GOLD", "5m", candle(300, o=4029.73, h=4032, l=4028, c=4031.11), r, {})
+        self.assertTrue(msg.startswith("🔴 SIGNAL NON CONFIRMÉ"))
+        self.assertLess(msg.index("🔴 SIGNAL NON CONFIRMÉ"), msg.index("🕯 CLÔTURE 5m"))
+        self.assertIn("N'ENTRE PAS", msg)
+        self.assertIn("POURQUOI", msg)
+        self.assertIn("CE QUE TU DOIS FAIRE", msg)
+
+    def test_upcoming_position_is_distinguished_from_open_trade(self):
+        from unittest.mock import patch
+        r = {"dirs": [1] * 11, "confirme": 1, "m1": [candle(7200, c=67500.0)]}
+        ordre = {"d": 1, "e": 67510.0, "za": 67490.0, "zb": 67520.0, "sl": 67400.0}
+        with (
+            patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "Attendre le retour en zone")),
+            patch.object(align_bot, "raison_attente", return_value="Le prix doit revenir en zone"),
+            patch.object(align_bot, "prochaine", return_value="Prochaine entrée LONG sur repli"),
+            patch.object(align_bot, "heure", return_value="03:00"),
+            patch.object(align_bot, "alignement", return_value=(2, 2)),
+            patch.object(align_bot, "meche_sl", return_value="sous la mèche"),
+        ):
+            msg = align_bot.texte_cloture("BTC", "5m", candle(7200), r, {"ordre": ordre})
+        self.assertIn("POSITION À VENIR", msg)
+        self.assertIn("ordre en attente", msg)
+        self.assertNotIn("POSITION EN COURS", msg)
+
+    def test_candle_close_countdown_supports_every_watched_timeframe(self):
+        for tf, interval in align_bot.TF_SECONDES.items():
+            field = align_bot.TF_CHAMPS[tf]
+            r = {field: [candle(1000)]}
+            self.assertEqual(
+                align_bot.prochaine_cloture_bougie(r, tf, 1000 + interval - 1),
+                1000 + interval,
+                tf,
+            )
+            self.assertEqual(
+                align_bot.prochaine_cloture_bougie(r, tf, 1000 + interval),
+                1000 + 2 * interval,
+                tf,
+            )
+
+    def test_candle_close_countdown_uses_next_real_candle_boundary(self):
+        from unittest.mock import patch
+        r = {"b5": [candle(600)]}
+        with patch.object(align_bot.time, "time", return_value=899.0):
+            self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m"), 900)
+        with patch.object(align_bot.time, "time", return_value=900.0):
+            self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m"), 1200)
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
         from unittest.mock import patch
@@ -1091,8 +1152,11 @@ class AlignMtfRulesTest(unittest.TestCase):
             raw = align_bot.texte_cloture("BTC", "1h", b, r, {})
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
-        self.assertEqual(lines[0], "🕯 CLÔTURE 1h / SIGNAL NON CONFIRMÉ")
-        self.assertEqual(lines[1], "1h — 🟠 BTC")
+        self.assertEqual(lines[0], "🔴 SIGNAL NON CONFIRMÉ")
+        self.assertIn("🚫 N'ENTRE PAS", message)
+        self.assertIn("ATTENDS LE PROCHAIN SIGNAL", message)
+        self.assertIn("🕯 CLÔTURE 1h", message)
+        self.assertIn("🟠 BTC", message)
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
                          "TENDANCE MULTI-UNITÉS", "4 h\nSHORT", "Confirmation 1 h\nSHORT", "2/2", "DÉCISION ALIGN",
                          "N'ENTRE PAS", "POURQUOI", "La zone Daily/Weekly est extrême", "j'attends un meilleur prix", "PROCHAINE ÉTAPE",
@@ -1113,7 +1177,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             raw = align_bot.texte_cloture("BTC", "5m", b, r, {})
         translated = align_bot.traduire(raw)
-        self.assertEqual(translated.splitlines()[0], "🕯 CANDLE CLOSE 5m / SIGNAL NOT CONFIRMED")
+        self.assertEqual(translated.splitlines()[0], "🔴 SIGNAL NOT CONFIRMED")
+        self.assertEqual(translated.splitlines()[1], "🚫 DON'T ENTER: WAIT FOR THE NEXT SIGNAL")
         for expected in ("CANDLE RESULT", "Open:", "Close:", "MULTI-TIMEFRAME TREND",
                          "ALIGN DECISION", "WHY", "NEXT STEP", "IMPORTANT",
                          "A candle close alone does not trigger an entry.",
@@ -1133,7 +1198,9 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             for tf in ("5m", "15m", "1h", "4h", "D", "W"):
                 message = align_bot.texte_cloture("BTC", tf, b, r, {})
-                self.assertEqual(message.splitlines()[0], f"🕯 CLÔTURE {tf} / SIGNAL NON CONFIRMÉ")
+                self.assertEqual(message.splitlines()[0], "🔴 SIGNAL NON CONFIRMÉ")
+                self.assertEqual(message.splitlines()[1], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
+                self.assertIn(f"🕯 CLÔTURE {tf}", message)
 
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
         from unittest.mock import patch
@@ -1146,7 +1213,9 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🕯 CLÔTURE 5m / SIGNAL CONFIRMÉ")
+        self.assertEqual(message.splitlines()[0], "🟢 SIGNAL CONFIRMÉ")
+        self.assertEqual(message.splitlines()[1], "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX")
+        self.assertNotIn("SIGNAL NON CONFIRMÉ", message)
 
 if __name__ == "__main__":
     unittest.main()

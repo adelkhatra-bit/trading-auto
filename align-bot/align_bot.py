@@ -857,6 +857,37 @@ TRAD = {
 # Verdicts / analyse
 "📊 INDICATEURS PAR UNITÉ DE TEMPS": "📊 TIMEFRAME INDICATORS",
 "📈 RSI PAR UNITÉ DE TEMPS": "📈 RSI BY TIMEFRAME",
+"🔴 SIGNAL NON CONFIRMÉ": "🔴 SIGNAL NOT CONFIRMED",
+"🟢 SIGNAL CONFIRMÉ": "🟢 SIGNAL CONFIRMED",
+"🟠 SIGNAL EN ATTENTE": "🟠 SIGNAL PENDING",
+"🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL": "🚫 DO NOT ENTER: WAIT FOR THE NEXT SIGNAL",
+"🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX": "🟢 ENTRY SIGNAL VALIDATED: CHECK LEVELS",
+"🟢 POSITION DÉJÀ OUVERTE : NE RAJOUTE PAS UNE ENTRÉE": "🟢 POSITION ALREADY OPEN: DO NOT ADD ANOTHER ENTRY",
+"🟢 SUIVI DE LA POSITION EN COURS": "🟢 OPEN POSITION MONITORING",
+"🟡 POSITION À VENIR — ordre en attente, aucune position ouverte": "🟡 UPCOMING POSITION — pending order, no position open",
+
+"🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
+"🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
+"🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
+"🟢 Position déjà ouverte : ne rajoute pas une entrée.": "🟢 Position already open: do not add another entry.",
+"🟢 Signal validé : vérifie la zone, le stop et les objectifs avant d'agir.": "🟢 Signal confirmed: check the entry zone, stop and targets before acting.",
+"🚫 N'ENTRE PAS. Attends une confirmation complète avant toute entrée.": "🚫 DO NOT ENTER. Wait for full confirmation before entering.",
+"🟡 POSITION À VENIR — ordre en attente, aucune position ouverte": "🟡 UPCOMING SETUP — pending order, no position is open",
+"📍 Zone surveillée :": "📍 Monitored zone:",
+"🛑 Stop prévu :": "🛑 Planned stop:",
+"🕯 Bougie ": "🕯 Candle ",
+" clôturée — ": " closed — ",
+"🕒 Heure de clôture :": "🕒 Close time:",
+"📊 Bougie haussière": "📊 Bullish candle",
+"📊 Bougie baissière": "📊 Bearish candle",
+"📊 Bougie neutre": "📊 Neutral candle",
+"🧭 Tendance 4 h :": "🧭 4h trend:",
+"🧭 Confirmation 1 h :": "🧭 1h confirmation:",
+"❓ POURQUOI :": "❓ WHY:",
+"➡️ PROCHAINE ACTION :": "➡️ NEXT ACTION:",
+"🔜 Prochaine étape :": "🔜 Next step:",
+"ℹ️ Une bougie clôturée ne déclenche jamais une entrée à elle seule. Aucun ordre n'est envoyé à ton broker.": "ℹ️ A candle close alone never triggers an entry. No order is sent to your broker.",
+
 "🔴🔴 N'ENTRE PAS": "🔴🔴 DON'T ENTER", "🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
 "⛔ TROP TARD — le marché est déjà parti": "⛔ TOO LATE — the market has already moved",
 "😎 Patience, on trouve une autre entrée": "😎 Be patient, we'll find another entry",
@@ -1136,6 +1167,10 @@ TRAD = {
 ", stop": ", SL", 
 
 # Analyse Telegram complète — libellés et plan multi-timeframe
+"🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL": "🚫 DON'T ENTER: WAIT FOR THE NEXT SIGNAL",
+"🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX": "🟢 ENTRY SIGNAL VALIDATED: CHECK THE LEVELS",
+"🟢 POSITION DÉJÀ OUVERTE : NE RAJOUTE PAS UNE ENTRÉE": "🟢 POSITION ALREADY OPEN: DO NOT ADD ANOTHER ENTRY",
+"⏸ PAS D'ENTRÉE POUR LE MOMENT : ATTENDS": "⏸ NO ENTRY FOR NOW: WAIT",
 "🕯 CLÔTURE ": "🕯 CANDLE CLOSE ",
 "SIGNAL CONFIRMÉ": "SIGNAL CONFIRMED",
 "SIGNAL NON CONFIRMÉ": "SIGNAL NOT CONFIRMED",
@@ -1867,7 +1902,6 @@ def chrono_txt(m, r, cle, t0):
     """Chronomètre calé sur les bougies reçues et sur l'unité de temps qui bloque réellement."""
     now = time.time()
     p = r["m1"][-1]["c"] if r.get("m1") else r.get("prix", 0)
-    d = r.get("confirme", 0)
     tr = cle.get("trade")
     if tr:
         return "\n".join([
@@ -1888,25 +1922,26 @@ def chrono_txt(m, r, cle, t0):
         direction = "NEUTRE — aucun sens LONG/SHORT validé"
     elif d1h != d4h:
         direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — confirmation 1 h manquante"
-    elif d:
-        direction = SENS[d]
+    elif r.get("confirme"):
+        direction = SENS[r["confirme"]]
     else:
         direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — validation complète en attente"
-    raison = raison_attente(r, cle)
     l = [
         f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
         f"🎯 Suivi démarré depuis {mmss(now - t0)}",
         f"🧭 DIRECTION : {direction}",
-        f"⏳ POURQUOI J'ATTENDS : {raison}",
+        f"⏳ POURQUOI J'ATTENDS : {raison_attente(r, cle)}",
     ]
     o = cle.get("ordre")
-    if o and not tr:
+    if o:
         bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
-        l.append(f"📍 ZONE D'ENTRÉE SURVEILLÉE : {px(bas)} à {px(haut)}")
-        l.append(f"🛑 Stop prévu : {px(o['sl'])} — {meche_sl(o)}")
+        l += [
+            f"📍 ZONE D'ENTRÉE SURVEILLÉE : {px(bas)} à {px(haut)}",
+            f"🛑 Stop calculé : {px(o['sl'])} — {meche_sl(o)}"
+        ]
     l += [
         f"🕯 PROCHAINE CLÔTURE {tf} : {mmss(restant)} (à {heure(cible)}:{datetime.datetime.fromtimestamp(cible, PARIS).strftime('%S')})",
-        f"⌛ Fin du suivi si aucun setup avant {heure(t0 + CHRONO_MAX)} (pas d'entrée forcée)",
+        f"⌛ Fin du suivi si aucun setup avant {heure(t0 + CHRONO_MAX)} — aucune entrée forcée",
         f"🔄 Actualisé à {datetime.datetime.fromtimestamp(now, PARIS).strftime('%H:%M:%S')}"
     ]
     return "\n".join(l)
@@ -2134,22 +2169,35 @@ def synchroniser_veille_auto(etat, m, r):
 
 
 def texte_cloture(m, tf, bougie, r, cle):
-    """Compte rendu déterministe après clôture réelle : résultat, blocage et prochaine action."""
+    """Décision opérationnelle en première ligne, puis compte rendu complet de clôture."""
+    cle = cle or {}
     duree = TF_SECONDES[tf]
     d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
     couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
-    titre, raison = verdict(r, cle)
-    # La bougie est clôturée techniquement ; le titre indique séparément si le signal autorise réellement l'entrée.
-    signal_confirme = titre.startswith("🟢 TU PEUX ENTRER")
-    statut_signal = "SIGNAL CONFIRMÉ" if signal_confirme else "SIGNAL NON CONFIRMÉ"
-    titre_cloture = f"🕯 CLÔTURE {tf} / {statut_signal}"
-    maj, n_ok = alignement(r)
-    confirmation = f"{n_ok}/2 — {'alignement confirmé' if r.get('confirme') else 'alignement non confirmé'} (4 h + 1 h)"
-    tendance_4h = 'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'
-    tendance_1h = 'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'
+    titre, details = verdict(r, cle)
+    titre = str(titre).upper()
+    if cle.get("trade"):
+        decision = "🟢 POSITION DÉJÀ OUVERTE : NE RAJOUTE PAS UNE ENTRÉE"
+        statut = "🟢 SUIVI DE LA POSITION EN COURS"
+    elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTEND" in titre or "PATIENCE" in titre:
+        decision = "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL"
+        statut = "🔴 SIGNAL NON CONFIRMÉ"
+    elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
+        decision = "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX"
+        statut = "🟢 SIGNAL CONFIRMÉ"
+    else:
+        decision = "⏸ PAS D'ENTRÉE POUR LE MOMENT : ATTENDS"
+        statut = "🟠 SIGNAL EN ATTENTE"
+    dirs = r.get("dirs", [0] * 11)
+    d4h, d1h = dirs[9], dirs[7]
+    sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
+    _, n_ok = alignement(r)
+    confirmation = f"{n_ok}/2 — alignement confirmé" if n_ok == 2 else f"{n_ok}/2 — alignement non confirmé"
     lignes = [
-        titre_cloture,
-        f"{tf} — {ICONE.get(m, '📊')} {m}",
+        statut,
+        decision,
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🕯 CLÔTURE {tf} — {ICONE.get(m, '📊')} {m}",
         f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
         "",
         "📊 RÉSULTAT DE LA BOUGIE",
@@ -2158,8 +2206,8 @@ def texte_cloture(m, tf, bougie, r, cle):
         f"Clôture : {px(bougie['c'])}",
         "",
         "🧭 TENDANCE MULTI-UNITÉS",
-        f"4 h : {tendance_4h}",
-        f"Confirmation 1 h : {tendance_1h}",
+        f"4 h : {sens(d4h)}",
+        f"Confirmation 1 h : {sens(d1h)}",
         "",
         "✅ ALIGNEMENT",
         confirmation,
@@ -2169,6 +2217,20 @@ def texte_cloture(m, tf, bougie, r, cle):
         "",
         "⏳ POURQUOI",
         raison_attente(r, cle),
+        "",
+        "➡️ CE QUE TU DOIS FAIRE",
+        details,
+    ]
+    ordre = cle.get("ordre")
+    if ordre and not cle.get("trade"):
+        bas, haut = sorted((ordre.get("za", ordre["e"]), ordre.get("zb", ordre["e"])))
+        lignes += [
+            "",
+            "🟡 POSITION À VENIR — ordre en attente, aucune position ouverte",
+            f"📍 Zone surveillée : {px(bas)} à {px(haut)}",
+            f"🛑 Stop prévu : {px(ordre['sl'])} — {meche_sl(ordre)}",
+        ]
+    lignes += [
         "",
         "➡️ PROCHAINE ÉTAPE",
         prochaine(r, cle),
