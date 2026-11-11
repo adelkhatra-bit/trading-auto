@@ -1732,7 +1732,8 @@ def maj_chronos(etat, m, r):
                 continue
             if now - c["t0"] > CHRONO_MAX:
                 ch.pop(cid, None)
-                etat.setdefault("auto", {})[m] = [x for x in etat["auto"].get(m, []) if str(x) != str(cid)]
+                suivis_auto = etat.setdefault("auto", {})
+                suivis_auto[m] = [x for x in suivis_auto.get(m, []) if str(x) != str(cid)]
                 texte = (f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n"
                          "😎 La position n'est pas venue : pas de mauvaise entrée\n"
                          "🎯 Réappuie sur le bouton pour la prochaine")
