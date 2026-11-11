@@ -37,8 +37,9 @@ for name, url, model, key, needs_key in align_bot.IA_FOURNISSEURS:
     try:
         # Même fonction HTTP, même modèle, même extraction et même seuil
         # minimal que le véritable commentaire produit par le bot.
-        align_bot._appel_ia(url, model, key, messages)
+        reply = align_bot._appel_ia(url, model, key, messages)
         attempts.append(name + "=CONNECTED")
+        print("AI_EXTERNAL_REPLY=" + " ".join(reply.split())[:220], flush=True)
         write_summary("CONNECTED", name, ", ".join(attempts))
         sys.exit(0)
     except Exception as exc:

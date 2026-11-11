@@ -74,11 +74,13 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.prochaine_cloture(1000, 0)
 
 
-    def test_countdown_keeps_seconds_visible_over_one_hour(self):
-        self.assertEqual(align_bot.mmss(59), "0 min 59 s")
-        self.assertEqual(align_bot.mmss(3599), "59 min 59 s")
-        self.assertEqual(align_bot.mmss(3600), "1 h 00 min 00 s")
-        self.assertEqual(align_bot.mmss(3617), "1 h 00 min 17 s")
+    def test_countdown_uses_four_numeric_digits_mm_ss_for_telegram(self):
+        self.assertEqual(align_bot.mmss(0), "00:00")
+        self.assertEqual(align_bot.mmss(59), "00:59")
+        self.assertEqual(align_bot.mmss(3599), "59:59")
+        self.assertEqual(align_bot.mmss(3600), "60:00")
+        self.assertEqual(align_bot.mmss(3617), "60:17")
+        self.assertRegex(align_bot.mmss(3599), r"^\d{2}:\d{2}$")
 
     def test_next_close_uses_latest_closed_candle_timestamp(self):
         r = {"b5": [candle(300), candle(600)]}
@@ -99,7 +101,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
         self.assertIn("DIRECTION : 4 h LONG — confirmation 1 h manquante", message)
         self.assertIn("⏳ PROCHAINE CLÔTURE 1h", message)
-        self.assertIn("⏱ Temps restant : 1 h 00 min 00 s", message)
+        self.assertIn("⏱ Temps restant : 60:00", message)
         self.assertNotIn("PROCHAINE CLÔTURE 5m", message)
         self.assertIn("J'attends une clôture 1 h", message)
 
@@ -416,26 +418,37 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(change[1], 60)
 
     def test_macro_confluence_detects_dollar_impulse_and_asset_divergence_without_forcing_entry(self):
-        now = align_bot.time.time()
+        now = 10_000
         etat = {"macro": {
             "dxy": [(now - 3600, 100.0), (now, 100.30)],
             "eurusd": [(now - 3600, 1.1000), (now, 1.0960)]
         }}
         bars = [{"c": 100.0} for _ in range(5)]
         bars[-1]["c"] = 101.0
-        result = align_bot.macro_confluence(etat, "GOLD", {"b15": bars}, maintenant=now)
+        result = align_bot.macro_confluence(etat, "GOLD", {"b15": bars})
         self.assertIn("FORTE HAUSSE", result["dollar_direction"])
         self.assertIn("COHÉRENT", result["controle_dxy_eurusd"])
         self.assertIn("DIVERGENCE HAUSSIÈRE", result["divergence_actif_dollar"])
         self.assertIn("ne jamais inverser LONG/SHORT", result["regle"])
 
-    def test_dxy_fails_closed_when_the_latest_quote_is_stale(self):
-        now = align_bot.time.time()
-        state = {"macro": {"dxy": [(now - 7200, 100.0), (now - 3600, 100.5)]}}
-        self.assertIsNone(align_bot.dxy_info(state, maintenant=now))
+    def test_us10y_is_included_as_official_daily_data_for_ai_context(self):
+        today = align_bot.datetime.datetime.now(align_bot.PARIS).date()
+        yesterday = today - align_bot.datetime.timedelta(days=1)
+        state = {"macro": {"us10": (4.25, 4.20, yesterday.strftime("%m/%d/%Y"))}}
+        info = align_bot.us10_info(state)
+        self.assertTrue(info["disponible"])
+        self.assertEqual(info["rendement_pct"], 4.25)
+        self.assertAlmostEqual(info["variation_points_base"], 5.0)
+        self.assertIn("QUOTIDIENNE", info["frequence"])
+
+    def test_us10y_rejects_stale_official_data_instead_of_calling_it_live(self):
+        old = (align_bot.datetime.datetime.now(align_bot.PARIS).date() - align_bot.datetime.timedelta(days=8)).strftime("%m/%d/%Y")
+        info = align_bot.us10_info({"macro": {"us10": (4.25, 4.20, old)}})
+        self.assertFalse(info["disponible"])
+        self.assertEqual(info["statut"], "US10Y TROP ANCIEN")
 
     def test_macro_confluence_fails_closed_when_eurusd_or_dxy_history_is_too_short(self):
-        now = align_bot.time.time()
+        now = 10_000
         etat = {"macro": {"dxy": [(now - 240, 100.0), (now, 100.4)], "eurusd": []}}
         result = align_bot.macro_confluence(etat, "BTC", {"b15": [{"c": 100.0}] * 5})
         self.assertFalse(result["disponible"])
@@ -452,10 +465,17 @@ class AlignMtfRulesTest(unittest.TestCase):
         }
         with patch.object(align_bot.time, "time", return_value=7200):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
-        self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 1 h 00 min 00 s\n🕒 Heure prévue : 04:00:00 (heure de Paris)", message)
+        self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 60:00\n🕒 Heure prévue : 04:00:00 (heure de Paris)", message)
         formatted = align_bot.mise_en_forme(message)
-        self.assertIn("⏱ Temps restant\n1 h 00 min 00 s", formatted)
+        self.assertIn("⏱ Temps restant\n60:00", formatted)
         self.assertIn("🕒 Heure prévue\n04:00:00 (heure de Paris)", formatted)
+
+    def test_independent_chronometer_tick_updates_every_market_with_cached_data(self):
+        from unittest.mock import patch
+        with patch.dict(align_bot.DERNIERS, {"BTC": {"m1": []}, "GOLD": {"m1": []}}, clear=True), \\
+             patch.object(align_bot, "maj_chronos") as update:
+            align_bot.tick_chronos({"BTC": {}, "GOLD": {}})
+        self.assertEqual([call.args[1] for call in update.call_args_list], ["BTC", "GOLD"])
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
         from unittest.mock import patch

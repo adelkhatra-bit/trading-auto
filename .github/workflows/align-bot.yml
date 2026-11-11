@@ -64,7 +64,6 @@ jobs:
           PY
 
       - name: Vérifier une connexion IA réelle (même chaîne que le bot)
-        continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python3 ai_healthcheck.py
