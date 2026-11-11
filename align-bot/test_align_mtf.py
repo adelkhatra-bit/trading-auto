@@ -808,6 +808,52 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Attendre un nouveau message explicite", message)
         self.assertNotIn("Prochaine entrée SHORT", message)
 
+    def test_telegram_history_renders_incoming_and_outgoing_messages_for_one_chat(self):
+        now = align_bot.time.time()
+        state = {"journal_telegram": [
+            {"direction": "entrant", "chat_id": "123", "timestamp": now, "text": "Analyse Gold"},
+            {"direction": "sortant", "chat_id": "123", "timestamp": now, "text": "Attendre la clôture"},
+            {"direction": "sortant", "chat_id": "456", "timestamp": now, "text": "Message privé autre chat"}
+        ]}
+        message = align_bot.texte_historique(state, "123")
+        self.assertIn("📥 TOI", message)
+        self.assertIn("📤 ALIGN", message)
+        self.assertIn("Analyse Gold", message)
+        self.assertIn("Attendre la clôture", message)
+        self.assertNotIn("Message privé autre chat", message)
+        self.assertIn("\\n", message)
+        self.assertNotIn("\\\\n", message)
+
+    def test_telegram_wrapper_records_successful_outgoing_messages(self):
+        from unittest.mock import patch
+        align_bot.JOURNAL_SORTANT.clear()
+        with patch.object(align_bot, "TOKEN", "test-token"), \\
+             patch.object(align_bot, "http_json", return_value={"ok": True, "result": {"message_id": 88}}):
+            align_bot.telegram("sendMessage", chat_id="123", text="Message ALIGN")
+        self.assertEqual(len(align_bot.JOURNAL_SORTANT), 1)
+        self.assertEqual(align_bot.JOURNAL_SORTANT[0]["direction"], "sortant")
+        self.assertEqual(align_bot.JOURNAL_SORTANT[0]["chat_id"], "123")
+        self.assertEqual(align_bot.JOURNAL_SORTANT[0]["message_id"], 88)
+        self.assertEqual(align_bot.JOURNAL_SORTANT[0]["text"], "Message ALIGN")
+        align_bot.JOURNAL_SORTANT.clear()
+
+    def test_history_callback_is_recorded_and_shows_only_the_requesting_chat(self):
+        from unittest.mock import patch
+        update = {"update_id": 9220, "callback_query": {
+            "id": "cb-history", "data": "history:BTC",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        state = {"journal_telegram": [
+            {"direction": "sortant", "chat_id": "123", "timestamp": align_bot.time.time(), "text": "Signal GOLD"},
+            {"direction": "sortant", "chat_id": "999", "timestamp": align_bot.time.time(), "text": "Private other"}
+        ]}
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.traiter(state, set(), [update])
+        self.assertEqual(state["journal_telegram"][-1]["direction"], "entrant")
+        self.assertIn("HISTORIQUE ALIGN", send.call_args.kwargs["text"])
+        self.assertIn("Signal GOLD", send.call_args.kwargs["text"])
+        self.assertNotIn("Private other", send.call_args.kwargs["text"])
+
     def test_all_timeframe_breakdown_lists_every_calculated_unit_and_strategy_role(self):
         r = {
             "dirs": [1, -1, 1, 0, -1, 1, 0, 1, -1, 1, 1],
