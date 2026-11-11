@@ -1600,13 +1600,12 @@ def prochaine_cloture_bougie(r, tf, now_ts=None):
     if not bars:
         return prochaine_cloture(now_ts, interval)
     derniere_ouverture = int(bars[-1]["t"])
-    # Le dernier timestamp désigne l'ouverture de la dernière bougie déjà clôturée.
     pas = max(1, int((now_ts - derniere_ouverture) // interval) + 1)
     return derniere_ouverture + pas * interval
 
 
 def raison_attente(r, cle):
-    """Explique en langage utilisateur le vrai blocage, sans jargon ni zone fictive."""
+    """Explique le blocage réel en langage utilisateur, sans zone fictive."""
     cle = cle or {}
     tr, o = cle.get("trade"), cle.get("ordre")
     if tr:
@@ -1623,32 +1622,27 @@ def raison_attente(r, cle):
         return f"La tendance 4 h est {sens}, mais la 1 h est {etat_1h}. J'attends une clôture 1 h qui confirme la 4 h."
     d = r.get("confirme") or d4h
     if etire(r, d):
-        return f"La tendance {sens} est confirmée, mais le mouvement est déjà trop étendu. Je n'achète/vends pas au prix actuel : j'attends un repli."
-    if bloque_dw(r, d, r.get("m1", [{}])[-1].get("c") if r.get("m1") else None):
+        return f"La tendance {sens} est confirmée, mais le mouvement est déjà trop étendu. Je ne poursuis pas le prix : j'attends un repli."
+    prix = r.get("m1", [{}])[-1].get("c") if r.get("m1") else None
+    if bloque_dw(r, d, prix):
         return f"La tendance {sens} existe, mais le prix est dans une zone Daily/Weekly extrême. J'attends un meilleur prix ou un retournement confirmé."
     if not o:
-        return f"La direction {sens} est confirmée, mais aucun point d'entrée propre n'est encore validé. J'attends que le prix construise un repli exploitable."
-    d = o.get("d", d)
-    p = r.get("m1", [{}])[-1].get("c") if r.get("m1") else None
+        return f"La direction {sens} est confirmée, mais aucun point d'entrée propre n'est validé. J'attends un repli exploitable."
+    p = prix
     bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
-    if p is not None and d == 1 and p > haut:
-        return f"Le biais LONG est confirmé. Le prix est à {px(p)}, au-dessus de la zone {px(bas)}–{px(haut)}. Je n'achète pas au prix actuel : j'attends qu'il redescende dans cette zone."
-    if p is not None and d == 1 and p < bas:
-        return f"Le biais LONG est confirmé, mais le prix est déjà passé sous la zone {px(bas)}–{px(haut)}. Je n'achète pas en retard : j'attends un nouveau point d'entrée."
-    if p is not None and d == -1 and p < bas:
-        return f"Le biais SHORT est confirmé. Le prix est à {px(p)}, sous la zone {px(bas)}–{px(haut)}. Je ne vends pas au prix actuel : j'attends qu'il remonte dans cette zone."
-    if p is not None and d == -1 and p > haut:
-        return f"Le biais SHORT est confirmé, mais le prix est déjà passé au-dessus de la zone {px(bas)}–{px(haut)}. Je ne vends pas en retard : j'attends un nouveau point d'entrée."
+    if p is not None and p < bas:
+        return f"Le biais {sens} est confirmé. Le prix est à {px(p)} et n'a pas encore rejoint la zone d'entrée {px(bas)}–{px(haut)}."
+    if p is not None and p > haut:
+        return f"Le biais {sens} est confirmé. Le prix est à {px(p)} et reste au-dessus de la zone d'entrée {px(bas)}–{px(haut)}. J'attends le repli."
     if cle.get("traverse"):
-        return f"Le prix a traversé la zone {px(bas)}–{px(haut)} sans rejet valide. Pas d'entrée : j'attends une mèche de rejet puis une clôture 5 min dans le sens {sens}."
-    return f"Le prix travaille la zone d'entrée {px(bas)}–{px(haut)}, mais je n'ai pas encore de rejet confirmé par une clôture 5 min. Une mèche seule ne suffit pas."
+        return f"Le prix a traversé la zone {px(bas)}–{px(haut)} sans rejet valide. J'attends une mèche de rejet puis une clôture 5 min dans le sens {sens}."
+    return f"Le prix travaille la zone d'entrée {px(bas)}–{px(haut)}, mais aucun rejet confirmé par une clôture 5 min n'est visible. Une mèche seule ne suffit pas."
 
 
 def chrono_txt(m, r, cle, t0):
     """Chronomètre calé sur les bougies reçues et sur l'unité de temps qui bloque réellement."""
     now = time.time()
     p = r["m1"][-1]["c"] if r.get("m1") else r.get("prix", 0)
-    d = r.get("confirme", 0)
     tr = cle.get("trade")
     if tr:
         return "\n".join([
@@ -1669,25 +1663,26 @@ def chrono_txt(m, r, cle, t0):
         direction = "NEUTRE — aucun sens LONG/SHORT validé"
     elif d1h != d4h:
         direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — confirmation 1 h manquante"
-    elif d:
-        direction = SENS[d]
+    elif r.get("confirme"):
+        direction = SENS[r["confirme"]]
     else:
         direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — validation complète en attente"
-    raison = raison_attente(r, cle)
     l = [
         f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
         f"🎯 Suivi démarré depuis {mmss(now - t0)}",
         f"🧭 DIRECTION : {direction}",
-        f"⏳ POURQUOI J'ATTENDS : {raison}",
+        f"⏳ POURQUOI J'ATTENDS : {raison_attente(r, cle)}",
     ]
     o = cle.get("ordre")
-    if o and not tr:
+    if o:
         bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
-        l.append(f"📍 ZONE D'ENTRÉE SURVEILLÉE : {px(bas)} à {px(haut)}")
-        l.append(f"🛑 Stop prévu : {px(o['sl'])} — {meche_sl(o)}")
+        l += [
+            f"📍 ZONE D'ENTRÉE SURVEILLÉE : {px(bas)} à {px(haut)}",
+            f"🛑 Stop calculé : {px(o['sl'])} — {meche_sl(o)}"
+        ]
     l += [
         f"🕯 PROCHAINE CLÔTURE {tf} : {mmss(restant)} (à {heure(cible)}:{datetime.datetime.fromtimestamp(cible, PARIS).strftime('%S')})",
-        f"⌛ Fin du suivi si aucun setup avant {heure(t0 + CHRONO_MAX)} (pas d'entrée forcée)",
+        f"⌛ Fin du suivi si aucun setup avant {heure(t0 + CHRONO_MAX)} — aucune entrée forcée",
         f"🔄 Actualisé à {datetime.datetime.fromtimestamp(now, PARIS).strftime('%H:%M:%S')}"
     ]
     return "\n".join(l)
