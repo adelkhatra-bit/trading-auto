@@ -85,6 +85,9 @@ if (-not [string]::IsNullOrWhiteSpace($Hostname)) {
 $configLines += @(
         "    path: /tv-webhook",
         "    service: http://localhost:$LocalPort",
+        "  -",
+        "    path: /bridge/robot-v12/mtf",
+        "    service: http://localhost:$LocalPort",
         "  - service: http_status:404"
 )
 
