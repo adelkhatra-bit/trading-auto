@@ -2224,7 +2224,7 @@ def traiter(etat, chats, updates):
                     pass
                 regler_bot(etat, qui, choix == "boton")
                 continue
-            if choix == "auto":
+            if choix == "auto" and mk in MARCHES:
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Noté")
                 except Exception:
@@ -2254,6 +2254,14 @@ def traiter(etat, chats, updates):
                 elif choix == "retirer" and mk in off:
                     off.remove(mk); chats.discard(mk)
                     _envoi_sur(qui, text=f"⛔ Accès retiré à {etat.get('noms', {}).get(mk, mk)}")
+                continue
+            # Ne jamais interpréter un callback inconnu comme une sortie manuelle.
+            # Seuls les boutons explicites in:<marché> et out:<marché> peuvent modifier une position.
+            if choix not in ("in", "out") or mk not in MARCHES:
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="Action inconnue ou expirée")
+                except Exception:
+                    pass
                 continue
             bienvenue = etat.get("bienvenue", {}).get(qui) == mk and etat.get(mk, {}).get("trade")
             if not bienvenue and not autorise(etat, qui, cb["from"]["id"]):
