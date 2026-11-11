@@ -2,7 +2,7 @@
 
 Date : 11 novembre 2026
 Branche audit : audit/align-telegram-end-to-end-20261111-v3
-Branche de référence : main après la PR #28
+Branche de référence : main après les PR #28, #29 et #30
 Périmètre : align-bot, workflows GitHub Actions, Telegram, mémoire persistante et chaîne IA.
 
 ## 1. Objectif
@@ -75,6 +75,8 @@ Les callbacks doivent répondre à Telegram, contrôler les droits avant toute a
 - Les données manquantes, dupliquées ou désalignées ne doivent pas déclencher de fausse clôture.
 - Les mises à jour du chronomètre doivent être cadencées pour éviter les limites Telegram et les rafales multi-utilisateurs.
 - Le suivi d'un utilisateur expire selon la durée déjà définie ; aucune entrée forcée ne doit être annoncée.
+- Une demande générale « Analyse » vise Gold par défaut ; « Analyse BTC » vise BTC ; « Analyse BTC et Gold » demande explicitement les deux marchés.
+- Le cycle de surveillance des setups est réglé à 5 secondes, sans contourner les caches des sources ni les confirmations sur bougie clôturée.
 
 ### 3.5 IA et repli
 
@@ -107,6 +109,8 @@ Les callbacks doivent répondre à Telegram, contrôler les droits avant toute a
 | MSG-01 | formateur commun appliqué | test du payload Telegram simulé |
 | MSG-02 | niveaux complets et lisibles | tests BTC et Gold |
 | MSG-03 | formatage prix idempotent | test double formatage |
+| MARKET-01 | sélection Gold par défaut | tests Analyse / Gold / BTC / deux marchés |
+| MARKET-02 | cycle de surveillance à 5 s | configuration workflow + code + test de régression |
 | BTN-01 | callbacks connus routés | tests de callbacks et droits |
 | BTN-02 | callbacks inconnus sans effet métier | tests de sécurité des actions |
 | CLOSE-01 | prochaine clôture strictement future | tests aux frontières temporelles |
@@ -136,20 +140,22 @@ Les callbacks doivent répondre à Telegram, contrôler les droits avant toute a
 - Le workflow MTF a déjà échoué sur une erreur de syntaxe dans test_align_mtf.py ; le garde-fou de compilation a depuis été ajouté sur main.
 - La PR #25 a corrigé le calcul de la prochaine clôture future et le timestamp du prix spot Gold. Ce correctif est conservé.
 - La PR #28 a ajouté le formatage de prix français compact et idempotent ; cette correction est conservée.
+- La PR #29 a supprimé les décimales nulles inutiles sur les prix ; cette correction est conservée.
+- Les changements de la PR #12 sont réintégrés proprement sur une branche issue du dernier main : Gold par défaut, BTC explicite, les deux marchés si demandés ensemble, surveillance des setups toutes les 5 secondes. Les filtres de bougie clôturée restent inchangés.
 - La branche de référence main comptait 30 tests MTF au démarrage de cette branche d'audit.
 - La branche historique feat/telegram-visual-cards-actions-20261111 avait une validation verte tardive, mais son jeu de tests ne contenait que 22 tests et avait supprimé quatre tests présents sur main à cette date. Ses anciens échecs concernaient notamment les attentes de formatage. Elle n'est donc pas une base de fusion fiable.
-- La PR #12 reste empilée sur l'ancienne branche de la PR #11. Son choix de marché par défaut (Gold seul) et sa cadence de 5 secondes doivent être évalués séparément ; ne pas fusionner cette branche en bloc.
+- Les PR #11 et #12 d'origine sont des branches empilées et anciennes ; leurs changements sont réintégrés de façon ciblée sur le dernier main. Les PR d'origine seront fermées comme supersédées après validation.
 - Le worker #490 était encore en cours sur un ancien SHA ; le run #497 était en attente lors du début de cette branche d'audit. La nouvelle version ne peut être déclarée opérationnelle avant son exécution réelle.
 
 ## 7. État de livraison
 
-La branche d'audit part du main après la PR #28. Elle conserve les 30 tests de départ et en ajoute 7 ciblés : formatage du payload Telegram, callback inconnu, marché invalide, entrée/sortie explicites, réservation valide, repli IA interne et commentaire interne. Le test existant du chronomètre est adapté à une cadence de 5 secondes. Total : 37 tests.
+La branche d'audit principale part du main après les PR #28 et #29. Elle conserve les 30 tests de départ et en ajoute 7 ciblés : formatage du payload Telegram, callback inconnu, marché invalide, entrée/sortie explicites, réservation valide, repli IA interne et commentaire interne. Le test existant du chronomètre est adapté à une cadence de 5 secondes. La branche de sélection marché ajoute un 38e test : Gold par défaut, BTC seul et demande explicite des deux marchés.
 
 Preuves obtenues sur la branche d'audit :
-- compilation de tous les fichiers Python : à confirmer par CI ;
-- compilation du bot et du healthcheck : à confirmer par CI ;
-- 37 tests MTF : à confirmer par CI ;
-- tests d'intégration backend : à confirmer par CI.
+- compilation de tous les fichiers Python : réussie sur la branche d'audit précédente ; à revalider sur la branche de sélection marché ;
+- compilation du bot et du healthcheck : réussie sur la branche d'audit précédente ; à revalider ;
+- 37 tests MTF : réussis sur la branche d'audit précédente ; 38 attendus après sélection marché ;
+- tests d'intégration backend : réussis sur la branche d'audit précédente ; à revalider après fusion.
 
 Ces preuves concernent la branche d'audit, pas encore le worker de production. Les changements ne deviennent production qu'après :
 - revue des différences ;
