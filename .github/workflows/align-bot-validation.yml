@@ -1,13 +1,7 @@
 name: ALIGN MTF validation
 
 on:
-  push:
-    branches:
-      - main
-      - "fix/align-*"
-    paths:
-      - "align-bot/**"
-      - ".github/workflows/align-bot-validation.yml"
+  workflow_call:
   pull_request:
     branches:
       - main
