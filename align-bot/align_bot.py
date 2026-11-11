@@ -1590,6 +1590,47 @@ def markup_analyse(etat, m, r):
     return json.dumps({"inline_keyboard": lignes})
 
 
+def markup_position(m):
+    return json.dumps({"inline_keyboard": [
+        [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
+         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
+        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
+    ]})
+
+
+def texte_position(m, r, cle, cid):
+    """Résumé opérationnel individuel : prix, stop réellement conseillé et objectifs."""
+    tr = (cle or {}).get("trade")
+    if not tr:
+        return f"📍 Aucune position ALIGN ouverte sur {m}.\n🔔 J'attends le prochain signal confirmé."
+    pos = tr.get("qui", {}).get(str(cid), {})
+    prix = (r or {}).get("m1", [{}])[-1].get("c", tr["e"])
+    entree = pos.get("e", tr["e"]) if isinstance(pos, dict) else tr["e"]
+    sl = (pos.get("sl_conseil") or pos.get("sl") or tr["sl"]) if isinstance(pos, dict) else tr["sl"]
+    tp1 = (pos.get("tp1") or tr["tp1"]) if isinstance(pos, dict) else tr["tp1"]
+    tp2 = tr["tp2"]
+    sens = "🟩 LONG ⬆️" if tr["d"] == 1 else "🟥 SHORT ⬇️"
+    protege = tr["d"] * (sl - entree) >= 0
+    gain_pct = tr["d"] * (prix - entree) / max(abs(entree), 1e-9) * 100
+    return "\n".join([
+        f"📍 TA POSITION — {m}",
+        "━━━━━━━━━━━━━━━━━━━━",
+        sens,
+        f"💹 Prix actuel : {px(prix)}",
+        f"📌 Ton entrée : {px(entree)}",
+        f"🛑 Ton SL actuel : {px(sl)}",
+        f"💰 TP1 : {px(tp1)}",
+        f"🏁 TP2 : {px(tp2)}",
+        f"📈 Évolution depuis ton entrée : {gain_pct:+.2f} %",
+        "━━━━━━━━━━━━━━━━━━━━",
+        ("🔒 STOP À BE / GAIN PROTÉGÉ" if protege else "🛡 STOP DE PROTECTION À CONSERVER"),
+        ("Le stop est au niveau ou au-delà de ton entrée dans le sens du trade." if protege else
+         "Ne retire pas le stop et ne l'élargis pas."),
+        "🎯 Le coach surveille les clôtures, le SL, le BE et les objectifs.",
+        "ℹ️ ALIGN ne passe aucun ordre sur ton broker : toute modification se fait sur ta plateforme."
+    ])
+
+
 def texte_timeframes(m, r):
     """Lecture pédagogique de toutes les unités réellement calculées par ALIGN."""
     noms = ["1 min", "2 min", "5 min", "10 min", "15 min", "30 min", "45 min",
@@ -2510,7 +2551,7 @@ def traiter(etat, chats, updates):
                     else:
                         _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est pas encore disponible. Appuie sur Analyse {mk}.")
                 continue
-            if choix in ("why", "details", "levels", "timeframes") and mk in MARCHES:
+            if choix in ("why", "details", "levels", "timeframes", "position") and mk in MARCHES:
                 if not autorise(etat, qui, cb.get("from", {}).get("id")):
                     try:
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Détails réservés aux VIP")
@@ -2532,7 +2573,10 @@ def traiter(etat, chats, updates):
                         _envoi_sur(qui, text="⚠️ Les détails sont momentanément indisponibles. Réessaie avec le bouton Analyse.")
                         continue
                 cle_detail = etat.get(mk, {})
-                if choix == "why":
+                if choix == "position":
+                    _envoi_sur(qui, text=texte_position(mk, r_detail, cle_detail, qui),
+                               reply_markup=markup_position(mk))
+                elif choix == "why":
                     _envoi_sur(qui, text=texte_pourquoi(mk, r_detail, cle_detail),
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Analyse complète", "callback_data": f"details:{mk}"},
                                                                              {"text": "🎯 Niveaux / prix", "callback_data": f"levels:{mk}"}],
@@ -3416,7 +3460,7 @@ def coach(etat, m, r, cle):
                         + ("🔒 Mets ton SL à BE (prix d'entrée)" if prog > 0.2 else "✂️ Le trade n'avance pas\n✂️ Je coupe avant la news"))
     for c in dedans:
         for t in msgs:
-            _envoi_sur(c, text=t, reply_markup=CLAVIER)
+            _envoi_sur(c, text=t, reply_markup=markup_position(m))
         gerer_stop(etat, m, r, tr, c)
 
 def gerer_stop(etat, m, r, tr, c):
@@ -3465,7 +3509,7 @@ def gerer_stop(etat, m, r, tr, c):
                      "🙅 Jamais pile sur la mèche : elle peut être retouchée\n"
                      + ("💰 Ton gain est protégé" if d * (nouveau - e) > 0 else "🛡 Ta perte possible est réduite")
                      + f"\n📍 Repère prix   ≈ {px(nouveau)}")
-        _envoi_sur(c, reply_markup=CLAVIER, text=texte)
+        _envoi_sur(c, reply_markup=markup_position(m), text=texte)
         return
     # Le marché respire : petit retour vers l'entrée, on ne bouge rien
     r5 = r["r5"][-1]
@@ -3473,7 +3517,7 @@ def gerer_stop(etat, m, r, tr, c):
     tps = pos.setdefault("cool_t", 0)
     if excès and time.time() - tps >= 45 * 60:
         pos["cool_t"] = time.time()
-        _envoi_sur(c, reply_markup=CLAVIER, text=(
+        _envoi_sur(c, reply_markup=markup_position(m), text=(
             f"😎 {ICONE.get(m, '')} {m} : reste cool\n🌬 Le marché respire\n"
             "🕯 Il peut revenir un peu, c'est normal\n"
             "🛑 Ne touche pas ton SL\n🎯 Cap sur le TP"))
