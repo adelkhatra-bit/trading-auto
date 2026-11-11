@@ -472,9 +472,9 @@ class AlignMtfRulesTest(unittest.TestCase):
 
     def test_independent_chronometer_tick_updates_every_market_with_cached_data(self):
         from unittest.mock import patch
-        with patch.dict(align_bot.DERNIERS, {"BTC": {"m1": []}, "GOLD": {"m1": []}}, clear=True), \\
-             patch.object(align_bot, "maj_chronos") as update:
-            align_bot.tick_chronos({"BTC": {}, "GOLD": {}})
+        with patch.dict(align_bot.DERNIERS, {"BTC": {"m1": []}, "GOLD": {"m1": []}}, clear=True):
+            with patch.object(align_bot, "maj_chronos") as update:
+                align_bot.tick_chronos({"BTC": {}, "GOLD": {}})
         self.assertEqual([call.args[1] for call in update.call_args_list], ["BTC", "GOLD"])
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
