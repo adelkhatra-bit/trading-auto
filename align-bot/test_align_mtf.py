@@ -1074,8 +1074,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(lines[0], "🕯 CLÔTURE CONFIRMÉE")
         self.assertEqual(lines[1], "1h — 🟠 BTC")
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
-                         "TENDANCE MULTI-UNITÉS", "4 h : SHORT", "Confirmation 1 h : SHORT", "2/2", "DÉCISION ALIGN",
-                         "N'ENTRE PAS", "POURQUOI", "zone Daily/Weekly est extrême", "PROCHAINE ÉTAPE",
+                         "TENDANCE MULTI-UNITÉS", "4 h\nSHORT", "Confirmation 1 h\nSHORT", "2/2", "DÉCISION ALIGN",
+                         "N'ENTRE PAS", "POURQUOI", "La zone Daily/Weekly est extrême", "j'attends un meilleur prix", "PROCHAINE ÉTAPE",
                          "Prochaine entrée SHORT", "Une clôture seule ne déclenche pas une entrée", "Aucun ordre n'est envoyé à ton broker"):
             self.assertIn(required, message)
 
