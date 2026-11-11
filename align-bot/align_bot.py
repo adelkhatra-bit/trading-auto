@@ -1821,16 +1821,13 @@ STATUT_LIB = {"🚦 🙅 PAS DE NOUVELLE POSITION": ("🚦 Statut", "🙅 Pas de
               "🚦 ⏳ NOT ENTERING YET": ("🚦 Status", "⏳ Not entering yet"), "🚦 🙅 JE NE SUIS PLUS EN POSITION": ("🚦 Statut", "🙅 Je ne suis plus en position"), "🚦 🙅 I'M OUT": ("🚦 Status", "🙅 I'm out"), "🚦 🟢 WE STAY IN": ("🚦 Status", "🟢 We stay in")}
 
 def mise_en_forme(t):
-    """Tous les messages rangés pareil : le titre au-dessus, l'info en dessous, une ligne vide entre chaque bloc."""
+    """Tous les messages rangés pareil pour mobile : titre en haut, puis une info par ligne « intitulé : valeur »."""
     if not isinstance(t, str) or not t:
         return t
     # Idempotent : les messages peuvent repasser ici après une première mise en forme.
     t = _normalise_prix_dans_texte(t)
     lignes = t.split("\n")
-    titre2 = " — " in lignes[0]
-    if titre2:
-        g, d_ = lignes[0].split(" — ", 1)
-        lignes = [g.strip(), d_.strip()] + lignes[1:]
+    titre2 = False                       # le titre « X — 🟠 BTC » reste sur une seule ligne
     plat = []
     for l in lignes:
         l = re.sub(r" {2,}", " ", l.strip())
@@ -1853,7 +1850,8 @@ def mise_en_forme(t):
         reste = plat[:i] + plat[i + len(bloc):]
         tete = 2 if titre2 else 1
         plat = reste[:tete] + bloc + reste[tete:]
-    # Titre au-dessus / info en dessous
+    # Présentation mobile compacte : une info par ligne « intitulé : valeur »,
+    # titre seul en haut puis une ligne vide, pas de ligne vide entre chaque info.
     out = []
     for k, l in enumerate(plat):
         if not l:
@@ -1861,10 +1859,10 @@ def mise_en_forme(t):
                 out.append("")
             continue
         if l in STATUT_LIB:
-            out += (["", *STATUT_LIB[l], ""] if out and out[-1] else [*STATUT_LIB[l], ""])
+            out.append("🚦 " + STATUT_LIB[l][1])
             continue
-        # Les niveaux chiffrés sont toujours présentés en carte :
-        # intitulé, valeur seule, puis explication (mèche / structure / unité de temps).
+        if l.startswith("🚦 ") and k + 1 < len(plat) and l in [v[0] for v in STATUT_LIB.values()]:
+            continue
         niveau = re.match(
             r"^(?P<label>.*?\b(?:TP\s*[12]|SL|STOP(?: LOSS)?|ENTR[ÉE]E?|ENTRY|SORTIE|EXIT|OBJECTIF(?: FINAL)?|TARGET|BREAK EVEN|BE)\b[^:：]*?)"
             r"\s*(?::|：|≈|=)\s*(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)"
@@ -1874,40 +1872,15 @@ def mise_en_forme(t):
             value = _compacte_prix(niveau.group("value"))
             detail = (niveau.group("detail") or "").strip()
             detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
-            if out and out[-1]:
-                out.append("")
-            out.append(label)
-            out.append(value)
-            if detail:
-                out.append(detail)
-            out.append("")
+            out.append(f"{label} : {value}" + (f" ({detail})" if detail and len(detail) <= 40 else ""))
+            if detail and len(detail) > 40:
+                out.append(f"   ↳ {detail}")
             continue
-        mesure = re.match(
-            r"^(?P<label>(?:Basse|Haute|Bas|Haut|Low|High|Support|Résistance|Resistance))\s+"
-            r"(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)$",
-            l, re.IGNORECASE)
-        if mesure:
-            if out and out[-1]:
-                out.append("")
-            value = _compacte_prix(mesure.group("value"))
-            out += [mesure.group("label"), value, ""]
-            continue
-        mt = re.search(r" ?: | ≈ ", l)
-        if mt and not l.startswith(("ℹ️", "RSI")):
-            g, d_ = l[:mt.start()], l[mt.end():]
-            if 2 < len(g) <= 34 and d_.strip():
-                if out and out[-1]:
-                    out.append("")
-                valeur = d_.strip()
-                # Ne compacter que les valeurs numériques pures : une durée ou une heure
-                # (ex. « 1 h 00 min 05 s », « 04:30:00 ») doit garder ses espaces.
-                if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?%?", valeur):
-                    valeur = _compacte_prix(valeur)
-                out += [g.strip(), ("≈ " if "≈" in mt.group() else "") + valeur, ""]
-                continue
         if l.endswith(" :") or l.endswith(":"):
             l = l.rstrip(" :")
         out.append(l)
+        if k == 0:
+            out.append("")
     txt = "\n".join(out)
     return re.sub(r"\n{3,}", "\n\n", txt).strip()
 
@@ -2534,6 +2507,45 @@ def texte_pourquoi(m, r, cle):
         "ℹ️ Aucun ordre n'est envoyé au broker."
     ])
 
+def court(texte, n=120):
+    texte = re.sub(r"\s+", " ", str(texte or "")).strip()
+    return texte if len(texte) <= n else texte[:n].rsplit(" ", 1)[0].rstrip(",;: ") + "…"
+
+
+def voyants_unites(r):
+    """Voyants des unités, même code couleur que l'indicateur (🟩 hausse, 🟥 baisse, ⬜ neutre)."""
+    dirs = r.get("dirs") or []
+    ic = lambda d: "🟩" if d == 1 else "🟥" if d == -1 else "⬜"
+    def u(i, nom):
+        return f"{nom}{ic(dirs[i])}" if i < len(dirs) else ""
+    petites = " ".join(x for x in (u(0, "1m"), u(1, "3m"), u(2, "5m"), u(4, "15m")) if x)
+    grandes = " ".join(x for x in (u(7, "1h"), u(9, "4h"), u(10, "D")) if x)
+    return ([f"⚡ Petites unités : {petites}"] if petites else []) + ([f"🏔 Grandes unités : {grandes}"] if grandes else [])
+
+
+def objectifs_marche(r, d):
+    """Où le mouvement peut aller : cible probable (prochain niveau 1h/4h/D), zone d'essoufflement
+    (niveau majeur suivant) et trajet indicatif selon l'amplitude réelle des bougies 5 min."""
+    if d not in (1, -1) or not r.get("m1"):
+        return []
+    p = r["m1"][-1]["c"]; a = r.get("atr") or 0
+    cand = [(v, f"niveau {n}") for v, n in (r.get("niveaux") or []) if n in ("1h", "4h", "D", "1D", "W")]
+    cand += [(v, n) for v, n in (r.get("niv_cles") or [])]
+    devant = sorted({(round(v, 2), n) for v, n in cand if v is not None and d * (v - p) >= 0.5 * a}, key=lambda z: d * (z[0] - p))
+    if not devant:
+        return []
+    cible = devant[0]
+    suite = next((z for z in devant[1:] if d * (z[0] - cible[0]) >= 0.5 * a), None)
+    l = [f"🎯 Cible probable : ≈ {px(cible[0])} ({cible[1]})"]
+    if suite:
+        l.append(f"🪫 Essoufflement possible : ≈ {px(suite[0])} ({suite[1]})")
+    a5 = r.get("atr5") or 0
+    if a5 > 0:
+        minutes = int(round(abs(cible[0] - p) / a5 * 5 * 1.5 / 5.0)) * 5
+        l.append(f"⏱ Trajet estimé : ≈ {max(5, minutes)} min (indicatif, pas une promesse)")
+    return l
+
+
 def texte_apercu(m, r, cle):
     """Carte d'abordage : autorisation d'entrée en premier, détails derrière les boutons."""
     cle = cle or {}
@@ -2557,34 +2569,30 @@ def texte_apercu(m, r, cle):
         decision = "⛔ NE PAS ENTRER"
         direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "AUCUNE DIRECTION CONFIRMÉE"
 
+    prof = profil_strategie(r) if r.get("dirs") and len(r.get("dirs")) >= 11 else {}
+    sens = (tr or {}).get("d") or prof.get("direction") or maj or 0
+    type_ = prof.get("mode") or ""
     lignes = [
-        f"{ICONE.get(m, '📊')} ALIGN • {m}",
-        "━━━━━━━━━━━━━━━━━━━━",
+        f"{ICONE.get(m, '📊')} {m} — {px(prix)}",
         f"🚦 {decision}",
-        f"🧭 Biais à surveiller : {direction}",
-        "⚠️ Le biais n'est pas une autorisation d'entrée.",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "❗ POURQUOI ?",
-        str(raison or "Aucune entrée autorisée pour le moment."),
-        "━━━━━━━━━━━━━━━━━━━━",
-        "➡️ CE QUE TU DOIS FAIRE",
-        ("Gérer la position déjà ouverte et suivre les alertes de sortie." if tr else
-         "Attendre un nouveau message explicite « ENTRÉE AUTORISÉE »."),
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"💹 Prix actuel : {px(prix)}",
-        f"📡 Confirmation 1 h + 4 h : {n_ok}/2",
+        f"🧭 Biais à surveiller : {direction}" + (f" ({type_})" if type_ and direction not in ('AUCUNE DIRECTION CONFIRMÉE', 'Non confirmée', 'À confirmer') else ""),
+        "⚠️ Le biais n'est pas une autorisation d'entrée." if not tr else "📍 Position ouverte : suis les alertes du coach.",
+        "",
+    ] + voyants_unites(r) + [""]
+    obj = objectifs_marche(r, sens)
+    if obj:
+        lignes += obj + [""]
+    lignes += [
+        f"❓ Pourquoi : {court(raison or 'Aucune entrée autorisée pour le moment.', 150)}",
+        "➡️ À faire : " + ("gérer la position ouverte et suivre les alertes de sortie." if tr else
+                         "Attendre un nouveau message explicite « ENTRÉE AUTORISÉE »."),
     ]
     if cle.get("ordre") and not tr:
         o = cle["ordre"]
-        lignes += ["🟨 Zone surveillée (pas un ordre) :",
-                   f"{px(o.get('za', o['e']))} → {px(o.get('zb', o['e']))}"]
+        lignes += [f"🟨 Zone surveillée : {px(min(o.get('za', o['e']), o.get('zb', o['e'])))} → {px(max(o.get('za', o['e']), o.get('zb', o['e'])))}"]
     if r.get("news"):
         lignes += [f"📰 Actualité : {r['news']}"]
-    lignes += [
-        "━━━━━━━━━━━━━━━━━━━━",
-        "👇 Besoin d'aller plus loin ? Utilise les boutons ci-dessous.",
-        "ℹ️ Aucun ordre n'est envoyé automatiquement à ton broker."
-    ]
+    lignes += ["", "👇 Détails : boutons ci-dessous", "ℹ️ Aucun ordre n'est envoyé automatiquement à ton broker."]
     return "\n".join(lignes)
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
@@ -3101,12 +3109,9 @@ def carte_avis_courte(m, r, cle, anglais=False):
     """Avis court pour mobile : voyants des unités (code couleur de l'indicateur), sens, quoi faire.
     Le détail complet de l'IA reste derrière le bouton « En savoir plus »."""
     cle = cle or {}
-    icone = lambda d: "🟩" if d == 1 else "🟥" if d == -1 else "⬜"
-    dirs = r.get("dirs") or []
-    def u(i, nom):
-        return f"{nom}{icone(dirs[i])}" if i < len(dirs) else ""
-    ligne1 = " ".join(x for x in (u(0, "1m"), u(1, "3m"), u(2, "5m"), u(4, "15m")) if x)
-    ligne2 = " ".join(x for x in (u(7, "1h"), u(9, "4h"), u(10, "D")) if x)
+    v = voyants_unites(r)
+    ligne1 = v[0].split(" : ", 1)[1] if v else ""
+    ligne2 = v[1].split(" : ", 1)[1] if len(v) > 1 else ""
     titre, raison = verdict(r, cle)
     prof = profil_strategie(r)
     sens = prof.get("direction") or 0
