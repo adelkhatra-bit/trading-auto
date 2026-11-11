@@ -682,7 +682,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_active_trade_keyboard_has_manual_entry_and_exit_controls(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))["inline_keyboard"]
-        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         self.assertIn("in:GOLD", callbacks)
         self.assertIn("out:GOLD", callbacks)
         self.assertNotIn("auto:GOLD", callbacks)
@@ -750,7 +750,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         r = {"dirs": [1, 1, 1, 1, -1, 0, 0, -1, 0, 1, 0], "confirme": 0}
         message = "\\n".join(align_bot.strategie_mtf(r))
         self.assertIn("Tendance principale 4 h : 🟢⬆️", message)
-        self.assertIn("Tendance Daily : 🟠➖", message)
+        self.assertIn("Contexte Daily : 🟠➖", message)
         self.assertIn("Confirmation 1 h : 🔴⬇️", message)
         self.assertIn("Préparation 15 min : 🔴⬇️", message)
         self.assertIn("Timing 5 min : 🟢⬆️", message)
@@ -1298,7 +1298,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_closed_trade_keyboard_links_to_results_history_and_next_setup(self):
         import json
         buttons = json.loads(align_bot.markup_cloture("BTC"))["inline_keyboard"]
-        callbacks = [button["callback_data"] for row in buttons for button in row]
+        callbacks = [button.get("callback_data") for row in buttons for button in row if button.get("callback_data")]
         self.assertIn("results:x", callbacks)
         self.assertIn("history:BTC", callbacks)
         self.assertIn("auto:BTC", callbacks)
@@ -1316,7 +1316,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_position_button_is_attached_to_following_alerts(self):
         import json
         buttons = json.loads(align_bot.markup_position("GOLD"))["inline_keyboard"]
-        callbacks = [button["callback_data"] for row in buttons for button in row]
+        callbacks = [button.get("callback_data") for row in buttons for button in row if button.get("callback_data")]
         self.assertIn("position:GOLD", callbacks)
         self.assertIn("timeframes:GOLD", callbacks)
         self.assertIn("history:GOLD", callbacks)
@@ -1331,7 +1331,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                       "45 min", "1 heure", "2 heures", "4 heures", "Daily"):
             self.assertIn(label, message)
         self.assertIn("4 h : tendance principale", message)
-        self.assertIn("1 h : confirmation obligatoire", message)
+        self.assertIn("1 h : confirme ou contredit", message)
         self.assertIn("5 min : déclencheur après clôture", message)
         self.assertIn("RSI 68", message)
 
@@ -1339,7 +1339,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         import json
         from unittest.mock import patch
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
-        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         self.assertIn("timeframes:BTC", callbacks)
         update = {"update_id": 9210, "callback_query": {
             "id": "cb-timeframes", "data": "timeframes:BTC",
@@ -1362,7 +1362,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_compact_analysis_buttons_expose_why_full_analysis_and_levels(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
-        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         labels = [button["text"] for row in keyboard for button in row]
         self.assertIn("why:BTC", callbacks)
         self.assertIn("details:BTC", callbacks)
