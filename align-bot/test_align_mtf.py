@@ -1146,6 +1146,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 patch.object(align_bot, "texte_apercu", return_value="analysis-card"),
                 patch.object(align_bot, "texte_etat", return_value="analysis-details"),
                 patch.object(align_bot, "texte_pourquoi", return_value="analysis-why"),
+                patch.object(align_bot, "avis_ia", return_value="analysis-ai"),
                 patch.object(align_bot, "_envoi_sur") as send,
                 patch.object(align_bot, "telegram", return_value={"ok": True}),
             ):
@@ -1991,8 +1992,8 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
             ["202"]
         )
         self.assertEqual(
-            align_bot.destinataires_message(state, {"101", "202"}, "🥇 GOLD — SIGNAL NON CONFIRMÉ"),
-            ["101", "202"]
+            set(align_bot.destinataires_message(state, {"101", "202"}, "🥇 GOLD — SIGNAL NON CONFIRMÉ")),
+            {"101", "202"}
         )
 
     def test_followmarket_both_registers_btc_and_gold(self):
