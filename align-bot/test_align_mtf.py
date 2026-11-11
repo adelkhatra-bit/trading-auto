@@ -799,8 +799,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         import json
         keyboard = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("in:GOLD", callbacks)
-        self.assertIn("out:GOLD", callbacks)
+        self.assertEqual(callbacks, ["position:GOLD", "out:GOLD"])
+        self.assertNotIn("in:GOLD", callbacks)
         self.assertNotIn("auto:GOLD", callbacks)
 
     def test_telegram_formatter_splits_compound_information(self):
