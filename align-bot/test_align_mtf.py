@@ -2460,6 +2460,33 @@ class TelegramIndependentPollerFastPathTest(unittest.TestCase):
         self.assertEqual(result, {"ok": True, "result": True})
         http.assert_not_called()
 
+
+    def test_independent_poller_acknowledges_callback_before_queueing_action(self):
+        from unittest.mock import patch
+        callback = {"id": "poller-fast", "from": {"id": 123},
+                    "message": {"chat": {"id": 123, "type": "private"}},
+                    "data": "why:BTC"}
+        update = {"update_id": 99817, "callback_query": callback}
+        while not align_bot.TELEGRAM_UPDATES.empty():
+            align_bot.TELEGRAM_UPDATES.get_nowait()
+        align_bot.TELEGRAM_POLL_STOP.clear()
+        def fake_telegram(method, **kwargs):
+            if method == "getUpdates":
+                align_bot.TELEGRAM_POLL_STOP.set()
+                return {"result": [update]}
+            if method == "answerCallbackQuery":
+                return {"ok": True}
+            return {"ok": True}
+        with patch.object(align_bot, "TOKEN", "test-token"), \
+             patch.object(align_bot, "telegram", side_effect=fake_telegram) as api:
+            align_bot.boucle_polling_telegram({}, {"123"})
+        self.assertIn("poller-fast", align_bot.CALLBACKS_ACKNOWLEDGED)
+        self.assertFalse(align_bot.TELEGRAM_UPDATES.empty())
+        self.assertTrue(any(call.args[0] == "answerCallbackQuery" for call in api.call_args_list))
+        align_bot.TELEGRAM_UPDATES.get_nowait()
+        align_bot.CALLBACKS_ACKNOWLEDGED.clear()
+        align_bot.TELEGRAM_POLL_STOP.clear()
+
     def test_shutdown_signal_requests_state_save_and_stops_poller(self):
         import signal
         align_bot._demander_arret(signal.SIGTERM, None)
