@@ -2048,7 +2048,8 @@ def menu_suivi(etat, cid):
     texte = ("🎯 CHOOSE THE MARKETS TO FOLLOW\nSelect BTC, GOLD or both. You'll be alerted when an entry is confirmed."
              if anglais else
              "🎯 CHOISIS LES MARCHÉS À SUIVRE\nSélectionne BTC, GOLD ou les deux. Je t'alerterai lorsqu'un point d'entrée sera confirmé.")
-    labels = ["🟠 BTC", "🥇 GOLD", "🟠 BTC + 🥇 GOLD"]
+    labels = (["🟠 BTC", "🥇 GOLD", "🟠 BTC + 🥇 GOLD"] if not anglais
+              else ["🟠 BTC", "🥇 GOLD", "🟠 BTC + 🥇 GOLD"])
     choix = ["BTC", "GOLD", "BOTH"]
     lignes = [[{"text": label, "callback_data": f"followmarket:{market}"}]
               for label, market in zip(labels, choix)]
@@ -3442,11 +3443,12 @@ def traiter(etat, chats, updates):
             menu_bot(etat, cid)
             continue
         if txt.strip() in ("analyse", "📊 analyse", "analysis", "📊 analysis", "faire une analyse", "run an analysis"):
-            _envoi_sur(cid, text=("📊 QUE VEUX-TU ANALYSER ?" if cid not in LANG_EN else "📊 WHAT DO YOU WANT TO ANALYSE?"),
+            en = cid in LANG_EN
+            _envoi_sur(cid, text=("📊 WHAT DO YOU WANT TO ANALYSE?" if en else "📊 QUE VEUX-TU ANALYSER ?"),
                        reply_markup=json.dumps({"inline_keyboard": [
                            [{"text": "🥇 GOLD", "callback_data": "analysechoice:GOLD"}],
                            [{"text": "🟠 BTC", "callback_data": "analysechoice:BTC"}],
-                           [{"text": "🥇 + 🟠 LES DEUX", "callback_data": "analysechoice:BOTH"}]
+                           [{"text": "🥇 + 🟠 BOTH" if en else "🥇 + 🟠 LES DEUX", "callback_data": "analysechoice:BOTH"}]
                        ]}))
         elif txt.strip() in ("suivre", "🔔 suivre", "follow", "🔔 follow", "mes marches", "my markets") or txt.startswith("/marches"):
             menu_suivi(etat, cid)
