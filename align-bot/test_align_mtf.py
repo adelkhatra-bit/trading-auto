@@ -1151,8 +1151,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             raw = align_bot.texte_cloture("BTC", "1h", b, r, {})
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
-        self.assertEqual(lines[0], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
-        self.assertEqual(lines[1], "🔴 SIGNAL NON CONFIRMÉ")
+        self.assertEqual(lines[0], "🔴 SIGNAL NON CONFIRMÉ")
+        self.assertEqual(lines[1], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
         self.assertIn("🕯 CLÔTURE 1h", message)
         self.assertIn("🟠 BTC", message)
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
@@ -1175,7 +1175,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             raw = align_bot.texte_cloture("BTC", "5m", b, r, {})
         translated = align_bot.traduire(raw)
-        self.assertEqual(translated.splitlines()[0], "🚫 DON'T ENTER: WAIT FOR THE NEXT SIGNAL")
+        self.assertEqual(translated.splitlines()[0], "🔴 SIGNAL NOT CONFIRMED")
+        self.assertEqual(translated.splitlines()[1], "🚫 DO NOT ENTER: WAIT FOR THE NEXT SIGNAL")
         for expected in ("CANDLE RESULT", "Open:", "Close:", "MULTI-TIMEFRAME TREND",
                          "ALIGN DECISION", "WHY", "NEXT STEP", "IMPORTANT",
                          "A candle close alone does not trigger an entry.",
@@ -1195,7 +1196,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             for tf in ("5m", "15m", "1h", "4h", "D", "W"):
                 message = align_bot.texte_cloture("BTC", tf, b, r, {})
-                self.assertEqual(message.splitlines()[0], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
+                self.assertEqual(message.splitlines()[0], "🔴 SIGNAL NON CONFIRMÉ")
+                self.assertEqual(message.splitlines()[1], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
                 self.assertIn(f"🕯 CLÔTURE {tf}", message)
 
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
@@ -1209,8 +1211,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX")
-        self.assertEqual(message.splitlines()[1], "🟢 SIGNAL CONFIRMÉ")
+        self.assertEqual(message.splitlines()[0], "🟢 SIGNAL CONFIRMÉ")
+        self.assertEqual(message.splitlines()[1], "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX")
         self.assertNotIn("SIGNAL NON CONFIRMÉ", message)
 
 if __name__ == "__main__":
