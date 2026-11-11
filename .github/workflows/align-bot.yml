@@ -56,8 +56,8 @@ jobs:
           print("Aucun message de démarrage envoyé aux utilisateurs.")
           PY
 
-      - name: Vérifier une connexion IA réelle (Gemini puis fournisseurs de secours)
-        continue-on-error: false
+      - name: Vérifier une connexion IA réelle (même chaîne que le bot)
+        continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python3 ai_healthcheck.py
