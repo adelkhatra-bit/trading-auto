@@ -1,30 +1,43 @@
 name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
 
 on:
+  # Les pushes sont validés par align-bot-validation.yml. Le worker ne redémarre
+  # qu'après la réussite de cette validation, via workflow_run.
+  workflow_run:
+    workflows: ["ALIGN MTF validation"]
+    types: [completed]
+    branches: [main]
   schedule:
     - cron: "0 */6 * * *"
-  push:
-    branches: [main]
-    paths:
-      - "align-bot/**"
-      - ".github/workflows/align-bot.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
   models: read
 
+concurrency:
+  # Un seul worker de production. Sur push, ce workflow ne démarre qu'après
+  # le succès du workflow de validation indépendant.
+  group: align-bot
+  cancel-in-progress: true
+
 jobs:
   validate:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/align-bot-validation.yml
 
   signaux:
     needs: validate
-    # Ne remplace le worker actif qu'après validation complète du nouveau code.
-    # Une PR/push invalide ne doit jamais interrompre le bot en production.
-    concurrency:
-      group: align-bot
-      cancel-in-progress: true
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_run' &&
+         github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_branch == 'main') ||
+        ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+         needs.validate.result == 'success')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 355
     defaults:
