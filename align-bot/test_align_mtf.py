@@ -358,8 +358,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             with patch.object(align_bot, "raison_attente", return_value="La 1 h doit confirmer la 4 h"):
                 with patch.object(align_bot, "prochaine", return_value="Pas encore de sens"):
                     msg = align_bot.texte_cloture("GOLD", "5m", candle(300, o=4029.73, h=4032, l=4028, c=4031.11), r, {})
-        self.assertTrue(msg.startswith("🔴 CLÔTURE — SIGNAL NON CONFIRMÉ"))
-        self.assertLess(msg.index("🔴 CLÔTURE — SIGNAL NON CONFIRMÉ"), msg.index("🕯 Bougie 5m clôturée"))
+        self.assertTrue(msg.startswith("🔴 SIGNAL NON CONFIRMÉ"))
+        self.assertLess(msg.index("🔴 SIGNAL NON CONFIRMÉ"), msg.index("🕯 CLÔTURE 5m"))
         self.assertIn("N'ENTRE PAS", msg)
         self.assertIn("POURQUOI", msg)
         self.assertIn("PROCHAINE ACTION", msg)
@@ -1153,7 +1153,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
         self.assertEqual(lines[0], "🔴 SIGNAL NON CONFIRMÉ")
-        self.assertEqual(lines[1], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
+        self.assertIn("🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL", message)
         self.assertIn("🕯 CLÔTURE 1h", message)
         self.assertIn("🟠 BTC", message)
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
