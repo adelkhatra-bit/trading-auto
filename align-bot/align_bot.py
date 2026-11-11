@@ -483,8 +483,8 @@ def analyser(pair):
         sl = min(sb - a * 0.3, swing) if d == 1 else max(sb + a * 0.3, swing)
         e_lim = sb + a * 0.3 if d == 1 else sb - a * 0.3
         e = min(cl, max(e_lim, sl + a * 1.0)) if d == 1 else max(cl, min(e_lim, sl - a * 1.0))
-        # Risque minimum : 1 ATR ou 0,08 % du prix (évite les stops collés quand le marché dort, ex. le week-end)
-        mini = max(a, cl * 0.0008)
+        # Risque minimum : 1,4 ATR ou 0,12 % du prix (le 11/11 un SL BTC à 1 ATR a été pris par une mèche de 27 $ avant que le prix file vers le TP) (évite les stops collés quand le marché dort, ex. le week-end)
+        mini = max(SL_RISQUE_MIN_ATR * a, cl * SL_RISQUE_MIN_PCT)
         if abs(e - sl) < mini:
             sl = e - d * mini
         risque = abs(e - sl)
@@ -2461,6 +2461,8 @@ def texte_apercu(m, r, cle):
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
+SL_RISQUE_MIN_ATR = 1.4      # stop jamais plus serré que 1,4 ATR 15 min (évite les SL pris par une simple mèche)
+SL_RISQUE_MIN_PCT = 0.0012   # ni plus serré que 0,12 % du prix
 CHRONO_REFRESH_SEC = 30      # 1 édition / 30 s par chrono : au-delà, Telegram bloque le chat pendant des heures (429)
 JAUGE_REFRESH_SEC = 60       # la jauge de prix n'est rééditée qu'une fois par minute au maximum
 CHRONO_LOCK = threading.RLock()  # un seul éditeur Telegram par chronomètre, même pendant l'analyse réseau
