@@ -750,5 +750,34 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("n'est pas disponible", send.call_args.kwargs["text"])
 
 
+    def test_confirmed_bias_without_execution_state_waits_for_15m(self):
+        dirs = [0] * 11
+        dirs[7] = dirs[9] = 1
+        r = {"dirs": dirs, "confirme": 1}
+        self.assertEqual(align_bot.timeframe_attendu(r, {}), "15m")
+
+    def test_chronometer_recreates_deleted_telegram_message(self):
+        from unittest.mock import patch
+        chrono = {"mid": 10, "t0": 1, "maj": 1}
+        def telegram_side_effect(method, **kwargs):
+            if method == "editMessageText":
+                raise RuntimeError("Bad Request: message to edit not found")
+            if method == "sendMessage":
+                return {"ok": True, "result": {"message_id": 99}}
+            raise AssertionError(method)
+        with patch.object(align_bot, "telegram", side_effect=telegram_side_effect), \\
+             patch.object(align_bot.time, "time", return_value=100):
+            ok = align_bot._editer_chrono_ou_recreer("123", chrono, "timer restored")
+        self.assertTrue(ok)
+        self.assertEqual(chrono["mid"], 99)
+        self.assertEqual(chrono["maj"], 100)
+
+    def test_chronometer_stops_for_blocked_telegram_chat(self):
+        from unittest.mock import patch
+        chrono = {"mid": 10, "t0": 1, "maj": 1}
+        with patch.object(align_bot, "telegram", side_effect=RuntimeError("Forbidden: bot was blocked by the user")):
+            ok = align_bot._editer_chrono_ou_recreer("123", chrono, "timer")
+        self.assertFalse(ok)
+
 if __name__ == "__main__":
     unittest.main()
