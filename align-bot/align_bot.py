@@ -2091,13 +2091,14 @@ def boutons_canal(etat, texte):
     m = next((x for x in MARCHES if x in texte.split("\n")[0]), None)
     lien = lambda p: f"https://t.me/{bot}?start={p}"
     lignes = []
-    if m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "CASSURE", "PRÉPARE-TOI", "J'ENTRE MAINTENANT", "REPLI", "RETRACE", "parti", "MANIPULATION", "zone")):
+    position = m and any(k in texte for k in ("J'ENTRE MAINTENANT", "TP1", "TP2", "BE", "STOP", "Stop", "SL", "parti"))
+    setup = m and any(k in texte for k in ("JE PRÉPARE", "ÇA ARRIVE", "CASSURE", "PRÉPARE-TOI", "REPLI", "RETRACE", "MANIPULATION", "zone"))
+    # Canal épuré : seulement les boutons utiles au message (le reste est dans le clavier du bot)
+    if setup or position:
         lignes.append([{"text": "🎯 Je rentre dans la prochaine position", "url": lien(f"auto_{m.lower()}")}])
-    # Mêmes boutons, même ordre que le clavier du bot ALIGN Coach
+    if position:
+        lignes.append([{"text": "📍 Suivre cette position", "url": lien("rentre")}, {"text": "🚪 Je suis sorti", "url": lien("sorti")}])
     lignes.append([{"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}, {"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}])
-    lignes.append([{"text": "📍 Suivre cette position", "url": lien("rentre")}, {"text": "🚪 Je suis sorti", "url": lien("sorti")}])
-    lignes.append([{"text": "🤖 Mon bot", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}])
-    lignes.append([{"text": "📸 Partager mon gain", "url": lien("gain")}, {"text": "🧩 Indicateur TradingView", "url": lien("indicateur")}])
     return json.dumps({"inline_keyboard": lignes})
 
 # ───────── IA (GitHub Models, gratuite avec le jeton GitHub du workflow) ─────────
@@ -5028,8 +5029,10 @@ def agent(m, r, cle, ferme):
         if bloque_dw(r, d, p):
             cle["prep"] = False
             cle.pop("ordre", None)
-            if r["t"] - cle.get("extreme_warn_t", 0) >= 1800:
-                cle["extreme_warn_t"] = r["t"]
+            sig_ext = f"{d}:{zone_txt(r['posW'])}"
+            # Une seule alerte par situation : on ne répète que si le sens / la zone Weekly change, ou après 2 h
+            if sig_ext != cle.get("extreme_sig") or r["t"] - cle.get("extreme_warn_t", 0) >= 7200:
+                cle["extreme_warn_t"] = r["t"]; cle["extreme_sig"] = sig_ext
                 out.append(f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')}.\n⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
             cle["aligne"] = d
             return out
