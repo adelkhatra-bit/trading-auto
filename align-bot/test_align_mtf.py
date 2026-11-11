@@ -89,7 +89,7 @@ class AlignMtfRulesTest(unittest.TestCase):
 
     def test_tradingview_mtf_readings_merge_into_existing_align_context(self):
         r = {"dirs": [0] * 11, "rsis": [50.0] * 11, "tv_indicator_mtf": {
-            "activeTimeframe": "M15", "snapshots": {"M15": {"robotV12": {
+            "activeTimeframe": "M15", "snapshots": {"M15": {"fresh": True, "robotV12": {
                 "lecture_1m": "LONG", "lecture_5m": "SHORT", "lecture_15m": "LONG",
                 "lecture_60m": "LONG", "rsi_5m": 31.5, "rsi_15m": 62
             }}}
