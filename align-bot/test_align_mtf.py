@@ -824,6 +824,18 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertGreaterEqual(message.count("\n"), 3)
         self.assertNotIn("\\n", message)
 
+    def test_telegram_history_coalesces_edits_of_the_same_live_timer(self):
+        state = {}
+        first = {"direction": "sortant", "chat_id": "123", "message_id": 88,
+                 "type": "sendMessage", "text": "Chrono 00:10", "timestamp": 1}
+        edit = {"direction": "sortant", "chat_id": "123", "message_id": 88,
+                "type": "editMessageText", "text": "Chrono 00:05", "timestamp": 2}
+        align_bot.journal_ajouter(state, first)
+        align_bot.journal_ajouter(state, edit)
+        self.assertEqual(len(state["journal_telegram"]), 1)
+        self.assertEqual(state["journal_telegram"][0]["text"], "Chrono 00:05")
+        self.assertEqual(state["journal_telegram"][0]["timestamp"], 2)
+
     def test_telegram_wrapper_records_successful_outgoing_messages(self):
         from unittest.mock import patch
         align_bot.JOURNAL_SORTANT.clear()
