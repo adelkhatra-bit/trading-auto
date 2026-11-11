@@ -20,6 +20,43 @@ class AlignMtfRulesTest(unittest.TestCase):
         r = {"dirs": [0, 0, 0, 0, -1, 0, 0, -1, 0, -1, 0]}
         self.assertEqual(align_bot.alignement(r), (-1, 2))
 
+    def test_strategy_profile_selects_swing_when_h4_h1_m15_align(self):
+        dirs = [0] * 11
+        dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, 1, 1
+        profile = align_bot.profil_strategie({"dirs": dirs})
+        self.assertEqual(profile["mode"], "SWING")
+        self.assertTrue(profile["m5_aligne"])
+        self.assertFalse(profile["contre_tendance"])
+
+    def test_strategy_profile_selects_intraday_during_m15_pullback(self):
+        dirs = [0] * 11
+        dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, -1, 1
+        profile = align_bot.profil_strategie({"dirs": dirs})
+        self.assertEqual(profile["mode"], "INTRADAY")
+        self.assertIn("retracement", profile["contexte"])
+        self.assertTrue(profile["m5_aligne"])
+
+    def test_strategy_profile_detects_countertrend_scalp_without_calling_it_swing(self):
+        dirs = [0] * 11
+        dirs[9], dirs[7], dirs[4], dirs[2] = -1, -1, 1, 1
+        profile = align_bot.profil_strategie({"dirs": dirs})
+        self.assertEqual(profile["mode"], "SCALPING CONTRE-TENDANCE")
+        self.assertTrue(profile["contre_tendance"])
+        self.assertIn("ne pas transformer", profile["horizon"])
+
+    def test_strategy_profile_waits_when_no_timeframe_confluence_exists(self):
+        profile = align_bot.profil_strategie({"dirs": [0] * 11})
+        self.assertEqual(profile["mode"], "ATTENTE")
+        self.assertEqual(profile["direction"], 0)
+
+    def test_tradingview_links_select_market_and_requested_timeframe(self):
+        btc = align_bot.url_tradingview("BTC", 5)
+        gold = align_bot.url_tradingview("GOLD", 240)
+        self.assertIn("KRAKEN%3AXBTUSD", btc)
+        self.assertIn("interval=5", btc)
+        self.assertIn("FOREXCOM%3AXAUUSD", gold)
+        self.assertIn("interval=240", gold)
+
     def test_breakout_uses_closed_5m_bars(self):
         bars = [candle(i) for i in range(21)]
         bars.append(candle(21, o=100.5, h=103.0, l=100.2, c=102.0))
@@ -423,8 +460,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         import json
         french = json.loads(align_bot.markup_analyse({}, "GOLD", {}))
         english = json.loads(align_bot.traduire_clavier(align_bot.markup_analyse({}, "GOLD", {})))
-        self.assertEqual([[b["callback_data"] for b in row] for row in french["inline_keyboard"]],
-                         [[b["callback_data"] for b in row] for row in english["inline_keyboard"]])
+        self.assertEqual([[b.get("callback_data") or b.get("url") for b in row] for row in french["inline_keyboard"]],
+                         [[b.get("callback_data") or b.get("url") for b in row] for row in english["inline_keyboard"]])
         self.assertTrue(all(b["text"] for row in english["inline_keyboard"] for b in row))
 
     def test_previous_analysis_button_is_market_specific(self):
@@ -715,8 +752,9 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Tendance principale 4 h : 🟢⬆️", message)
         self.assertIn("Tendance Daily : 🟠➖", message)
         self.assertIn("Confirmation 1 h : 🔴⬇️", message)
-        self.assertIn("Contexte 15 min   🔴⬇️", message)
-        self.assertIn("Déclencheur 5 min   🟢⬆️", message)
+        self.assertIn("Préparation 15 min : 🔴⬇️", message)
+        self.assertIn("Timing 5 min : 🟢⬆️", message)
+        self.assertIn("PROFIL RETENU : SCALPING CONTRE-TENDANCE", message)
 
     def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
         r = {"m1": [candle(1, c=67500.0)], "news": "📰 Calendrier économique"}
