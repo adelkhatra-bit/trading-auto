@@ -196,7 +196,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
         }}
         with patch.object(align_bot, "telegram"), patch.object(align_bot, "autorise", return_value=True):
-            self.assertEqual(align_bot.traiter({}, set(), [update]), [("123", "BTC"), ("123", "GOLD")])
+            self.assertEqual(align_bot.traiter({}, set(), [update]), [("123", "BTC"), ("123", "GOLD"), ("123", "NASDAQ")])
 
     def test_breakout_uses_closed_5m_bars(self):
         bars = [candle(i) for i in range(21)]
@@ -1067,7 +1067,7 @@ class AlignMtfRulesTest(unittest.TestCase):
              patch.object(align_bot, "inscrire_auto") as register, \
              patch.object(align_bot, "_envoi_sur"):
             align_bot.traiter({}, set(), [update])
-        select.assert_called_once_with(unittest.mock.ANY, "123", "BTC")
+        select.assert_not_called()      # aucun choix encore fait : tous les marchés restent actifs
         register.assert_called_once_with(unittest.mock.ANY, "123", "BTC", notifier=False)
         menu.assert_not_called()
 
@@ -1939,8 +1939,12 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         btc = align_bot.destinataires_message(state, chats, "🟠 BTC — SIGNAL EN ATTENTE\\nPrix 70000")
         gold = align_bot.destinataires_message(state, chats, "🥇 GOLD — SIGNAL CONFIRMÉ\\nPrix 4000")
         # Le flux VIP complet part uniquement dans la chaîne VIP (plus de doublon en privé)
-        self.assertEqual(btc, ["-1000"])
-        self.assertEqual(gold, ["-1000"])
+        # Chaîne VIP = tout ; en privé, uniquement les VIP qui ont coché ce marché
+        self.assertEqual(set(btc), {"-1000", "101", "303"})
+        self.assertEqual(set(gold), {"-1000", "202", "303"})
+        nasdaq = align_bot.destinataires_message(state, chats, "💠 NASDAQ — SIGNAL\\nPrix 20000")
+        self.assertEqual(nasdaq, ["-1000"])
+        self.assertEqual(align_bot.destinataires_message(state, {"999"}, "🥇 GOLD — X"), ["-1000"])   # pas de choix = rien en double
         state.pop("canal")
         self.assertEqual(set(align_bot.destinataires_message(state, chats, "🟠 BTC — SIGNAL EN ATTENTE\\nPrix 70000")), {"101", "303"})
 
@@ -1984,6 +1988,17 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         self.assertEqual(len(a), 1)
         self.assertIn("L'IA ALIGN EN DIRECT", a[0])
         self.assertEqual(b, [])
+
+    def test_nasdaq_market_is_available_and_selectable(self):
+        self.assertEqual(align_bot.MARCHES["NASDAQ"], "NAS100")
+        self.assertEqual(align_bot.marche_demande("💠 Analyse Nasdaq"), "NASDAQ")
+        etat = {"marches_par_chat": {"7": ["GOLD", "NASDAQ"]}}
+        self.assertTrue(align_bot.marche_autorise(etat, "7", "NASDAQ"))
+        self.assertFalse(align_bot.marche_autorise(etat, "7", "BTC"))
+        align_bot.basculer_marche(etat, "7", "GOLD")
+        self.assertEqual(align_bot.marches_choisis(etat, "7"), {"NASDAQ"})
+        align_bot.basculer_marche(etat, "7", "NASDAQ")          # au moins 1 marché reste coché
+        self.assertEqual(align_bot.marches_choisis(etat, "7"), {"NASDAQ"})
 
     def test_coach_speaks_with_first_name(self):
         etat = {}
@@ -2045,16 +2060,16 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         kwargs = send.call_args.kwargs
         keyboard = __import__("json").loads(kwargs["reply_markup"])
         callbacks = [button["callback_data"] for row in keyboard["inline_keyboard"] for button in row]
-        self.assertEqual(callbacks, ["markets:BTC", "markets:GOLD", "markets:BOTH"])
+        self.assertEqual(callbacks, ["markets:BTC", "markets:GOLD", "markets:NASDAQ", "markets:ALL"])
 
     def test_market_selection_callback_persists_without_changing_other_users(self):
         from unittest.mock import patch
-        state = {"marches_par_chat": {"202": "GOLD"}, "auto": {"BTC": ["101"]},
+        state = {"marches_par_chat": {"101": ["BTC", "GOLD"], "202": "GOLD"}, "auto": {"BTC": ["101"]},
                  "veille_cloture": {"BTC": {"101": {"multi": True}}}}
         update = {"update_id": 1, "callback_query": {
             "id": "callback-1", "from": {"id": 101},
             "message": {"chat": {"id": 101, "type": "private"}},
-            "data": "markets:GOLD"
+            "data": "markets:BTC"
         }}
         with patch.object(align_bot, "telegram", return_value={"ok": True}), \
              patch.object(align_bot, "_envoi_sur") as send:
@@ -2074,12 +2089,12 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
             with patch.object(align_bot, "_envoi_sur") as send:
                 align_bot.menu_marches({}, "101")
             kwargs = send.call_args.kwargs
-            self.assertIn("CHOOSE THE MARKETS", kwargs["text"])
+            self.assertIn("MY MARKETS", kwargs["text"])
             keyboard = __import__("json").loads(kwargs["reply_markup"])
             labels = [button["text"] for row in keyboard["inline_keyboard"] for button in row]
-            self.assertIn("BTC only", labels[0])
-            self.assertIn("GOLD only", labels[1])
-            self.assertEqual(len(labels), 3)
+            self.assertIn("Everything", labels[-1])
+            self.assertIn("GOLD", labels[1])
+            self.assertEqual(len(labels), 4)
         finally:
             align_bot.LANG_EN.clear()
             align_bot.LANG_EN.update(old)
@@ -2164,7 +2179,7 @@ class TestOneTapMarketAnalysis(unittest.TestCase):
         }}
         with patch.object(align_bot, "telegram"), patch.object(align_bot, "autorise", return_value=True):
             demandes = align_bot.traiter({}, set(), [update])
-        self.assertEqual(set(demandes), {("101", "BTC"), ("101", "GOLD")})
+        self.assertEqual(set(demandes), {("101", "BTC"), ("101", "GOLD"), ("101", "NASDAQ")})
 
 class TestFollowPositionMarketChoice(unittest.TestCase):
     def test_follow_button_opens_explicit_btc_gold_or_both_menu(self):
@@ -2186,7 +2201,7 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
             self.assertIn(expected, args["text"])
             keyboard = json.loads(args["reply_markup"])["inline_keyboard"]
             callbacks = [button["callback_data"] for row in keyboard for button in row]
-            self.assertEqual(callbacks, ["followmarket:BTC", "followmarket:GOLD", "followmarket:BOTH"])
+            self.assertEqual(callbacks, ["followmarket:BTC", "followmarket:GOLD", "followmarket:NASDAQ", "followmarket:BOTH"])
 
     def test_followmarket_btc_registers_only_btc(self):
         from unittest.mock import patch
@@ -2641,13 +2656,13 @@ class TestTelegramMarketButtonsJourney(unittest.TestCase):
         self.assertFalse(any("\\n" in t for t in texts))
 
     def test_markets_menu_callbacks_all_handled(self):
-        for i, mk in enumerate(("BTC", "GOLD", "BOTH")):
+        for i, (mk, attendu) in enumerate((("BTC", {"GOLD", "NASDAQ"}), ("GOLD", {"BTC", "NASDAQ"}), ("ALL", {"BTC", "GOLD", "NASDAQ"}))):
             state = {}
             sent = self._run(state, f"markets:{mk}", 10 + i)
-            self.assertEqual(state["marches_par_chat"]["501"], mk)
+            self.assertEqual(align_bot.marches_choisis(state, "501"), attendu)
             kb = json.loads(sent[-1]["reply_markup"])["inline_keyboard"]
-            coches = [b["text"] for r in kb for b in r if b["text"].startswith("✅")]
-            self.assertEqual(len(coches), 1)
+            coches = [b["text"] for r in kb[:-1] for b in r if b["text"].startswith("✅")]
+            self.assertEqual(len(coches), len(attendu))
 
     def test_both_label_translated_in_english(self):
         self.assertEqual(align_bot.traduire("🥇 + 🟠 Les deux"), "🥇 + 🟠 Both")
