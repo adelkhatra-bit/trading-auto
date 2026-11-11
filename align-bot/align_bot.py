@@ -5757,6 +5757,16 @@ def un_tour(etat, chats):
                     telegram("sendMessage", chat_id=p, text=f"💳 Lien d'abonnement VIP créé ({PRIX_STARS} ⭐ / mois ≈ 49,90 €) :\n{etat['lien']}\n\n👉 C'est ce lien que tu partages pour vendre l'accès.")
             except Exception as ex:
                 print("lien abonnement", ex)
+        # Sécurité VIP (1 seule fois) : l'ancien lien d'invitation gratuit de la chaîne est révoqué.
+        # Seul le lien d'abonnement payant (Stars) permet d'entrer : partager un lien ne donne jamais l'accès gratuit.
+        if etat.get("canal") and not etat.get("lien_primaire_revoque_v1"):
+            try:
+                telegram("exportChatInviteLink", chat_id=etat["canal"])
+                etat["lien_primaire_revoque_v1"] = time.time()
+                for p in proprio(etat):
+                    _envoi_sur(p, text="🔐 SÉCURITÉ VIP\n⛔ L'ancien lien gratuit de la chaîne VIP est révoqué\n💳 Seul le lien payant permet d'entrer")
+            except Exception as ex:
+                print("révocation lien VIP", ex)
         # Toutes les heures : on retire les abonnés qui n'ont pas renouvelé
         if etat.get("canal") and time.time() - etat.get("purge", 0) > 3600:
             etat["purge"] = time.time()
