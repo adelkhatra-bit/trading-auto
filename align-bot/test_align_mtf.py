@@ -796,14 +796,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
         labels = [button["text"] for row in keyboard for button in row]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("❓ Pourquoi cette décision ?", labels)
-        self.assertIn("📊 Analyse complète", labels)
-        self.assertIn("🎯 Niveaux / prix", labels)
-        self.assertIn("🔔 Suivre la prochaine position", labels)
-        self.assertIn("why:GOLD", callbacks)
-        self.assertIn("details:GOLD", callbacks)
-        self.assertIn("levels:GOLD", callbacks)
-        self.assertIn("auto:GOLD", callbacks)
+        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
+        self.assertEqual(callbacks, ["auto:GOLD"])
 
     def test_active_trade_keyboard_has_manual_entry_and_exit_controls(self):
         import json
