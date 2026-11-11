@@ -1572,39 +1572,112 @@ def prochaine_cloture(ts, interval_sec=300):
 
 
 def mmss(sec):
-    sec = max(0, int(sec)); return f"{sec // 60} min {sec % 60:02d} s" if sec < 3600 else f"{sec // 3600} h {sec % 3600 // 60:02d}"
+    """Durée restante exacte, secondes toujours visibles, même au-delà d'une heure."""
+    sec = max(0, int(sec))
+    heures, reste = divmod(sec, 3600)
+    minutes, secondes = divmod(reste, 60)
+    return f"{heures} h {minutes:02d} min {secondes:02d} s" if heures else f"{minutes} min {secondes:02d} s"
+
+
+TF_SECONDES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "D": 86400, "W": 604800}
+TF_CHAMPS = {"5m": "b5", "15m": "b15", "1h": "b1h", "4h": "b4h", "D": "bd", "W": "bw"}
+
+
+def prochaine_cloture_bougie(r, tf, now_ts=None):
+    """Prochaine clôture alignée sur l'horodatage des bougies réellement reçues."""
+    if tf not in TF_SECONDES:
+        raise ValueError(f"Unité de temps inconnue : {tf}")
+    now_ts = time.time() if now_ts is None else float(now_ts)
+    interval = TF_SECONDES[tf]
+    bars = r.get(TF_CHAMPS[tf], []) or []
+    if not bars:
+        return prochaine_cloture(now_ts, interval)
+    derniere_ouverture = int(bars[-1]["t"])
+    # Le dernier timestamp désigne l'ouverture de la dernière bougie déjà clôturée.
+    pas = max(1, int((now_ts - derniere_ouverture) // interval) + 1)
+    return derniere_ouverture + pas * interval
+
+
+def raison_attente(r, cle):
+    """Explique en langage utilisateur le vrai blocage, sans jargon ni zone fictive."""
+    cle = cle or {}
+    tr, o = cle.get("trade"), cle.get("ordre")
+    if tr:
+        return "Une position est déjà ouverte : le coach surveille le stop et les objectifs."
+    if r.get("annonce"):
+        return "Une annonce économique approche : aucune nouvelle entrée pendant cette période de risque."
+    dirs = r.get("dirs", [0] * 11)
+    d4h, d1h = dirs[9], dirs[7]
+    if not d4h:
+        return "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé."
+    sens = "LONG" if d4h == 1 else "SHORT"
+    if d1h != d4h:
+        etat_1h = "neutre" if not d1h else "dans le sens opposé"
+        return f"La tendance 4 h est {sens}, mais la 1 h est {etat_1h}. J'attends une clôture 1 h qui confirme la 4 h."
+    d = r.get("confirme") or d4h
+    if etire(r, d):
+        return f"La tendance {sens} est confirmée, mais le mouvement est déjà trop étendu. Je n'achète/vends pas au prix actuel : j'attends un repli."
+    if bloque_dw(r, d, r.get("m1", [{}])[-1].get("c") if r.get("m1") else None):
+        return f"La tendance {sens} existe, mais le prix est dans une zone Daily/Weekly extrême. J'attends un meilleur prix ou un retournement confirmé."
+    if not o:
+        return f"La direction {sens} est confirmée, mais aucun point d'entrée propre n'est encore validé. J'attends que le prix construise un repli exploitable."
+    p = r.get("m1", [{}])[-1].get("c") if r.get("m1") else None
+    bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
+    if p is not None and p < bas:
+        return f"Le biais {sens} est confirmé. Le prix est à {px(p)} et n'a pas encore rejoint la zone d'entrée {px(bas)}–{px(haut)}."
+    if p is not None and p > haut:
+        return f"Le biais {sens} est confirmé. Le prix est à {px(p)} et reste au-dessus de la zone d'entrée {px(bas)}–{px(haut)}. J'attends le repli."
+    if cle.get("traverse"):
+        return f"Le prix a traversé la zone {px(bas)}–{px(haut)} sans rejet valide. Pas d'entrée : j'attends une mèche de rejet puis une clôture 5 min dans le sens {sens}."
+    return f"Le prix travaille la zone d'entrée {px(bas)}–{px(haut)}, mais je n'ai pas encore de rejet confirmé par une clôture 5 min. Une mèche seule ne suffit pas."
+
 
 def chrono_txt(m, r, cle, t0):
-    """Chronomètre en direct : tendance 4h, confirmation 1h, déclencheur à la clôture 5m."""
-    now = time.time(); p = r["m1"][-1]["c"]; d = r["confirme"]; a = r["atr"]
-    cloture = prochaine_cloture(now, 300)  # prochaine clôture future, jamais la bougie déjà terminée
-    tr = cle.get("trade"); o = cle.get("ordre")
-    l = [f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}   {px(p)}",
-         f"🎯 Inscrit depuis {mmss(now - t0)}"]
+    """Chronomètre calé sur les bougies reçues et sur l'unité de temps qui bloque réellement."""
+    now = time.time()
+    p = r["m1"][-1]["c"] if r.get("m1") else r.get("prix", 0)
+    d = r.get("confirme", 0)
+    tr = cle.get("trade")
     if tr:
-        l += [f"✅ ENTRÉ   {SENS[tr['d']]}", statut_txt(1, tr).strip(), "🎯 Le coach te suit jusqu'au TP"]
-        return "\n".join(l)
+        return "\n".join([
+            f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
+            f"🎯 Suivi démarré depuis {mmss(now - t0)}",
+            f"🟢 POSITION OUVERTE — {SENS[tr['d']]}",
+            statut_txt(1, tr).strip(),
+            "🎯 Le coach surveille le SL, le passage à BE et les TP."
+        ])
+    tf = timeframe_attendu(r, cle)
+    cible = prochaine_cloture_bougie(r, tf, now)
+    restant = max(0, cible - now)
+    d4h = r.get("dirs", [0] * 11)[9]
+    d1h = r.get("dirs", [0] * 11)[7]
     if r.get("annonce"):
-        etape, estim = "⏸ News dans moins de 15 min : pause", "⏳ Reprise juste après la news"
-    elif not d:
-        maj, n_ok = alignement(r)
-        etape, estim = f"1️⃣/3 🧭 Tendance 4 h + confirmation 1 h : {n_ok}/2", "⏳ Pas d'entrée tant que le 1 h ne confirme pas le 4 h"
-    elif etire(r, d):
-        etape, estim = "1️⃣/4 🚀 Le marché est parti : j'attends le repli", f"↩️ Repli visé ≈ {px(r['ema15'])}"
-    elif not o:
-        etape, estim = "2️⃣/4 🔎 Je calcule la zone d'entrée", "⏳ Quelques instants"
-    elif cle.get("attente_rsi") or cle.get("attente_rejet") or cle.get("prep"):
-        etape = f"4️⃣/4 🟨 Prix dans la zone : j'entre dès qu'une bougie clôture {'en remontant' if (o or {}).get('d', d) == 1 else 'en redescendant'}"
-        estim = f"⚡ Décision à la clôture de la bougie 5 min (à {heure(cloture)})"
+        direction = "PAUSE — annonce économique proche"
+    elif d4h == 0:
+        direction = "NEUTRE — aucun sens LONG/SHORT validé"
+    elif d1h != d4h:
+        direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — confirmation 1 h manquante"
+    elif d:
+        direction = SENS[d]
     else:
-        dist = abs(p - o["e"]); vit = max(a / 15, 1e-9)            # vitesse moyenne ≈ 1 ATR par 15 min
-        etape = f"3️⃣/4 🟨 Le prix approche de la zone {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}"
-        estim = f"⏳ Arrivée estimée ≈ {max(1, round(dist / vit))} min" if dist / vit < 240 else "⏳ Encore loin : ça peut prendre des heures"
-    l += [etape, estim,
-          statut_txt(0, o).strip(),
-          f"🕯 Prochaine clôture 5 min dans {mmss(cloture - now)}",
-          f"⌛ Si rien avant {heure(t0 + CHRONO_MAX)} : j'annule ta réservation (pas d'entrée forcée)",
-          f"🔄 Mis à jour à {heure(now)}:{datetime.datetime.fromtimestamp(now, PARIS).strftime('%S')}"]
+        direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — validation complète en attente"
+    raison = raison_attente(r, cle)
+    l = [
+        f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
+        f"🎯 Suivi démarré depuis {mmss(now - t0)}",
+        f"🧭 DIRECTION : {direction}",
+        f"⏳ POURQUOI J'ATTENDS : {raison}",
+    ]
+    o = cle.get("ordre")
+    if o and not tr:
+        bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
+        l.append(f"📍 ZONE D'ENTRÉE SURVEILLÉE : {px(bas)} à {px(haut)}")
+        l.append(f"🛑 Stop prévu : {px(o['sl'])} — {meche_sl(o)}")
+    l += [
+        f"🕯 PROCHAINE CLÔTURE {tf} : {mmss(restant)} (à {heure(cible)}:{datetime.datetime.fromtimestamp(cible, PARIS).strftime('%S')})",
+        f"⌛ Fin du suivi si aucun setup avant {heure(t0 + CHRONO_MAX)} (pas d'entrée forcée)",
+        f"🔄 Actualisé à {datetime.datetime.fromtimestamp(now, PARIS).strftime('%H:%M:%S')}"
+    ]
     return "\n".join(l)
 
 def maj_chronos(etat, m, r):
@@ -1651,20 +1724,43 @@ def lancer_chrono(etat, cid, m, r=None):
         print("chrono", ex)
 
 def inscrire_auto(etat, cid, m):
-    """L'utilisateur réserve sa place : dès que le bot entre, il est compté dedans au même prix (coach + résultats)."""
+    """Active le suivi de la prochaine position sans faire croire qu'un ordre broker est placé."""
     liste = etat.setdefault("auto", {}).setdefault(m, [])
     if cid not in liste:
         liste.append(cid)
-    o = etat.get(m, {}).get("ordre")
-    d = (o or {}).get("d") or etat.get(m, {}).get("aligne") or 1
-    _envoi_sur(cid, reply_markup=CLAVIER, text=(
-        f"✅ Noté ! Prochaine position {ICONE.get(m, '')} {m}\n{SENS[d]}\n"
-        "📲 Place ton ordre limite dans la zone 🟨 (vue 15 min)\n"
-        f"🛑 SL un peu {meche_sl(dict(o or {}, d=d))}\n"
-        + (f"📍 Repère prix : zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))} • SL ≈ {px(o['sl'])}\n" if o else "")
-        + "🤖 Dès que j'entre, tu es compté dedans automatiquement\n🎯 Le coach te suit : SL à BE, SL remonté, TP\n"
-          "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme\n⏱ Ton chrono en direct arrive juste en dessous 👇"))
-    lancer_chrono(etat, cid, m, (DERNIERS or {}).get(m))
+    r = (DERNIERS or {}).get(m)
+    cle = etat.get(m, {})
+    o = cle.get("ordre")
+    d = (o or {}).get("d") or cle.get("aligne") or (r or {}).get("confirme") or 0
+    lignes = [
+        f"🎯 SUIVI ACTIVÉ — {ICONE.get(m, '')} {m}",
+        f"🧭 Direction actuelle : {SENS[d] if d in SENS else '⚪ NEUTRE — aucun sens confirmé'}",
+        f"⏳ Décision actuelle : {raison_attente(r, cle) if r else 'J'attends les premières bougies complètes pour établir le contexte.'}"
+    ]
+    if o:
+        bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
+        lignes += [
+            f"📍 Zone d'entrée surveillée : {px(bas)} à {px(haut)}",
+            f"🛑 Stop calculé : {px(o['sl'])} — {meche_sl(o)}",
+            f"🎯 Objectifs : TP1 {px(o['tp1'])} • TP2 {px(o['tp2'])}",
+            "⚠️ Cette zone est un repère, pas un ordre à placer maintenant."
+        ]
+    else:
+        lignes += [
+            "📍 Aucune zone d'entrée validée pour le moment.",
+            "🙅 Ne place pas d'ordre sur une zone qui n'a pas encore été calculée."
+        ]
+    lignes += [
+        "🔔 Je t'expliquerai chaque clôture utile : 5 min, 15 min, 1 h et 4 h.",
+        "🤖 Si ALIGN déclenche une position, ton suivi interne sera activé automatiquement.",
+        "ℹ️ Aucun ordre n'est envoyé à ta plateforme : tu gardes la main sur l'exécution.",
+        "🎯 Le coach suit ensuite le SL, le passage à BE et les TP.",
+        "⏱ Le chronomètre réel est affiché dans le message juste en dessous."
+    ]
+    _envoi_sur(cid, reply_markup=CLAVIER, text="\n".join(lignes))
+    if r:
+        armer_clotures_multi(etat, cid, m, r)
+    lancer_chrono(etat, cid, m, r)
 
 def bot_on(etat, cid):
     return cid not in etat.get("bot_off", [])
@@ -1735,33 +1831,67 @@ def armer_cloture(etat, cid, m, r, cle):
     surveillances[str(cid)] = {"tf": tf, "dernier_t": int(bars[-1]["t"]), "restants": 3}
 
 
+def armer_clotures_multi(etat, cid, m, r):
+    """Suit les clôtures 5m, 15m, 1h et 4h pendant la réservation, sans compteur de trois alertes."""
+    surveillances = etat.setdefault("veille_cloture", {}).setdefault(m, {})
+    derniers = {}
+    for tf in ("5m", "15m", "1h", "4h"):
+        bars = r.get(TF_CHAMPS[tf], []) or []
+        if bars:
+            derniers[tf] = int(bars[-1]["t"])
+    surveillances[str(cid)] = {
+        "multi": True,
+        "derniers_t": derniers,
+        "expire": time.time() + CHRONO_MAX
+    }
+
+
 def texte_cloture(m, tf, bougie, r, cle):
-    """Compte rendu déterministe fondé sur une bougie entièrement clôturée et les règles ALIGN."""
+    """Compte rendu déterministe après clôture réelle : résultat, blocage et prochaine action."""
+    duree = TF_SECONDES[tf]
     d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
     couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
     titre, raison = verdict(r, cle)
     maj, n_ok = alignement(r)
-    confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (1h + 4h)"
-    decision = str(titre)
-    lignes = [f"🕯 CLÔTURE CONFIRMÉE — {ICONE.get(m, '📊')} {m}",
-              f"⏱ Unité de temps : {tf}",
-              f"📍 Bougie terminée à {heure(bougie['t'] + {'5m':300,'15m':900,'1h':3600,'4h':14400,'D':86400,'W':604800}[tf])}",
-              f"📊 Bougie {couleur} • ouverture {px(bougie['o'])} • clôture {px(bougie['c'])}",
-              f"🧭 Alignement 1h + 4h : {confirmation}",
-              f"🚦 Décision ALIGN : {decision}"]
-    if raison:
-        lignes.append(str(raison))
-    lignes += [f"➡️ Étape suivante : {prochaine(r, cle)}",
-               "⚠️ Une clôture de bougie n'est pas, à elle seule, une confirmation d'entrée. Aucun ordre broker n'est envoyé."]
+    confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (4 h + 1 h)"
+    lignes = [
+        f"🕯 CLÔTURE {tf} TERMINÉE — {ICONE.get(m, '📊')} {m}",
+        f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
+        f"📊 Résultat : bougie {couleur} — ouverture {px(bougie['o'])}, clôture {px(bougie['c'])}",
+        f"🧭 Tendance : 4 h {'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'} ; confirmation 1 h {'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'}",
+        f"✅ Alignement : {confirmation}",
+        f"🚦 Décision ALIGN : {titre}",
+        f"⏳ Pourquoi : {raison_attente(r, cle)}",
+        f"➡️ Prochaine étape : {prochaine(r, cle)}",
+        "ℹ️ Une clôture seule ne déclenche pas une entrée. Aucun ordre n'est envoyé à ton broker."
+    ]
     return "\n".join(lignes)
 
 
 def notifier_clotures(etat, m, r, cle):
-    """Alerte une seule fois par nouvelle bougie complète, uniquement aux utilisateurs ayant demandé l'analyse."""
-    champs = {"5m": "b5", "15m": "b15", "1h": "b1h", "4h": "b4h", "D": "bd", "W": "bw"}
+    """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
+    champs = TF_CHAMPS
     for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
+        if suivi.get("multi"):
+            if cle.get("trade") or time.time() >= float(suivi.get("expire", 0)):
+                etat["veille_cloture"][m].pop(cid, None)
+                continue
+            derniers = suivi.setdefault("derniers_t", {})
+            for tf in ("5m", "15m", "1h", "4h"):
+                bars = r.get(champs[tf], []) or []
+                if not bars:
+                    continue
+                nouveaux = [b for b in bars if int(b["t"]) > int(derniers.get(tf, 0))]
+                if not nouveaux:
+                    continue
+                # Si plusieurs tours ont été manqués, on envoie le dernier bilan connu, sans rafale rétroactive.
+                bougie = nouveaux[-1]
+                derniers[tf] = int(bougie["t"])
+                _envoi_sur(cid, text=texte_cloture(m, tf, bougie, r, cle),
+                           reply_markup=markup_analyse(etat, m, r))
+            continue
         tf = suivi.get("tf")
-        bars = r.get(champs.get(tf, ""), [])
+        bars = r.get(champs.get(tf, ""), []) or []
         if not bars:
             continue
         close = next((b for b in bars if int(b["t"]) > int(suivi.get("dernier_t", 0))), None)
@@ -1773,7 +1903,6 @@ def notifier_clotures(etat, m, r, cle):
         suivi["restants"] = int(suivi.get("restants", 1)) - 1
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
-
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
