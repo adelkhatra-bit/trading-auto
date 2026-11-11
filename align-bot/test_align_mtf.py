@@ -1934,7 +1934,7 @@ class TestTradingViewReportRegression(unittest.TestCase):
         state = {"menu": 4}
         with patch.object(align_bot, "telegram") as api:
             align_bot.installer_menu(state)
-        self.assertEqual(state["menu"], 5)
+        self.assertEqual(state["menu"], 6)
         self.assertTrue(any(call.args[0] == "setMyCommands" for call in api.call_args_list))
 
 class TestOneTapMarketAnalysis(unittest.TestCase):
