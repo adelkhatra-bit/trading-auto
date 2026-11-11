@@ -1729,7 +1729,7 @@ def telegram(methode, **params):
 CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "🔔 Suivre"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "🔔 Suivre"}]],
-                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Analyse ou suivi"})
+                               "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
                  "Le trading (CFD, futures, crypto) peut faire perdre tout le capital investi : chacun décide seul et reste responsable de ses choix.")
@@ -2056,27 +2056,17 @@ def menu_suivi(etat, cid):
     _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
 
 def bouton_rappel(m):
-    """Rappelle l'analyse du marché et conserve le suivi de la prochaine position."""
-    return json.dumps({"inline_keyboard": [
-        [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
-        [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
-    ]})
+    """Un seul rappel utile : suivre la prochaine position de ce marché."""
+    return json.dumps({"inline_keyboard": [[{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
 
 def markup_analyse(etat, m, r):
-    """Actions contextuelles de l'analyse ; le menu principal reste limité à deux boutons."""
+    """Carte d'analyse épurée ; les actions de position restent disponibles quand un trade existe."""
     cle = etat.get(m, {})
-    lignes = [
-        [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
-         {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
-        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
-         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
-    ]
     if cle.get("trade"):
-        lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
-                       {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
+        lignes = [[{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
+                   {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}]]
     else:
-        lignes.append([{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
+        lignes = [[{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]
     return json.dumps({"inline_keyboard": lignes})
 
 
@@ -3427,8 +3417,10 @@ def traiter(etat, chats, updates):
                 for p in proprio(etat):    # le propriétaire peut offrir l'accès en 1 clic
                     _envoi_sur(p, text=f"👤 Nouveau visiteur : {nom}",
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'accès VIP", "callback_data": f"offrir:{cid}"}]]}))
-            elif "analyse" in txtv:
+            elif "analyse" in txtv or "analysis" in txtv:
                 analyse_visiteur(etat, cid, marche_demande(txtv))
+            elif "suivre" in txtv or "follow" in txtv:
+                menu_suivi(etat, cid)
             elif "vip" in txtv or "/start" in txtv:
                 refuser(etat, cid)
             else:
