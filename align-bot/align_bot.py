@@ -534,10 +534,48 @@ def texte_historique(etat, cid, limite=8, offset=0):
     return "\n".join(lignes)
 
 def alignement(r):
-    """Le 1h confirme la tendance 4h ; le 15m n'est pas un filtre."""
+    """Biais de fond : H4 donne le sens, H1 le confirme. M15/M5 sont évalués séparément."""
     d1h, d4h = r["dirs"][7], r["dirs"][9]
     maj = d4h if d4h != 0 and d1h == d4h else 0
     return maj, (2 if maj else 0)
+
+
+def profil_strategie(r):
+    """Classe le setup sans confondre alignement directionnel et autorisation d’entrée."""
+    D = r["dirs"]
+    d5, d15, d1h, d4h = D[2], D[4], D[7], D[9]
+    if d4h and d1h == d4h:
+        direction = d4h
+        if d15 == direction:
+            mode, horizon = "SWING", "plusieurs séances si la structure H4 reste valide"
+            contexte = "H4, H1 et M15 sont alignés"
+        elif d15 == -direction:
+            mode, horizon = "INTRADAY", "séance en cours ; pas de conservation automatique la nuit"
+            contexte = "M15 est en retracement contre le biais H4/H1"
+        else:
+            mode, horizon = "INTRADAY", "séance en cours ; réévaluer à chaque clôture"
+            contexte = "M15 est neutre : attendre une structure exploitable"
+        contre = False
+    elif d1h and d15 == d1h and d4h in (0, d1h):
+        direction = d1h
+        mode, horizon = "INTRADAY", "mouvement de séance ; sortie avant invalidation"
+        contexte = "H1 et M15 sont alignés"
+        contre = False
+    elif d15 and d5 == d15:
+        direction = d15
+        contre = bool(d1h == -direction or d4h == -direction)
+        mode = "SCALPING CONTRE-TENDANCE" if contre else "SCALPING"
+        horizon = "court terme ; ne pas transformer en position swing"
+        contexte = "M15 et M5 sont alignés" + (" mais H1/H4 s’opposent" if contre else "")
+    else:
+        direction, mode, horizon = 0, "ATTENTE", "aucune durée de position à annoncer"
+        contexte, contre = "pas de confluence exploitable entre les unités", False
+    m5_aligne = bool(direction and d5 == direction)
+    return {"mode": mode, "direction": direction, "horizon": horizon, "contexte": contexte,
+            "m5_aligne": m5_aligne, "contre_tendance": contre,
+            "statut": "CONFLUENCE M5 — attendre le déclencheur clôturé" if m5_aligne
+                      else "PRÉPARATION — attendre l’alignement ou le retournement M5"}
+
 
 def texte_etat(nom_marche, r, cle=None, vip=True):
     """Carte Telegram complète : mise en page uniquement, aucune rubrique d'analyse supprimée."""
@@ -618,26 +656,34 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
         l.append(prochaine(r, cle))
     return "\n".join(l)
 def strategie_mtf(r):
-    """4h = tendance principale, 1h = confirmation, 15m = contexte, 5m = déclencheur clôturé."""
+    """H4/H1 = fond, M15 = préparation, M5 = timing ; profil scalp/intraday/swing explicite."""
     fl = lambda x: "🟢⬆️" if x == 1 else "🔴⬇️" if x == -1 else "🟠➖"
     D = r["dirs"]; d5, d15, d1h, d4h, dD = D[2], D[4], D[7], D[9], D[10]
-    fond = d4h
+    profil = profil_strategie(r)
     l = ["🧭 STRATÉGIE MULTI-UT",
          f"🏔 Tendance principale 4 h : {fl(d4h)}",
-         f"📅 Tendance Daily : {fl(dD)}",
          f"🔁 Confirmation 1 h : {fl(d1h)}",
-         f"ℹ️ Contexte 15 min   {fl(d15)}",
-         f"🎯 Déclencheur 5 min   {fl(d5)}"]
-    if r["confirme"] and r.get("repli"):
-        l.append(f"✅ Tendance VALIDÉE   {SENS[r['confirme']]}\n⏳ Le 15 min fait son repli : l'entrée n'est PAS encore là")
-    elif r["confirme"]:
-        l.append(f"✅ VALIDÉ   {SENS[r['confirme']]}")
+         f"👀 Préparation 15 min : {fl(d15)}",
+         f"🎯 Timing 5 min : {fl(d5)}",
+         f"📅 Contexte Daily : {fl(dD)}",
+         f"🧩 PROFIL RETENU : {profil['mode']}",
+         f"🧭 Lecture : {profil['contexte']}",
+         f"⏱ Horizon indicatif : {profil['horizon']}",
+         f"🚦 {profil['statut']}"]
+    if profil["contre_tendance"]:
+        l.append("⚠️ Contre-tendance : objectif court, risque réduit selon les règles, aucune conservation swing.")
+    if r.get("confirme") and r.get("repli"):
+        l.append(f"✅ Biais H4/H1 validé   {SENS[r['confirme']]}\n⏳ Le 15 min retrace : attendre le retour du M5 dans le sens du biais")
+    elif r.get("confirme"):
+        l.append(f"✅ Biais de fond H4/H1 validé   {SENS[r['confirme']]}")
+    elif profil["mode"].startswith("SCALPING"):
+        l.append(f"🟡 Setup court terme détecté   {SENS[profil['direction']]}\n⛔ Ce setup n’est pas un swing et reste soumis au déclencheur clôturé.")
     elif not d4h:
-        l.append("➖ Pas de tendance de fond en 4 h\n⛔ Rien de validé : on ne trade pas")
-    elif d1h == -fond:
-        l.append("↩️ 1 h en opposition à la tendance de fond\n⛔ On attend la confirmation 1 h")
+        l.append("➖ Pas de tendance de fond en 4 h\n⏳ Les configurations M15/M5 restent surveillées pour un éventuel scalp.")
+    elif d1h == -d4h:
+        l.append("↩️ 1 h en opposition à la tendance de fond\n⏳ Pas de swing : surveiller uniquement une configuration courte M15/M5.")
     else:
-        l.append(f"⏳ {SENS[fond]} en préparation — ⛔ PAS ENCORE VALIDÉ\n✅ Il manque la confirmation 1 h {fl(fond)}")
+        l.append(f"⏳ {SENS[d4h]} en préparation — confirmation H1 manquante")
     return l
 
 def bloque_dw(r, d, prix=None):
