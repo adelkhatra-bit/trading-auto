@@ -551,12 +551,11 @@ class AlignMtfRulesTest(unittest.TestCase):
             arm.assert_called_once()
             # Avis court avec voyants ; l'avis IA complet n'est envoyé que sur « En savoir plus ».
             ai.assert_not_called()
-            self.assertEqual(send.call_count, 2, market)
+            # Un seul message : « RIEN N'A BOUGÉ » avec les voyants, pas de 2e carte en doublon.
+            self.assertEqual(send.call_count, 1, market)
             texte = send.call_args.kwargs["text"]
-            self.assertIn("L'AVIS ALIGN", texte)
+            self.assertIn("RIEN N'A BOUGÉ", texte)
             self.assertIn("15m⬜", texte)
-            self.assertIn("En savoir plus", send.call_args.kwargs["reply_markup"])
-            self.assertIn(f"details:{market}", send.call_args.kwargs["reply_markup"])
 
     def test_ai_commentary_uses_english_for_english_subscribers(self):
         from unittest.mock import patch
