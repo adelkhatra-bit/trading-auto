@@ -100,10 +100,10 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.fmt_trade("BTC", trade, 101.0)
         self.assertIn("🟩🟩🟩  LONG", message)
         self.assertIn("📌 PLAN D'EXÉCUTION — 🟩 LONG", message)
-        self.assertIn("🟨 Entrée : 100,00", message)
-        self.assertIn("🛑 Stop Loss : 98,00", message)
-        self.assertIn("💰 TP1 : 104,00", message)
-        self.assertIn("🏁 TP2 : 108,00", message)
+        self.assertIn("🟨 Entrée : 100", message)
+        self.assertIn("🛑 Stop Loss : 98", message)
+        self.assertIn("💰 TP1 : 104", message)
+        self.assertIn("🏁 TP2 : 108", message)
         self.assertIn("📍 RÉCAPITULATIF — BTC", message)
 
     def test_trade_card_marks_short_in_red(self):
@@ -119,8 +119,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.fmt_trade("GOLD", trade, 99.0)
         self.assertIn("🟥🟥🟥  SHORT", message)
         self.assertIn("📌 PLAN D'EXÉCUTION — 🟥 SHORT", message)
-        self.assertIn("🛑 Stop Loss : 102,00", message)
-        self.assertIn("🏁 TP2 : 92,00", message)
+        self.assertIn("🛑 Stop Loss : 102", message)
+        self.assertIn("🏁 TP2 : 92", message)
 
     def test_telegram_price_levels_render_value_before_explanation(self):
         message = align_bot.mise_en_forme(
@@ -158,7 +158,8 @@ class AlignMtfRulesTest(unittest.TestCase):
 
     def test_price_helper_uses_french_decimal_without_thousands_separator(self):
         self.assertEqual(align_bot.px(4075.5), "4075,50")
-        self.assertEqual(align_bot.px(4000), "4000,00")
+        self.assertEqual(align_bot.px(4000), "4000")
+        self.assertEqual(align_bot.mise_en_forme("TP1 : 4 000,00"), "TP1\n4000")
 
     def test_previous_analysis_button_is_market_specific(self):
         import json
@@ -265,7 +266,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("🚦 DÉCISION ALIGN", message)
                 self.assertIn("🎯 DIRECTION À SURVEILLER : 🟩 LONG", message)
                 self.assertIn("⏳ Prochaine entrée : attendre le signal", message)
-                self.assertIn("67500,00", message)
+                self.assertIn("67500", message)
                 self.assertIn("\n💹 Prix actuel", message)
                 self.assertNotIn("\\n", message)
                 self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None
