@@ -1971,8 +1971,8 @@ CLAVIER = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "�
                                    [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "🟠 Analyse BTC"}],
-                                            [{"text": "📊 Faire une analyse"}],
-                                            [{"text": "💎 Devenir VIP"}],
+                                            [{"text": "📊 Faire une analyse"}, {"text": "📡 Mes marchés"}],
+                                            [{"text": "🤖 Mon bot"}, {"text": "💎 Devenir VIP"}],
                                             [{"text": "📸 Partager mon gain"}],
                                             [{"text": "🌐 English"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
@@ -2013,6 +2013,28 @@ def epingler(etat, cid):
         print("epingler", cid, ex)
 
 PARTAGE_JOURS = int(os.environ.get("PARTAGE_JOURS", "3"))  # rappel « partage à tes amis » tous les X jours
+PARTAGE_HEURE = int(os.environ.get("PARTAGE_HEURE", "18"))  # heure de Paris du rappel de partage
+PROPRIO_VUE_GRATUITE = os.environ.get("PROPRIO_VUE_GRATUITE", "1") == "1"  # le propriétaire voit le bot comme un utilisateur gratuit
+
+def vue_gratuite(etat, cid):
+    """Conversation privée côté GRATUIT : visiteurs + propriétaire (pour voir exactement ce que reçoit un gratuit).
+    Le VIP complet (news, analyses, toutes les positions) ne part QUE dans la chaîne ALIGN VIP."""
+    cid = str(cid)
+    return cid in [str(c) for c in etat.get("prospects", [])] or (PROPRIO_VUE_GRATUITE and cid in {str(x) for x in proprio(etat)})
+
+def destinataires_gratuits(etat):
+    return list(dict.fromkeys([str(c) for c in etat.get("prospects", [])]
+                              + ([str(x) for x in sorted(proprio(etat))] if PROPRIO_VUE_GRATUITE else [])))
+
+def partage_du(etat, maintenant=None):
+    """Le rappel de partage part au plus une fois par jour prévu, à heure fixe : jamais deux fois de suite."""
+    now = maintenant or datetime.datetime.now(PARIS)
+    jour = now.strftime("%Y-%m-%d")
+    if now.hour != PARTAGE_HEURE or now.date().toordinal() % max(1, PARTAGE_JOURS) or etat.get("partage_jour") == jour:
+        return False
+    etat["partage_jour"] = jour
+    etat["partage_t"] = time.time()
+    return True
 
 def message_partage(etat):
     """Invitation à partager le bot (texte court + bouton de partage Telegram)."""
@@ -2085,6 +2107,24 @@ def boutons_canal(etat, texte):
         lignes.append([{"text": "📍 Suivre cette position", "url": lien("rentre")}, {"text": "🚪 Je suis sorti", "url": lien("sorti")}])
     lignes.append([{"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}, {"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}])
     return json.dumps({"inline_keyboard": lignes})
+
+def menu_canal_vip(etat):
+    """Chaîne VIP : Telegram n'autorise pas le clavier du bas dans une chaîne → menu à boutons épinglé en haut (1 seule fois)."""
+    if not etat.get("canal") or etat.get("menu_vip_v1"):
+        return
+    bot = etat.get("bot") or "align_mtf_adel_bot"
+    lien = lambda p: f"https://t.me/{bot}?start={p}"
+    kb = json.dumps({"inline_keyboard": [
+        [{"text": "🥇 Analyse Gold", "url": lien("analyse_gold")}, {"text": "🟠 Analyse BTC", "url": lien("analyse_btc")}],
+        [{"text": "📊 Faire une analyse", "url": lien("faire_analyse")}, {"text": "📡 Mes marchés", "url": lien("marches")}],
+        [{"text": "🤖 Mon bot", "url": lien("mon_bot")}, {"text": "📈 Mes résultats", "url": lien("resultats")}],
+        [{"text": "📸 Partager mon gain", "url": lien("gain")}, {"text": "🧩 Indicateur TradingView", "url": lien("indicateur")}]]})
+    try:
+        res = telegram("sendMessage", chat_id=etat["canal"], text="💎 MENU ALIGN VIP\n👇 Touche un bouton : il s'ouvre dans ton bot", reply_markup=kb, disable_notification="true")
+        telegram("pinChatMessage", chat_id=etat["canal"], message_id=res["result"]["message_id"], disable_notification="true")
+        etat["menu_vip_v1"] = res["result"]["message_id"]
+    except Exception as ex:
+        print("menu VIP", ex)
 
 # ───────── IA (GitHub Models, gratuite avec le jeton GitHub du workflow) ─────────
 # IA : Google Gemini (gratuit). GitHub Models a été fermé le 30/07/2026 → clé GEMINI_API_KEY dans les secrets GitHub.
@@ -2946,7 +2986,29 @@ def bot_on(etat, cid):
 def stats_bot(etat, cid):
     return etat.setdefault("stats_bot", {}).setdefault(cid, {"arrets": 0, "auto": 0})
 
+def en_position(etat, cid):
+    return [m for m in MARCHES if isinstance(((etat.get(m) or {}).get("trade") or {}).get("qui", {}).get(str(cid)), dict)
+            and not etat[m]["trade"]["qui"][str(cid)].get("fini")]
+
+def menu_bot_gratuit(etat, cid):
+    on = bot_on(etat, cid)
+    dedans = en_position(etat, cid)
+    utilise = str(cid) in etat.get("bienvenue", {})
+    lignes = [f"🤖 MON BOT : {'▶️ ON' if on else '⏸ OFF'}", "━━━━━━━━━━━━", "🔔 Souhaites-tu encore des positions ?"]
+    if dedans:
+        lignes.append(f"🎯 En position : {', '.join(dedans)} (suivi jusqu'au TP / SL)")
+    lignes += (["✅ Je te propose la prochaine position", "🙋 Tu choisis : tu la prends ou non"] if on else
+               ["⏸ Aucune position proposée", "🔒 Tu sais juste qu'une position VIP sort"])
+    lignes += ["━━━━━━━━━━━━", "🎁 Position du jour : " + ("déjà utilisée (nouvelle demain)" if utilise else "disponible"),
+               "📡 Marchés : " + {"BTC": "🟠 BTC", "GOLD": "🥇 GOLD"}.get(marche_selection(etat, cid), "🟠 BTC + 🥇 GOLD")]
+    _envoi_sur(cid, text="\n".join(lignes), reply_markup=json.dumps({"inline_keyboard": [
+        [{"text": "⏸ Non, plus de positions", "callback_data": "botoff:x"} if on else
+         {"text": "✅ Oui, je veux des positions", "callback_data": "boton:x"}],
+        [{"text": "📡 Choisir BTC / GOLD", "callback_data": "marketsmenu:x"}]]}))
+
 def menu_bot(etat, cid):
+    if vue_gratuite(etat, cid):
+        return menu_bot_gratuit(etat, cid)
     on = bot_on(etat, cid)
     # Lecture sans écriture : ce menu peut être affiché pendant une analyse en cours.
     st = etat.get("stats_bot", {}).get(str(cid), {"arrets": 0, "auto": 0})
@@ -2963,18 +3025,31 @@ def regler_bot(etat, cid, on):
         off.remove(cid)
     elif not on and cid not in off:
         off.append(cid); stats_bot(etat, cid)["arrets"] += 1
+    if vue_gratuite(etat, cid):
+        dedans = en_position(etat, cid)
+        txt = (("✅ C'est noté : je te propose la prochaine position" if str(cid) not in etat.get("bienvenue", {})
+                else "✅ C'est noté\n🎁 Ta position du jour est déjà utilisée : la prochaine demain") if on else
+               "⏸ C'est noté : plus de position proposée\n▶️ Réactive quand tu veux : 🤖 Mon bot")
+        if dedans:
+            txt += f"\n🎯 Ta position {', '.join(dedans)} reste suivie jusqu'au TP / SL"
+        _envoi_sur(cid, reply_markup=CLAVIER_VISITEUR, text=txt)
+        return
     _envoi_sur(cid, reply_markup=CLAVIER, text=("▶️ Ton bot est relancé\n🤖 Il entre tout seul dans la prochaine position" if on
                                                 else "⏸ Ton bot est arrêté\n🔔 Tu reçois toujours les positions\n▶️ Relance-le avec 🤖 Mon bot"))
 
 def entrer_inscrits(etat, m, tr, chats=()):
     """Le bot vient d'entrer : il fait entrer automatiquement tous les membres dont le bot est ON,
     plus ceux qui ont appuyé sur 🎯, au prix d'entrée du bot (coach + résultats comptés)."""
-    auto = [c for c in chats if bot_on(etat, c) and marche_autorise(etat, c, m) and c not in etat.get("prospects", []) and c != etat.get("canal")]
+    auto = [c for c in chats if bot_on(etat, c) and marche_autorise(etat, c, m) and not vue_gratuite(etat, c) and c != etat.get("canal")]
     for cid in list(dict.fromkeys(etat.get("auto", {}).pop(m, []) + auto)):
         if isinstance(tr.setdefault("qui", {}).get(cid), dict):
             continue
+        if vue_gratuite(etat, cid):
+            deja = etat.get("bienvenue", {}).get(cid)
+            if not bot_on(etat, cid) or not marche_autorise(etat, cid, m) or (deja and deja != m):
+                continue      # gratuit : bot éteint, marché non choisi ou position du jour déjà prise
         tr["qui"][cid] = {"e": tr["e"], "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
-        if cid in etat.get("prospects", []):
+        if vue_gratuite(etat, cid):
             etat.setdefault("bienvenue", {}).setdefault(cid, m)
         stats_bot(etat, cid)["auto"] += 1
         _envoi_sur(cid, reply_markup=markup_position(m), text=(
@@ -3474,9 +3549,15 @@ def publier_resultat(etat, m, tr, sortie, motif, gain):
     lien = lien_validation(etat)
     kb = json.dumps({"inline_keyboard": [[{"text": "📸 Voir les résultats ALIGN", "url": lien}]]})
     for c, pos in (tr.get("qui") or {}).items():
-        if isinstance(pos, dict) and c in etat.get("prospects", []):
+        if isinstance(pos, dict) and vue_gratuite(etat, c):
             g_ = pos["d"] * (sortie - pos["e"]) / pos["e"] * 100
             pay = bouton_payer(etat) or kb
+            off = etat.setdefault("bot_off", [])
+            if c not in off:
+                off.append(c)      # position du jour terminée : le bot gratuit s'éteint tout seul
+            _envoi_sur(c, reply_markup=CLAVIER_VISITEUR, text=(
+                "⏸ Position du jour terminée : ton bot s'est éteint\n"
+                "▶️ Pour la prochaine : 🤖 Mon bot → ✅ Oui, je veux des positions"))
             _envoi_sur(c, reply_markup=pay, text=(
                 f"🎉🎉 BRAVO — {ICONE.get(m, '')} {m}\n💰 Ta position gratuite : {g_:+.2f} %\n🔥 C'est ça, ALIGN\n"
                 "😍 Imagine chaque position comme celle-là\n💎 En VIP : toutes les positions + le sens + le coach (BE, TP)\n🔓 VIP 49,90 € / mois 👇"
@@ -3599,6 +3680,20 @@ def traiter(etat, chats, updates):
                     continue
                 for marche in (("BTC", "GOLD") if mk == "BOTH" else (mk,)):
                     demandes.append((qui, marche))
+                continue
+            if choix == "botmenu":
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"])
+                except Exception:
+                    pass
+                menu_bot(etat, qui)
+                continue
+            if choix == "marketsmenu":
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"])
+                except Exception:
+                    pass
+                menu_marches(etat, qui)
                 continue
             if choix == "markets" and mk in ("BTC", "GOLD", "BOTH"):
                 selectionner_marches_suivi(etat, qui, mk)
@@ -3926,6 +4021,10 @@ def traiter(etat, chats, updates):
                 for p in proprio(etat):    # le propriétaire peut offrir l'accès en 1 clic
                     _envoi_sur(p, text=f"👤 Nouveau visiteur : {nom}",
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'accès VIP", "callback_data": f"offrir:{cid}"}]]}))
+            elif "mon bot" in txtv or "my bot" in txtv:
+                menu_bot(etat, cid)
+            elif "mes march" in txtv or "my markets" in txtv:
+                menu_marches(etat, cid)
             elif "analyse" in txtv:
                 analyse_visiteur(etat, cid, marche_demande(txtv))
             elif "vip" in txtv or "/start" in txtv:
@@ -4076,10 +4175,9 @@ def masquer(texte):
     return re.sub(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", "🔒🔒🔒", texte).replace("\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", "")
 
 def envoyer_prospects(etat, texte, signal, clavier=None):
-    """Visiteurs : news en clair ; UNE position de bienvenue complète (bougies + coach) ;
-    ensuite tout est caché, avec des messages courts « tu loupes ça » et le bouton VIP."""
+    """GRATUIT (visiteurs + propriétaire en vue gratuite) : 1 position proposée par jour si le bot est ON,
+    sinon un simple avis masqué quand une position sort. Jamais de news ni d'analyse : c'est le VIP."""
     entree = signal and "J'ENTRE MAINTENANT" in texte
-    kw = {"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}
     jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
     if etat.get("offerte_jour") != jour:           # 1 position GRATUITE par jour : on remet les compteurs à zéro
         etat["bienvenue"] = {c: mk for c, mk in etat.get("bienvenue", {}).items() if etat.get(mk, {}).get("trade")}
@@ -4087,55 +4185,39 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
     deja = etat.setdefault("bienvenue", {})
     tete = texte.split("\n")[0]
     m = next((x for x in MARCHES if x in tete), None)
-    chiffres = bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte))
-    news = tete.startswith(("📅", "⚠️⚠️", "🚨", "✅ News", "🔔 Ouverture")) or "NEWS" in tete
     tr = etat.get(m, {}).get("trade") if m else None
-    pct_tp = (tr["d"] * (tr["tp1"] - tr["e"]) / tr["e"] * 100) if tr else None
-    fomo = None
-    if m and ("TP1" in tete and "touché" in tete) and pct_tp:
-        fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : TP1 TOUCHÉ 🔥🔥🔥\n💰 +{pct_tp:.2f} % pour les VIP\n😬 Tu n'étais pas dedans ?\n💎 Les prochaines : VIP 👇"
-    elif m and ("objectif final" in tete.lower() or "tp2 touché" in tete.lower()):
-        g = etat.get(m, {}).get("dernier")
-        fomo = f"🔥🔥🔥 {ICONE.get(m, '')} {m} : OBJECTIF ATTEINT 🔥🔥🔥\n" + (f"💰 +{g:.2f} % pour les VIP\n" if g else "") + "😬 Tu as loupé ça\n💎 Rejoins le VIP 👇"
-    elif m and "stop" in tete.lower() and "touché" in tete.lower() and "sécurisé" not in tete.lower():
-        fomo = f"❌ {ICONE.get(m, '')} {m} : SL touché pour les VIP\n🛡 Risque maîtrisé, on repart\n💎 Toutes les positions et les résultats : VIP 👇"
-    elif m and ("ÇA ARRIVE" in tete or "POINT D'ENTRÉE À VENIR" in tete or "CASSURE EN VUE" in tete or "PRÉPARE-TOI" in tete or "RETRACE" in tete or "REPLI EST LÀ" in tete):
-        fomo = f"👀 {ICONE.get(m, '')} {m} : une position VIP arrive 🔥\n🔒 Zone cachée\n😬 Tu vas la louper ?\n💎 VIP 👇"
-    for cid in list(etat.get("prospects", [])):
-        if m and not marche_autorise(etat, cid, m):
+    # GRATUIT = même bot que le VIP, mais 1 seule position par jour et options bridées.
+    # Plus de news, de teasers ni d'alertes « ça arrive » : uniquement quand une position sort.
+    if not (m and entree):
+        return
+    vus = etat.setdefault("masque_vu", {})
+    ref = f"{m}:{(tr or {}).get('cree') or int(time.time() // 1800)}"
+    for cid in destinataires_gratuits(etat):
+        if not marche_autorise(etat, cid, m):
             continue
-        sa_bienvenue = m and deja.get(cid) == m and tr is not None
-        if signal and cid not in deja:
-            txt = ("🎁🎁 TA POSITION GRATUITE DU JOUR 🎁🎁\n"
-                   "👀 Suis-la en vue 15 minutes, tout est expliqué en bougies\n\n" + texte)
-            k = {"reply_markup": clavier} if (entree and clavier) else {}
-            if entree:
-                deja[cid] = m
-                txt += "\n\n💎 C'est ta position gratuite du jour. Toutes les autres + le coach : VIP 49,90 € / mois"
-        elif sa_bienvenue and not signal:
-            txt, k = texte, {}          # sa position offerte est en cours : il suit tout en clair
-        elif signal:
-            txt = (f"🔒 {ICONE.get(m, '')} {m} : les VIP viennent de recevoir une position\n"
-                   + ("🟩 LONG ⬆️ ou 🟥 SHORT ⬇️ ? 🤫\n" if entree else "👀 Elle se prépare 🤫\n")
-                   + "😬 Tu vas louper ce move ?\n💎 VIP 49,90 € / mois : toutes les positions + le coach 👇")
-            k = kw
-        elif fomo:
-            txt, k = fomo, kw
-        elif news:
-            txt, k = texte, {}
+        if bot_on(etat, cid) and cid not in deja:
+            deja[cid] = m      # la position du jour est PROPOSÉE : il choisit de la prendre ou non
+            txt = ("🎁 TA POSITION GRATUITE DU JOUR\n"
+                   "🙋 Tu la prends ? Bouton 📍 ci-dessous (tu n'es pas obligé)\n━━━━━━━━━━━━\n" + texte
+                   + "\n━━━━━━━━━━━━\n💎 Toutes les autres + le coach : VIP 49,90 € / mois")
+            k = {"reply_markup": json.dumps({"inline_keyboard": [
+                [{"text": "📍 Je la prends", "callback_data": f"in:{m}"}],
+                [{"text": "⏸ Plus de positions", "callback_data": "botoff:x"}]]})}
         else:
-            # Jamais le sens ni les niveaux : un simple teaser, 1 fois / 30 min / marché
-            tz = etat.setdefault("teaser_t", {})
-            cle_t = f"{cid}_{m}"
-            if not m or time.time() - tz.get(cle_t, 0) < 1800:
+            if vus.get(cid) == ref or (deja.get(cid) == m and tr and isinstance(tr.get("qui", {}).get(cid), dict)):
                 continue
-            tz[cle_t] = time.time()
-            txt, k = (f"🔒 {ICONE.get(m, '')} {m}\nNouvelle info pour les VIP\n🤫 Sens et niveaux cachés\n💎 VIP 49,90 € / mois 👇"), kw
+            vus[cid] = ref
+            txt = (f"🔒 {ICONE.get(m, '')} {m} : une position VIP vient de sortir\n"
+                   "🤫 Sens et niveaux : réservés aux VIP\n"
+                   + ("🎁 Ta position du jour est déjà utilisée\n" if cid in deja else "⏸ Ton bot est sur OFF\n")
+                   + "💎 VIP 49,90 € / mois 👇")
+            rang = [[{"text": "💎 Devenir VIP", "url": etat["lien"]}]] if etat.get("lien") else []
+            k = {"reply_markup": json.dumps({"inline_keyboard": rang + [[{"text": "🤖 Mon bot", "callback_data": "botmenu:x"}]]})}
         try:
             telegram("sendMessage", chat_id=cid, text=txt, **k)
         except Exception as ex:
             print("prospect", cid, ex)
-            if "403" in str(ex):
+            if "403" in str(ex) and cid in etat.get("prospects", []):
                 etat["prospects"].remove(cid)
 
 def _envoi_sur(cid, **kw):
@@ -4234,6 +4316,10 @@ def marche_du_message(texte):
     return None
 
 def destinataires_message(etat, chats, texte):
+    # Le flux complet (news, analyses, toutes les positions) part UNIQUEMENT dans la chaîne VIP :
+    # plus de double notification chaîne + conversation privée. Le gratuit a son propre flux (envoyer_prospects).
+    if etat.get("canal"):
+        return [str(etat["canal"])]
     marche = marche_du_message(texte)
     cibles = [str(c) for c in chats if marche is None or (marche == "BOTH" and marche_selection(etat, c) == "BOTH") or
               (marche in ("BTC", "GOLD") and marche_autorise(etat, c, marche))]
@@ -5744,12 +5830,11 @@ def un_tour(etat, chats):
         if TOKEN:
             for cid in set(destinataires(etat, chats)) | set(etat.get("prospects", [])):
                 epingler(etat, cid)
-        # Rappel de partage (jamais la nuit) : abonnés, visiteurs et chaîne VIP
-        h = datetime.datetime.now(PARIS).hour
-        if TOKEN and 11 <= h <= 20 and time.time() - etat.get("partage_t", 0) >= PARTAGE_JOURS * 86400:
-            etat["partage_t"] = time.time()
+            menu_canal_vip(etat)
+        # Rappel de partage : côté gratuit seulement (jamais dans la chaîne VIP), 1 fois au jour prévu
+        if TOKEN and partage_du(etat):
             txt, kb = message_partage(etat)
-            for cid in set(destinataires(etat, chats)) | set(etat.get("prospects", [])):
+            for cid in destinataires_gratuits(etat):
                 _envoi_sur(cid, text=txt, reply_markup=kb)
     except Exception as ex:
         print("annonces", ex)
@@ -5774,7 +5859,7 @@ def un_tour(etat, chats):
             envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("JE PRÉPARE", "J'ENTRE MAINTENANT")), clavier)
         for nom_marche in MARCHES:
             if nom_marche in derniers:
-                maj_jauge(etat, nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
+                maj_jauge(etat, nom_marche, derniers[nom_marche], etat[nom_marche], set() if etat.get("canal") else chats, etat.get("canal"))
                 try:
                     maj_chronos(etat, nom_marche, derniers[nom_marche])
                 except Exception as ex:
