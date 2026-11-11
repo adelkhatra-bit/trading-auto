@@ -1727,7 +1727,7 @@ def telegram(methode, **params):
 
 # ───────── Boutons et jauge ─────────
 CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "🔔 Suivre"}]],
-                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Analyse ou suivi"})
+                      "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Analyse"}, {"text": "🔔 Suivre"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Analyse ou suivi"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
@@ -2056,15 +2056,28 @@ def menu_suivi(etat, cid):
     _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
 
 def bouton_rappel(m):
-    """Un seul bouton d'action, sans clavier secondaire."""
-    return json.dumps({"inline_keyboard": [[{"text": "🔔 Suivre ce marché", "callback_data": f"auto:{m}"}]]})
+    """Rappelle l'analyse du marché et conserve le suivi de la prochaine position."""
+    return json.dumps({"inline_keyboard": [
+        [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
+        [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
+    ]})
 
 def markup_analyse(etat, m, r):
-    """Un seul bouton utile sous la synthèse de marché."""
+    """Actions contextuelles de l'analyse ; le menu principal reste limité à deux boutons."""
     cle = etat.get(m, {})
+    lignes = [
+        [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
+         {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
+        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
+         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
+        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
+    ]
     if cle.get("trade"):
-        return json.dumps({"inline_keyboard": [[{"text": "📍 Ma position", "callback_data": f"position:{m}"}]]})
-    return json.dumps({"inline_keyboard": [[{"text": "🔔 Suivre ce marché", "callback_data": f"auto:{m}"}]]})
+        lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
+                       {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
+    else:
+        lignes.append([{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
+    return json.dumps({"inline_keyboard": lignes})
 
 
 def markup_position(m):
