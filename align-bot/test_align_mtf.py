@@ -1933,6 +1933,20 @@ class TestTradingViewReportRegression(unittest.TestCase):
         self.assertIn("Profil SWING", message)
 
 
+    def test_analysis_command_maps_to_market_selection_prompt(self):
+        self.assertEqual(align_bot.COMMANDES["/faire_analyse"], "📊 Faire une analyse")
+        self.assertIn(("faire_analyse", "📊 Faire une analyse"), [
+            ("faire_analyse", "📊 Faire une analyse")
+        ])
+
+    def test_installer_menu_refreshes_existing_version_four_users(self):
+        from unittest.mock import patch
+        state = {"menu": 4}
+        with patch.object(align_bot, "telegram") as api:
+            align_bot.installer_menu(state)
+        self.assertEqual(state["menu"], 5)
+        self.assertTrue(any(call.args[0] == "setMyCommands" for call in api.call_args_list))
+
 class TestOneTapMarketAnalysis(unittest.TestCase):
     def test_analysis_button_asks_market_and_gold_choice_returns_only_gold_request(self):
         from unittest.mock import patch
