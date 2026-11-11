@@ -49,40 +49,55 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(profile["mode"], "ATTENTE")
         self.assertEqual(profile["direction"], 0)
 
-    def test_indicator_plan_uses_m5_for_scalping_and_preserves_levels(self):
-        dirs = [0] * 11
-        dirs[9], dirs[7], dirs[4], dirs[2] = -1, -1, 1, 1
-        r = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
-            "M5": {"fresh": True, "confirmed": True, "robotV12": {"signal": "SHORT", "entry": 100, "sl": 102, "tp": 96}}
+    def test_indicator_plan_follows_the_active_tradingview_timeframe(self):
+        r = {"tv_indicator_mtf": {"available": True, "activeTimeframe": "M15", "snapshots": {
+            "M5": {"fresh": True, "robotV12": {"signal": "SHORT", "entry": 100, "sl": 102, "tp": 96}},
+            "M15": {"fresh": True, "confirmed": True, "robotV12": {"signal": "LONG", "entry": 101, "sl": 99, "tp": 105}},
+            "H4": {"fresh": True, "robotV12": {"signal": "LONG", "entry": 98, "sl": 95, "tp": 104}}
         }}}
         plan = align_bot.plan_indicateur(r)
         self.assertTrue(plan["available"])
-        self.assertEqual(plan["timeframe"], "M5")
-        self.assertEqual((plan["entry"], plan["sl"], plan["tp"]), (100, 102, 96))
+        self.assertEqual(plan["timeframe"], "M15")
+        self.assertEqual((plan["entry"], plan["sl"], plan["tp"]), (101, 99, 105))
         self.assertTrue(plan["confirmed"])
 
-    def test_indicator_plan_uses_h4_for_swing(self):
-        dirs = [0] * 11
-        dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, 1, 1
-        r = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
-            "H4": {"fresh": True, "confirmed": False, "robotV12": {"signal": "LONG", "entry": 100, "sl": 98, "tp": 104}}
+    def test_indicator_plan_changes_when_active_timeframe_changes(self):
+        r = {"tv_indicator_mtf": {"available": True, "activeTimeframe": "H4", "snapshots": {
+            "M15": {"fresh": True, "robotV12": {"signal": "LONG", "entry": 101, "sl": 99, "tp": 105}},
+            "H4": {"fresh": True, "robotV12": {"signal": "SHORT", "entry": 110, "sl": 112, "tp": 106}}
         }}}
         plan = align_bot.plan_indicateur(r)
         self.assertTrue(plan["available"])
         self.assertEqual(plan["timeframe"], "H4")
-        self.assertFalse(plan["confirmed"])
+        self.assertEqual((plan["entry"], plan["sl"], plan["tp"]), (110, 112, 106))
 
-    def test_indicator_plan_rejects_stale_or_incomplete_snapshot(self):
-        dirs = [0] * 11
-        dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, -1, 0
-        stale = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
+    def test_indicator_plan_rejects_stale_or_missing_active_snapshot(self):
+        stale = {"tv_indicator_mtf": {"available": True, "activeTimeframe": "M15", "snapshots": {
             "M15": {"fresh": False, "robotV12": {"signal": "LONG", "entry": 100, "sl": 98, "tp": 104}}
         }}}
-        incomplete = {"dirs": dirs, "tv_indicator_mtf": {"available": True, "snapshots": {
-            "M15": {"fresh": True, "robotV12": {"signal": "LONG", "entry": 100, "sl": None, "tp": 104}}
+        missing = {"tv_indicator_mtf": {"available": True, "activeTimeframe": "H1", "snapshots": {
+            "M15": {"fresh": True, "robotV12": {"signal": "LONG", "entry": 100, "sl": 98, "tp": 104}}
         }}}
         self.assertFalse(align_bot.plan_indicateur(stale)["available"])
-        self.assertFalse(align_bot.plan_indicateur(incomplete)["available"])
+        self.assertFalse(align_bot.plan_indicateur(missing)["available"])
+
+    def test_indicator_plan_rejects_incoherent_levels(self):
+        r = {"tv_indicator_mtf": {"available": True, "activeTimeframe": "M5", "snapshots": {
+            "M5": {"fresh": True, "robotV12": {"signal": "LONG", "entry": 100, "sl": 102, "tp": 104}}
+        }}}
+        self.assertFalse(align_bot.plan_indicateur(r)["available"])
+
+    def test_tradingview_mtf_readings_merge_into_existing_align_context(self):
+        r = {"dirs": [0] * 11, "rsis": [50.0] * 11, "tv_indicator_mtf": {
+            "activeTimeframe": "M15", "snapshots": {"M15": {"robotV12": {
+                "lecture_1m": "LONG", "lecture_5m": "SHORT", "lecture_15m": "LONG",
+                "lecture_60m": "LONG", "rsi_5m": 31.5, "rsi_15m": 62
+            }}}
+        }}
+        align_bot.fusionne_lectures_tradingview(r)
+        self.assertEqual([r["dirs"][i] for i in (0, 2, 4, 7)], [1, -1, 1, 1])
+        self.assertEqual(r["rsis"][2], 31.5)
+        self.assertEqual(r["rsis"][4], 62)
 
     def test_tradingview_links_select_market_and_requested_timeframe(self):
         btc = align_bot.url_tradingview("BTC", 5)
