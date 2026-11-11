@@ -5294,10 +5294,34 @@ def recevoir_updates_telegram(etat, chats, demandes):
     return len(updates)
 
 
+ARRET_FORCE_SEC = int(os.environ.get("ARRET_FORCE_SEC", "25"))
+_ETAT_COURANT = {}
+
+
+def _arret_garanti():
+    """Si une analyse longue bloque l'arrêt, on sauvegarde quand même l'état puis on quitte.
+    Évite l'annulation forcée GitHub (état perdu + bot muet plusieurs minutes pendant la relève)."""
+    time.sleep(ARRET_FORCE_SEC)
+    etat = _ETAT_COURANT.get("etat")
+    try:
+        if etat is not None and CHRONO_LOCK.acquire(timeout=5):
+            try:
+                _sauver_etat_sous_verrou(etat, _ETAT_COURANT.get("chats"))
+            finally:
+                CHRONO_LOCK.release()
+            print("ALIGN_STATE_SAVED_ON_FORCED_SHUTDOWN", flush=True)
+    except Exception as ex:
+        print("ALIGN_FORCED_SAVE_FAILED", ex, flush=True)
+    os._exit(0)
+
+
 def _demander_arret(signum, frame):
+    premier = not SHUTDOWN_REQUESTED.is_set()
     SHUTDOWN_REQUESTED.set()
     TELEGRAM_POLL_STOP.set()
     print(f"ALIGN_SHUTDOWN_REQUESTED signal={signum}", flush=True)
+    if premier:
+        threading.Thread(target=_arret_garanti, name="ALIGN-Arret-Garanti", daemon=True).start()
 
 
 def un_tour(etat, chats):
@@ -5589,6 +5613,8 @@ def main():
         chats |= set(etat["prospects"]); etat["prospects"] = []
 
     restaurer_cooldowns_telegram(etat)
+    _ETAT_COURANT["etat"] = etat
+    _ETAT_COURANT["chats"] = chats
 
     signal.signal(signal.SIGINT, _demander_arret)
     signal.signal(signal.SIGTERM, _demander_arret)
