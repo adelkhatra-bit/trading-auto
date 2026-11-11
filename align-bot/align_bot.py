@@ -1737,7 +1737,7 @@ def _telegram_verifie_cooldown(chat_id, maintenant=None):
 
 
 def _telegram_enregistre_429(chat_id, erreur, maintenant=None):
-    match = re.search(r"retry after\\s+(\\d+)", str(erreur), re.IGNORECASE)
+    match = re.search(r"retry after\s+(\d+)", str(erreur), re.IGNORECASE)
     if not match:
         return 0
     delai = max(1, int(match.group(1)))
