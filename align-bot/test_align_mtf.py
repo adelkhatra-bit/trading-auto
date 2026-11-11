@@ -309,7 +309,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertTrue(watcher["multi"])
         self.assertEqual(watcher["derniers_t"], {"5m": 600, "15m": 900, "1h": 3600, "4h": 14400})
 
-    def test_multi_timeframe_watcher_batches_simultaneous_closes_into_one_message(self):
+    def test_multi_timeframe_watcher_only_notifies_the_blocking_timeframe(self):
         from unittest.mock import patch
         state = {"veille_cloture": {"GOLD": {"123": {
             "multi": True, "derniers_t": {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400},
@@ -323,14 +323,35 @@ class AlignMtfRulesTest(unittest.TestCase):
             "m1": [candle(28800)], "dirs": [0] * 11, "confirme": 0
         }
         with patch.object(align_bot.time, "time", return_value=100), \
-             patch.object(align_bot, "texte_clotures_multi", return_value="batch-close") as fmt, \
+             patch.object(align_bot, "texte_cloture", return_value="close-4h"), \
              patch.object(align_bot, "markup_analyse", return_value=None), \
-             patch.object(align_bot, "_envoi_sur") as send:
+             patch.object(align_bot, "_envoi_sur", return_value={"ok": True}) as send:
             align_bot.notifier_clotures(state, "GOLD", r, {})
             align_bot.notifier_clotures(state, "GOLD", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertEqual(send.call_args.kwargs["text"], "batch-close")
-        self.assertEqual(fmt.call_args.args[1], [("5m", r["b5"][-1]), ("15m", r["b15"][-1]), ("1h", r["b1h"][-1]), ("4h", r["b4h"][-1])])
+        self.assertEqual(send.call_args.kwargs["text"], "close-4h")
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["derniers_t"]["4h"], 28800)
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["derniers_t"]["5m"], 300)
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["derniers_t"]["15m"], 900)
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["derniers_t"]["1h"], 3600)
+
+    def test_multi_timeframe_watcher_retries_when_telegram_send_fails(self):
+        from unittest.mock import patch
+        state = {"veille_cloture": {"GOLD": {"123": {
+            "multi": True, "derniers_t": {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400},
+            "expire": 999999
+        }}}}
+        r = {"b4h": [candle(14400), candle(28800)], "m1": [candle(28800)],
+             "dirs": [0] * 11, "confirme": 0}
+        with patch.object(align_bot.time, "time", return_value=100), \
+             patch.object(align_bot, "texte_cloture", return_value="close-4h"), \
+             patch.object(align_bot, "markup_analyse", return_value=None), \
+             patch.object(align_bot, "_envoi_sur", side_effect=[None, {"ok": True}]) as send:
+            align_bot.notifier_clotures(state, "GOLD", r, {})
+            self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["derniers_t"]["4h"], 14400)
+            align_bot.notifier_clotures(state, "GOLD", r, {})
+        self.assertEqual(send.call_count, 2)
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["derniers_t"]["4h"], 28800)
 
     def test_signup_message_does_not_invent_a_yellow_entry_zone(self):
         from unittest.mock import patch

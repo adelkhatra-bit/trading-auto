@@ -2614,26 +2614,6 @@ def texte_cloture(m, tf, bougie, r, cle):
     return "\n".join(lignes)
 
 
-def texte_clotures_multi(m, clotures, r, cle):
-    """Regroupe les clôtures multi-UT simultanées dans une seule notification."""
-    if len(clotures) == 1:
-        tf, bougie = clotures[0]
-        return texte_cloture(m, tf, bougie, r, cle)
-    prix = (r.get("m1") or [{}])[-1].get("c")
-    dirs = r.get("dirs", [0] * 11)
-    sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
-    _, n_ok = alignement(r)
-    lignes = [f"{ICONE.get(m, '📊')} {m}  ·  {px(prix) if prix is not None else 'prix indisponible'}",
-              "🕯 CLÔTURES MULTI-UT : " + " · ".join(f"{tf} {heure(b['t'] + TF_SECONDES[tf])}" for tf, b in clotures),
-              f"H4 {sens(dirs[9])} · H1 {sens(dirs[7])} · ALIGN {n_ok}/2"]
-    statut = "🟢 POSITION EN COURS" if (cle or {}).get("trade") else "🔴 PAS D'ENTRÉE" if not (cle or {}).get("trade") and not (cle or {}).get("ordre") and not (r.get("confirme")) else "🟡 SETUP EN ATTENTE"
-    lignes.append(statut)
-    tf_attendu = timeframe_attendu(r, cle or {})
-    lignes.append(f"⏳ Prochaine validation : clôture {tf_attendu}")
-    if not (cle or {}).get("trade"):
-        lignes.append("🚫 Aucun ordre envoyé au broker.")
-    return "\n".join(lignes)
-
 def notifier_clotures(etat, m, r, cle):
     """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
     champs = TF_CHAMPS
@@ -2645,22 +2625,20 @@ def notifier_clotures(etat, m, r, cle):
             if cle.get("trade") or time.time() >= float(suivi.get("expire", 0)):
                 etat["veille_cloture"][m].pop(cid, None)
                 continue
+            # Une seule UT déclenche la prochaine notification : celle qui bloque réellement la décision.
+            # H4 neutre -> attendre H4 ; H4 directionnel/H1 manquant -> H1 ;
+            # biais H4+H1 confirmé -> M15 ; ordre/préparation active -> M5.
+            tf = timeframe_attendu(r, cle)
+            bars = r.get(champs.get(tf, ""), []) or []
             derniers = suivi.setdefault("derniers_t", {})
-            clotures = []
-            for tf in ("5m", "15m", "1h", "4h"):
-                bars = r.get(champs[tf], []) or []
-                if not bars:
-                    continue
-                nouveaux = [b for b in bars if int(b["t"]) > int(derniers.get(tf, 0))]
-                if not nouveaux:
-                    continue
-                # Un seul bilan par cycle et par utilisateur, même si plusieurs UT ferment ensemble.
+            nouveaux = [b for b in bars if int(b["t"]) > int(derniers.get(tf, 0))]
+            if nouveaux:
                 bougie = nouveaux[-1]
-                derniers[tf] = int(bougie["t"])
-                clotures.append((tf, bougie))
-            if clotures:
-                _envoi_sur(cid, text=texte_clotures_multi(m, clotures, r, cle),
-                           reply_markup=markup_analyse(etat, m, r))
+                resultat = _envoi_sur(cid, text=texte_cloture(m, tf, bougie, r, cle),
+                                     reply_markup=markup_analyse(etat, m, r))
+                # Ne consommer la clôture que si Telegram a accepté l'envoi : sinon réessayer au tour suivant.
+                if resultat is not None and not (isinstance(resultat, dict) and resultat.get("ok") is False):
+                    derniers[tf] = int(bougie["t"])
             continue
         tf = suivi.get("tf")
         bars = r.get(champs.get(tf, ""), []) or []
@@ -2669,9 +2647,11 @@ def notifier_clotures(etat, m, r, cle):
         close = next((b for b in bars if int(b["t"]) > int(suivi.get("dernier_t", 0))), None)
         if not close:
             continue
+        resultat = _envoi_sur(cid, text=texte_cloture(m, tf, close, r, cle),
+                               reply_markup=markup_analyse(etat, m, r))
+        if resultat is None or (isinstance(resultat, dict) and resultat.get("ok") is False):
+            continue
         suivi["dernier_t"] = int(close["t"])
-        _envoi_sur(cid, text=texte_cloture(m, tf, close, r, cle),
-                   reply_markup=markup_analyse(etat, m, r))
         suivi["restants"] = int(suivi.get("restants", 1)) - 1
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
