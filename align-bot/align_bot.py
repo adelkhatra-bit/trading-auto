@@ -3069,7 +3069,7 @@ def traiter(etat, chats, updates):
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb_chat["id"])
             if choix == "markets" and mk in ("BTC", "GOLD", "BOTH"):
-                etat.setdefault("marches_par_chat", {})[qui] = mk
+                selectionner_marches_suivi(etat, qui, mk)
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Sélection enregistrée")
                 except Exception:
