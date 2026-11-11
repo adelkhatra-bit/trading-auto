@@ -100,10 +100,10 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.fmt_trade("BTC", trade, 101.0)
         self.assertIn("🟩🟩🟩  LONG", message)
         self.assertIn("📌 PLAN D'EXÉCUTION — 🟩 LONG", message)
-        self.assertIn("🟨 Entrée : 100.00", message)
-        self.assertIn("🛑 Stop Loss : 98.00", message)
-        self.assertIn("💰 TP1 : 104.00", message)
-        self.assertIn("🏁 TP2 : 108.00", message)
+        self.assertIn("🟨 Entrée : 100,00", message)
+        self.assertIn("🛑 Stop Loss : 98,00", message)
+        self.assertIn("💰 TP1 : 104,00", message)
+        self.assertIn("🏁 TP2 : 108,00", message)
         self.assertIn("📍 RÉCAPITULATIF — BTC", message)
 
     def test_trade_card_marks_short_in_red(self):
@@ -119,8 +119,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.fmt_trade("GOLD", trade, 99.0)
         self.assertIn("🟥🟥🟥  SHORT", message)
         self.assertIn("📌 PLAN D'EXÉCUTION — 🟥 SHORT", message)
-        self.assertIn("🛑 Stop Loss : 102.00", message)
-        self.assertIn("🏁 TP2 : 92.00", message)
+        self.assertIn("🛑 Stop Loss : 102,00", message)
+        self.assertIn("🏁 TP2 : 92,00", message)
 
     def test_telegram_price_levels_render_value_before_explanation(self):
         message = align_bot.mise_en_forme(
@@ -135,6 +135,30 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_telegram_price_values_remove_all_thousands_grouping_spaces(self):
         message = align_bot.mise_en_forme("PLAN\n💰 TP1 : 12 345 678,90 (niveau majeur)")
         self.assertIn("💰 TP1\n12345678,90\nniveau majeur", message)
+
+
+    def test_telegram_price_formatting_is_idempotent_after_card_layout(self):
+        first = align_bot.mise_en_forme(
+            "PLAN\n💰 TP1 ≈ 4 075,50 (ancienne mèche haute — bougie 15 minutes)"
+        )
+        second = align_bot.mise_en_forme(first)
+        self.assertIn("💰 TP1\n4075,50\nancienne mèche haute — bougie 15 minutes", second)
+        self.assertNotIn("4 075", second)
+        self.assertEqual(first, second)
+
+    def test_telegram_standalone_price_line_is_compacted(self):
+        message = align_bot.mise_en_forme(
+            "💰 TP1\n4 075,50\nancienne mèche haute — bougie 15 minutes\n"
+            "📌 Entrée\n4 000,00"
+        )
+        self.assertIn("💰 TP1\n4075,50", message)
+        self.assertIn("📌 Entrée\n4000,00", message)
+        self.assertNotIn("4 075", message)
+        self.assertNotIn("4 000", message)
+
+    def test_price_helper_uses_french_decimal_without_thousands_separator(self):
+        self.assertEqual(align_bot.px(4075.5), "4075,50")
+        self.assertEqual(align_bot.px(4000), "4000,00")
 
     def test_previous_analysis_button_is_market_specific(self):
         import json
@@ -241,7 +265,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("🚦 DÉCISION ALIGN", message)
                 self.assertIn("🎯 DIRECTION À SURVEILLER : 🟩 LONG", message)
                 self.assertIn("⏳ Prochaine entrée : attendre le signal", message)
-                self.assertIn("67500.00", message)
+                self.assertIn("67500,00", message)
                 self.assertIn("\n💹 Prix actuel", message)
                 self.assertNotIn("\\n", message)
                 self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None

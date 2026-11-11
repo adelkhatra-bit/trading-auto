@@ -422,8 +422,16 @@ def analyser(pair):
 
 # ───────── Messages ─────────
 def px(v):
-    # Les prix restent compacts : 4036.45, jamais 4 036.45.
-    return f"{v:.2f}"
+    # Format français compact : 4075,50 ; aucun séparateur de milliers.
+    return f"{v:.2f}".replace(".", ",")
+
+def _normalise_prix_dans_texte(texte):
+    """Retire les séparateurs de milliers des prix, même sur une ligne déjà formatée."""
+    motif = r"(?<![\w])([+-]?\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d+)?%?)(?!\w)"
+    def compact(match):
+        valeur = re.sub(r"[ \u00a0\u202f]", "", match.group(1))
+        return valeur.replace(".", ",")
+    return re.sub(motif, compact, texte)
 
 def cme_ouvert(ts):
     ct = datetime.datetime.fromtimestamp(ts, datetime.timezone(datetime.timedelta(hours=-6)))  # heure de Chicago (approx. hiver)
@@ -1168,6 +1176,8 @@ def mise_en_forme(t):
     """Tous les messages rangés pareil : le titre au-dessus, l'info en dessous, une ligne vide entre chaque bloc."""
     if not isinstance(t, str) or not t:
         return t
+    # Idempotent : les messages peuvent repasser ici après une première mise en forme.
+    t = _normalise_prix_dans_texte(t)
     lignes = t.split("\n")
     titre2 = " — " in lignes[0]
     if titre2:
