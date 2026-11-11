@@ -5493,7 +5493,7 @@ def main():
             for cid, mq in demandes:
                 envoyer_analyse(cid, etat, mq)
             sauver_etat(etat, chats)
-            time.sleep(0.2)
+            time.sleep(0.5)
         if SHUTDOWN_REQUESTED.is_set() or time.time() >= debut + DUREE_SEC:
             break
         if not TOKEN:
