@@ -1073,7 +1073,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         r = {
             "m1": [candle(1, c=100.0)], "dirs": [0] * 11, "rsis": [50] * 11,
             "posD": 0.5, "posW": 0.5, "confirme": 0, "b5": [
-                {"o": 100, "h": 101, "l": 99, "c": 100} for _ in range(12)
+                {"o": 100, "h": 101, "l": 99, "c": 100, "v": 100.0,
+                 "volume_source": "Kraken BTC"} for _ in range(12)
             ], "b15": [], "b1h": [], "b4h": [], "atr": 2.0,
             "macro_data": {}, "tv_indicator_mtf": {}
         }
@@ -1087,6 +1088,9 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(data["distance_plan_entree"]["entree_visee"], 104.0)
         self.assertEqual(data["distance_plan_entree"]["distance_prix"], 4.0)
         self.assertEqual(data["estimation_approche_entree"]["minutes_indicatives"], 10)
+        self.assertTrue(data["volume"]["M5"]["disponible"])
+        self.assertEqual(data["volume"]["M5"]["provenance"], "Kraken BTC")
+        self.assertFalse(data["volume"]["M15"]["disponible"])
 
     def test_details_button_returns_ai_briefing_and_keeps_raw_technical_details(self):
         import json
@@ -2133,3 +2137,40 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
         self.assertEqual(args["reply_markup"], align_bot.markup_position("GOLD"))
         self.assertIn("SUIVI PERSONNEL ACTIVÉ", args["text"])
         self.assertIn("101", state["GOLD"]["trade"]["qui"])
+
+
+    def test_volume_summary_detects_relative_spike_and_preserves_source(self):
+        bars = [{"v": 100.0} for _ in range(20)] + [{"v": 180.0}]
+        result = align_bot.resume_volume(bars, "Kraken spot BTC")
+        self.assertTrue(result["disponible"])
+        self.assertEqual(result["provenance"], "Kraken spot BTC")
+        self.assertEqual(result["etat"], "pic")
+        self.assertEqual(result["ratio_vs_moyenne"], 1.8)
+
+    def test_volume_summary_never_invents_missing_volume(self):
+        result = align_bot.resume_volume([candle(1)], "PAXG proxy")
+        self.assertFalse(result["disponible"])
+        self.assertEqual(result["provenance"], "PAXG proxy")
+        self.assertIn("indisponible", result["interpretation"])
+
+    def test_regrouping_sums_source_volume_without_changing_price_aggregation(self):
+        bars = [
+            dict(candle(0), v=12.5, trades=4),
+            dict(candle(60, o=100.0, h=103.0, l=98.0, c=102.0), v=7.5, trades=3),
+        ]
+        grouped = align_bot.regrouper(bars, 2, 60, now_ts=120)
+        self.assertEqual(len(grouped), 1)
+        self.assertEqual(grouped[0]["v"], 20.0)
+        self.assertEqual(grouped[0]["trades"], 7)
+        self.assertEqual(grouped[0]["c"], 102.0)
+
+    def test_kraken_ohlc_parser_keeps_exchange_volume_and_trade_count(self):
+        from unittest.mock import patch
+        payload = {"error": [], "result": {"XXBTZUSD": [
+            [0, "100", "102", "99", "101", "100.5", "12.75", 9],
+            [60, "101", "103", "100", "102", "101.5", "18.25", 12],
+        ], "last": 120}}
+        with patch.object(align_bot, "http_json", return_value=payload):
+            rows = align_bot._kraken("XBTUSD", 1)
+        self.assertEqual(rows[-1]["v"], 12.75)
+        self.assertEqual(rows[-1]["trades"], 9)
