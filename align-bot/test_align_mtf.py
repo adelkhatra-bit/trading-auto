@@ -779,5 +779,15 @@ class AlignMtfRulesTest(unittest.TestCase):
             ok = align_bot._editer_chrono_ou_recreer("123", chrono, "timer")
         self.assertFalse(ok)
 
+    def test_timeout_chronometer_message_uses_real_line_breaks(self):
+        from unittest.mock import patch
+        state = {"chrono": {"GOLD": {"123": {"mid": 10, "t0": 1, "maj": 1}}}, "GOLD": {}}
+        with patch.object(align_bot.time, "time", return_value=align_bot.CHRONO_MAX + 2), \\
+             patch.object(align_bot, "_editer_chrono_ou_recreer") as edit:
+            align_bot.maj_chronos(state, "GOLD", {})
+        text = edit.call_args.args[2]
+        self.assertIn("\\n", text)
+        self.assertNotIn("\\\\n", text)
+
 if __name__ == "__main__":
     unittest.main()
