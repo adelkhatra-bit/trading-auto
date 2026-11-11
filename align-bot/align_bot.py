@@ -2,7 +2,7 @@
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
 Prix gratuits : BTC = Kraken XBTUSD, Gold = XAUUSD spot (bougies COMEX Yahoo recalées sur le prix spot Swissquote).
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
-import json, os, re, time, urllib.request, urllib.error, urllib.parse, datetime, threading
+import json, os, re, time, hashlib, urllib.request, urllib.error, urllib.parse, datetime, threading
 from zoneinfo import ZoneInfo
 import sys
 try:
@@ -1972,8 +1972,14 @@ def avis_ia(etat, m, r, cle, anglais=False):
         "Rédige en français clair, 8 rubriques courtes maximum : (1) sens actuel du marché ; (2) biais directeur H4/H1 et conflits ; (3) retracement/setup M15 et direction visée ; (4) déclencheur M5 et condition exacte de clôture ; (5) zone d'entrée, SL et TP uniquement si les données les fournissent ; (6) invalidation ; (7) prochaine heure de réévaluation selon l'unité bloquante ; (8) action maintenant, y compris quand revenir vérifier ou se reposer. Ne prédis jamais une heure exacte d'entrée ni un nombre de ticks. La prochaine clôture est une heure de réévaluation, pas une promesse d'entrée. Un setup M15/M5 contre H4/H1 reste un scalp contre-tendance. Ne contredis jamais le verdict interne."
     )
     langue_cache = "en" if anglais else "fr"
-    t = ia(etat, consigne, donnees_ia(m, r, cle),
-           cle_cache=f"analyse_{m}_{langue_cache}_{int(time.time() // 600)}")
+    donnees = donnees_ia(m, r, cle)
+    empreinte = dict(donnees)
+    reevaluation = dict(empreinte.get("prochaine_reevaluation") or {})
+    reevaluation.pop("secondes_restantes", None)
+    empreinte["prochaine_reevaluation"] = reevaluation
+    signature = hashlib.sha256(json.dumps(empreinte, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+    t = ia(etat, consigne, donnees,
+           cle_cache=f"analyse_{m}_{langue_cache}_{signature}")
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
         fournisseur = etat.get("ia_dernier_fournisseur")
