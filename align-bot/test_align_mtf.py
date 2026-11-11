@@ -973,10 +973,11 @@ class AlignMtfRulesTest(unittest.TestCase):
         }
         with patch.object(align_bot, "autorise", return_value=True), \
              patch.object(align_bot, "telegram"), \
+             patch.object(align_bot, "menu_suivi") as menu, \
              patch.object(align_bot, "inscrire_auto") as register:
             align_bot.traiter({}, set(), [update])
-        register.assert_called_once()
-        self.assertEqual(register.call_args.args[1:], ("123", "BTC"))
+        menu.assert_called_once_with(unittest.mock.ANY, "123")
+        register.assert_not_called()
 
     def test_user_facing_ai_commentary_uses_internal_analysis_when_providers_fail(self):
         from unittest.mock import patch
@@ -1829,7 +1830,7 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
              patch.object(align_bot, "inscrire_auto") as subscribe, \
              patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
             align_bot.traiter({}, set(), [update])
-        subscribe.assert_called_once_with(unittest.mock.ANY, "101", "BTC")
+        subscribe.assert_called_once_with(unittest.mock.ANY, "101", "BTC", notifier=False)
 
     def test_followmarket_both_registers_btc_and_gold(self):
         from unittest.mock import patch
