@@ -999,7 +999,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             reply.assert_called_once()
             self.assertEqual(reply.call_args.args[1:], ("123", expected, "GOLD"))
 
-    def test_valid_auto_callback_registers_only_the_requested_market(self):
+    def test_valid_auto_callback_registers_requested_market_in_one_tap(self):
         from unittest.mock import patch
         update = {
             "update_id": 9012,
@@ -1012,11 +1012,22 @@ class AlignMtfRulesTest(unittest.TestCase):
         }
         with patch.object(align_bot, "autorise", return_value=True), \
              patch.object(align_bot, "telegram"), \
+             patch.object(align_bot, "selectionner_marches_suivi") as select, \
              patch.object(align_bot, "menu_suivi") as menu, \
-             patch.object(align_bot, "inscrire_auto") as register:
+             patch.object(align_bot, "inscrire_auto") as register, \
+             patch.object(align_bot, "_envoi_sur"):
             align_bot.traiter({}, set(), [update])
-        menu.assert_called_once_with(unittest.mock.ANY, "123")
-        register.assert_not_called()
+        select.assert_called_once_with(unittest.mock.ANY, "123", "BTC")
+        register.assert_called_once_with(unittest.mock.ANY, "123", "BTC", notifier=False)
+        menu.assert_not_called()
+
+    def test_main_keyboards_do_not_show_redundant_markets_button(self):
+        import json
+        for keyboard in (align_bot.CLAVIER, align_bot.CLAVIER_VISITEUR):
+            parsed = json.loads(keyboard)
+            labels = [b["text"] for row in parsed["keyboard"] for b in row]
+            self.assertFalse(any("Mes marchés" in label or "My markets" in label for label in labels))
+
 
     def test_user_facing_ai_commentary_uses_internal_analysis_when_providers_fail(self):
         from unittest.mock import patch
