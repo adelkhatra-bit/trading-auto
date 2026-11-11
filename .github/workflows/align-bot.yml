@@ -55,8 +55,8 @@ jobs:
           print("Aucun message de démarrage envoyé aux utilisateurs.")
           PY
 
-      - name: Contrôler la connexion réelle à Gemini (sans exposer la clé)
-        continue-on-error: true
+      - name: Vérifier une connexion IA réelle (Gemini puis fournisseurs de secours)
+        continue-on-error: false
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python3 ai_healthcheck.py

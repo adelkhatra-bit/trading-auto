@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Compile bot
-        run: python -m py_compile align-bot/align_bot.py
+      - name: Compile bot and AI healthcheck
+        run: python -m py_compile align-bot/align_bot.py align-bot/ai_healthcheck.py
       - name: Run MTF regression tests
         run: python -m unittest discover -s align-bot -p "test_*.py" -v
