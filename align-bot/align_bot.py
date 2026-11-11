@@ -3013,7 +3013,12 @@ def texte_cloture(m, tf, bougie, r, cle):
         lignes.append(f"🟡 Zone {px(bas)}–{px(haut)} · SL {niveau(ordre.get('sl'))} · TP1 {niveau(ordre.get('tp1'))} · TP2 {niveau(ordre.get('tp2'))}")
     else:
         attente = "4h" if not d4h else "1h" if d1h != d4h else "15m" if not r.get("confirme") else "5m"
-        lignes.append(f"⏳ Prochaine validation : clôture {attente}")
+        try:
+            now_ = time.time(); fin_ = prochaine_cloture_bougie(r, attente, now_)
+            chrono_ = f" dans {duree_cloture(fin_ - now_)} (à {datetime.datetime.fromtimestamp(fin_, PARIS).strftime('%H:%M')})"
+        except Exception:
+            chrono_ = ""
+        lignes.append(f"⏳ Prochaine validation : clôture {attente}{chrono_}")
     if not tr:
         lignes.append("🚫 Aucun ordre envoyé au broker.")
     return "\n".join(lignes)
