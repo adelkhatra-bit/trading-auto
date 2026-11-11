@@ -1048,6 +1048,31 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(state["ia_dernier_statut"], "ALL_EXTERNAL_PROVIDERS_FAILED")
         self.assertTrue(state.get("ia_err"))
 
+    def test_verified_external_ai_provider_is_named_in_telegram_commentary(self):
+        from unittest.mock import patch
+        state = {"ia_dernier_fournisseur": "Gemini", "ia_dernier_modele": "gemini-flash-latest",
+                 "ia_dernier_statut": "CONNECTED"}
+        r = {"macro_data": {"disponible": False}}
+        with patch.object(align_bot, "macro_confluence", return_value={"disponible": False}), \
+             patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}), \
+             patch.object(align_bot, "ia", return_value="Gold is neutral; wait for a confirmed close."):
+            message = align_bot.avis_ia(state, "GOLD", r, {})
+        self.assertIn("Gemini", message)
+        self.assertIn("gemini-flash-latest", message)
+        self.assertIn("Gold is neutral", message)
+
+    def test_ai_daily_limit_is_explicitly_marked_as_internal_fallback(self):
+        from unittest.mock import patch
+        jour = align_bot.datetime.datetime.now(align_bot.PARIS).strftime("%Y-%m-%d")
+        state = {"ia_jour": {jour: align_bot.IA_MAX_JOUR}}
+        with patch.object(align_bot, "_appel_ia") as call:
+            answer = align_bot.ia(state, "Explain", {"market": "GOLD"})
+        self.assertEqual(answer, "")
+        self.assertEqual(state["ia_dernier_fournisseur"], "INTERNAL_FALLBACK")
+        self.assertEqual(state["ia_dernier_statut"], "DAILY_LIMIT_INTERNAL_FALLBACK")
+        call.assert_not_called()
+
+
 
     def test_all_analysis_inline_buttons_route_without_silent_failure(self):
         from unittest.mock import patch
@@ -1748,17 +1773,20 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
 
     def test_market_selection_callback_persists_without_changing_other_users(self):
         from unittest.mock import patch
-        state = {"marches_par_chat": {"202": "GOLD"}}
+        state = {"marches_par_chat": {"202": "GOLD"}, "auto": {"BTC": ["101"]},
+                 "veille_cloture": {"BTC": {"101": {"multi": True}}}}
         update = {"update_id": 1, "callback_query": {
             "id": "callback-1", "from": {"id": 101},
             "message": {"chat": {"id": 101, "type": "private"}},
-            "data": "markets:BTC"
+            "data": "markets:GOLD"
         }}
         with patch.object(align_bot, "telegram", return_value={"ok": True}), \
              patch.object(align_bot, "_envoi_sur") as send:
             align_bot.traiter(state, {"101", "202"}, [update])
-        self.assertEqual(align_bot.marche_selection(state, "101"), "BTC")
+        self.assertEqual(align_bot.marche_selection(state, "101"), "GOLD")
         self.assertEqual(align_bot.marche_selection(state, "202"), "GOLD")
+        self.assertNotIn("101", state["auto"]["BTC"])
+        self.assertNotIn("101", state["veille_cloture"]["BTC"])
         self.assertIn("reply_markup", send.call_args.kwargs)
 
 
@@ -1860,6 +1888,55 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
             align_bot.traiter({}, set(), [update])
         subscribe.assert_called_once_with(unittest.mock.ANY, "101", "BTC", notifier=False)
 
+    def test_followmarket_btc_registers_only_btc(self):
+        from unittest.mock import patch
+        state = {
+            "auto": {"BTC": [], "GOLD": ["101"]},
+            "veille_cloture": {"GOLD": {"101": {"multi": True}}},
+            "marches_par_chat": {"101": "BOTH"}
+        }
+        update = {"update_id": 99001, "callback_query": {
+            "id": "follow-btc", "data": "followmarket:BTC",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "inscrire_auto") as subscribe, \
+             patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
+            align_bot.traiter(state, set(), [update])
+        subscribe.assert_called_once_with(unittest.mock.ANY, "101", "BTC", notifier=False)
+        self.assertEqual(state["marches_par_chat"]["101"], "BTC")
+        self.assertNotIn("101", state["auto"]["GOLD"])
+        self.assertNotIn("101", state["veille_cloture"]["GOLD"])
+
+    def test_followmarket_gold_sets_exclusive_preference_and_clears_stale_btc_watch(self):
+        from unittest.mock import patch
+        state = {
+            "auto": {"BTC": ["101", "202"], "GOLD": []},
+            "veille_cloture": {"BTC": {"101": {"multi": True}, "202": {"multi": True}}},
+            "marches_par_chat": {"101": "BOTH"}
+        }
+        update = {"update_id": 99003, "callback_query": {
+            "id": "follow-gold", "data": "followmarket:GOLD",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "inscrire_auto") as subscribe, \
+             patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
+            align_bot.traiter(state, set(), [update])
+        subscribe.assert_called_once_with(unittest.mock.ANY, "101", "GOLD", notifier=False)
+        self.assertEqual(state["marches_par_chat"]["101"], "GOLD")
+        self.assertEqual(state["auto"]["BTC"], ["202"])
+        self.assertNotIn("101", state["veille_cloture"]["BTC"])
+        self.assertIn("202", state["veille_cloture"]["BTC"])
+        self.assertEqual(
+            align_bot.destinataires_message(state, {"101", "202"}, "🔴 BTC — SIGNAL NON CONFIRMÉ"),
+            ["202"]
+        )
+        self.assertEqual(
+            align_bot.destinataires_message(state, {"101", "202"}, "🥇 GOLD — SIGNAL NON CONFIRMÉ"),
+            ["101", "202"]
+        )
+
     def test_followmarket_both_registers_btc_and_gold(self):
         from unittest.mock import patch
         state = {}
@@ -1872,3 +1949,4 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
              patch.object(align_bot, "_envoi_sur"), patch.object(align_bot, "telegram"):
             align_bot.traiter(state, set(), [update])
         self.assertEqual([call.args[2] for call in subscribe.call_args_list], ["BTC", "GOLD"])
+        self.assertEqual(state["marches_par_chat"]["102"], "BOTH")

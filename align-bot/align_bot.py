@@ -1892,6 +1892,10 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
     jour = datetime.datetime.now(PARIS).strftime("%Y-%m-%d")
     compte = etat.setdefault("ia_jour", {})
     if compte.get(jour, 0) >= IA_MAX_JOUR:
+        etat["ia_dernier_fournisseur"] = "INTERNAL_FALLBACK"
+        etat["ia_dernier_modele"] = None
+        etat["ia_dernier_statut"] = "DAILY_LIMIT_INTERNAL_FALLBACK"
+        print("AI_PROVIDER_USED=INTERNAL_FALLBACK reason=DAILY_LIMIT", flush=True)
         return ""
     messages = [{"role": "system", "content": IA_REGLES},
                 {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]
@@ -1965,6 +1969,12 @@ def avis_ia(etat, m, r, cle, anglais=False):
            cle_cache=f"analyse_{m}_{langue_cache}_{int(time.time() // 600)}")
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
+        fournisseur = etat.get("ia_dernier_fournisseur")
+        modele = etat.get("ia_dernier_modele")
+        # Le fournisseur n'est affiché que si un appel externe réel a abouti.
+        if etat.get("ia_dernier_statut") == "CONNECTED" and fournisseur:
+            origine = f" • {fournisseur}" + (f" / {modele}" if modele else "")
+            titre += origine
         return f"{titre}\n{t}"
     # Toutes les IA en panne : l'analyse interne du bot répond (jamais de silence)
     titre, raison = verdict(r, cle)
@@ -3059,7 +3069,7 @@ def traiter(etat, chats, updates):
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb_chat["id"])
             if choix == "markets" and mk in ("BTC", "GOLD", "BOTH"):
-                etat.setdefault("marches_par_chat", {})[qui] = mk
+                selectionner_marches_suivi(etat, qui, mk)
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Sélection enregistrée")
                 except Exception:
@@ -3075,6 +3085,10 @@ def traiter(etat, chats, updates):
                     _envoi_sur(qui, text="🔒 Réservé aux VIP\\n🎁 Ta position gratuite du jour est déjà utilisée\\n💎 VIP 49,90 € / mois 👇",
                                **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
                     continue
+                # La sélection explicite est aussi la préférence de distribution privée.
+                # Supprimer les anciennes réservations en attente sur l'autre marché évite
+                # qu'un ancien abonnement BTC survive à un nouveau choix GOLD (et inversement).
+                selectionner_marches_suivi(etat, qui, mk)
                 marches = ("BTC", "GOLD") if mk == "BOTH" else (mk,)
                 for marche in marches:
                     inscrire_auto(etat, qui, marche, notifier=False)
@@ -3600,6 +3614,22 @@ def connecter_canal(etat, mcm):
             telegram("sendMessage", chat_id=p, text=texte)
     elif etat.get("canal") == cid and st in ("left", "kicked", "member"):
         etat.pop("canal", None)
+
+def selectionner_marches_suivi(etat, cid, choix):
+    """Enregistre le choix explicite et retire uniquement les suivis en attente des autres marchés."""
+    cid = str(cid)
+    if choix not in ("BTC", "GOLD", "BOTH"):
+        raise ValueError("Marché de suivi invalide")
+    etat.setdefault("marches_par_chat", {})[cid] = choix
+    autorises = {"BTC", "GOLD"} if choix == "BOTH" else {choix}
+    for marche in MARCHES:
+        if marche in autorises:
+            continue
+        attente = etat.setdefault("auto", {}).setdefault(marche, [])
+        etat["auto"][marche] = [x for x in attente if str(x) != cid]
+        veilles = etat.setdefault("veille_cloture", {}).setdefault(marche, {})
+        veilles.pop(cid, None)
+
 
 def marche_selection(etat, cid):
     """Préférence personnelle persistante ; les anciens abonnés gardent les deux marchés."""
