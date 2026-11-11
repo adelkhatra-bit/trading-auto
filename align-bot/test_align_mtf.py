@@ -340,7 +340,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertTrue(send.call_args.kwargs["text"].startswith("🔴 CLÔTURE — SIGNAL NON CONFIRMÉ"))
+        self.assertTrue(send.call_args.kwargs["text"].startswith("🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL"))
         self.assertIn("N'ENTRE PAS", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
@@ -379,6 +379,21 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("POSITION À VENIR", msg)
         self.assertIn("ordre en attente", msg)
         self.assertNotIn("POSITION EN COURS", msg)
+
+    def test_candle_close_countdown_supports_every_watched_timeframe(self):
+        for tf, interval in align_bot.TF_SECONDES.items():
+            field = align_bot.TF_CHAMPS[tf]
+            r = {field: [candle(1000)]}
+            self.assertEqual(
+                align_bot.prochaine_cloture_bougie(r, tf, 1000 + interval - 1),
+                1000 + interval,
+                tf,
+            )
+            self.assertEqual(
+                align_bot.prochaine_cloture_bougie(r, tf, 1000 + interval),
+                1000 + 2 * interval,
+                tf,
+            )
 
     def test_candle_close_countdown_uses_next_real_candle_boundary(self):
         from unittest.mock import patch
@@ -1136,8 +1151,10 @@ class AlignMtfRulesTest(unittest.TestCase):
             raw = align_bot.texte_cloture("BTC", "1h", b, r, {})
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
-        self.assertEqual(lines[0], "🕯 CLÔTURE 1h / SIGNAL NON CONFIRMÉ")
-        self.assertEqual(lines[1], "1h — 🟠 BTC")
+        self.assertEqual(lines[0], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
+        self.assertEqual(lines[1], "🔴 SIGNAL NON CONFIRMÉ")
+        self.assertIn("🕯 CLÔTURE 1h", message)
+        self.assertIn("🟠 BTC", message)
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
                          "TENDANCE MULTI-UNITÉS", "4 h\nSHORT", "Confirmation 1 h\nSHORT", "2/2", "DÉCISION ALIGN",
                          "N'ENTRE PAS", "POURQUOI", "La zone Daily/Weekly est extrême", "j'attends un meilleur prix", "PROCHAINE ÉTAPE",
@@ -1158,7 +1175,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             raw = align_bot.texte_cloture("BTC", "5m", b, r, {})
         translated = align_bot.traduire(raw)
-        self.assertEqual(translated.splitlines()[0], "🕯 CANDLE CLOSE 5m / SIGNAL NOT CONFIRMED")
+        self.assertEqual(translated.splitlines()[0], "🚫 DON'T ENTER: WAIT FOR THE NEXT SIGNAL")
         for expected in ("CANDLE RESULT", "Open:", "Close:", "MULTI-TIMEFRAME TREND",
                          "ALIGN DECISION", "WHY", "NEXT STEP", "IMPORTANT",
                          "A candle close alone does not trigger an entry.",
@@ -1178,7 +1195,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             for tf in ("5m", "15m", "1h", "4h", "D", "W"):
                 message = align_bot.texte_cloture("BTC", tf, b, r, {})
-                self.assertEqual(message.splitlines()[0], f"🕯 CLÔTURE {tf} / SIGNAL NON CONFIRMÉ")
+                self.assertEqual(message.splitlines()[0], "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL")
+                self.assertIn(f"🕯 CLÔTURE {tf}", message)
 
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
         from unittest.mock import patch
@@ -1191,8 +1209,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🟢 CLÔTURE — SIGNAL CONFIRMÉ")
-        self.assertIn("Signal validé", message)
+        self.assertEqual(message.splitlines()[0], "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX")
+        self.assertEqual(message.splitlines()[1], "🟢 SIGNAL CONFIRMÉ")
         self.assertNotIn("SIGNAL NON CONFIRMÉ", message)
 
 if __name__ == "__main__":
