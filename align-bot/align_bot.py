@@ -1953,9 +1953,12 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
             cache.pop(k)
     return txt
 
-def resume_volume(bars, provenance):
-    """Résumé de volume sur bougies clôturées. La provenance indique si c'est un flux réel ou proxy."""
+def resume_volume(bars, provenance, timeframe_sec=0, now_ts=None):
+    """Résumé du volume sur bougies entièrement clôturées, jamais sur une bougie encore en formation."""
     bars = bars or []
+    now_ts = time.time() if now_ts is None else now_ts
+    if timeframe_sec:
+        bars = [b for b in bars if int(b.get("t", 0)) + timeframe_sec <= now_ts]
     provenance = next((b.get("volume_source") for b in reversed(bars) if b.get("volume_source")), provenance)
     valeurs = [float(b["v"]) for b in bars if b.get("v") is not None and float(b["v"]) >= 0]
     if not valeurs:
@@ -1992,10 +1995,10 @@ def donnees_ia(m, r, cle):
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
             "contexte_macro_dollar": r.get("macro_data") or {},
             "volume": {
-                "M5": resume_volume(r.get("b5"), "Kraken BTC spot" if m == "BTC" else "Volume proxy GOLD (PAXG ou COMEX selon la source active)"),
-                "M15": resume_volume(r.get("b15"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
-                "H1": resume_volume(r.get("b1h"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
-                "H4": resume_volume(r.get("b4h"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD")
+                "M5": resume_volume(r.get("b5"), "Kraken BTC spot" if m == "BTC" else "Volume proxy GOLD (PAXG ou COMEX selon la source active)", 300),
+                "M15": resume_volume(r.get("b15"), "Kraken BTC spot" if m == "BTC" else "Volume proxy GOLD (PAXG ou COMEX selon la source active)", 900),
+                "H1": resume_volume(r.get("b1h"), "Kraken BTC spot" if m == "BTC" else "Volume proxy GOLD (PAXG ou COMEX selon la source active)", 3600),
+                "H4": resume_volume(r.get("b4h"), "Kraken BTC spot" if m == "BTC" else "Volume proxy GOLD (PAXG ou COMEX selon la source active)", 14400)
             },
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
     # Distance réelle au plan d'entrée et rythme observé : aide à décider si l'attente vaut la peine.
