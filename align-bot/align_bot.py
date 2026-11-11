@@ -1941,19 +1941,54 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
 def donnees_ia(m, r, cle):
     titre, raison = verdict(r, cle)
     o = (cle or {}).get("ordre") or {}
+    dirs = r.get("dirs") or [0] * 11
+    rsis = r.get("rsis") or [50] * 11
     data = {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
-            "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
-            "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
+            "sens 1m/5m/15m/1h/4h/Daily": [dirs[i] if len(dirs) > i else 0 for i in (0, 2, 4, 7, 9, 10)],
+            "RSI 5m/15m/1h/4h": [round(rsis[i]) if len(rsis) > i else 50 for i in (2, 4, 7, 9)],
             "profil_strategie": profil_strategie(r),
             "plan_indicateur_tradingview": plan_indicateur(r),
             "snapshots_indicateur_tradingview": (r.get("tv_indicator_mtf") or {}).get("snapshots", {}),
-            "lecture_multi_unites": {"M5": r["dirs"][2], "M15": r["dirs"][4], "H1": r["dirs"][7], "H4": r["dirs"][9]},
-            "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
+            "lecture_multi_unites": {"M5": dirs[2] if len(dirs) > 2 else 0, "M15": dirs[4] if len(dirs) > 4 else 0, "H1": dirs[7] if len(dirs) > 7 else 0, "H4": dirs[9] if len(dirs) > 9 else 0},
+            "position Daily (0 bas, 1 haut)": round(r.get("posD", 0.5), 2), "position Weekly": round(r.get("posW", 0.5), 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
             "contexte_macro_dollar": r.get("macro_data") or {}, 
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
+    # Distance réelle au plan d'entrée et rythme observé : aide à décider si l'attente vaut la peine.
+    prix_actuel = float(r["m1"][-1]["c"])
+    plan = plan_indicateur(r)
+    cible_entree = None
+    origine_plan = None
+    if plan.get("available"):
+        cible_entree, origine_plan = float(plan["entry"]), "TradingView ROBOT V12 frais"
+    elif o.get("e") is not None:
+        cible_entree, origine_plan = float(o["e"]), "ordre ALIGN actif"
+    if cible_entree is not None:
+        distance = abs(cible_entree - prix_actuel)
+        data["distance_plan_entree"] = {
+            "prix_actuel": round(prix_actuel, 5), "entree_visee": round(cible_entree, 5),
+            "distance_prix": round(distance, 5), "sens_du_deplacement": "hausse" if cible_entree > prix_actuel else "baisse" if cible_entree < prix_actuel else "au niveau actuel",
+            "origine": origine_plan,
+            "distance_en_ATR_15m": round(distance / max(float(r.get("atr") or 0), 1e-9), 2) if r.get("atr") else None
+        }
+    else:
+        data["distance_plan_entree"] = {"disponible": False, "raison": "aucun ordre ALIGN ni plan TradingView frais avec prix d'entrée exploitable"}
+    # Rythme des dernières bougies 5m : estimation indicative, jamais un compte à rebours garanti.
+    b5 = r.get("b5") or []
+    ranges = [max(float(b.get("h", 0)) - float(b.get("l", 0)), abs(float(b.get("h", 0)) - float(b.get("c", 0))), abs(float(b.get("l", 0)) - float(b.get("c", 0)))) for b in b5[-12:] if b.get("h") is not None and b.get("l") is not None and b.get("c") is not None]
+    moyenne_5m = sum(ranges) / len(ranges) if ranges else 0
+    if cible_entree is not None and moyenne_5m > 0:
+        bougies = distance / moyenne_5m
+        data["estimation_approche_entree"] = {
+            "mouvement_moyen_5m": round(moyenne_5m, 5),
+            "bougies_5m_indicatives": round(bougies, 1),
+            "minutes_indicatives": round(bougies * 5),
+            "avertissement": "projection mécanique fondée sur les 12 dernières bougies, non prédictive et à ne pas traiter comme heure d'entrée"
+        }
+    else:
+        data["estimation_approche_entree"] = {"disponible": False, "raison": "pas de plan d'entrée exploitable ou historique 5m insuffisant"}
     tf = timeframe_attendu(r, cle or {})
     close_ts = prochaine_cloture_bougie(r, tf, time.time())
     data["prochaine_reevaluation"] = {
@@ -3697,7 +3732,7 @@ def destinataires_message(etat, chats, texte):
     # La chaîne VIP reste commune et reçoit les deux marchés, sans préférence individuelle.
     if etat.get("canal"):
         cibles.append(str(etat["canal"]))
-    return list(dict.fromkeys(cibles))
+    return sorted(set(cibles))
 
 def destinataires(etat, chats):
     """Téléphones qui reçoivent les signaux + la chaîne VIP."""
