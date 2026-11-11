@@ -2265,6 +2265,43 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
             cache.pop(k)
     return txt
 
+IA_TON_JEUNE = ("Ton : coach trading jeune et cool, tutoiement, phrases très simples, motivant, jamais vulgaire, "
+                "jamais de promesse de gain. FORMAT : 4 lignes courtes maximum, une info par ligne, "
+                "chaque ligne commence par un emoji, 12 mots maximum par ligne, aucun paragraphe.")
+
+MOMENTS_IA = (
+    ("prep", ("JE PRÉPARE UNE POSITION", "PRÉPARE-TOI", "ÇA ARRIVE"), 7200,
+     "Une position se prépare. Dis à l'abonné de se tenir prêt, ce que tu vois en bougies maintenant, et ce qui validera l'entrée."),
+    ("tp", ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"), 3600,
+     "Un objectif vient d'être touché. Félicite simplement, dis quoi faire maintenant (sécuriser, BE) et ce que le marché peut faire ensuite."),
+    ("turbulence", ("MANIPULATION", "MOUVEMENT FORT", "RÉACTION À LA NEWS", "NEWS USA DANS", "MÈCHE SUSPECTE"), 1800,
+     "Grosse turbulence ou news. Explique simplement ce qui se passe, le risque, et quoi faire (patience, SL, BE)."),
+)
+
+def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
+    """La vraie IA revient aux moments clés : préparation de l'entrée, TP touché, turbulence / news (1 fois par moment)."""
+    out = []
+    vus = etat.setdefault("ia_moments", {})
+    for t in nouveaux or []:
+        texte = t[0] if isinstance(t, tuple) else t
+        tete = str(texte).split("\n")[0].upper()
+        for nom, cles, delai, consigne in MOMENTS_IA:
+            if not any(k in tete for k in cles):
+                continue
+            k = f"{m}:{nom}"
+            if time.time() - vus.get(k, 0) < delai:
+                break
+            vus[k] = time.time()
+            try:
+                avis = ia(etat, consigne + " " + IA_TON_JEUNE, dict(donnees_ia(m, r, cle), evenement=str(texte)[:600]),
+                          cle_cache=f"moment:{k}", duree=delai)
+            except Exception as ex:
+                print("ia moment", ex); avis = ""
+            if avis:
+                out.append(f"🧠 L'IA ALIGN EN DIRECT — {ICONE.get(m, '')} {m}\n{compacter_ia(avis)}")
+            break
+    return out
+
 def resume_volume(bars, provenance, timeframe_sec=0, now_ts=None):
     """Résumé du volume sur bougies entièrement clôturées, jamais sur une bougie encore en formation."""
     bars = bars or []
@@ -3519,9 +3556,10 @@ def installer_menu(etat):
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in en]), language_code="en")
         telegram("setChatMenuButton", menu_button=json.dumps({"type": "commands"}))
         try:
-            nom_bot = "ALIGN Gratuit 🎁 BTC & Gold"
-            if (telegram("getMyName").get("result") or {}).get("name") != nom_bot:   # setMyName est très limité par Telegram
-                telegram("setMyName", name=nom_bot)
+            # RÈGLE OBLIGATOIRE : le nom du bot ne se change JAMAIS depuis le code.
+            # Telegram bloque setMyName pendant des heures : c'est ce qui a rendu le bot sourd le 11/11/2026.
+            # Nom définitif, posé une fois : « ALIGN Gratuit 🎁 BTC & Gold ».
+            pass
         except Exception as ex:
             print("nom", ex)
         telegram("setMyShortDescription", short_description="🎁 ALIGN Gratuit : 1 position BTC / Gold proposée chaque jour • 💎 Tout le reste dans ALIGN VIP")
@@ -5886,14 +5924,17 @@ def un_tour(etat, chats):
             print("macro analyse", nom_marche, ex)
             r["macro_data"] = {"disponible": False, "statut": "DONNÉES MACRO INDISPONIBLES"}
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
-        envois += agent(nom_marche, r, cle, ferme)
+        nouveaux = agent(nom_marche, r, cle, ferme)
+        envois += nouveaux
+        if TOKEN:
+            envois += commentaires_ia_temps_reel(etat, nom_marche, r, cle, nouveaux)
         recevoir_updates_telegram(etat, chats, demandes)
         if SHUTDOWN_REQUESTED.is_set():
             return
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
             cle["trade"]["auto_fait"] = True
             trx = cle["trade"]
-            t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite. FORMAT : 4 lignes courtes maximum, une info par ligne, chaque ligne commence par un emoji, 12 mots maximum par ligne, aucun paragraphe ni conclusion.",
+            t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite. " + IA_TON_JEUNE,
                     dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
                                                                     "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}))
             if t_:
