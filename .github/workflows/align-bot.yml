@@ -145,6 +145,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
         run: python3 ai_healthcheck.py
 
       - name: Vérifier le bridge TradingView ROBOT V12 (BTC + GOLD)
@@ -189,6 +191,9 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          ANTHROPIC_MAX_JOUR: ${{ vars.ANTHROPIC_MAX_JOUR }}
           ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
           DUREE_SEC: "21000"

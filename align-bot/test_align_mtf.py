@@ -1115,7 +1115,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertTrue(state.get("ia_err"))
 
     def test_openai_is_configured_as_primary_external_ai_provider(self):
-        provider = align_bot.IA_FOURNISSEURS[0]
+        # Claude (moments clés, premium) passe avant ; OpenAI reste le premier fournisseur « classique ».
+        provider = next(p for p in align_bot.IA_FOURNISSEURS if p[0] != "Anthropic")
         self.assertEqual(provider[0], "OpenAI")
         self.assertEqual(provider[1], "https://api.openai.com/v1/chat/completions")
         self.assertEqual(provider[2], "chat-latest")
@@ -1845,7 +1846,11 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
 
     def _r(self, **kw):
         b5 = kw.pop("b5", None) or self._bars()
-        return {"b5": b5, "m1": [{"t": self.NOW - 30, "c": 100.4}], **kw}
+        base = {"b5": b5, "m1": [{"t": self.NOW - 30, "c": 100.4}], "dirPlan": -1, "bull": 2, "bear": 6, "sens": -1, "pctH": 30,
+                "strat": "DAY", "dirs": [-1, -1, -1, -1, -1, 0, 0, 1, 0, 0, -1], "dirW": 0, "atr": 2.0, "prix": 100.4,
+                "zone_pine": {"za": 101.0, "zb": 103.0, "zmil": 102.0, "f50": 102.5, "f618": 102.0, "f786": 101.2}}
+        base.update(kw)
+        return base
 
     def _state(self, cid="501", m="GOLD", vip=True):
         return {"veille_cloture": {m: {cid: {"multi": True, "derniers_t": {}, "expire": 9e12}}},
@@ -1863,30 +1868,100 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
             align_bot.battement_coeur(state, m, r, cle or {}, now=n_)
         return sent
 
-    def test_calm_heartbeat_real_data_then_no_spam(self):
-        st = self._state()
-        r = self._r(b5=self._bars(rng=1.0, last_rng=0.3))
-        sent = self._run(st, r)
-        self.assertEqual(len(sent), 1)
-        self.assertIn("marché calme, pas d'entrée pour l'instant", sent[0][1])
-        self.assertIn("Je surveille", sent[0][1])
-        self.assertEqual(self._run(st, r, now=self.NOW + 60), [])           # même bougie : rien
-        r2 = self._r(b5=self._bars(rng=1.0, last_rng=0.3, t0=self.NOW - 25 * 300 + 300))
-        self.assertEqual(self._run(st, r2, now=self.NOW + 120), [])         # < 5 min : pas de spam
-        self.assertEqual(len(self._run(st, r2, now=self.NOW + 400)), 1)     # ≥ 5 min : nouvelle info
+    # ───── battement de cœur : aucun doublon, délais respectés, contenu issu de l'indicateur ─────
+    def _cycle(self, etat, r, minute, m="GOLD", cle=None, mutate=None):
+        """Une poll à T0 + minute min. b5 : nouvelle bougie M5 toutes les 5 min ; m1 : cotation fraîche."""
+        from unittest.mock import patch
+        t = self.NOW + minute * 60
+        r = dict(r, b5=self._bars(t0=(t // 300) * 300 - 24 * 300), m1=[{"t": t - 20, "c": r["prix"]}])
+        sent = []
+        with patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: sent.append((minute, c, k["text"], k.get("disable_notification"))) or {"ok": True}), \
+             patch.object(align_bot, "verdict", return_value=("⏳ ATTEND", "")), patch.object(align_bot, "cme_ouvert", return_value=True), \
+             patch.object(align_bot, "POSITIONS_GRATUITES", False):
+            if mutate:
+                mutate(etat)
+            align_bot.battement_coeur(etat, m, r, cle or {}, now=t)
+        return sent
 
-    def test_moving_market_is_not_called_calm(self):
-        sent = self._run(self._state(), self._r(b5=self._bars(rng=1.0, last_rng=2.5)))
-        self.assertIn("ça bouge", sent[0][1])
-        self.assertNotIn("marché calme", sent[0][1])
+    def test_same_situation_for_an_hour_sends_one_message_only(self):
+        etat = self._state()
+        envois = []
+        for minute in range(0, 61):
+            # le prix bouge à chaque minute : sans évolution de l'indicateur, rien ne doit partir
+            envois += self._cycle(etat, self._r(prix=100.0 + minute * 0.01), minute)
+        self.assertEqual(len(envois), 1, [e[0] for e in envois])
 
-    def test_free_heartbeat_is_spaced(self):
-        st = self._state(vip=False)
-        r = self._r(b5=self._bars(rng=1.0, last_rng=0.3))
-        self.assertEqual(len(self._run(st, r)), 1)
-        r2 = self._r(b5=self._bars(rng=1.0, last_rng=0.3, t0=self.NOW - 25 * 300 + 300))
-        self.assertEqual(self._run(st, r2, now=self.NOW + 900), [])         # gratuit : 30 min
-        self.assertEqual(len(self._run(st, r2, now=self.NOW + 1900)), 1)
+    def test_memory_survives_restart_and_suivi_rearming(self):
+        etat = self._state()
+        envois = self._cycle(etat, self._r(), 0)
+        self.assertEqual(len(envois), 1)
+        for minute in range(1, 40):
+            # le suivi est supprimé puis recréé (nouvelle réservation, fin de position, expiration) et l'état est rechargé du disque
+            etat = json.loads(json.dumps(etat))
+            etat["veille_cloture"]["GOLD"]["501"] = {"multi": True, "derniers_t": {}, "expire": 9e12}
+            envois += self._cycle(etat, self._r(prix=100.4 + minute * 0.02), minute)
+        self.assertEqual(len(envois), 1)
+
+    def test_real_evolution_sends_once_and_respects_vip_delay(self):
+        etat = self._state()
+        envois = self._cycle(etat, self._r(bear=6), 0)
+        envois += self._cycle(etat, self._r(bear=7), 1)           # évolution trop tôt : retenue
+        envois += self._cycle(etat, self._r(bear=7), 4)
+        self.assertEqual(len(envois), 1)
+        envois += self._cycle(etat, self._r(bear=7), 5)           # délai de 5 min écoulé + nouvelle bougie M5 : un seul envoi
+        envois += self._cycle(etat, self._r(bear=7), 6)
+        envois += self._cycle(etat, self._r(bear=7), 10)
+        self.assertEqual([e[0] for e in envois], [0, 5])
+        self.assertTrue(all(b[0] - a[0] >= 5 for a, b in zip(envois, envois[1:])))
+        self.assertNotEqual(envois[0][2], envois[1][2])
+        self.assertNotEqual(align_bot._forme(envois[0][2]), align_bot._forme(envois[1][2]))
+
+    def test_free_delay_30_minutes_discreet_without_direction_or_levels(self):
+        etat = self._state(vip=False)
+        envois = self._cycle(etat, self._r(bear=6), 0)
+        envois += self._cycle(etat, self._r(bear=7), 10)
+        envois += self._cycle(etat, self._r(bear=7), 29)
+        self.assertEqual(len(envois), 1)
+        envois += self._cycle(etat, self._r(bear=7), 30)
+        self.assertEqual([e[0] for e in envois], [0, 30])
+        for _, _, txt, silencieux in envois:
+            self.assertEqual(silencieux, "true")
+            self.assertNotIn("LONG", txt); self.assertNotIn("SHORT", txt); self.assertNotIn("101", txt); self.assertNotIn("102", txt)
+            self.assertIn("VIP", txt)
+
+    def test_message_says_what_is_watched(self):
+        etat = self._state()
+        txt = self._cycle(etat, self._r(bear=6), 0)[0][2]
+        self.assertIn("SHORT", txt)                                   # sens probable
+        self.assertIn("6/11", txt); self.assertIn("il en faut 8", txt)  # UT alignées
+        self.assertIn("101", txt); self.assertIn("103", txt)          # zone min–max
+        self.assertIn("J'attends une clôture 5 min sous 102", txt)      # trait de décision de la stratégie DAY
+        self.assertIn("Profil visé", txt)
+        self.assertIn("prix à 0,6", txt)                              # distance au prix (100,4 -> zone 101)
+
+    def test_english_and_three_markets(self):
+        for m, ic in (("BTC", "🟠"), ("GOLD", "🥇"), ("NASDAQ", "💠")):
+            etat = self._state(m=m)
+            align_bot.LANG_EN.add("501")
+            try:
+                txt = self._cycle(etat, self._r(bear=6), 0, m=m)[0][2]
+            finally:
+                align_bot.LANG_EN.discard("501")
+            self.assertIn(ic, txt); self.assertIn(m, txt)
+            self.assertIn("Aligned timeframes: 6/11 (need 8)", txt)
+            self.assertIn("Waiting for a 5 min close below 102", txt)
+            self.assertNotIn("Je surveille", txt)
+
+    def test_ten_successive_evolutions_never_repeat_the_same_message(self):
+        etat = self._state()
+        textes = []
+        for k in range(10):
+            textes += [e[2] for e in self._cycle(etat, self._r(bear=3 + k % 8, pctH=40 - k), k * 5)]
+        self.assertGreaterEqual(len(textes), 9)
+        for a, b in zip(textes, textes[1:]):
+            self.assertNotEqual(a, b)
+            self.assertNotEqual(align_bot._forme(a), align_bot._forme(b))
+        self.assertGreaterEqual(len({t.split("\n")[0].split(":", 1)[1] for t in textes}), 4)   # formulation variée
 
     def test_no_heartbeat_with_open_trade_or_missing_data(self):
         self.assertEqual(self._run(self._state(), self._r(), cle={"trade": {"d": 1}}), [])
@@ -1914,14 +1989,6 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         self.assertIn("⏸ GOLD : marché fermé, reprise à", sent[0])
         self.assertRegex(sent[0], r"reprise à lundi 00:00")
-
-    def test_english_heartbeat(self):
-        align_bot.LANG_EN.add("501")
-        try:
-            sent = self._run(self._state(), self._r(b5=self._bars(rng=1.0, last_rng=0.3)))
-        finally:
-            align_bot.LANG_EN.discard("501")
-        self.assertIn("market is calm, no entry for now", sent[0][1])
 
     def test_gemini_error_shows_http_code_without_key(self):
         import io
@@ -1954,7 +2021,7 @@ class AlignSoundAndAiBudgetTest(unittest.TestCase):
         t = AlignHeartbeatAndGeminiTest
         from unittest.mock import patch
         for vip, attendu in ((True, None), (False, "true")):
-            tc = t("test_calm_heartbeat_real_data_then_no_spam")
+            tc = t("test_same_situation_for_an_hour_sends_one_message_only")
             sent = []
             st = tc._state("501", vip=vip)
             r = tc._r(b5=tc._bars(rng=1.0, last_rng=0.3))
@@ -1995,9 +2062,9 @@ class AlignSoundAndAiBudgetTest(unittest.TestCase):
         """Une heure simulée (12 cycles de 5 min, 3 marchés) : battement de cœur sans IA ; IA seulement aux moments clés, cachée."""
         from unittest.mock import patch
         appels = []
-        def faux_ia(etat, consigne, donnees, cle_cache=None, duree=600):
+        def faux_ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False):
             appels.append(cle_cache); return "🧠 test"
-        etat, tc = {}, AlignHeartbeatAndGeminiTest("test_calm_heartbeat_real_data_then_no_spam")
+        etat, tc = {}, AlignHeartbeatAndGeminiTest("test_same_situation_for_an_hour_sends_one_message_only")
         horloge = [tc.NOW]
         with patch.object(align_bot, "ia", side_effect=faux_ia), patch.object(align_bot, "donnees_ia", return_value={}), \
              patch.object(align_bot.time, "time", side_effect=lambda: horloge[0]), \
@@ -2016,6 +2083,77 @@ class AlignSoundAndAiBudgetTest(unittest.TestCase):
         print(f"IA_APPELS_PAR_HEURE={len(appels)} (3 marchés, événements clés à chaque cycle)")
         self.assertLessEqual(len(appels), 3 * (1 + 2 + 1))     # prep 1/2h + tp 1/h + turbulence 1/30min par marché
         self.assertGreaterEqual(len(appels), 3)
+
+
+
+class AlignClaudeProviderTest(unittest.TestCase):
+    CLE = "sk-ant-api03-FAKEKEYFAKEKEYFAKEKEY123456"
+
+    def _patch_chaine(self, cle, appels, echec_claude=False):
+        from unittest.mock import patch
+        def faux_appel(url, modele, k, messages):
+            nom = "Anthropic" if "anthropic" in url else "OVH" if "ovh" in url else "autre"
+            appels.append((nom, modele))
+            if nom == "Anthropic" and echec_claude:
+                raise RuntimeError("HTTP 529")
+            return "🧠 réponse de test " + nom
+        chaine = [("Anthropic", "https://api.anthropic.com/v1/messages", "claude-haiku-5-5", cle, True),
+                  ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta", "", False)]
+        return patch.object(align_bot, "IA_FOURNISSEURS", chaine), patch.object(align_bot, "_appel_ia", side_effect=faux_appel)
+
+    def test_claude_first_for_key_moments_only(self):
+        appels = []
+        p1, p2 = self._patch_chaine(self.CLE, appels)
+        with p1, p2:
+            etat = {}
+            self.assertIn("Anthropic", align_bot.ia(etat, "c", {}, premium=True))
+            self.assertIn("OVH", align_bot.ia(etat, "c", {}))            # hors moment clé : IA gratuites
+        self.assertEqual([a[0] for a in appels], ["Anthropic", "OVH"])
+        self.assertEqual(sum(etat["ia_claude_jour"].values()), 1)
+
+    def test_claude_absent_or_failing_or_capped_falls_back_to_free(self):
+        for cle, echec, plafond in (("", False, 300), (self.CLE, True, 300), (self.CLE, False, 0)):
+            appels = []
+            p1, p2 = self._patch_chaine(cle, appels, echec_claude=echec)
+            with p1, p2, unittest.mock.patch.object(align_bot, "ANTHROPIC_MAX_JOUR", plafond):
+                txt = align_bot.ia({}, "c", {}, premium=True)
+            self.assertIn("OVH", txt, f"clé={bool(cle)} échec={echec} plafond={plafond}")
+            self.assertEqual(any(a[0] == "Anthropic" for a in appels), bool(cle) and echec)
+
+    def test_daily_cap_counts_and_switches(self):
+        appels = []
+        p1, p2 = self._patch_chaine(self.CLE, appels)
+        with p1, p2, unittest.mock.patch.object(align_bot, "ANTHROPIC_MAX_JOUR", 2):
+            etat = {}
+            textes = [align_bot.ia(etat, "c", {}, premium=True) for _ in range(4)]
+        self.assertEqual([("Anthropic" in t) for t in textes], [True, True, False, False])
+
+    def test_anthropic_request_format_and_key_never_in_errors(self):
+        import io
+        import urllib.error
+        from unittest.mock import patch, MagicMock
+        rep = MagicMock(); rep.__enter__.return_value.read.return_value = b'{"content":[{"type":"text","text":"\xf0\x9f\xa7\xa0 Tiens-toi pr\xc3\xaat"}]}'
+        msgs = [{"role": "system", "content": "REGLES"}, {"role": "user", "content": "DONNEES"}]
+        with patch.object(align_bot.urllib.request, "urlopen", return_value=rep) as uo:
+            txt = align_bot._appel_ia("https://api.anthropic.com/v1/messages", "claude-haiku-5-5", self.CLE, msgs)
+        req = uo.call_args.args[0]
+        corps = json.loads(req.data.decode())
+        self.assertEqual(req.get_header("X-api-key"), self.CLE)
+        self.assertEqual(req.get_header("Anthropic-version"), "2023-06-01")
+        self.assertEqual((corps["model"], corps["system"], corps["messages"]), ("claude-haiku-5-5", "REGLES", [msgs[1]]))
+        self.assertLessEqual(corps["max_tokens"], 500)
+        self.assertIn("Tiens-toi", txt)
+        corps_err = io.BytesIO(('{"error":{"status":"UNAUTHENTICATED","message":"bad key ' + self.CLE + '"}}').encode())
+        ex = urllib.error.HTTPError("https://api.anthropic.com/v1/messages", 401, "x", {}, corps_err)
+        detail = align_bot.detail_erreur_ia(ex, self.CLE)
+        self.assertIn("HTTP 401", detail); self.assertNotIn(self.CLE, detail); self.assertNotIn("sk-ant-api03", detail)
+
+    def test_key_moments_call_claude_and_lesson_does_not(self):
+        import inspect
+        src = inspect.getsource(align_bot)
+        self.assertEqual(src.count(", premium=True)"), 5)   # moments clés, En savoir plus, news x2, entrée
+        self.assertEqual(align_bot.IA_FOURNISSEURS[0][0], "Anthropic")
+        self.assertEqual(align_bot.ANTHROPIC_MAX_JOUR, 300)
 
 
 if __name__ == "__main__":

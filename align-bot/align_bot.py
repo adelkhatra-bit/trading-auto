@@ -2362,6 +2362,8 @@ def menu_canal_vip(etat):
 # 1) Google Gemini (si la clé GEMINI_API_KEY existe)  2) OVHcloud Llama 3.3 70B (sans clé)  3) OVHcloud Mistral (sans clé)
 # 4) Pollinations (sans clé)  5) LLM7 (sans clé). Et si TOUT tombe : l'analyse interne du bot répond quand même.
 IA_FOURNISSEURS = [
+    # Claude Haiku : payant (clé ANTHROPIC_API_KEY dans les secrets GitHub), UNIQUEMENT pour les moments clés (premium=True), plafond/jour ANTHROPIC_MAX_JOUR.
+    ("Anthropic", "https://api.anthropic.com/v1/messages", os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5", os.environ.get("ANTHROPIC_API_KEY", ""), True),
     ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL") or "chat-latest", os.environ.get("OPENAI_API_KEY", ""), True),
     ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash", os.environ.get("GEMINI_API_KEY", ""), True),
     ("Gemini Lite", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.5-flash-lite", os.environ.get("GEMINI_API_KEY", ""), True),
@@ -2371,6 +2373,8 @@ IA_FOURNISSEURS = [
     ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", "", False),
 ]
 IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "300"))
+ANTHROPIC_MAX_JOUR = int(os.environ.get("ANTHROPIC_MAX_JOUR") or "300")     # appels Claude par jour (au-delà : IA gratuites)
+ANTHROPIC_MAX_TOKENS = 400                                                  # réponse courte : 4 lignes
 IA_REGLES = ("Tu es l'analyste de marché du bot ALIGN. Tu reçois des données chiffrées réelles calculées par le moteur ; tu dois les interpréter, pas les remplacer. "
              "Architecture : H4 = biais directeur, H1 = confirmation, M15 = structure/retracement, M5 = déclencheur après clôture ; M1 = suivi du prix. "
              "Sépare tendance, scénario privilégié, scénario alternatif, validation, invalidation et prochaine action. "
@@ -2397,21 +2401,31 @@ def detail_erreur_ia(ex, cle=""):
         texte = f"{type(ex).__name__} {ex}".strip()
     if cle:
         texte = texte.replace(cle, "***")
-    return re.sub(r"AIza[0-9A-Za-z_\-]{20,}", "***", texte)[:200]
+    return re.sub(r"(AIza|sk-ant-)[0-9A-Za-z_\-]{20,}", "***", texte)[:200]
 
 def _appel_ia(url, modele, cle, messages):
-    corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 1000, "messages": messages}).encode()
     h = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "align-bot"}
-    if cle:
-        h["Authorization"] = f"Bearer {cle}"
+    anthropic = "api.anthropic.com" in url
+    if anthropic:                                   # API Messages d'Anthropic : consigne système séparée, clé dans x-api-key
+        systeme = "\n".join(m["content"] for m in messages if m.get("role") == "system")
+        corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": ANTHROPIC_MAX_TOKENS, "system": systeme,
+                            "messages": [m for m in messages if m.get("role") != "system"]}).encode()
+        h["x-api-key"] = cle; h["anthropic-version"] = "2023-06-01"
+    else:
+        corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 1000, "messages": messages}).encode()
+        if cle:
+            h["Authorization"] = f"Bearer {cle}"
     with urllib.request.urlopen(urllib.request.Request(url, data=corps, headers=h), timeout=25) as rep_:
         j = json.loads(rep_.read().decode())
-    txt = (j["choices"][0]["message"].get("content") or "").strip()
+    if anthropic:
+        txt = "".join(b.get("text", "") for b in j.get("content", []) if b.get("type") == "text").strip()
+    else:
+        txt = (j["choices"][0]["message"].get("content") or "").strip()
     if len(txt) < 8:
         raise ValueError("réponse vide")
     return txt
 
-def ia(etat, consigne, donnees, cle_cache=None, duree=600):
+def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False):
     """Commentaire court d'une vraie IA. Essaie chaque IA gratuite à la suite ; '' seulement si toutes sont tombées."""
     cache = etat.setdefault("ia_cache", {})
     if cle_cache and cle_cache in cache and time.time() - cache[cle_cache][0] < duree:
@@ -2427,9 +2441,12 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
     messages = [{"role": "system", "content": IA_REGLES},
                 {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]
     txt, erreurs = "", []
+    claude_jour = etat.setdefault("ia_claude_jour", {})
     for nom, url, modele, cle, besoin_cle in IA_FOURNISSEURS:
         if besoin_cle and not cle:
             continue
+        if nom == "Anthropic" and (not premium or claude_jour.get(jour, 0) >= ANTHROPIC_MAX_JOUR):
+            continue                                   # Claude : moments clés seulement, dans la limite du plafond du jour
         if time.time() < etat.get("ia_pause", {}).get(nom, 0):
             continue                                   # IA en panne récemment : on passe à la suivante
         try:
@@ -2438,6 +2455,10 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
             etat["ia_dernier_fournisseur"] = nom
             etat["ia_dernier_modele"] = modele
             etat["ia_dernier_statut"] = "CONNECTED"
+            if nom == "Anthropic":
+                claude_jour[jour] = claude_jour.get(jour, 0) + 1
+                for k in [k for k in claude_jour if k != jour]:
+                    claude_jour.pop(k)
             print(f"AI_PROVIDER_USED={nom} model={modele}", flush=True)
             break
         except Exception as ex:
@@ -2492,7 +2513,7 @@ def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
             vus[k] = time.time()
             try:
                 avis = ia(etat, consigne + " " + IA_TON_JEUNE, dict(donnees_ia(m, r, cle), evenement=str(texte)[:600]),
-                          cle_cache=f"moment:{k}", duree=delai)
+                          cle_cache=f"moment:{k}", duree=delai, premium=True)
             except Exception as ex:
                 print("ia moment", ex); avis = ""
             if avis:
@@ -2648,7 +2669,7 @@ def avis_ia(etat, m, r, cle, anglais=False):
     empreinte["prochaine_reevaluation"] = reevaluation
     signature = hashlib.sha256(json.dumps(empreinte, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
     t = ia(etat, consigne, donnees,
-           cle_cache=f"analyse_{m}_{langue_cache}_{signature}")
+           cle_cache=f"analyse_{m}_{langue_cache}_{signature}", premium=True)
     t = compacter_ia(t)
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
@@ -3584,28 +3605,71 @@ def etat_marche_hb(m, r, now):
         return "perime", None
     return "ouvert", None
 
-def texte_battement(m, r, cle, anglais=False):
-    """Info courte réelle à la clôture d'une bougie M5 : calme ou non, uniquement d'après les bougies reçues."""
-    b5 = r.get("b5") or []
-    if len(b5) < 21:
+HB_VARIANTES_FR = ("🟡 {ic} {m} : je surveille, pas d'entrée pour l'instant", "👀 {ic} {m} : rien de validé, je garde l'œil dessus",
+                   "⏳ {ic} {m} : toujours en attente d'une confirmation", "🧐 {ic} {m} : le marché n'a pas encore validé d'entrée")
+HB_VARIANTES_EN = ("🟡 {ic} {m}: watching, no entry for now", "👀 {ic} {m}: nothing confirmed yet, keeping an eye on it",
+                   "⏳ {ic} {m}: still waiting for a confirmation", "🧐 {ic} {m}: the market has not confirmed an entry yet")
+HB_UNITE_VALIDATION = {"SWING": "1h", "DAY": "5 min", "SCALPING": "1 min"}        # unité de validation de l'indicateur (15 min sans stratégie)
+
+def hb_etat_surveille(r):
+    """Ce que l'indicateur surveille, uniquement à partir des vraies données : sens, UT alignées, zone, profil, trait de décision."""
+    d = r.get("dirPlan") or 0
+    strat = r.get("strat") or ""
+    etat_s = strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)[1] if d else "AUCUNE"
+    n = r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
+    zp = r.get("zone_pine") if d else None
+    a = float(r.get("atr") or 0) or 1.0
+    prix = r.get("prix") or (r.get("m1") or [{}])[-1].get("c")
+    sens = r.get("sens", 0)
+    pct = r.get("pctH", 50)
+    return dict(d=d, strat=strat, etat=etat_s, n=n, zp=zp, a=a, prix=prix, sens=sens, pct=pct if sens >= 0 else 100 - pct,
+                sig=(d, n, strat, etat_s, sens, round(zp["zmil"] / (0.5 * a)) if zp else None))
+
+def texte_battement(m, r, cle, anglais=False, vip=True, variante=0):
+    """Message de veille : CE QUI EST SURVEILLÉ (jamais inventé). Gratuit : sobre, sans sens ni niveaux (réservés aux VIP)."""
+    if len(r.get("b5") or []) < 21 and "bull" not in r:
         return None
-    x = b5[-1]
-    rng = x["h"] - x["l"]
-    moy = sum(y["h"] - y["l"] for y in b5[-21:-1]) / 20
-    if moy <= 0:
-        return None
-    calme = rng <= 0.7 * moy
-    prix = (r.get("m1") or [x])[-1].get("c", x["c"])
+    e = hb_etat_surveille(r)
     ic = ICONE.get(m, "📊")
-    if anglais:
-        tete = f"🟡 {ic} {m}: market is calm, no entry for now" if calme else f"🟡 {ic} {m}: price is moving, no confirmed entry yet"
-        return "\n".join([tete, f"💰 Price {px(prix)}", "👀 I keep watching"])
-    tete = f"🟡 {ic} {m} : marché calme, pas d'entrée pour l'instant" if calme else f"🟡 {ic} {m} : ça bouge, pas d'entrée confirmée pour l'instant"
-    return "\n".join([tete, f"💰 Prix {px(prix)}", "👀 Je surveille"])
+    tete = (HB_VARIANTES_EN if anglais else HB_VARIANTES_FR)[variante % 4].format(ic=ic, m=m)
+    n, seuil = e["n"], MIN_ALIGN
+    if not vip:
+        return "\n".join([tete, (f"📊 Aligned timeframes: {n}/11 (need {seuil})" if anglais else f"📊 UT alignées : {n}/11 (il en faut {seuil})"),
+                          ("🔒 Direction and levels: VIP" if anglais else "🔒 Sens et niveaux : VIP")])
+    lignes = [tete]
+    sens_txt = {1: "LONG ⬆️", -1: "SHORT ⬇️", 0: "INDÉCIS" if not anglais else "UNDECIDED"}[e["sens"]]
+    lignes.append((f"🧭 Likely direction: {sens_txt}" if anglais else f"🧭 Sens probable : {sens_txt}") + (f" ({e['pct']} %)" if e["sens"] else ""))
+    atteint = n >= seuil
+    lignes.append((f"📊 Aligned timeframes: {n}/11 " + (f"(threshold {seuil} reached)" if atteint else f"(need {seuil})")) if anglais else
+                  (f"📊 UT alignées : {n}/11 " + (f"(seuil {seuil} atteint)" if atteint else f"(il en faut {seuil})")))
+    zp, prix, d = e["zp"], e["prix"], e["d"]
+    if zp and prix:
+        dedans = zp["za"] <= prix <= zp["zb"]
+        dist = 0 if dedans else min(abs(prix - zp["za"]), abs(prix - zp["zb"]))
+        if anglais:
+            lignes.append(f"📍 Entry zone: {px(zp['za'])} – {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)"))
+        else:
+            lignes.append(f"📍 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})"))
+        unite = HB_UNITE_VALIDATION.get(e["strat"], "15 min")
+        if anglais:
+            lignes.append(f"🕯 Waiting for a {unite} close {'below' if d == -1 else 'above'} {px(zp['zmil'])}")
+        else:
+            lignes.append(f"🕯 J'attends une clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(zp['zmil'])}")
+    profil = {"SWING": "SWING", "DAY": "INTRADAY" if not anglais else "DAY", "SCALPING": "SCALP"}.get(e["strat"], "")
+    if profil:
+        etat_t = {"CONFIRMÉ": "confirmed" if anglais else "confirmé", "EN ATTENTE": "pending" if anglais else "en attente"}.get(e["etat"], "")
+        lignes.append((f"🎯 Target profile: {profil} ({etat_t})" if anglais else f"🎯 Profil visé : {profil} ({etat_t})"))
+    else:
+        lignes.append("🎯 Target profile: none yet" if anglais else "🎯 Profil visé : aucun pour l'instant")
+    return "\n".join(lignes)
+
+def _forme(texte):
+    """Forme d'un message sans chiffres : deux messages à la même forme sont « quasi identiques »."""
+    return re.sub(r"[\d.,]+", "#", str(texte))
 
 def battement_coeur(etat, m, r, cle, now=None):
-    """Battement de cœur : une info courte à chaque clôture M5 pour les abonnés qui suivent ce marché.
-    Réutilise veille_cloture (aucun second suivi) ; n'envoie rien si une alerte de clôture est partie récemment."""
+    """Veille : une info seulement à une VRAIE évolution (sens, UT alignées, stratégie, zone), au plus à une clôture M5, avec
+    5 min minimum (VIP) ou 30 min (gratuit). Mémoire dédiée dans etat['hb_mem'] : indépendante de la vie des suivis, sauvegardée avec l'état."""
     now = now or time.time()
     if cle.get("trade"):
         return                                    # position ouverte : le coach parle déjà
@@ -3614,43 +3678,47 @@ def battement_coeur(etat, m, r, cle, now=None):
         return                                    # signal validé : l'alerte d'entrée s'en charge
     statut, reprise = etat_marche_hb(m, r, now)
     b5 = r.get("b5") or []
+    memoire = etat.setdefault("hb_mem", {}).setdefault(m, {})
     for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
         if not suivi.get("multi") or not marche_autorise(etat, cid, m):
             continue
-        anglais = str(cid) in LANG_EN
+        cid = str(cid)
+        anglais = cid in LANG_EN
+        mem = memoire.setdefault(cid, {})
         if statut == "ferme":
-            if suivi.get("ferme_dit") != reprise:
+            if mem.get("ferme_dit") != reprise:
                 quand = heure_reprise(reprise, anglais) if reprise else "?"
                 txt = (f"⏸ {m}: market closed, back at {quand} (Paris time)" if anglais
                        else f"⏸ {m} : marché fermé, reprise à {quand} (heure de Paris)")
                 res = _envoi_sur(cid, text=txt)
                 if isinstance(res, dict) and res.get("ok") is not False:
-                    suivi["ferme_dit"] = reprise
-                    suivi["hb_t"] = now
+                    mem["ferme_dit"] = reprise; mem["t"] = now
             continue
-        suivi.pop("ferme_dit", None)
+        mem.pop("ferme_dit", None)
         if statut == "perime":
-            if not suivi.get("perime_dit"):
+            if not mem.get("perime_dit"):
                 res = _envoi_sur(cid, text=(f"⚠️ {m}: data not up to date, I can't judge right now" if anglais
                                             else f"⚠️ {m} : données pas à jour, je ne peux pas juger pour l'instant"))
                 if isinstance(res, dict) and res.get("ok") is not False:
-                    suivi["perime_dit"] = True
-                    suivi["hb_t"] = now
+                    mem["perime_dit"] = True; mem["t"] = now
             continue
-        suivi.pop("perime_dit", None)
-        if not b5 or int(b5[-1]["t"]) <= int(suivi.get("hb_bar", 0)):
+        mem.pop("perime_dit", None)
+        if not b5 or int(b5[-1]["t"]) <= int(mem.get("bar", 0)):
             continue                              # pas de nouvelle clôture M5
-        intervalle = HB_INTERVALLE_VIP if autorise(etat, cid, cid) else HB_INTERVALLE_GRATUIT
-        if now - float(suivi.get("hb_t", 0)) < intervalle:
-            continue
-        txt = texte_battement(m, r, cle, anglais)
-        if not txt:
-            continue
-        # Gratuit : battement discret (sans son). VIP : notification normale.
-        res = _envoi_sur(cid, text=txt, **({} if intervalle == HB_INTERVALLE_VIP else {"disable_notification": "true"}))
+        vip = bool(autorise(etat, cid, cid))
+        if now - float(mem.get("t", 0)) < (HB_INTERVALLE_VIP if vip else HB_INTERVALLE_GRATUIT):
+            continue                              # délai minimal non écoulé (mémoire du dernier envoi)
+        sig = list(hb_etat_surveille(r)["sig"])
+        mem["bar"] = int(b5[-1]["t"])
+        if mem.get("sig") == sig:
+            continue                              # rien n'a changé : on n'envoie rien
+        txt = texte_battement(m, r, cle, anglais, vip=vip, variante=int(mem.get("i", 0)))
+        if not txt or _forme(txt) == mem.get("forme"):
+            continue                              # jamais deux messages quasi identiques de suite
+        # Gratuit : discret (sans son). VIP : notification normale.
+        res = _envoi_sur(cid, text=txt, **({} if vip else {"disable_notification": "true"}))
         if isinstance(res, dict) and res.get("ok") is not False:
-            suivi["hb_t"] = now
-            suivi["hb_bar"] = int(b5[-1]["t"])
+            mem.update(t=now, sig=sig, forme=_forme(txt), i=int(mem.get("i", 0)) + 1)
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
@@ -5004,7 +5072,7 @@ def annonces_et_sessions(etat, maintenant, derniers):
                     etat,
                     "Après cette annonce économique, interprète uniquement la réaction de prix observée sur BTC et Gold. Dis si le mouvement est net ou limité, rappelle que les deux sens restent possibles et indique d'attendre la clôture 15 min avant toute reprise. N'invente aucun chiffre et ne donne pas d'ordre d'entrée.",
                     {"annonce": e["titre"], "réaction observée": lr, "consigne": "aucune entrée avant clôture 15 min"},
-                    cle_cache=f"newsreaction{e['t']}{e['titre']}", duree=3600)
+                    cle_cache=f"newsreaction{e['t']}{e['titre']}", duree=3600, premium=True)
                 message = f"📰 RÉACTION À LA NEWS — {e['titre']}\n" + "\n".join(lr)
                 message += "\n⏳ J'attends la clôture de la bougie 15 min avant de reprendre"
                 if avis_apres:
@@ -5013,7 +5081,7 @@ def annonces_et_sessions(etat, maintenant, derniers):
         if 6 * 60 < reste <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev{e['t']}{e['titre']}")
             avis = ia(etat, "Explique en 2 lignes très simples ce que cette annonce peut faire au Gold et au BTC (sans donner de sens à trader, juste le risque).",
-                      {"annonce": e["titre"], "prévu": e.get("prev"), "avant": e.get("avant")}, cle_cache=f"news{e['t']}{e['titre']}", duree=3600)
+                      {"annonce": e["titre"], "prévu": e.get("prev"), "avant": e.get("avant")}, cle_cache=f"news{e['t']}{e['titre']}", duree=3600, premium=True)
             out.append(f"⚠️⚠️ NEWS USA dans {round(reste / 60)} min ({heure(e['t'])})\n📰 {e['titre']}\n\n"
                        f"🟥 N'ouvre AUCUN trade\n🛡 Déjà en position ? Vérifie que ton STOP est bien placé\n"
                        f"💥 Le prix peut bouger très fort dans les 2 sens\n⏳ On reprend à {fin}" + (f"\n\n🧠 L'avis de l'IA ALIGN\n{avis}" if avis else ""))
@@ -6359,7 +6427,7 @@ def un_tour(etat, chats):
             trx = cle["trade"]
             t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite. " + IA_TON_JEUNE,
                     dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
-                                                                    "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}))
+                                                                    "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}), premium=True)
             if t_:
                 envois.append(f"🧠 L'IA ALIGN sur cette entrée — {ICONE.get(nom_marche, '')} {nom_marche}\n{compacter_ia(t_)}")
             entrer_inscrits(etat, nom_marche, cle["trade"], chats)
