@@ -2218,6 +2218,12 @@ def donnees_ia(m, r, cle):
                 "H4": resume_volume(r.get("b4h"), "Kraken BTC spot" if m == "BTC" else "Volume proxy GOLD (PAXG ou COMEX selon la source active)", 14400)
             },
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
+    # Position déjà ouverte : l'IA la commente (jamais « aucun prix d'entrée » pendant un trade).
+    trx = (cle or {}).get("trade")
+    if trx:
+        data["position_ouverte"] = {"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
+                                    "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2),
+                                    "TP2": round(trx["tp2"], 2) if trx.get("tp2") else None, "statut": trx.get("statut")}
     # Distance réelle au plan d'entrée et rythme observé : aide à décider si l'attente vaut la peine.
     prix_actuel = float(r["m1"][-1]["c"])
     plan = plan_indicateur(r)
@@ -2300,9 +2306,9 @@ def compacter_ia(t):
 def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
     consigne = (
-        "Give a concise, decision-ready desk brief in English: current move (rising/falling/ranging/rebound/pullback), H4/H1 bias, M15 structure and intended direction, M5 entry trigger, volume context on M5/M15/H1/H4 including source provenance and relative spike/weakness when available (never treat GOLD proxy volume as actual XAUUSD spot volume), exact planned entry/SL/TP only from supplied live plan, distance from current price to entry, indicative minutes based on observed 5m candle ranges, and what to do now. If the target is far, say plainly whether it is worth waiting and give the indicative check-back window; never tell the user to wait for hours when the supplied distance/range data show otherwise. Label the time estimate as mechanical and uncertain, never a promise. If no fresh entry plan exists, say NO VALID ENTRY PRICE and do not invent one. Mention the next blocking candle close only as the next review, not an entry time. No broker, macro filler, generic warnings, or indicator dump. Never override ALIGN's internal verdict. FORMAT: at most 6 short lines, one fact per line, each line starts with an emoji then 'Label: value' (e.g. '📈 Move: falling'), max 12 words per line, no paragraph, no conclusion sentence."
+        "Give a concise, decision-ready desk brief in English: current move (rising/falling/ranging/rebound/pullback), H4/H1 bias, M15 structure and intended direction, M5 entry trigger, volume context on M5/M15/H1/H4 including source provenance and relative spike/weakness when available (never treat GOLD proxy volume as actual XAUUSD spot volume), exact planned entry/SL/TP only from supplied live plan, distance from current price to entry, indicative minutes based on observed 5m candle ranges, and what to do now. If the target is far, say plainly whether it is worth waiting and give the indicative check-back window; never tell the user to wait for hours when the supplied distance/range data show otherwise. Label the time estimate as mechanical and uncertain, never a promise. If 'position_ouverte' is supplied, comment on that open trade (direction, entry, SL, TP, what to do now) instead of looking for an entry. With no open position and no fresh entry plan, say NO VALID ENTRY PRICE and do not invent one. Mention the next blocking candle close only as the next review, not an entry time. No broker, macro filler, generic warnings, or indicator dump. Never override ALIGN's internal verdict. FORMAT: at most 6 short lines, one fact per line, each line starts with an emoji then 'Label: value' (e.g. '📈 Move: falling'), max 12 words per line, no paragraph, no conclusion sentence."
         if anglais else
-        "Fais un briefing de trading court et directement exploitable : mouvement actuel (hausse, baisse, range, rebond ou retracement), biais H4/H1, structure M15 et direction visée, déclencheur d'entrée M5, lecture des volumes M5/M15/H1/H4 avec provenance et comparaison à la moyenne lorsqu'elle est disponible (ne jamais présenter le volume proxy GOLD comme le volume réel du spot XAUUSD), prix d'entrée/SL/TP exacts uniquement s'ils viennent d'un plan actif et frais, distance entre prix actuel et entrée, estimation indicative en minutes fondée sur les amplitudes réellement observées des bougies 5 min, puis quoi faire maintenant. Si l'entrée est loin, dis clairement si cela vaut la peine d'attendre et dans combien de temps revenir vérifier ; ne demande pas d'attendre des heures si la distance et le rythme observé indiquent le contraire. Présente le délai comme une projection mécanique incertaine, jamais comme une promesse. Sans plan d'entrée frais, écris AUCUN PRIX D'ENTRÉE VALIDE et n'invente rien. La prochaine clôture de l'unité bloquante est une réévaluation, pas une heure d'entrée. Aucun broker, remplissage macro, avertissement générique ou catalogue d'indicateurs. Ne contredis jamais le verdict interne. FORMAT : 6 lignes courtes au maximum, une seule info par ligne, chaque ligne commence par un emoji puis « Intitulé : valeur » (ex. « 📈 Mouvement : baisse »), 12 mots maximum par ligne, aucun paragraphe, aucune phrase de conclusion."
+        "Fais un briefing de trading court et directement exploitable : mouvement actuel (hausse, baisse, range, rebond ou retracement), biais H4/H1, structure M15 et direction visée, déclencheur d'entrée M5, lecture des volumes M5/M15/H1/H4 avec provenance et comparaison à la moyenne lorsqu'elle est disponible (ne jamais présenter le volume proxy GOLD comme le volume réel du spot XAUUSD), prix d'entrée/SL/TP exacts uniquement s'ils viennent d'un plan actif et frais, distance entre prix actuel et entrée, estimation indicative en minutes fondée sur les amplitudes réellement observées des bougies 5 min, puis quoi faire maintenant. Si l'entrée est loin, dis clairement si cela vaut la peine d'attendre et dans combien de temps revenir vérifier ; ne demande pas d'attendre des heures si la distance et le rythme observé indiquent le contraire. Présente le délai comme une projection mécanique incertaine, jamais comme une promesse. Si « position_ouverte » est fournie, commente cette position (sens, entrée, SL, TP, que faire maintenant) au lieu de chercher une entrée. Sans position ouverte ni plan d'entrée frais, écris AUCUN PRIX D'ENTRÉE VALIDE et n'invente rien. La prochaine clôture de l'unité bloquante est une réévaluation, pas une heure d'entrée. Aucun broker, remplissage macro, avertissement générique ou catalogue d'indicateurs. Ne contredis jamais le verdict interne. FORMAT : 6 lignes courtes au maximum, une seule info par ligne, chaque ligne commence par un emoji puis « Intitulé : valeur » (ex. « 📈 Mouvement : baisse »), 12 mots maximum par ligne, aucun paragraphe, aucune phrase de conclusion."
     )
     langue_cache = "en" if anglais else "fr"
     donnees = donnees_ia(m, r, cle)
@@ -2450,28 +2456,21 @@ def texte_timeframes(m, r):
             "1 heure", "2 heures", "4 heures", "Daily"]
     directions = ["🟩 HAUSSIER ⬆️" if d == 1 else "🟥 BAISSIER ⬇️" if d == -1 else "⬜ NEUTRE ➖"
                   for d in r["dirs"]]
-    lignes = [
-        f"⏱ TOUTES LES UNITÉS — {m}",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "Lecture technique : direction + RSI",
-        f"Profil proposé : {profil_strategie(r)['mode']} — {profil_strategie(r)['horizon']}",
-        f"Préparation M15 : {'alignée' if r['dirs'][4] == profil_strategie(r)['direction'] and profil_strategie(r)['direction'] else 'en attente / retracement'}",
-        f"Timing M5 : {'direction alignée ; déclencheur clôturé à vérifier' if profil_strategie(r)['m5_aligne'] else 'attendre la confirmation dans le sens du setup'}",
-    ]
+    prof = profil_strategie(r) if len(r.get("dirs") or []) >= 11 else {}
+    lignes = [f"⏱ TOUTES LES UNITÉS — {ICONE.get(m, '')} {m}"]
+    if prof.get("mode"):
+        lignes.append(f"🏷 Profil : {prof['mode']}")
+    lignes.append("")
     for nom, direction, valeur in zip(noms, directions, r["rsis"]):
         lignes.append(f"{nom} : {direction} — RSI {valeur:.0f}")
     lignes += [
-        "━━━━━━━━━━━━━━━━━━━━",
-        "🧭 COMMENT ALIGN PREND SA DÉCISION",
+        "",
         "🏔 4 h : tendance principale",
-        "🔁 1 h : confirme ou contredit le biais de fond H4",
-        "👀 15 min : préparation, retracement, cassure et retest",
-        "🎯 5 min : timing ; clôture, rejet ou retest confirmé obligatoire",
-        "⚖️ SCALPING : H1 + M15 + M5 + M1 • DAY : H4 + H1 + M15 + M5 • SWING : W1/D1 + H4 + H1",
-        "⚠️ Un setup contre H4/H1 reste un scalp contre-tendance, jamais un swing",
-        "📍 1 min : suivi du prix et de la position",
-        "ℹ️ 3, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.",
-        "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d'entrée."
+        "🔁 1 h : confirme ou contredit la 4 h",
+        "👀 15 min : préparation et cassure",
+        "🎯 5 min : timing de l'entrée (clôture obligatoire)",
+        "⚖️ SCALP : 1h + 15m + 5m + 1m — DAY : 4h + 1h + 15m + 5m — SWING : D/W + 4h + 1h",
+        "⚠️ Une unité seule n'autorise jamais une entrée.",
     ]
     return "\n".join(lignes)
 
@@ -2480,7 +2479,7 @@ def texte_pourquoi(m, r, cle):
     """Explication courte de la décision, sans transformer le biais en signal d'entrée."""
     titre, raison = verdict(r, cle)
     maj, n_ok = alignement(r)
-    direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "AUCUNE DIRECTION CONFIRMÉE"
+    direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else direction_attente(r)
     tr = (cle or {}).get("trade")
     if tr:
         autorisation = "POSITION DÉJÀ OUVERTE"
@@ -2516,6 +2515,17 @@ def news_courte(news):
         return (f"📰 Pas de news d'ici 4 h — prochaine : {court(evts[0], 70)}" if calme
                 else f"📰 News : {court(evts[0], 80)}")
     return f"📰 {court(lignes[0] if lignes else news, 80)}"
+
+
+def direction_attente(r):
+    """Pas de direction validée : on dit quand même ce que fait la 4 h (même lecture que le chrono)."""
+    dirs = r.get("dirs") or []
+    d4 = dirs[9] if len(dirs) > 9 else 0
+    if d4 == 1:
+        return "AUCUNE DIRECTION CONFIRMÉE (4 h LONG, 1 h pas encore d'accord)"
+    if d4 == -1:
+        return "AUCUNE DIRECTION CONFIRMÉE (4 h SHORT, 1 h pas encore d'accord)"
+    return "AUCUNE DIRECTION CONFIRMÉE (4 h neutre)"
 
 
 def court(texte, n=120):
@@ -2579,7 +2589,7 @@ def texte_apercu(m, r, cle):
         direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "Non confirmée"
     else:
         decision = "⛔ NE PAS ENTRER"
-        direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "AUCUNE DIRECTION CONFIRMÉE"
+        direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else direction_attente(r)
 
     prof = profil_strategie(r) if r.get("dirs") and len(r.get("dirs")) >= 11 else {}
     # Même sens que la décision : pas de cible tant que la 4 h + 1 h ne donnent pas de direction.
@@ -2588,7 +2598,7 @@ def texte_apercu(m, r, cle):
     lignes = [
         f"{ICONE.get(m, '📊')} {m} — {px(prix)}",
         f"🚦 {decision}",
-        f"🧭 Biais à surveiller : {direction}" + (f" ({type_})" if type_ and direction not in ('AUCUNE DIRECTION CONFIRMÉE', 'Non confirmée', 'À confirmer') else ""),
+        f"🧭 Biais à surveiller : {direction}" + (f" ({type_})" if type_ and not direction.startswith(('AUCUNE', 'Non confirmée', 'À confirmer')) else ""),
         "⚠️ Le biais n'est pas une autorisation d'entrée." if not tr else "📍 Position ouverte : suis les alertes du coach.",
         "",
     ] + voyants_unites(r) + [""]
