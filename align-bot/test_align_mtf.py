@@ -351,9 +351,11 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_ai_response_cache_is_separated_by_language(self):
         from unittest.mock import patch
         for english, expected in ((False, "_fr_"), (True, "_en_")):
-            with patch.object(align_bot, "macro_confluence", return_value={"disponible": False}), \\
-                 patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}), \\
-                 patch.object(align_bot, "ia", return_value="A clear market view.") as call:
+            with (
+                patch.object(align_bot, "macro_confluence", return_value={"disponible": False}),
+                patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}),
+                patch.object(align_bot, "ia", return_value="A clear market view.") as call,
+            ):
                 align_bot.avis_ia({}, "GOLD", {}, {}, anglais=english)
             self.assertIn(expected, call.call_args.kwargs["cle_cache"])
 
