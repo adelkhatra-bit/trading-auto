@@ -64,11 +64,15 @@ jobs:
           PY
 
       - name: Vérifier une connexion IA réelle (même chaîne que le bot)
+        # Le moteur interne ALIGN doit continuer même si tous les fournisseurs IA externes sont indisponibles.
+        continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python3 ai_healthcheck.py
 
       - name: Vérifier le bridge TradingView ROBOT V12 (BTC + GOLD)
+        # Le bridge enrichit l'analyse ; son indisponibilité ne doit pas arrêter les alertes du moteur interne.
+        continue-on-error: true
         env:
           ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
