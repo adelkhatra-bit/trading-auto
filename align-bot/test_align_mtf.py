@@ -786,8 +786,8 @@ class AlignMtfRulesTest(unittest.TestCase):
              patch.object(align_bot, "_editer_chrono_ou_recreer") as edit:
             align_bot.maj_chronos(state, "GOLD", {})
         text = edit.call_args.args[2]
-        self.assertIn("\\n", text)
-        self.assertNotIn("\\\\n", text)
+        self.assertIn("\n", text)
+        self.assertNotIn("\\n", text)
 
 if __name__ == "__main__":
     unittest.main()
