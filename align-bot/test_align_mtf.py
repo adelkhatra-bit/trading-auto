@@ -199,8 +199,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         )
         self.assertIn("Tendance\nhaussière", message)
         self.assertIn("Confirmation\n2/2", message)
-        self.assertIn("Basse\n4 050,00", message)
-        self.assertIn("Haute\n4 060,00", message)
+        self.assertIn("Basse\n4050,00", message)
+        self.assertIn("Haute\n4060,00", message)
 
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
@@ -245,6 +245,31 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("ALIGN • BTC", message)
         self.assertIn("POINT DE MARCHÉ", message)
         self.assertIn("Direction et niveaux de trading réservés aux VIP", message)
+
+    def test_news_announcement_warns_40_minutes_before_once(self):
+        from unittest.mock import patch
+        now = align_bot.datetime.datetime(2026, 11, 11, 12, 0, tzinfo=align_bot.PARIS).timestamp()
+        event = {"t": int(now + 40 * 60), "titre": "Discours Fed", "prev": "?", "avant": "?"}
+        state = {}
+        with patch.object(align_bot, "calendrier", return_value=[event]), \
+             patch.object(align_bot, "minutes_avant_fermeture_gold", return_value=100), \
+             patch.object(align_bot, "horaires_gold", return_value=(now + 100 * 60, now + 200 * 60, now + 300 * 60)):
+            first = align_bot.annonces_et_sessions(state, now, {})
+            second = align_bot.annonces_et_sessions(state, now, {})
+        alerts = [x for x in first + second if "NEWS USA DANS 40 MIN" in x]
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("Discours Fed", alerts[0])
+        self.assertIn("Vérifie ton SL", alerts[0])
+
+    def test_gold_market_closure_warns_40_minutes_before(self):
+        from unittest.mock import patch
+        now = align_bot.datetime.datetime(2026, 11, 11, 12, 0, tzinfo=align_bot.PARIS).timestamp()
+        with patch.object(align_bot, "calendrier", return_value=[]), \
+             patch.object(align_bot, "minutes_avant_fermeture_gold", return_value=39.5), \
+             patch.object(align_bot, "horaires_gold", return_value=(now + 39.5 * 60, now + 90 * 60, now + 150 * 60)):
+            messages = align_bot.annonces_et_sessions({}, now, {})
+        closure = [x for x in messages if "FERMETURE DU GOLD DANS 40 MIN" in x]
+        self.assertEqual(len(closure), 1)
 
 if __name__ == "__main__":
     unittest.main()
