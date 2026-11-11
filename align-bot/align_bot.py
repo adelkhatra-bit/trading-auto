@@ -1989,13 +1989,16 @@ def telegram(methode, **params):
                     params[k] = rendu_html(params[k])
             params["parse_mode"] = "HTML"
     chat_id = params.get("chat_id")
-    _telegram_verifie_cooldown(chat_id)
+    # Sans chat (getUpdates, setMyName…) : blocage PAR MÉTHODE. Un 429 de plusieurs heures sur setMyName
+    # ne doit jamais rendre le bot sourd (getUpdates bloqué = boutons sans réponse).
+    cle_cooldown = chat_id if chat_id is not None else f"__{methode}__"
+    _telegram_verifie_cooldown(cle_cooldown)
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
     try:
         resultat = http_json(url, urllib.parse.urlencode(params).encode())
     except Exception as ex:
         if "HTTP Error 429" in str(ex):
-            delai = _telegram_enregistre_429(chat_id, ex)
+            delai = _telegram_enregistre_429(cle_cooldown, ex)
             if delai:
                 print(f"telegram rate limit chat={chat_id}: pause {delai}s; envoi suspendu sans nouvel appel")
         raise
@@ -3516,7 +3519,9 @@ def installer_menu(etat):
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in en]), language_code="en")
         telegram("setChatMenuButton", menu_button=json.dumps({"type": "commands"}))
         try:
-            telegram("setMyName", name="ALIGN Gratuit 🎁 BTC & Gold")
+            nom_bot = "ALIGN Gratuit 🎁 BTC & Gold"
+            if (telegram("getMyName").get("result") or {}).get("name") != nom_bot:   # setMyName est très limité par Telegram
+                telegram("setMyName", name=nom_bot)
         except Exception as ex:
             print("nom", ex)
         telegram("setMyShortDescription", short_description="🎁 ALIGN Gratuit : 1 position BTC / Gold proposée chaque jour • 💎 Tout le reste dans ALIGN VIP")
@@ -6032,6 +6037,8 @@ def restaurer_cooldowns_telegram(etat, maintenant=None):
     """Un nouveau worker respecte le blocage 429 du précédent au lieu de le prolonger."""
     maintenant = time.time() if maintenant is None else float(maintenant)
     for cle, fin in (etat.get("telegram_retry_until") or {}).items():
+        if str(cle) == "__global__":
+            continue      # ancien blocage commun : il rendait le bot sourd, on ne le restaure plus
         try:
             if float(fin) > maintenant:
                 TELEGRAM_RETRY_UNTIL[str(cle)] = max(float(TELEGRAM_RETRY_UNTIL.get(str(cle), 0)), float(fin))

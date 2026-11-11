@@ -1959,6 +1959,16 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         self.assertEqual(lignes[0], "📰 NEWS USA DU JOUR")
         self.assertIn("Unemployment Claims (prévu 220K) — sortie", lignes[1])
 
+    def test_rate_limit_on_bot_name_never_blocks_polling(self):
+        align_bot.TELEGRAM_RETRY_UNTIL.clear()
+        align_bot._telegram_enregistre_429("__setMyName__", "HTTP Error 429: retry after 29000")
+        self.assertEqual(align_bot._telegram_cooldown_restant("__getUpdates__"), 0)
+        etat = {"telegram_retry_until": {"__global__": 9e12}}
+        align_bot.TELEGRAM_RETRY_UNTIL.clear()
+        align_bot.restaurer_cooldowns_telegram(etat)
+        self.assertNotIn("__global__", align_bot.TELEGRAM_RETRY_UNTIL)
+        align_bot.TELEGRAM_RETRY_UNTIL.clear()
+
     def test_coach_speaks_with_first_name(self):
         etat = {}
         align_bot.retenir_prenom(etat, 5, {"first_name": "Adel K"})
