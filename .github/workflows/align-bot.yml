@@ -18,8 +18,8 @@ permissions:
 
 concurrency:
   group: align-bot
-  # Ne pas tuer un worker de 5 h 40 à cause d'un push ou d'un déclenchement planifié concurrent.
-  cancel-in-progress: false
+  # Remplacer immédiatement l'ancien worker lors d'une mise à jour ; son état est sauvegardé dans le cache avant le relais.
+  cancel-in-progress: true
 
 jobs:
   validate:
