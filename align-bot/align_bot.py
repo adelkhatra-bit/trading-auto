@@ -2138,7 +2138,7 @@ def synchroniser_veille_auto(etat, m, r):
 
 
 def texte_cloture(m, tf, bougie, r, cle):
-    """Verdict de sécurité prioritaire, puis compte rendu complet de la clôture."""
+    """Décision opérationnelle en première ligne, puis compte rendu complet de clôture."""
     cle = cle or {}
     duree = TF_SECONDES[tf]
     d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
@@ -2147,19 +2147,24 @@ def texte_cloture(m, tf, bougie, r, cle):
     titre = str(titre).upper()
     if cle.get("trade"):
         decision = "🟢 POSITION DÉJÀ OUVERTE : NE RAJOUTE PAS UNE ENTRÉE"
+        statut = "🟢 SUIVI DE LA POSITION EN COURS"
     elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTENDS" in titre or "PATIENCE" in titre:
         decision = "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL"
+        statut = "🔴 SIGNAL NON CONFIRMÉ"
     elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
         decision = "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX"
+        statut = "🟢 SIGNAL CONFIRMÉ"
     else:
         decision = "⏸ PAS D'ENTRÉE POUR LE MOMENT : ATTENDS"
+        statut = "🟠 SIGNAL EN ATTENTE"
     dirs = r.get("dirs", [0] * 11)
     d4h, d1h = dirs[9], dirs[7]
     sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
     _, n_ok = alignement(r)
-    confirmation = f"{n_ok}/2 — {'alignement confirmé' if n_ok == 2 else 'alignement non confirmé'} (4 h + 1 h)"
+    confirmation = f"{n_ok}/2 — alignement confirmé" if n_ok == 2 else f"{n_ok}/2 — alignement non confirmé"
     lignes = [
         decision,
+        statut,
         "━━━━━━━━━━━━━━━━━━━━",
         f"🕯 CLÔTURE {tf} — {ICONE.get(m, '📊')} {m}",
         f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
