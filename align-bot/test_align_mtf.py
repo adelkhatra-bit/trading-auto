@@ -1676,3 +1676,62 @@ class TestFrenchAndChicagoTimezones(unittest.TestCase):
         self.assertEqual(align_bot.heure(ts), "13:34")
         self.assertEqual(align_bot.PARIS.key, "Europe/Paris")
 
+
+
+class AlignTelegramMarketPreferencesTest(unittest.TestCase):
+    def test_existing_subscribers_default_to_both_markets(self):
+        state = {}
+        self.assertEqual(align_bot.marche_selection(state, "101"), "BOTH")
+        self.assertTrue(align_bot.marche_autorise(state, "101", "BTC"))
+        self.assertTrue(align_bot.marche_autorise(state, "101", "GOLD"))
+
+    def test_market_preference_is_isolated_per_subscriber(self):
+        state = {"marches_par_chat": {"101": "BTC", "202": "GOLD"}}
+        self.assertTrue(align_bot.marche_autorise(state, "101", "BTC"))
+        self.assertFalse(align_bot.marche_autorise(state, "101", "GOLD"))
+        self.assertFalse(align_bot.marche_autorise(state, "202", "BTC"))
+        self.assertTrue(align_bot.marche_autorise(state, "202", "GOLD"))
+
+    def test_market_message_routing_keeps_btc_and_gold_separate(self):
+        state = {"marches_par_chat": {"101": "BTC", "202": "GOLD", "303": "BOTH"}, "canal": "-1000"}
+        chats = {"101", "202", "303"}
+        btc = align_bot.destinataires_message(state, chats, "🟠 BTC — SIGNAL EN ATTENTE\\nPrix 70000")
+        gold = align_bot.destinataires_message(state, chats, "🥇 GOLD — SIGNAL CONFIRMÉ\\nPrix 4000")
+        self.assertEqual(set(btc), {"101", "303", "-1000"})
+        self.assertEqual(set(gold), {"202", "303", "-1000"})
+
+    def test_mixed_market_macro_alert_requires_both_selection(self):
+        state = {"marches_par_chat": {"101": "BTC", "202": "GOLD", "303": "BOTH"}}
+        recipients = align_bot.destinataires_message(
+            state, {"101", "202", "303"},
+            "💵 DOLLAR EN FORTE HAUSSE\\n🥇 GOLD : prudence\\n🟠 BTC : prudence"
+        )
+        self.assertEqual(set(recipients), {"303"})
+
+    def test_market_selection_menu_exposes_three_real_callbacks(self):
+        from unittest.mock import patch
+        with patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.menu_marches({}, "101")
+        kwargs = send.call_args.kwargs
+        keyboard = __import__("json").loads(kwargs["reply_markup"])
+        callbacks = [button["callback_data"] for row in keyboard["inline_keyboard"] for button in row]
+        self.assertEqual(callbacks, ["markets:BTC", "markets:GOLD", "markets:BOTH"])
+
+    def test_market_selection_callback_persists_without_changing_other_users(self):
+        from unittest.mock import patch
+        state = {"marches_par_chat": {"202": "GOLD"}}
+        update = {"update_id": 1, "callback_query": {
+            "id": "callback-1", "from": {"id": 101},
+            "message": {"chat": {"id": 101, "type": "private"}},
+            "data": "markets:BTC"
+        }}
+        with patch.object(align_bot, "telegram", return_value={"ok": True}), \\
+             patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.traiter(state, {"101", "202"}, [update])
+        self.assertEqual(align_bot.marche_selection(state, "101"), "BTC")
+        self.assertEqual(align_bot.marche_selection(state, "202"), "GOLD")
+        self.assertIn("reply_markup", send.call_args.kwargs)
+
+
+if __name__ == "__main__":
+    unittest.main()
