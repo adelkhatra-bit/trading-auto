@@ -2068,14 +2068,15 @@ def bouton_rappel(m):
     ]})
 
 def markup_analyse(etat, m, r):
-    """Un seul choix utile sous l'analyse : suivre la prochaine position de ce marché."""
+    """Clavier minimal et contextuel : suivi si aucune position, commandes si position ouverte."""
     cle = etat.get(m, {})
-    lignes = []
     if cle.get("trade"):
-        lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
-                       {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
+        lignes = [
+            [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"}],
+            [{"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}],
+        ]
     else:
-        lignes.append([{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
+        lignes = [[{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]
     return json.dumps({"inline_keyboard": lignes})
 
 

@@ -799,8 +799,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         import json
         keyboard = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("in:GOLD", callbacks)
-        self.assertIn("out:GOLD", callbacks)
+        self.assertEqual(callbacks, ["position:GOLD", "out:GOLD"])
+        self.assertNotIn("in:GOLD", callbacks)
         self.assertNotIn("auto:GOLD", callbacks)
 
     def test_telegram_formatter_splits_compound_information(self):
@@ -2063,11 +2063,11 @@ class TestTelegramSimpleAnalysisLayout(unittest.TestCase):
         callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
         self.assertEqual(callbacks, ["auto:GOLD"])
 
-    def test_active_position_keeps_only_entered_and_exited_actions(self):
+    def test_active_position_keeps_only_position_and_exit_actions(self):
         import json
         markup = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))
         callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
-        self.assertEqual(callbacks, ["in:GOLD", "out:GOLD"])
+        self.assertEqual(callbacks, ["position:GOLD", "out:GOLD"])
 
     def test_telegram_command_menu_has_one_analysis_entry_not_separate_btc_gold_entries(self):
         from unittest.mock import patch
