@@ -707,8 +707,10 @@ class AlignMtfRulesTest(unittest.TestCase):
             "text": "💎 Devenir VIP", "chat": {"id": 456, "type": "private"},
             "from": {"id": 456, "first_name": "Visitor"}
         }}
-        with patch.object(align_bot, "autorise", return_value=False), \\
-             patch.object(align_bot, "refuser") as refuse:
+        with (
+            patch.object(align_bot, "autorise", return_value=False),
+            patch.object(align_bot, "refuser") as refuse,
+        ):
             align_bot.traiter({}, set(), [message])
         refuse.assert_called_once()
 
