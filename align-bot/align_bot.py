@@ -485,25 +485,29 @@ def journal_vider_sortants(etat):
         journal_ajouter(etat, entree)
 
 
-def texte_historique(etat, cid, limite=15):
+def texte_historique(etat, cid, limite=15, offset=0):
     entrees = [x for x in etat.get("journal_telegram", []) if str(x.get("chat_id")) == str(cid)]
-    entrees = entrees[-limite:]
+    total = len(entrees)
+    fin = max(0, total - max(0, offset))
+    debut = max(0, fin - limite)
+    page = entrees[debut:fin]
     lignes = ["🗂 HISTORIQUE ALIGN — TES ÉCHANGES",
               "━━━━━━━━━━━━━━━━━━━━",
-              f"{len(entrees)} dernier(s) message(s) conservé(s) pour cette conversation."]
-    if not entrees:
-        lignes.append("Aucun message n'a encore été consigné depuis l'activation de l'historique.")
-    for x in entrees:
+              f"Messages {debut + 1 if page else 0} à {fin} sur {total} conservé(s)."]
+    if not page:
+        lignes.append("Aucun message dans cette page. Utilise « Plus récents » pour revenir.")
+    for x in page:
         ts = x.get("timestamp")
         try:
             date = datetime.datetime.fromtimestamp(float(ts), PARIS).strftime("%d/%m %H:%M:%S")
         except Exception:
             date = "Date inconnue"
         sens = "📤 ALIGN" if x.get("direction") == "sortant" else "📥 TOI"
-        lignes.append(f"\n{date} • {sens}\n{str(x.get('text') or x.get('type') or 'Message')[:900]}")
+        lignes.append(f"\\n{date} • {sens}\\n{str(x.get('text') or x.get('type') or 'Message')[:900]}")
     lignes += ["━━━━━━━━━━━━━━━━━━━━",
-               "ℹ️ Historique enregistré à partir de l'activation de cette fonction. Telegram ne permet pas au bot de relire rétroactivement tous les anciens messages."]
-    return "\n".join(lignes)
+               f"ℹ️ Conservation : {JOURNAL_MAX} derniers échanges au maximum, tous chats confondus.",
+               "Les messages antérieurs à l'activation ne sont pas récupérables par le Bot API Telegram."]
+    return "\\n".join(lignes)
 
 def alignement(r):
     """Le 1h confirme la tendance 4h ; le 15m n'est pas un filtre."""
@@ -2532,8 +2536,22 @@ def traiter(etat, chats, updates):
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🗂 Historique")
                 except Exception:
                     pass
-                _envoi_sur(qui, text=texte_historique(etat, qui),
-                           reply_markup=json.dumps({"inline_keyboard": [[{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}) if mk in MARCHES else None)
+                morceaux = mk.split(":")
+                marche = morceaux[0] if morceaux and morceaux[0] in MARCHES else None
+                try:
+                    offset = max(0, int(morceaux[1])) if len(morceaux) > 1 else 0
+                except (TypeError, ValueError):
+                    offset = 0
+                total = sum(1 for x in etat.get("journal_telegram", []) if str(x.get("chat_id")) == qui)
+                boutons = []
+                if offset > 0:
+                    boutons.append([{"text": "⬅️ Plus récents", "callback_data": f"history:{marche or 'x'}:{max(0, offset - 15)}"}])
+                if offset + 15 < total:
+                    boutons.append([{"text": "Plus anciens ➡️", "callback_data": f"history:{marche or 'x'}:{offset + 15}"}])
+                if marche:
+                    boutons.append([{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{marche}"}])
+                _envoi_sur(qui, text=texte_historique(etat, qui, offset=offset),
+                           reply_markup=json.dumps({"inline_keyboard": boutons}) if boutons else None)
                 continue
             if choix == "previous" and mk in MARCHES:
                 if not autorise(etat, qui, cb.get("from", {}).get("id")):
