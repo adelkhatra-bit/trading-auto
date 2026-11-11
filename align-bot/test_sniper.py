@@ -101,7 +101,7 @@ class PropositionPineV25(unittest.TestCase):
     def test_v24_untouched_and_diff_has_no_design_change(self):
         import hashlib
         v24 = (self.RACINE / "ALIGN_MTF_PRO_v24.pine").read_bytes()
-        self.assertEqual(len(v24.splitlines()), 577)                                           # copie intégrale d'origine
+        self.assertEqual(hashlib.sha256(v24).hexdigest(), "0f1216cbb261eaaa3e019524071b67777cbecd0f5d10689cedf5727a06921085")      # empreinte du v24 publié (#134) : jamais modifié
         diff = (self.RACINE / "PROPOSITION_v25_sniper.diff").read_text(encoding="utf-8").splitlines()
         modifs = [l[1:] for l in diff if l[:1] in "+-" and not l.startswith(("+++", "---"))]
         for l in modifs:
