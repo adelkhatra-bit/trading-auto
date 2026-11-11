@@ -1094,3 +1094,30 @@ class TestPersistenceAndLiveRefresh(unittest.TestCase):
     def test_live_price_sources_refresh_within_five_seconds(self):
         self.assertEqual(align_bot.TTL_KRAKEN[1], 5)
         self.assertEqual(align_bot.TTL_KRAKEN[5], 10)
+
+
+class TestFrenchAndChicagoTimezones(unittest.TestCase):
+    def test_cme_closed_hour_tracks_chicago_winter_offset(self):
+        from datetime import datetime, timezone
+        # 16:30 à Chicago en hiver = 22:30 UTC.
+        ts = datetime(2026, 1, 12, 22, 30, tzinfo=timezone.utc).timestamp()
+        self.assertFalse(align_bot.cme_ouvert(ts))
+
+    def test_cme_closed_hour_tracks_chicago_summer_offset(self):
+        from datetime import datetime, timezone
+        # 16:30 à Chicago en été = 21:30 UTC (UTC-5, pas UTC-6).
+        ts = datetime(2026, 7, 13, 21, 30, tzinfo=timezone.utc).timestamp()
+        self.assertFalse(align_bot.cme_ouvert(ts))
+
+    def test_cme_open_hour_tracks_chicago_summer_offset(self):
+        from datetime import datetime, timezone
+        # 15:30 à Chicago en été : encore ouvert avant la fenêtre de fermeture.
+        ts = datetime(2026, 7, 13, 20, 30, tzinfo=timezone.utc).timestamp()
+        self.assertTrue(align_bot.cme_ouvert(ts))
+
+    def test_all_user_facing_clock_helpers_use_paris_zone(self):
+        from datetime import datetime, timezone
+        ts = datetime(2026, 1, 12, 12, 34, tzinfo=timezone.utc).timestamp()
+        self.assertEqual(align_bot.heure(ts), "13:34")
+        self.assertEqual(align_bot.PARIS.key, "Europe/Paris")
+
