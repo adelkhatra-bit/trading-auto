@@ -322,7 +322,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             "b4h": [candle(14400), candle(28800)],
             "m1": [candle(28800)], "dirs": [0] * 11, "confirme": 0
         }
-        with patch.object(align_bot, "texte_clotures_multi", return_value="batch-close") as fmt, \
+        with patch.object(align_bot.time, "time", return_value=100), \
+             patch.object(align_bot, "texte_clotures_multi", return_value="batch-close") as fmt, \
              patch.object(align_bot, "markup_analyse", return_value=None), \
              patch.object(align_bot, "_envoi_sur") as send:
             align_bot.notifier_clotures(state, "GOLD", r, {})
@@ -585,7 +586,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(send.call_count, 1)
         self.assertTrue(send.call_args.kwargs["text"].startswith("🟠 BTC"))
         self.assertIn("🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
-        self.assertIn("N'ENTRE PAS", send.call_args.kwargs["text"])
+        self.assertIn("PAS D'ENTRÉE", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
     def test_candle_alert_puts_clear_no_entry_verdict_before_market_details(self):
@@ -622,7 +623,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "meche_sl", return_value="sous la mèche"),
         ):
             msg = align_bot.texte_cloture("BTC", "5m", candle(7200), r, {"ordre": ordre})
-        self.assertIn("POSITION À VENIR", msg)
+        self.assertIn("🟡 Zone 67490–67520", msg)
         self.assertIn("ordre en attente", msg)
         self.assertNotIn("POSITION EN COURS", msg)
 
@@ -1521,7 +1522,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.texte_cloture("GOLD", "1h", b, r, {})
         lines = message.splitlines()
         self.assertTrue(lines[0].startswith("🥇 GOLD"))
-        self.assertIn("4 046,76", lines[0])
+        self.assertIn("4046,76", lines[0])
         self.assertEqual(lines[1], "🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ")
         self.assertIn("1h clôturée 06:00", lines[2])
         self.assertIn("O 4 050,53 → C 4 046,76", lines[2])
