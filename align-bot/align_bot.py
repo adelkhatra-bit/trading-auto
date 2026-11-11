@@ -1208,7 +1208,7 @@ TRAD = {
 "📡 Mes marchés": "📡 My markets",
 "📍 Suivre cette position": "📍 Follow this position", "📍 Ma position • SL / TP": "📍 My position • SL / TP", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
  "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
-"🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
+"🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "💎 TU ES DÉJÀ VIP": "💎 YOU ARE ALREADY VIP", "✅ Toutes les positions, les niveaux et le coach sont actifs pour toi": "✅ All positions, levels and the coach are active for you", "📲 Le canal ALIGN VIP 💎 est accessible avec le bouton ci-dessous": "📲 Open the ALIGN VIP 💎 channel with the button below", "📲 Ouvrir le canal ALIGN VIP 💎": "📲 Open ALIGN VIP 💎 channel", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
 "✅ Sélection enregistrée": "✅ Selection saved", "🥇 + 🟠 Les deux": "🥇 + 🟠 Both",
 "✅ Je suis rentré": "✅ I'm in", "🚪 Je suis sorti": "🚪 I'm out", "📈 Mes résultats": "📈 My results",
 "🧩 Indicateur TradingView": "🧩 TradingView indicator", "💎 Devenir VIP": "💎 Become VIP",
@@ -1973,7 +1973,7 @@ CLAVIER = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "�
                                    [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "🟠 Analyse BTC"}],
-                                            [{"text": "📊 Faire une analyse"}, {"text": "📡 Mes marchés"}],
+                                            [{"text": "📊 Faire une analyse"}],
                                             [{"text": "💎 Devenir VIP"}],
                                             [{"text": "📸 Partager mon gain"}],
                                             [{"text": "🌐 English"}]],
@@ -3489,6 +3489,10 @@ def traiter(etat, chats, updates):
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📊 Analyse en cours")
                 except Exception:
                     pass
+                if not autorise(etat, qui, (cb.get("from") or {}).get("id")):
+                    # Visiteur : jamais les niveaux VIP, seulement l'état du marché + bouton VIP
+                    analyse_visiteur(etat, qui, None if mk == "BOTH" else mk)
+                    continue
                 for marche in (("BTC", "GOLD") if mk == "BOTH" else (mk,)):
                     demandes.append((qui, marche))
                 continue
@@ -3839,6 +3843,12 @@ def traiter(etat, chats, updates):
             nom = (fr.get("first_name", "") + (" @" + fr["username"] if fr.get("username") else "")).strip() or cid
             etat.setdefault("noms", {})[cid] = nom
             menu_indicateur(etat, cid, nom)
+            continue
+        if "devenir vip" in txt or "become vip" in txt:
+            lien = etat.get("lien")
+            _envoi_sur(cid, text=("💎 TU ES DÉJÀ VIP\n✅ Toutes les positions, les niveaux et le coach sont actifs pour toi"
+                                  + ("\n📲 Le canal ALIGN VIP 💎 est accessible avec le bouton ci-dessous" if lien else "")),
+                       reply_markup=json.dumps({"inline_keyboard": [[{"text": "📲 Ouvrir le canal ALIGN VIP 💎", "url": lien}]]}) if lien else CLAVIER)
             continue
         if "mes marches" in txt or "my markets" in txt or txt.startswith("/marches"):
             menu_marches(etat, cid)
