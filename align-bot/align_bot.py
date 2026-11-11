@@ -3658,11 +3658,18 @@ def main():
         while TOKEN and time.time() < min(prochain, debut + DUREE_SEC):
             reste = int(min(prochain, debut + DUREE_SEC) - time.time())
             try:
-                maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=max(1, min(50, reste))).get("result", [])
+                maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=1).get("result", [])
             except Exception as ex:
                 print("ecoute", ex); time.sleep(5); continue
             for cid, mq in traiter(etat, chats, maj):
                 envoyer_analyse(cid, etat, mq)
+            # Le polling Telegram reste à 1 s afin de faire vivre les chronomètres
+            # sans relancer l'analyse complète des marchés à chaque seconde.
+            for marche, derniere in list(DERNIERS.items()):
+                try:
+                    maj_chronos(etat, marche, derniere)
+                except Exception as ex:
+                    print("tick chrono", marche, ex)
             etat["chats"] = sorted(chats)
             json.dump(etat, open(ETAT_FICHIER, "w"))
         if time.time() >= debut + DUREE_SEC:
