@@ -1175,7 +1175,7 @@ def mise_en_forme(t):
     for l in lignes:
         l = re.sub(r" {2,}", " ", l.strip())
         # Une ligne ne doit jamais contenir plusieurs informations indépendantes.
-        if " • " in l:
+        if " • " in l and not l.startswith(("ALIGN •", "📍 RÉCAPITULATIF •")):
             parts = [x.strip() for x in l.split(" • ") if x.strip()]
             if len(parts) > 1:
                 plat.extend(parts)
