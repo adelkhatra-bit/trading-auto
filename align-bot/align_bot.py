@@ -693,15 +693,6 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
                             "━━━━━━━━━━━━━━━━━━", "🔒 Direction et niveaux de trading réservés aux VIP",
                             "💎 Accès VIP : 49,90 € / mois"])
     tv_plan = plan_indicateur(r)
-    if tv_plan["available"]:
-        l += ["━━━━━━━━━━━━━━━━━━", "📡 PLAN DE L'INDICATEUR TRADINGVIEW",
-              f"Unité sélectionnée : {tv_plan['timeframe']}",
-              f"Entrée indicateur : {px(tv_plan['entry'])} • SL : {px(tv_plan['sl'])} • TP : {px(tv_plan['tp'])}",
-              "Clôture confirmée par l'indicateur : " + ("OUI" if tv_plan["confirmed"] else "NON / NON FOURNIE"),
-              "⚠️ Plan indicateur affiché séparément : il ne remplace pas le verdict de sécurité ALIGN."]
-    elif r.get("tv_indicator_mtf", {}).get("available"):
-        l += ["━━━━━━━━━━━━━━━━━━", "📡 PLAN TRADINGVIEW",
-              f"{tv_plan['timeframe']} : {tv_plan['reason']}"]
     D, R = r["dirs"], r["rsis"]
     maj, n_ok = alignement(r)
     ut = [("1m", 0), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("Daily", 10)]
@@ -714,6 +705,15 @@ def texte_etat(nom_marche, r, cle=None, vip=True):
          "  /  ".join(f"{nom} {fl(D[i])}" for nom, i in ut),
          "━━━━━━━━━━━━━━━━━━", "📈 RSI PAR UNITÉ DE TEMPS",
          "  /  ".join(f"{nom} {R[i]:.0f}" for nom, i in ut)]
+    if tv_plan["available"]:
+        l += ["━━━━━━━━━━━━━━━━━━", "📡 PLAN DE L'INDICATEUR TRADINGVIEW",
+              f"Unité sélectionnée : {tv_plan['timeframe']}",
+              f"Entrée indicateur : {px(tv_plan['entry'])} • SL : {px(tv_plan['sl'])} • TP : {px(tv_plan['tp'])}",
+              "Clôture confirmée par l'indicateur : " + ("OUI" if tv_plan["confirmed"] else "NON / NON FOURNIE"),
+              "⚠️ Plan indicateur séparé du verdict de sécurité ALIGN."]
+    elif r.get("tv_indicator_mtf", {}).get("available"):
+        l += ["━━━━━━━━━━━━━━━━━━", "📡 PLAN TRADINGVIEW",
+              f"{tv_plan['timeframe']} : {tv_plan['reason']}"]
     l += ["━━━━━━━━━━━━━━━━━━", "🧭 CONFIRMATION DE TENDANCE",
           "ALIGNEMENT 1H + 4H", f"{n_ok}/2 {'✅ CONFIRMÉ' if r['confirme'] else '⏳ EN ATTENTE'}",
           "ZONE DAILY", zone_txt(r['posD']),
