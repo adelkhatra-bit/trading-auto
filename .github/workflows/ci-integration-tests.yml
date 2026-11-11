@@ -3,8 +3,26 @@ name: CI Integration Tests
 on:
   push:
     branches: [main, feature/**, deploy/**]
+    paths:
+      - "server.js"
+      - "server-manager.js"
+      - "package.json"
+      - "package-lock.json"
+      - "src/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/ci-integration-tests.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "server.js"
+      - "server-manager.js"
+      - "package.json"
+      - "package-lock.json"
+      - "src/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/ci-integration-tests.yml"
 
 jobs:
   integration_tests:
