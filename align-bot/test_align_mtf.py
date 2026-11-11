@@ -592,12 +592,14 @@ class AlignMtfRulesTest(unittest.TestCase):
                 "id": "cb-" + action, "data": action + ":GOLD",
                 "message": {"chat": {"id": 123}}, "from": {"id": 123}
             }}
-            with patch.object(align_bot, "autorise", return_value=True), \\
-                 patch.dict(align_bot.DERNIERS, {"GOLD": r}), \\
-                 patch.object(align_bot, "texte_apercu", return_value="analysis-card"), \\
-                 patch.object(align_bot, "texte_etat", return_value="analysis-details"), \\
-                 patch.object(align_bot, "_envoi_sur") as send, \\
-                 patch.object(align_bot, "telegram", return_value={"ok": True}):
+            with (
+                patch.object(align_bot, "autorise", return_value=True),
+                patch.dict(align_bot.DERNIERS, {"GOLD": r}),
+                patch.object(align_bot, "texte_apercu", return_value="analysis-card"),
+                patch.object(align_bot, "texte_etat", return_value="analysis-details"),
+                patch.object(align_bot, "_envoi_sur") as send,
+                patch.object(align_bot, "telegram", return_value={"ok": True}),
+            ):
                 align_bot.traiter({}, set(), [update])
                 self.assertTrue(send.called, action + " did not send a response")
 
@@ -608,8 +610,10 @@ class AlignMtfRulesTest(unittest.TestCase):
                 "id": "cb-" + action, "data": action + ":x",
                 "message": {"chat": {"id": 123}}, "from": {"id": 123}
             }}
-            with patch.object(align_bot, "regler_bot") as toggle, \\
-                 patch.object(align_bot, "telegram"):
+            with (
+                patch.object(align_bot, "regler_bot") as toggle,
+                patch.object(align_bot, "telegram"),
+            ):
                 align_bot.traiter({}, set(), [update])
             toggle.assert_called_once_with({}, "123", enabled)
 
@@ -629,10 +633,12 @@ class AlignMtfRulesTest(unittest.TestCase):
                 "message": {"chat": {"id": 123}}, "from": {"id": 123}
             }}
             state = {"proprio": ["123"], "indic": {"456": {"tv": "trader456"}}}
-            with patch.object(align_bot, "telegram"), \\
-                 patch.object(align_bot, "_envoi_sur"), \\
-                 patch.object(align_bot, "decider_entree") as decision, \\
-                 patch.object(align_bot, "valider_gain") as gain:
+            with (
+                patch.object(align_bot, "telegram"),
+                patch.object(align_bot, "_envoi_sur"),
+                patch.object(align_bot, "decider_entree") as decision,
+                patch.object(align_bot, "valider_gain") as gain,
+            ):
                 align_bot.traiter(state, set(), [update])
                 if handler == "decider_entree":
                     decision.assert_called_once()
@@ -649,13 +655,16 @@ class AlignMtfRulesTest(unittest.TestCase):
             "id": "cb-resume", "data": "resume:BTC",
             "message": {"chat": {"id": 123}}, "from": {"id": 123}
         }}
-        with patch.object(align_bot, "autorise", return_value=True), \\
-             patch.dict(align_bot.DERNIERS, {}, clear=True), \\
-             patch.object(align_bot, "analyse_marche", side_effect=RuntimeError("offline")), \\
-             patch.object(align_bot, "_envoi_sur") as send, \\
-             patch.object(align_bot, "telegram"):
+        with (
+            patch.object(align_bot, "autorise", return_value=True),
+            patch.dict(align_bot.DERNIERS, {}, clear=True),
+            patch.object(align_bot, "analyse_marche", side_effect=RuntimeError("offline")),
+            patch.object(align_bot, "_envoi_sur") as send,
+            patch.object(align_bot, "telegram"),
+        ):
             align_bot.traiter({}, set(), [update])
         self.assertIn("n'est pas disponible", send.call_args.kwargs["text"])
+
 
 if __name__ == "__main__":
     unittest.main()
