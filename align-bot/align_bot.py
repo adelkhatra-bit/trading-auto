@@ -2056,8 +2056,11 @@ def menu_suivi(etat, cid):
     _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
 
 def bouton_rappel(m):
-    """Un seul rappel utile : suivre la prochaine position de ce marché."""
-    return json.dumps({"inline_keyboard": [[{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
+    """Rappelle l'analyse du marché et conserve le suivi de la prochaine position."""
+    return json.dumps({"inline_keyboard": [
+        [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
+        [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
+    ]})
 
 def markup_analyse(etat, m, r):
     """Carte d'analyse épurée ; les actions de position restent disponibles quand un trade existe."""
