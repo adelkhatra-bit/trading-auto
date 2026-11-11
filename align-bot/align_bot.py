@@ -877,7 +877,7 @@ TRAD = {
 "❓ POURQUOI :": "❓ WHY:",
 "➡️ PROCHAINE ACTION :": "➡️ NEXT ACTION:",
 "🔜 Prochaine étape :": "🔜 Next step:",
-"ℹ️ Une bougie clôturée ne déclenche jamais une entrée à elle seule. Aucun ordre n'est envoyé à ton broker.": "ℹ️ A candle close alone never triggers an entry. No order is sent to your broker."
+"ℹ️ Une bougie clôturée ne déclenche jamais une entrée à elle seule. Aucun ordre n'est envoyé à ton broker.": "ℹ️ A candle close alone never triggers an entry. No order is sent to your broker.",
 
 "🔴🔴 N'ENTRE PAS": "🔴🔴 DON'T ENTER", "🟢 TU PEUX ENTRER": "🟢 YOU CAN ENTER", "🟡 PATIENCE": "🟡 BE PATIENT",
 "⛔ TROP TARD — le marché est déjà parti": "⛔ TOO LATE — the market has already moved",
