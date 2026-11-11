@@ -32,7 +32,21 @@ function storeTradingViewTimeframe(entry) {
   const symbol = String(entry.symbol).toUpperCase();
   const timeframe = String(entry.timeframe).toUpperCase();
   if (!tvMtfStore[symbol]) tvMtfStore[symbol] = Object.create(null);
-  tvMtfStore[symbol][timeframe] = { ...entry, storedAt: Date.now() };
+  const previous = tvMtfStore[symbol][timeframe] || {};
+  const hasIndicatorPlan = !!(entry.robotV12 && typeof entry.robotV12 === 'object');
+  const next = {
+    ...previous,
+    ...entry,
+    // The periodic extension scrape carries price/legend only. It must never erase
+    // the last Pine/ROBOT V12 plan for this timeframe.
+    robotV12: hasIndicatorPlan ? entry.robotV12 : (previous.robotV12 || null),
+    entry: entry.entry != null ? entry.entry : previous.entry,
+    sl: entry.sl != null ? entry.sl : previous.sl,
+    tp: entry.tp != null ? entry.tp : previous.tp,
+    storedAt: Date.now(),
+    planStoredAt: hasIndicatorPlan ? Date.now() : (previous.planStoredAt || null)
+  };
+  tvMtfStore[symbol][timeframe] = next;
   try {
     fs.writeFileSync(TV_MTF_CACHE_PATH, JSON.stringify(tvMtfStore, null, 2));
   } catch (e) {
@@ -150,12 +164,13 @@ app.get('/bridge/robot-v12/mtf', (req, res) => {
   const now = Date.now();
   const snapshots = {};
   for (const [tf, entry] of Object.entries(frames)) {
-    const ageMs = Math.max(0, now - Number(entry.storedAt || 0));
+    const hasIndicatorPlan = !!entry.robotV12;
+    const ageMs = Math.max(0, now - Number(hasIndicatorPlan ? entry.planStoredAt : entry.storedAt || 0));
     const maxAgeMs = timeframeFreshnessMs(tf);
     snapshots[tf] = {
       ...entry,
       ageMs,
-      fresh: maxAgeMs > 0 && ageMs <= maxAgeMs,
+      fresh: hasIndicatorPlan && maxAgeMs > 0 && ageMs <= maxAgeMs,
       confirmed: entry.robotV12?.confirmed === true
         || entry.robotV12?.candle_confirmed === true
         || entry.robotV12?.bar_confirmed === true
