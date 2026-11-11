@@ -1968,9 +1968,9 @@ def bouton_auto(m):
 def menu_suivi(etat, cid):
     """Demande quels marchés l'utilisateur veut suivre avant l'inscription."""
     anglais = str(cid) in LANG_EN
-    texte = ("🎯 CHOOSE THE MARKETS TO FOLLOW\\nSelect BTC, GOLD or both. You'll be alerted when an entry is confirmed."
+    texte = ("🎯 CHOOSE THE MARKETS TO FOLLOW\nSelect BTC, GOLD or both. You'll be alerted when an entry is confirmed."
              if anglais else
-             "🎯 CHOISIS LES MARCHÉS À SUIVRE\\nSélectionne BTC, GOLD ou les deux. Je t'alerterai lorsqu'un point d'entrée sera confirmé.")
+             "🎯 CHOISIS LES MARCHÉS À SUIVRE\nSélectionne BTC, GOLD ou les deux. Je t'alerterai lorsqu'un point d'entrée sera confirmé.")
     labels = ["🟠 BTC", "🥇 GOLD", "🟠 BTC + 🥇 GOLD"]
     choix = ["BTC", "GOLD", "BOTH"]
     lignes = [[{"text": label, "callback_data": f"followmarket:{market}"}]
@@ -2395,7 +2395,7 @@ def boucle_chronos(etat):
         time.sleep(1)
 
 
-def inscrire_auto(etat, cid, m):
+def inscrire_auto(etat, cid, m, notifier=True):
     """Active le suivi de la prochaine position sans faire croire qu'un ordre broker est placé."""
     liste = etat.setdefault("auto", {}).setdefault(m, [])
     if cid not in liste:
@@ -2431,7 +2431,8 @@ def inscrire_auto(etat, cid, m):
         "🎯 Le coach suit ensuite le SL, le passage à BE et les TP.",
         "⏱ Le chronomètre réel est affiché dans le message juste en dessous."
     ]
-    _envoi_sur(cid, reply_markup=CLAVIER, text="\n".join(lignes))
+    if notifier:
+        _envoi_sur(cid, reply_markup=CLAVIER, text="\n".join(lignes))
     if r:
         armer_clotures_multi(etat, cid, m, r)
     lancer_chrono(etat, cid, m, r)
@@ -3074,15 +3075,15 @@ def traiter(etat, chats, updates):
                     continue
                 marches = ("BTC", "GOLD") if mk == "BOTH" else (mk,)
                 for marche in marches:
-                    inscrire_auto(etat, qui, marche)
+                    inscrire_auto(etat, qui, marche, notifier=False)
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Suivi activé")
                 except Exception:
                     pass
                 noms = "BTC + GOLD" if mk == "BOTH" else mk
-                _envoi_sur(qui, text=(f"✅ FOLLOW ACTIVATED: {noms}\\nI'll alert you when an entry is confirmed."
+                _envoi_sur(qui, text=(f"✅ FOLLOW ACTIVATED: {noms}\nI'll alert you when an entry is confirmed."
                                       if qui in LANG_EN else
-                                      f"✅ SUIVI ACTIVÉ : {noms}\\nJe t'alerterai lorsqu'un point d'entrée sera confirmé."))
+                                      f"✅ SUIVI ACTIVÉ : {noms}\nJe t'alerterai lorsqu'un point d'entrée sera confirmé."))
                 continue
             if choix == "results":
                 try:
