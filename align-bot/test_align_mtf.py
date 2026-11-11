@@ -1033,3 +1033,63 @@ class AlignMtfRulesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPersistenceAndLiveRefresh(unittest.TestCase):
+    def test_state_migration_preserves_open_trade_subscribers_and_telegram_offset(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        old = {
+            "schema_version": 1,
+            "BTC": {"trade": {"e": 70000, "qui": {"123": {"e": 70010, "sl": 69900}}}},
+            "chats": ["123"], "offset": 987, "offerts": ["456"],
+            "journal_telegram": [{"chat_id": "123", "text": "ancienne instruction"}]
+        }
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "state.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(old, f)
+            with patch.object(align_bot, "ETAT_FICHIER", path):
+                state = align_bot.charger_etat()
+                self.assertEqual(state["schema_version"], align_bot.STATE_SCHEMA_VERSION)
+                self.assertEqual(state["BTC"]["trade"]["qui"]["123"]["sl"], 69900)
+                self.assertEqual(state["offset"], 987)
+                self.assertEqual(state["offerts"], ["456"])
+                self.assertEqual(state["journal_telegram"][0]["text"], "ancienne instruction")
+                align_bot.sauver_etat(state, {"123"})
+                restored = align_bot.charger_etat()
+            self.assertEqual(restored["BTC"]["trade"]["qui"]["123"]["e"], 70010)
+            self.assertEqual(restored["offset"], 987)
+            self.assertFalse(os.path.exists(path + ".tmp"))
+
+    def test_corrupt_state_fails_closed_instead_of_resetting_subscribers(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "state.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("{broken")
+            with patch.object(align_bot, "ETAT_FICHIER", path):
+                with self.assertRaisesRegex(RuntimeError, "aucune donnée écrasée"):
+                    align_bot.charger_etat()
+            with open(path, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read(), "{broken")
+
+    def test_telegram_journal_keeps_a_fair_per_chat_history(self):
+        state = {}
+        for i in range(align_bot.JOURNAL_PAR_CHAT + 7):
+            align_bot.journal_ajouter(state, {
+                "direction": "entrant", "chat_id": "123", "timestamp": i, "text": f"m{i}"
+            })
+        align_bot.journal_ajouter(state, {
+            "direction": "entrant", "chat_id": "456", "timestamp": 999, "text": "autre abonné"
+        })
+        mine = [x for x in state["journal_telegram"] if x["chat_id"] == "123"]
+        self.assertEqual(len(mine), align_bot.JOURNAL_PAR_CHAT)
+        self.assertEqual(mine[0]["text"], "m7")
+        self.assertIn("autre abonné", [x["text"] for x in state["journal_telegram"]])
+
+    def test_live_price_sources_refresh_within_five_seconds(self):
+        self.assertEqual(align_bot.TTL_KRAKEN[1], 5)
+        self.assertEqual(align_bot.TTL_KRAKEN[5], 10)
