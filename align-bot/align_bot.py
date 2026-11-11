@@ -1887,6 +1887,51 @@ def mise_en_forme(t):
     txt = "\n".join(out)
     return re.sub(r"\n{3,}", "\n\n", txt).strip()
 
+TELEGRAM_HTML = os.environ.get("TELEGRAM_HTML", "1") == "1"   # 0 = retour à l'ancien rendu texte brut
+SEPARATEUR = "━━━━━━━━━━━━━━━"
+_UNITE_RE = re.compile(r"(?<![\w<])(1m|2m|3m|5m|10m|15m|30m|45m|1h|2h|4h|D)(?= (?:⬆️|⬇️|➖))")
+
+def _majuscule(l):
+    lettres = [c for c in l if c.isalpha()]
+    return len(lettres) >= 5 and sum(c.isupper() for c in lettres) / len(lettres) >= 0.8
+
+def rendu_html(t):
+    """Design Telegram (parse_mode HTML) : titre en gras + séparateur, sections MAJUSCULES en gras
+    entre séparateurs, intitulés en gras, unités en monospace (fond gris), notes ℹ️ en italique."""
+    if not isinstance(t, str) or not t.strip():
+        return t
+    esc = lambda x: x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    lignes = t.split("\n")
+    out = []
+    sep = lambda: out and out[-1] != SEPARATEUR and out.append(SEPARATEUR)
+    for k, brut in enumerate(lignes):
+        l = brut.strip()
+        if not l:
+            continue
+        if re.fullmatch(r"[━─➖=\-]{6,}", l):
+            sep(); continue
+        if k == 0:
+            out.append(f"<b>{esc(l)}</b>"); out.append(SEPARATEUR); continue
+        if l.startswith(("ℹ️", "Aucun ordre", "⚠️ Cette zone est un repère")):
+            out.append(f"<i>{esc(l)}</i>"); continue
+        if l.startswith(("http", "👉 http")):
+            out.append(esc(l)); continue
+        m = re.match(r"^(.{2,34}?) : (.+)$", l)
+        if m and "http" not in m.group(1):
+            lab, val = esc(m.group(1)), esc(m.group(2))
+            if _majuscule(m.group(1)) and len(l) <= 40 and not re.search(r"\d", m.group(2)):
+                sep()
+            val = _UNITE_RE.sub(lambda u: f"<code>{u.group(1)}</code>", val)
+            if lab.startswith(("⚡", "🏔")) and _UNITE_RE.search(m.group(2) or ""):
+                out.append(f"<b>{lab} :</b>"); out.append(val); continue
+            out.append(f"<b>{lab} :</b> {val}"); continue
+        if _majuscule(l) and len(l) <= 60:
+            sep(); out.append(f"<b>{esc(l)}</b>"); continue
+        out.append(_UNITE_RE.sub(lambda u: f"<code>{u.group(1)}</code>", esc(l)))
+    while out and out[-1] == SEPARATEUR:
+        out.pop()
+    return "\n".join(out)
+
 # Telegram peut imposer un délai de plusieurs heures après un dépassement de quota.
 # Le cooldown est isolé par chat pour ne pas bloquer les autres destinataires.
 TELEGRAM_RETRY_UNTIL = {}
@@ -1938,6 +1983,11 @@ def telegram(methode, **params):
         for k in ("text", "caption"):
             if k in params:
                 params[k] = mise_en_forme(params[k])
+        if TELEGRAM_HTML and "parse_mode" not in params and any(k in params for k in ("text", "caption")):
+            for k in ("text", "caption"):
+                if k in params:
+                    params[k] = rendu_html(params[k])
+            params["parse_mode"] = "HTML"
     chat_id = params.get("chat_id")
     _telegram_verifie_cooldown(chat_id)
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
@@ -2014,17 +2064,18 @@ def epingler(etat, cid):
 
 PARTAGE_JOURS = int(os.environ.get("PARTAGE_JOURS", "3"))  # rappel « partage à tes amis » tous les X jours
 PARTAGE_HEURE = int(os.environ.get("PARTAGE_HEURE", "18"))  # heure de Paris du rappel de partage
-PROPRIO_VUE_GRATUITE = os.environ.get("PROPRIO_VUE_GRATUITE", "1") == "1"  # le propriétaire voit le bot comme un utilisateur gratuit
+PROPRIO_VUE_GRATUITE = os.environ.get("PROPRIO_VUE_GRATUITE", "0") == "1"  # 1 = propriétaire toujours en vue gratuite
 
 def vue_gratuite(etat, cid):
     """Conversation privée côté GRATUIT : visiteurs + propriétaire (pour voir exactement ce que reçoit un gratuit).
     Le VIP complet (news, analyses, toutes les positions) ne part QUE dans la chaîne ALIGN VIP."""
     cid = str(cid)
-    return cid in [str(c) for c in etat.get("prospects", [])] or (PROPRIO_VUE_GRATUITE and cid in {str(x) for x in proprio(etat)})
+    return cid in [str(c) for c in etat.get("prospects", [])] or (
+        (PROPRIO_VUE_GRATUITE or etat.get("proprio_gratuit")) and cid in {str(x) for x in proprio(etat)})
 
 def destinataires_gratuits(etat):
     return list(dict.fromkeys([str(c) for c in etat.get("prospects", [])]
-                              + ([str(x) for x in sorted(proprio(etat))] if PROPRIO_VUE_GRATUITE else [])))
+                              + ([str(x) for x in sorted(proprio(etat))] if (PROPRIO_VUE_GRATUITE or etat.get("proprio_gratuit")) else [])))
 
 def partage_du(etat, maintenant=None):
     """Le rappel de partage part au plus une fois par jour prévu, à heure fixe : jamais deux fois de suite."""
@@ -2601,13 +2652,13 @@ def court(texte, n=120):
 
 
 def voyants_unites(r):
-    """Voyants des unités, même code couleur que l'indicateur (🟩 hausse, 🟥 baisse, ⬜ neutre)."""
+    """Voyants des unités : ⬆️ hausse, ⬇️ baisse, ➖ neutre (plus lisible que des carrés sur téléphone)."""
     dirs = r.get("dirs") or []
-    ic = lambda d: "🟩" if d == 1 else "🟥" if d == -1 else "⬜"
+    ic = lambda d: "⬆️" if d == 1 else "⬇️" if d == -1 else "➖"
     def u(i, nom):
-        return f"{nom}{ic(dirs[i])}" if i < len(dirs) else ""
-    petites = " ".join(x for x in (u(0, "1m"), u(1, "3m"), u(2, "5m"), u(4, "15m")) if x)
-    grandes = " ".join(x for x in (u(7, "1h"), u(9, "4h"), u(10, "D")) if x)
+        return f"{nom} {ic(dirs[i])}" if i < len(dirs) else ""
+    petites = "  ".join(x for x in (u(0, "1m"), u(1, "3m"), u(2, "5m"), u(4, "15m")) if x)
+    grandes = "  ".join(x for x in (u(7, "1h"), u(9, "4h"), u(10, "D")) if x)
     return ([f"⚡ Petites unités : {petites}"] if petites else []) + ([f"🏔 Grandes unités : {grandes}"] if grandes else [])
 
 
@@ -3004,7 +3055,8 @@ def menu_bot_gratuit(etat, cid):
     _envoi_sur(cid, text="\n".join(lignes), reply_markup=json.dumps({"inline_keyboard": [
         [{"text": "⏸ Non, plus de positions", "callback_data": "botoff:x"} if on else
          {"text": "✅ Oui, je veux des positions", "callback_data": "boton:x"}],
-        [{"text": "📡 Choisir BTC / GOLD", "callback_data": "marketsmenu:x"}]]}))
+        [{"text": "📡 Choisir BTC / GOLD", "callback_data": "marketsmenu:x"}]]
+        + ([[{"text": "💎 Revenir en vue VIP (propriétaire)", "callback_data": "vuegratuit:off"}]] if str(cid) in {str(x) for x in proprio(etat)} else [])}))
 
 def menu_bot(etat, cid):
     if vue_gratuite(etat, cid):
@@ -3017,7 +3069,8 @@ def menu_bot(etat, cid):
                              if on else "⏸ Il n'entre plus pour toi\n🔔 Tu reçois quand même les positions\n")
                           + f"━━━━━━━━━━━━\n🤖 Positions prises par ton bot   {st['auto']}\n⏸ Arrêts manuels   {st['arrets']}"),
                reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"} if on
-                                                            else {"text": "▶️ Relancer mon bot", "callback_data": "boton:x"}]]}))
+                                                            else {"text": "▶️ Relancer mon bot", "callback_data": "boton:x"}]]
+                                       + ([[{"text": "👁 Tester la version gratuite", "callback_data": "vuegratuit:on"}]] if str(cid) in {str(x) for x in proprio(etat)} else [])}))
 
 def regler_bot(etat, cid, on):
     off = etat.setdefault("bot_off", [])
@@ -3448,7 +3501,7 @@ COMMANDES = {"/faire_analyse": "📊 Faire une analyse", "/analyse_btc": "🟠 A
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
-    if etat.get("menu") == 6:
+    if etat.get("menu") == 7:
         return
     fr = [("faire_analyse", "📊 Faire une analyse"), ("mon_bot", "🤖 Mon bot ON / OFF"),
           ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
@@ -3461,17 +3514,17 @@ def installer_menu(etat):
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in en]), language_code="en")
         telegram("setChatMenuButton", menu_button=json.dumps({"type": "commands"}))
         try:
-            telegram("setMyName", name="ALIGN Gratuit 🎁 BTC & Gold")
+            telegram("setMyName", name="ALIGN Signaux BTC & Gold")
         except Exception as ex:
             print("nom", ex)
-        telegram("setMyShortDescription", short_description="🎁 1 position BTC / Gold offerte chaque jour • 💎 Tout le reste dans ALIGN VIP")
-        telegram("setMyDescription", description=("🎁 ALIGN Gratuit — BTC & Gold\n\n🎁 1 position offerte chaque jour, expliquée en bougies\n"
-                                                  "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n📰 News et discours Fed gratuits\n\n"
+        telegram("setMyShortDescription", short_description="💎 VIP : tout, en direct • 🎁 Gratuit : 1 position BTC / Gold par jour")
+        telegram("setMyDescription", description=("📈 ALIGN Signaux — BTC & Gold\n\n🎁 Gratuit : 1 position proposée chaque jour, expliquée en bougies\n"
+                                                  "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n\n"
                                                   "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux et le coach (BE, TP)\n"
                                                   "🤖 Les abonnés au suivi sont enregistrés automatiquement à l'ouverture du signal.\n"
                                                   "📍 Suivi personnel : SL, BE, TP et sortie manuelle depuis Telegram.\n\n"
                                                   "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
-        etat["menu"] = 6
+        etat["menu"] = 7
     except Exception as ex:
         print("menu", ex)
 
@@ -3680,6 +3733,15 @@ def traiter(etat, chats, updates):
                     continue
                 for marche in (("BTC", "GOLD") if mk == "BOTH" else (mk,)):
                     demandes.append((qui, marche))
+                continue
+            if choix == "vuegratuit" and qui in {str(x) for x in proprio(etat)}:
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"])
+                except Exception:
+                    pass
+                etat["proprio_gratuit"] = mk == "on"
+                _envoi_sur(qui, text=("👁 VUE GRATUITE ACTIVÉE\n🎁 Tu reçois maintenant exactement ce que reçoit un gratuit\n💎 Retour : 🤖 Mon bot → Revenir en vue VIP"
+                                      if mk == "on" else "💎 VUE VIP RÉTABLIE\n📲 Tout le flux complet est dans la chaîne ALIGN VIP"))
                 continue
             if choix == "botmenu":
                 try:

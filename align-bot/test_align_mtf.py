@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import align_bot
+align_bot.TELEGRAM_HTML = False   # rendu texte testé ici ; le rendu HTML a son propre test
 
 
 def candle(t, o=100.0, h=101.0, l=99.0, c=100.0):
@@ -555,7 +556,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             self.assertEqual(send.call_count, 1, market)
             texte = send.call_args.kwargs["text"]
             self.assertIn("RIEN N'A BOUGÉ", texte)
-            self.assertIn("15m⬜", texte)
+            self.assertIn("15m ➖", texte)
 
     def test_ai_commentary_uses_english_for_english_subscribers(self):
         from unittest.mock import patch
@@ -1943,9 +1944,16 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         state.pop("canal")
         self.assertEqual(set(align_bot.destinataires_message(state, chats, "🟠 BTC — SIGNAL EN ATTENTE\\nPrix 70000")), {"101", "303"})
 
+    def test_html_design_bold_title_separators_and_monospace_units(self):
+        html = align_bot.rendu_html("😎 GOLD <test> & co\n⚡ Petites unités : 1m ⬇️ 15m ⬆️\nPOURQUOI J'ATTENDS\nℹ️ note")
+        self.assertTrue(html.startswith("<b>😎 GOLD &lt;test&gt; &amp; co</b>\n" + align_bot.SEPARATEUR))
+        self.assertIn("<code>1m</code> ⬇️ <code>15m</code> ⬆️", html)
+        self.assertIn(align_bot.SEPARATEUR + "\n<b>POURQUOI J'ATTENDS</b>", html)
+        self.assertIn("<i>ℹ️ note</i>", html)
+
     def test_free_flow_one_proposed_position_then_masked(self):
         from unittest.mock import patch
-        state = {"prospects": ["7"], "proprio": ["1"], "lien": "https://t.me/+x", "GOLD": {"trade": {"cree": 5, "qui": {}}}}
+        state = {"prospects": ["7"], "proprio": ["1"], "proprio_gratuit": True, "lien": "https://t.me/+x", "GOLD": {"trade": {"cree": 5, "qui": {}}}}
         entree = "🥇 GOLD — J'ENTRE MAINTENANT\nEntrée 3990.50"
         with patch.object(align_bot, "telegram") as tg:
             align_bot.envoyer_prospects(state, "📰 NEWS USA DANS 1 H", False)
@@ -2092,7 +2100,7 @@ class TestTradingViewReportRegression(unittest.TestCase):
         state = {"menu": 4}
         with patch.object(align_bot, "telegram") as api:
             align_bot.installer_menu(state)
-        self.assertEqual(state["menu"], 6)
+        self.assertEqual(state["menu"], 7)
         self.assertTrue(any(call.args[0] == "setMyCommands" for call in api.call_args_list))
 
 class TestOneTapMarketAnalysis(unittest.TestCase):
@@ -2918,7 +2926,7 @@ class TestMessagesPropres(unittest.TestCase):
         self.assertIn("3984,20", l[0])
         self.assertIn("Essoufflement", l[1])
         self.assertIn("3978,40", l[1])
-        self.assertEqual(align_bot.voyants_unites(r)[0], "⚡ Petites unités : 1m🟥 3m🟥 5m🟥 15m🟥")
+        self.assertEqual(align_bot.voyants_unites(r)[0], "⚡ Petites unités : 1m ⬇️  3m ⬇️  5m ⬇️  15m ⬇️")
         self.assertEqual(align_bot.objectifs_marche(r, 0), [])
 
     def test_alerte_retournement_3_sur_5_une_seule_fois(self):
