@@ -18,7 +18,7 @@ TELEGRAM_POLL_STOP = threading.Event()
 SHUTDOWN_REQUESTED = threading.Event()
 CALLBACKS_ACKNOWLEDGED = set()
 MARCHES = {"BTC": "XBTUSD", "GOLD": "XAUUSD", "NASDAQ": "NAS100"}  # BTC → FTMO (CFD 24/7) • GOLD → Topstep (MGC) / FTMO • NASDAQ → FX:NAS100 (TradingView)
-MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 2.0
+MIN_ALIGN, MIN_SQZ, MARGE_ATR, GAIN_MIN = 8, 4, 0.5, 1.5   # = réglages par défaut de l'indicateur ALIGN MTF PRO v24
 LIEN_RESULTATS = "https://t.me/+RajFd_hMgl1kNmQ0"     # groupe ALIGN Résultats (lien privé)
 RISQUE_MAX = 1.5      # SL jamais plus loin que 1,5 ATR 15 min : pas de gros SL, on attend mieux
 UT = ["1", "3", "5", "10", "15", "30", "45", "1h", "2h", "4h", "D"]   # 3 min comme l'indicateur TradingView (unité standard)
@@ -419,10 +419,13 @@ def atr(b, n):
     return rma(tr, n)
 
 def rsi(c, n=14):
-    up = [0] + [max(c[i] - c[i - 1], 0) for i in range(1, len(c))]
-    dn = [0] + [max(c[i - 1] - c[i], 0) for i in range(1, len(c))]
+    """RSI de Wilder identique à ta.rsi : la 1re variation est la barre 1 (change() = na sur la barre 0), graine = moyenne simple."""
+    if len(c) < 2:
+        return [None] * len(c)
+    up = [max(c[i] - c[i - 1], 0) for i in range(1, len(c))]
+    dn = [max(c[i - 1] - c[i], 0) for i in range(1, len(c))]
     ru, rd = rma(up, n), rma(dn, n)
-    return [None if u is None or d is None else (100 if d == 0 else 100 - 100 / (1 + u / d)) for u, d in zip(ru, rd)]
+    return [None] + [None if u is None or d is None else (100 if d == 0 else 100 - 100 / (1 + u / d)) for u, d in zip(ru, rd)]
 
 def divergence(bars, g=3, recent=12):
     """Divergence RSI sur les derniers sommets / creux : (baissière, haussière)."""
@@ -487,12 +490,69 @@ def fvgs(bars, ut, n=40):
         out.append((lo, hi, ut, dd))
     return out[-3:]
 
-def analyser(pair):
+def analyser(pair, mem=None):
+    """Télécharge les bougies puis calcule l'analyse (logique identique à l'indicateur Pine ALIGN MTF PRO v24).
+    mem = mémoire persistante du marché (sens stable, plan figé, retournement) ; sans mémoire : calcul instantané."""
     m1, m5, m15, h1, h4, d1 = (bougies(pair, i) for i in (1, 5, 15, 60, 240, 1440))
     if pair == "XBTUSD":
         m1 = direct_btc(m1, pair)
+    return analyser_avec_memoire(dict(m1=m1, m5=m5, m15=m15, m30=bougies(pair, 30), h1=h1, h4=h4, d1=d1,
+                                      w1=bougies(pair, 10080)), mem)
+
+def dir_stable_pas(stable, brut, d15, d60):
+    """Anti-parasites de l'indicateur : le sens ne change qu'à la clôture d'une bougie 15 min, et seulement si le 15 min ou la 1h confirme."""
+    if stable == 0:
+        return brut
+    if brut != 0 and brut != stable and (d15 == brut or d60 == brut):
+        return brut
+    if brut == 0 and d15 != stable and d60 != stable:
+        return 0
+    return stable
+
+def zone_pine(b15, d, e, sl):
+    """Zone verte + Fibonacci de l'indicateur : 24 bougies 15 min CLÔTURÉES avant la courante, entrée et stop figés."""
+    z = b15[-25:-1]
+    if len(z) < 24:
+        return None
+    fH, fL = max(x["h"] for x in z), min(x["l"] for x in z)
+    fR = fH - fL
+    if fR <= 0 or e is None or sl is None:
+        return None
+    f = (lambda k: fL + k * fR) if d == -1 else (lambda k: fH - k * fR)
+    f50, f618, f786 = f(0.5), f(0.618), f(0.786)
+    if d == -1:
+        zmin, zmax = min(e, f50), min(max(e, f786), sl - 0.25 * (sl - e))
+    else:
+        zmin, zmax = max(min(e, f786), sl + 0.25 * (e - sl)), max(e, f50)
+    za, zb = min(zmin, zmax), max(zmin, zmax)
+    return dict(za=za, zb=zb, f50=f50, f618=f618, f786=f786, zmil=(za + zb) / 2)
+
+def plan_pine(d, cl, a, a15, tous_niv, hau1, bas1, bas10, haut10, ut_sl, ut_tp):
+    """Plan entrée / TP1 / TP2 / SL : transcription de f_plan() de l'indicateur Pine v24.
+    a = ATR 14 de la vue 15 min ; a15 = ATR 14 de la bougie 15 min précédente."""
+    cote = [v for v, n in tous_niv if n in ut_sl and d * (cl - v) > a * 0.3]
+    sb = (max(cote) if d == 1 else min(cote)) if cote else (bas1[0] if d == 1 and bas1 else hau1[0] if d == -1 and hau1 else cl - d * 1.5 * a)
+    swing = bas10 - a * 0.35 if d == 1 else haut10 + a * 0.35
+    sl = min(sb - a * 0.3, swing) if d == 1 else max(sb + a * 0.3, swing)
+    e_lim = sb + a * 0.3 if d == 1 else sb - a * 0.3
+    e = min(cl, max(e_lim, sl + a * 0.5)) if d == 1 else max(cl, min(e_lim, sl - a * 0.5))
+    aP = max(a, a15 if a15 is not None else a)
+    e = min(e, sl + aP * 1.5) if d == 1 else max(e, sl - aP * 1.5)          # jamais un SL de plus de 1,5 bougie moyenne
+    mini = max(SL_RISQUE_MIN_ATR * aP, cl * SL_RISQUE_MIN_PCT)
+    sl = min(sl, e - mini) if d == 1 else max(sl, e + mini)
+    risque = abs(e - sl)
+    cibles_niv = [(v, n) for v, n in tous_niv if n in ut_tp]
+    cibles = sorted([(v, n) for v, n in cibles_niv if d * (v - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+    t1 = cibles[0] if cibles else (e + d * risque * GAIN_MIN, f"projection {GAIN_MIN} x le risque")
+    loin = sorted([z for z in cibles_niv if d * (z[0] - e) >= abs(t1[0] - e) + a], key=lambda z: d * z[0])
+    t2 = loin[0] if loin else (e + d * risque * (GAIN_MIN + 2), f"projection {GAIN_MIN + 2} x le risque")
+    return dict(e=e, sl=sl, tp1=t1[0], n1=t1[1], tp2=t2[0], n2=t2[1], rr=abs(t1[0] - e) / max(risque, 1e-9), marche=e == cl)
+
+def calculer_analyse(S, stable=None, comp_prev=None):
+    """Calcul pur à partir des bougies S (m1, m5, m15, m30, h1, h4, d1, w1). Aucun accès réseau."""
+    m1, m5, m15, h1, h4, d1, w1 = (S[k] for k in ("m1", "m5", "m15", "h1", "h4", "d1", "w1"))
     series = {"1": m1, "3": regrouper(m1, 3, 60), "5": m5, "10": regrouper(m5, 2, 300), "15": m15,
-              "30": bougies(pair, 30), "45": regrouper(m15, 3, 900), "1h": h1, "2h": regrouper(h1, 2, 3600), "4h": h4, "D": d1}
+              "30": S["m30"], "45": regrouper(m15, 3, 900), "1h": h1, "2h": regrouper(h1, 2, 3600), "4h": h4, "D": d1}
     et = {k: etat_ut(v) for k, v in series.items()}
     dirs = [et[k][0] for k in UT]; sqzs = [et[k][1] for k in UT]; rsis = [et[k][2] or 50 for k in UT]
     bull, bear, comp = dirs.count(1), dirs.count(-1), sum(sqzs)
@@ -539,29 +599,12 @@ def analyser(pair):
 
     grosses = [(v, n) for v, n in zip(niv, noms) if v is not None and n != "15m"]
     tous_niv = [(v, n) for v, n in zip(niv, noms) if v is not None]
-    def plan(d):
-        # Comme l'indicateur v7 : le plan suit le profil (SWING 4h, INTRADAY 1h, SCALP/SNIPER 15 min)
-        dW_ = etat_ut(w1)[0] if len(w1) >= 50 else 0
-        ut_sl, ut_tp = niveaux_strategie(strategie_alignement(dirs, d, dW_)[0])
-        cote = [v for v, n in tous_niv if n in ut_sl and d * (cl - v) > a * 0.3]
-        sb = (max(cote) if d == 1 else min(cote)) if cote else (bas1[0] if d == 1 and bas1 else hau1[0] if d == -1 and hau1 else cl - d * 1.5 * a)
-        # SL un peu plus loin derrière la mèche (0,35 ATR), comme l'indicateur : la mèche peut être retouchée
-        swing = min(x["l"] for x in b[-10:]) - a * 0.35 if d == 1 else max(x["h"] for x in b[-10:]) + a * 0.35
-        sl = min(sb - a * 0.3, swing) if d == 1 else max(sb + a * 0.3, swing)
-        e_lim = sb + a * 0.3 if d == 1 else sb - a * 0.3
-        e = min(cl, max(e_lim, sl + a * 1.0)) if d == 1 else max(cl, min(e_lim, sl - a * 1.0))
-        # Risque minimum : 1,4 ATR ou 0,12 % du prix (le 11/11 un SL BTC à 1 ATR a été pris par une mèche de 27 $ avant que le prix file vers le TP) (évite les stops collés quand le marché dort, ex. le week-end)
-        mini = max(SL_RISQUE_MIN_ATR * a, cl * SL_RISQUE_MIN_PCT)
-        if abs(e - sl) < mini:
-            sl = e - d * mini
-        risque = abs(e - sl)
-        cibles_niv = [(v, n) for v, n in tous_niv if n in ut_tp]
-        cibles = sorted([(v, n) for v, n in cibles_niv if d * (v - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
-        t1 = cibles[0] if cibles else (e + d * risque * GAIN_MIN, f"projection {GAIN_MIN} x le risque")
-        loin = [z for z in cibles_niv if d * (z[0] - e) >= abs(t1[0] - e) + a]
-        loin.sort(key=lambda z: d * z[0])
-        t2 = loin[0] if loin else (e + d * risque * (GAIN_MIN + 2), "projection")
-        return dict(e=e, sl=sl, tp1=t1[0], n1=t1[1], tp2=t2[0], n2=t2[1], rr=abs(t1[0] - e) / risque, marche=e == cl)
+    dW_ = etat_ut(w1)[0] if len(w1) >= 50 else 0
+    a15 = atr(b, 14)[-2] if len(b) >= 16 else None
+    bas10, haut10 = min(x["l"] for x in b[-10:]), max(x["h"] for x in b[-10:])
+    def plan(d, strat_rng=None):
+        ut_sl, ut_tp = niveaux_strategie(strat_rng or "")
+        return plan_pine(d, cl, a, a15, tous_niv, hau1, bas1, bas10, haut10, ut_sl, ut_tp)
 
     fortHaut = rsiAchat and rsiOB < 3 and bull > bear and bull >= MIN_ALIGN - 2 and (comp >= MIN_SQZ or bull >= MIN_ALIGN)
     fortBas = rsiVente and rsiOS < 3 and bear > bull and bear >= MIN_ALIGN - 2 and (comp >= MIN_SQZ or bear >= MIN_ALIGN)
@@ -569,7 +612,9 @@ def analyser(pair):
     explBas = sqzC1 == 1 and sqzC == 0 and mom < 0 and bear > bull
     sigHaut = ((fortHaut or explHaut) and longT >= 1) or (zoneHaut and longT >= 0)
     sigBas = ((fortBas or explBas) and longT <= -1) or (zoneBas and longT <= 0)
-    dirPlan = 1 if zoneHaut else -1 if zoneBas else 1 if longT >= 2 else -1 if longT <= -2 else 1 if retHaut else -1 if retBas else sens
+    dirBrut = 1 if zoneHaut else -1 if zoneBas else 1 if longT >= 2 else -1 if longT <= -2 else 1 if retHaut else -1 if retBas else sens
+    dirPlan = dirBrut if stable is None else stable
+    strat_plan = strategie_alignement(dirs, dirPlan, etat_ut(w1)[0] if len(w1) >= 50 else 0)[0]
     nom = ("★ ACHAT FORT" if fortHaut else "EXPLOSION ▲" if explHaut else "ZONE DE REBOND ▲") if sigHaut else \
           ("★ VENTE FORTE" if fortBas else "EXPLOSION ▼" if explBas else "ZONE DE RETOURNEMENT ▼") if sigBas else ""
     # ═══ STRATÉGIE : 4h = tendance principale, 1h = confirmation ═══
@@ -577,7 +622,6 @@ def analyser(pair):
     # Le 15m reste informatif et ne bloque jamais un signal.
     confirme = d4h if d4h != 0 and d1h == d4h else 0
     # Contexte Daily / Weekly : où est le prix dans sa zone (0 = tout en bas, 1 = tout en haut)
-    w1 = bougies(pair, 10080)
     def position(bars, n):
         z = bars[-n:]; haut = max(x["h"] for x in z); bas = min(x["l"] for x in z)
         return (cl - bas) / max(haut - bas, 1e-9), haut, bas
@@ -616,8 +660,58 @@ def analyser(pair):
                 atr5=atr5, ema5=ema([x["c"] for x in m5], 20)[-1], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
                 grosses=grosses, ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
-                dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC,
-                dirW=etat_ut(w1)[0] if len(w1) >= 50 else 0)
+                dirPlan=dirPlan, dirBrut=dirBrut, strat=strat_plan,
+                plan=plan(dirPlan if dirPlan else 1, strat_plan), planH=plan(1), planB=plan(-1), rC=rC,
+                dirW=dW_, ohlc15=b[-30:])
+
+def analyser_avec_memoire(S, mem=None):
+    """Sens stable, plan figé et retournement exactement comme l'indicateur (vue 15 min = unité de référence du bot).
+    À chaque clôture 15 min : le sens stable avance, puis le plan est recalculé (entrée / TP1 / TP2 / SL figés
+    jusqu'à la clôture suivante). Le SL franchi à la clôture annule la position et ouvre un RETOURNEMENT."""
+    m15 = S["m15"]
+    if mem is None or len(m15) < 3:
+        r = calculer_analyse(S)
+        r["pine"] = None
+        return r
+    t = m15[-1]["t"]
+    if mem.get("bar_t") is None:
+        r0 = calculer_analyse(S)
+        mem.update(bar_t=t, stable=r0["dirBrut"], comp=r0["comp"], comp_prev=None, ret_dir=0, ret_age=0)
+        mem.update(figer_plan(r0, r0["dirBrut"]))
+    elif t != mem["bar_t"]:
+        # une bougie 15 min vient de se clôturer : on relit l'état à sa clôture (dernier instant de cette bougie)
+        S2 = dict(S, m15=m15[:-1])
+        rc = calculer_analyse(S2, stable=mem["stable"], comp_prev=mem.get("comp_prev"))
+        sl_old, dir_fig = mem.get("sl"), mem.get("dir_fig") or 0
+        franchi = sl_old is not None and ((dir_fig == -1 and rc["prix"] > sl_old) or (dir_fig == 1 and rc["prix"] < sl_old))
+        stable = dir_stable_pas(mem["stable"], rc["dirBrut"], rc["dirs"][4], rc["dirs"][7])
+        mem["comp_prev"] = rc["comp"]
+        if franchi:
+            mem["ret_dir"], mem["ret_age"] = -dir_fig, 0
+        elif mem.get("ret_dir"):
+            mem["ret_age"] = mem.get("ret_age", 0) + 1
+            if mem["ret_age"] > 40:
+                mem["ret_dir"] = 0
+        mem["stable"], mem["comp"], mem["bar_t"] = stable, rc["comp"], t
+        rc = calculer_analyse(S2, stable=stable, comp_prev=mem["comp_prev"])
+        mem.update(figer_plan(rc, stable))
+    r = calculer_analyse(S, stable=mem["stable"], comp_prev=mem.get("comp_prev"))
+    mem["comp"] = r["comp"]
+    r["plan_fige"] = dict(e=mem["ent"], sl=mem["sl"], tp1=mem["tp1"], tp2=mem["tp2"], n1=mem["n1"], n2=mem["n2"],
+                          rr=abs(mem["tp1"] - mem["ent"]) / max(abs(mem["ent"] - mem["sl"]), 1e-9),
+                          marche=mem["ent"] == r["prix"], d=mem["dir_fig"], strat=mem["strat_fig"])
+    r["plan"] = r["plan_fige"]
+    r["zone_pine"] = zone_pine(S["m15"], r["dirPlan"], mem["ent"], mem["sl"])
+    r["ret_dir"] = mem.get("ret_dir", 0)
+    r["ret_conf"] = bool(r["ret_dir"]) and r["dirPlan"] == r["ret_dir"]
+    r["nVoy"] = sum(1 for k in range(5) if r["dirPlan"] != 0 and r["dirs"][k] == -r["dirPlan"])
+    r["pine"] = mem
+    return r
+
+def figer_plan(r, stable):
+    """Valeurs de plan à mémoriser (ent, tp1, tp2, sl, sens et stratégie figés)."""
+    p = r["plan"]
+    return dict(ent=p["e"], tp1=p["tp1"], tp2=p["tp2"], sl=p["sl"], n1=p["n1"], n2=p["n2"], dir_fig=stable, strat_fig=r["strat"])
 
 # ───────── Messages ─────────
 def _compacte_prix(valeur):
@@ -959,10 +1053,9 @@ def score_validation(strat, etat, dirs, d, dW, prix, plan, atr_, rsis, sens, vol
     p["structure"] = 20 if ctxU else 0 if ctxO else 10
     dist = abs(prix - plan["e"])
     p["zone"] = 20 if dist <= 0.5 * atr_ else 10 if dist <= 1.5 * atr_ else 0
-    vols = [v for v in (volumes or []) if v is not None and v > 0]
-    if len(vols) >= 21:
-        moy = sum(vols[-21:-1]) / 20
-        ratio = vols[-1] / moy if moy > 0 else 0
+    dernier = list(volumes or [])[-20:]
+    if len(dernier) == 20 and all(v is not None for v in dernier) and dernier[-1] > 0 and sum(dernier) > 0:
+        ratio = dernier[-1] / (sum(dernier) / 20)          # ta.sma(volume, 20) inclut la bougie courante
         p["volume"] = 15 if ratio >= 1.0 else 7 if ratio >= 0.7 else 0
     else:
         p["volume"] = 0
@@ -987,18 +1080,28 @@ def score_validation(strat, etat, dirs, d, dW, prix, plan, atr_, rsis, sens, vol
     return total, p, dec
 
 
+def ligne_retournement(r):
+    """Étiquette RETOURNEMENT de l'indicateur : SL franchi à la clôture 15 min, puis confirmation du nouveau sens."""
+    rd = r.get("ret_dir") or 0
+    if not rd:
+        return []
+    if r.get("ret_conf"):
+        strat = r.get("strat") or ""
+        return [f"✅ RETOURNEMENT CONFIRMÉ : {'LONG' if rd == 1 else 'SHORT'}" + (f" • {strat}" if strat else "")]
+    return [f"⛔ SL cassé à la clôture : {'SHORT' if rd == 1 else 'LONG'} annulé ↩ RETOURNEMENT en cours (attendre la confirmation 15 min / 1h)"]
+
 def ligne_strategie(r):
-    """Même lecture que la barre TradingView v12 : stratégie, état, score /100, motif."""
+    """Même lecture que la barre TradingView v24 : stratégie, état, score /100, motif."""
     d = r.get("dirPlan") or 0
     strat, etat, motif = strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)
     if not strat:
-        return [f"🏷 Stratégie : aucune — {motif}"]
+        return ligne_retournement(r) + [f"🏷 Stratégie : aucune — {motif}"]
     total, p, dec = score_validation(strat, etat, r.get("dirs"), d, r.get("dirW") or 0, r.get("prix", 0),
                                      r.get("plan"), r.get("atr", 0) or 0, r.get("rsis"), r.get("sens"),
                                      [x.get("v") for x in (r.get("b15") or [])])
     ic = "✅" if etat == "CONFIRMÉ" and total >= 75 else "⏳"
     vol = " (volume indisponible)" if p.get("volume_indisponible") else ""
-    return [f"🏷 Stratégie : {strat} {ic} {etat} • score {total}/100",
+    return ligne_retournement(r) + [f"🏷 Stratégie : {strat} {ic} {etat} • score {total}/100",
             f"📊 Alignement {p['alignement']}/25 • structure {p['structure']}/20 • zone {p['zone']}/20 • volume {p['volume']}/15{vol} • indicateurs {p['indicateurs']}/10 • R/R {p['rr']}/10",
             f"🧭 {motif}",
             f"🚦 {dec}"]
@@ -1858,6 +1961,10 @@ TRAD.update({
     "📈 TradingView 4 h": "📈 TradingView 4 h",
 })
 LANG_EN = set()                                   # téléphones qui ont choisi l'anglais
+TRAD.update({
+    "⛔ SL cassé à la clôture :": "⛔ SL broken at the close:", "annulé ↩ RETOURNEMENT en cours (attendre la confirmation 15 min / 1h)": "cancelled ↩ REVERSAL in progress (wait for the 15 min / 1h confirmation)",
+    "✅ RETOURNEMENT CONFIRMÉ :": "✅ REVERSAL CONFIRMED:", "petites unités contre le plan": "small timeframes against the plan", ": le retournement se prépare": ": a reversal is building",
+})
 _CLES = sorted(TRAD, key=len, reverse=True)
 BOUTONS_FR = ["🤖 Mon bot", "📸 Partager mon gain", "🟠 Analyse BTC", "🥇 Analyse Gold", "💠 Analyse Nasdaq", "✅ Je suis rentré", "🚪 Je suis sorti", "📈 Mes résultats",
               "🧩 Indicateur TradingView", "💎 Devenir VIP", "📡 Mes marchés", "❌ Non"]
@@ -2205,8 +2312,8 @@ def tendance_armee(r, cle):
     return r
 
 def analyse_marche(etat, pair):
-    r = analyser(pair)
     m = next((k for k, v in MARCHES.items() if v == pair), None)
+    r = analyser(pair, (etat or {}).setdefault(m, {}).setdefault("pine", {}) if m else None)
     if m:
         tendance_armee(r, (etat or {}).setdefault(m, {}))
     r["annonce"] = annonce_proche(etat or {}, int(time.time()))
@@ -2788,7 +2895,9 @@ def voyants_unites(r):
         return f"{nom} {ic(dirs[i])}" if i < len(dirs) else ""
     petites = "  ".join(x for x in (u(0, "1m"), u(1, "3m"), u(2, "5m"), u(4, "15m")) if x)
     grandes = "  ".join(x for x in (u(7, "1h"), u(9, "4h"), u(10, "D")) if x)
-    return ([f"⚡ Petites unités : {petites}"] if petites else []) + ([f"🏔 Grandes unités : {grandes}"] if grandes else [])
+    nv = r.get("nVoy") or 0
+    retour = [f"↩ {nv}/5 petites unités contre le plan" + (" : le retournement se prépare" if nv >= 3 else "")] if nv else []
+    return ([f"⚡ Petites unités : {petites}"] if petites else []) + retour + ([f"🏔 Grandes unités : {grandes}"] if grandes else [])
 
 
 def objectifs_marche(r, d):
@@ -5122,8 +5231,27 @@ def plan_entree(r, d, p):
                 tp2=t2[0], n2=(("résistance " if d == 1 else "support ") + t2[1]) if t2[1] in ("1h", "4h", "Daily") else t2[1],
                 rr=abs(t1[0] - p) / risque)
 
+def pine_entree(r, d):
+    """Ordre Telegram = niveaux du graphique : plan figé de l'indicateur Pine v24 (sens du plan) ou plan instantané de l'autre sens."""
+    if d not in (1, -1) or not r.get("b15") or "planH" not in r:
+        return None
+    if r.get("plan_fige") and d == r.get("dirPlan"):
+        pl = r["plan_fige"]
+    else:
+        pl = r["planH"] if d == 1 else r["planB"]
+    z = zone_pine(r["b15"], d, pl["e"], pl["sl"])
+    if not z:
+        return None
+    nom = lambda n: (("résistance " if d == 1 else "support ") + n) if n in ("15m", "1h", "4h", "Daily") else n
+    return dict(d=d, e=pl["e"], sl=pl["sl"], tp1=pl["tp1"], n1=nom(pl["n1"]), tp2=pl["tp2"], n2=nom(pl["n2"]), rr=pl["rr"],
+                src="Fibonacci 50 → 78,6 % (indicateur ALIGN)", za=z["za"], zb=z["zb"], f50=z["f50"], f618=z["f618"], f786=z["f786"],
+                zmil=z["zmil"], sl_h=bougie_protegee(r["b15"][-3:], d, pl["sl"]), sl_ut="15 min")
+
 def point_entree(r, d, p):
     """Zone limite basée sur le dernier mouvement 5m ; niveaux 1h/4h et FVG restent des confluences."""
+    pe = pine_entree(r, d)
+    if pe:
+        return pe
     a = r.get("atr5", r["atr"]); b = r["b5"][-24:]
     H = max(x["h"] for x in b); L = min(x["l"] for x in b)
     if d == -1:   # SHORT : on vend un rebond vers une résistance
@@ -6193,7 +6321,7 @@ def un_tour(etat, chats):
         if SHUTDOWN_REQUESTED.is_set():
             return
         try:
-            r = analyser(pair)
+            r = analyser(pair, etat.setdefault(nom_marche, {}).setdefault("pine", {}))
             recevoir_updates_telegram(etat, chats, demandes)
             if SHUTDOWN_REQUESTED.is_set():
                 return
