@@ -2042,6 +2042,12 @@ def traiter(etat, chats, updates):
                                                                              {"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
                 continue
             if choix == "resume" and mk in MARCHES:
+                if not autorise(etat, qui, cb.get("from", {}).get("id")):
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Réservé aux VIP")
+                    except Exception:
+                        pass
+                    continue
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="Analyse")
                 except Exception:
