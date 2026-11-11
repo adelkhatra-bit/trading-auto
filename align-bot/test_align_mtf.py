@@ -340,7 +340,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertIn("CLÔTURE CONFIRMÉE", send.call_args.kwargs["text"])
+        self.assertIn("CLÔTURE 5m : SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
@@ -1071,7 +1071,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             raw = align_bot.texte_cloture("BTC", "1h", b, r, {})
         message = align_bot.mise_en_forme(raw)
         lines = message.splitlines()
-        self.assertEqual(lines[0], "🕯 CLÔTURE 1h — SIGNAL NON CONFIRMÉ")
+        self.assertEqual(lines[0], "🕯 CLÔTURE 1h : SIGNAL NON CONFIRMÉ")
         self.assertEqual(lines[1], "1h — 🟠 BTC")
         for required in ("03:00", "RÉSULTAT DE LA BOUGIE", "haussière", "Ouverture", "73444,10", "Clôture", "73498,30",
                          "TENDANCE MULTI-UNITÉS", "4 h\nSHORT", "Confirmation 1 h\nSHORT", "2/2", "DÉCISION ALIGN",
@@ -1093,7 +1093,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             raw = align_bot.texte_cloture("BTC", "5m", b, r, {})
         translated = align_bot.traduire(raw)
-        self.assertEqual(translated.splitlines()[0], "🕯 CANDLE CLOSE 5m — SIGNAL NOT CONFIRMED")
+        self.assertEqual(translated.splitlines()[0], "🕯 CANDLE CLOSE 5m : SIGNAL NOT CONFIRMED")
         for expected in ("CANDLE RESULT", "Open:", "Close:", "MULTI-TIMEFRAME TREND",
                          "ALIGN DECISION", "WHY", "NEXT STEP", "IMPORTANT",
                          "A candle close alone does not trigger an entry.",
@@ -1113,7 +1113,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             for tf in ("5m", "15m", "1h", "4h", "D", "W"):
                 message = align_bot.texte_cloture("BTC", tf, b, r, {})
-                self.assertEqual(message.splitlines()[0], f"🕯 CLÔTURE {tf} — SIGNAL NON CONFIRMÉ")
+                self.assertEqual(message.splitlines()[0], f"🕯 CLÔTURE {tf} : SIGNAL NON CONFIRMÉ")
 
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
         from unittest.mock import patch
