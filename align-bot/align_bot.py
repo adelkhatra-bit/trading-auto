@@ -1826,11 +1826,24 @@ def signature_analyse(m, r, cle):
     return "|".join([titre, str(r["confirme"]), str(bool(cle.get("trade"))), str(round(o.get("e", 0) / max(r["atr"], 1e-9)))])
 
 def timeframe_attendu(r, cle):
-    """Un seul horizon décisionnel est surveillé à la fois, selon l'étape réelle de la stratégie."""
+    """Retourne l'unité qui bloque réellement la décision, avant les déclencheurs d'entrée."""
+    dirs = r.get("dirs") or []
+    d1h = dirs[7] if len(dirs) > 7 else 0
+    d4h = dirs[9] if len(dirs) > 9 else 0
+
+    # La tendance 4h est le filtre directeur : si elle est neutre, seule sa clôture
+    # peut changer ce constat. Une zone d'entrée existante ne doit pas masquer ce blocage.
+    if not d4h:
+        return "4h"
+
+    # Tant que la 1h n'est pas dans le même sens que la 4h, la prochaine décision
+    # appartient à la clôture 1h, même si un ancien ordre/plan est encore mémorisé.
+    if d1h != d4h or not r.get("confirme"):
+        return "1h"
+
+    # Une fois le biais 4h + 1h confirmé, les états d'exécution attendent le déclencheur M5.
     if cle.get("trade") or cle.get("ordre") or cle.get("prep") or cle.get("attente_rsi") or cle.get("attente_rejet"):
         return "5m"
-    if not r.get("confirme"):
-        return "1h" if r.get("dirs", [0] * 10)[9] else "4h"
     return "15m"
 
 
