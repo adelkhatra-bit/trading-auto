@@ -350,8 +350,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         import json
         french = json.loads(align_bot.CLAVIER)
         english = json.loads(align_bot.traduire_clavier(align_bot.CLAVIER))
-        self.assertEqual([[b.get("text") for b in row] for row in french["keyboard"]],
-                         [[align_bot.INVERSE.get(b.get("text"), b.get("text")) for b in row] for row in english["keyboard"]])
+        self.assertEqual([[align_bot.TRAD.get(b.get("text"), b.get("text")) for b in row] for row in french["keyboard"]],
+                         [[b.get("text") for b in row] for row in english["keyboard"]])
         self.assertEqual(len(french["keyboard"]), len(english["keyboard"]))
 
     def test_english_and_french_analysis_buttons_keep_identical_callbacks(self):
