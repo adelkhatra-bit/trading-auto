@@ -14,8 +14,9 @@ permissions:
 
 concurrency:
   group: align-bot
-  # Ne jamais interrompre une session d'analyse déjà lancée lors d'un push ou lancement manuel.
-  cancel-in-progress: false
+  # Une nouvelle version remplace le worker précédent ; l'étape always() sauvegarde la mémoire
+  # et alerte le propriétaire en cas d'arrêt, avant que le nouveau worker ne prenne le relais.
+  cancel-in-progress: true
 
 jobs:
   validate:
