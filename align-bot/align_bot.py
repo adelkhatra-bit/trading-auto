@@ -476,10 +476,12 @@ def analyser(pair):
     tous_niv = [(v, n) for v, n in zip(niv, noms) if v is not None]
     def plan(d):
         # Comme l'indicateur v7 : le plan suit le profil (SWING 4h, INTRADAY 1h, SCALP/SNIPER 15 min)
-        ut_sl, ut_tp = niveaux_profil(profil_indicateur(dirs, d))
+        dW_ = etat_ut(w1)[0] if len(w1) >= 50 else 0
+        ut_sl, ut_tp = niveaux_strategie(strategie_alignement(dirs, d, dW_)[0])
         cote = [v for v, n in tous_niv if n in ut_sl and d * (cl - v) > a * 0.3]
         sb = (max(cote) if d == 1 else min(cote)) if cote else (bas1[0] if d == 1 and bas1 else hau1[0] if d == -1 and hau1 else cl - d * 1.5 * a)
-        swing = min(x["l"] for x in b[-10:]) - a * 0.2 if d == 1 else max(x["h"] for x in b[-10:]) + a * 0.2
+        # SL un peu plus loin derrière la mèche (0,35 ATR), comme l'indicateur : la mèche peut être retouchée
+        swing = min(x["l"] for x in b[-10:]) - a * 0.35 if d == 1 else max(x["h"] for x in b[-10:]) + a * 0.35
         sl = min(sb - a * 0.3, swing) if d == 1 else max(sb + a * 0.3, swing)
         e_lim = sb + a * 0.3 if d == 1 else sb - a * 0.3
         e = min(cl, max(e_lim, sl + a * 1.0)) if d == 1 else max(cl, min(e_lim, sl - a * 1.0))
@@ -549,7 +551,8 @@ def analyser(pair):
                 atr5=atr5, ema5=ema([x["c"] for x in m5], 20)[-1], m1=m1, confirme=confirme, atr=a, r5=r5[-3:], r15=rC, posD=posD, posW=posW, hautD=hautD, basD=basD, hautW=hautW, basW=basW,
                 grosses=grosses, ema15=ema(c, 20)[-1], niveaux=[(v, n) for v, n in zip(niv, noms) if v is not None], t=b[-1]["t"], prix=cl, dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, rsiOB=rsiOB, rsiOS=rsiOS,
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
-                dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
+                dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC,
+                dirW=etat_ut(w1)[0] if len(w1) >= 50 else 0)
 
 # ───────── Messages ─────────
 def _compacte_prix(valeur):
@@ -693,6 +696,14 @@ def profil_strategie(r):
     else:
         direction, mode, horizon = 0, "ATTENTE", "aucune durée de position à annoncer"
         contexte, contre = "pas de confluence exploitable entre les unités", False
+    # Source unique : le nom de stratégie vient du moteur SCALPING / DAY / SWING (identique à TradingView).
+    strat_, etat_s, motif_s = strategie_alignement(D, direction, r.get("dirW") or 0) if direction else ("", "", "")
+    if strat_:
+        mode = {"SWING": "SWING", "DAY": "DAY TRADING", "SCALPING": "SCALPING"}[strat_] + (" CONTRE-TENDANCE" if contre and strat_ == "SCALPING" else "")
+        horizon = {"SWING": "plusieurs jours si la structure H4 / D1 reste valide",
+                   "DAY": "séance en cours ; pas de conservation automatique la nuit",
+                   "SCALPING": "court terme ; ne pas transformer en position swing"}[strat_]
+        contexte = motif_s
     m5_aligne = bool(direction and d5 == direction)
     return {"mode": mode, "direction": direction, "horizon": horizon, "contexte": contexte,
             "m5_aligne": m5_aligne, "contre_tendance": contre,
@@ -802,35 +813,108 @@ FENETRES_UT = {
 }
 
 
-def profil_indicateur(dirs, d):
-    """Même règle que la barre de l'indicateur TradingView (v5) : SWING / INTRADAY / SCALP / SNIPER."""
+def strategie_alignement(dirs, d, dW=0):
+    """Règles SCALPING / DAY / SWING, identiques à l'indicateur TradingView v12.
+    SWING : W1/D1 contexte, H4 retracement ou aligné, H1 confirmation.
+    DAY : H4 contexte, H1 direction, M15 retracement, M5 déclenchement.
+    SCALPING : H1 contexte, M15 direction, M5 structure, M1 déclenchement."""
     if not d:
-        return ""
+        return "", "AUCUNE", "Pas de direction exploitable"
     D = list(dirs or []) + [0] * 11
-    pf4, pf1h, pf15, pf5, pf1 = D[9] == d, D[7] == d, D[4] == d, D[2] == d, D[0] == d
-    contre = D[9] == -d or D[7] == -d
-    if pf4 and pf1h and pf15:
-        return "SWING"
-    if pf4 and pf1h:
-        return "INTRADAY (retracement 15 min)"
-    if pf1h and pf15 and D[9] == 0:
-        return "INTRADAY"
-    if pf15 and pf5:
-        return "SCALP contre-tendance" if contre else "SCALP"
-    if pf1 and pf5:
-        return "SNIPER"
-    return "SIGNAL FAIBLE"
+    u = lambda i: D[i] == d
+    o = lambda i: D[i] == -d
+    uW, oW = dW == d, dW == -d
+    uD, u4, u1h, u15, u5, u1 = u(10), u(9), u(7), u(4), u(2), u(0)
+    o4, o1h = o(9), o(7)
+    swOk = uD and not oW and u1h and not o4
+    swAtt = uD and not oW and not u4 and not u1h
+    dyOk = not o4 and u1h and u5
+    dyAtt = not o4 and u1h and not u15 and not u5
+    scOk = not o1h and u15 and u5 and u1
+    scAtt = not o1h and u15 and u5 and not u1
+    if swOk:
+        return "SWING", "CONFIRMÉ", "D1 ✔ H1 ✔ " + ("H4 ✔" if u4 else "H4 en retracement") + " : reprise confirmée"
+    if dyOk:
+        return "DAY", "CONFIRMÉ", "H1 ✔ M5 ✔ " + ("M15 ✔" if u15 else "M15 en retracement") + (" H4 ✔" if u4 else " H4 neutre")
+    if scOk:
+        return "SCALPING", "CONFIRMÉ", "M15 ✔ M5 ✔ M1 ✔" + (" H1 ✔" if u1h else " H1 neutre")
+    if swAtt:
+        return "SWING", "EN ATTENTE", "Retracement H4 détecté, H1 non confirmé : aucune entrée pour le moment"
+    if dyAtt:
+        return "DAY", "EN ATTENTE", "Retracement M15 en cours, M5 non confirmé : attendre la clôture 5 min"
+    if scAtt:
+        return "SCALPING", "EN ATTENTE", "M15 et M5 alignés, déclenchement M1 manquant"
+    return "", "AUCUNE", "Pas d'alignement conforme aux règles SCALPING / DAY / SWING"
 
 
-def niveaux_profil(profil):
-    """Unités utilisées pour le SL et les TP selon le profil (identique à l'indicateur v7)."""
-    if profil == "SWING":
-        return ("4h",), ("4h", "Daily")
-    if profil.startswith("INTRADAY"):
+def niveaux_strategie(strat):
+    """Unités du SL et des TP selon la stratégie (identique à l'indicateur v12)."""
+    if strat == "SWING":
+        return ("1h", "4h"), ("4h", "Daily")
+    if strat == "DAY":
         return ("1h",), ("1h", "4h")
-    if profil.startswith("SCALP") or profil == "SNIPER":
+    if strat == "SCALPING":
         return ("15m",), ("15m", "1h")
     return ("1h", "4h"), ("1h", "4h", "Daily")
+
+
+def score_validation(strat, etat, dirs, d, dW, prix, plan, atr_, rsis, sens, volumes):
+    """Score /100 mesuré (pas une probabilité), mêmes critères que l'indicateur v12."""
+    if not strat or not d or not plan:
+        return 0, {}, "AUCUNE ENTRÉE"
+    D = list(dirs or []) + [0] * 11
+    u = lambda i: D[i] == d
+    tfs = {"SWING": [dW == d, u(10), u(9), u(7)], "DAY": [u(9), u(7), u(4), u(2)],
+           "SCALPING": [u(7), u(4), u(2), u(0)]}[strat]
+    p = {"alignement": round(25 * sum(tfs) / 4)}
+    ctxU = {"SWING": u(10), "DAY": u(9), "SCALPING": u(7)}[strat]
+    ctxO = {"SWING": dW == -d, "DAY": D[9] == -d, "SCALPING": D[7] == -d}[strat]
+    p["structure"] = 20 if ctxU else 0 if ctxO else 10
+    dist = abs(prix - plan["e"])
+    p["zone"] = 20 if dist <= 0.5 * atr_ else 10 if dist <= 1.5 * atr_ else 0
+    vols = [v for v in (volumes or []) if v is not None and v > 0]
+    if len(vols) >= 21:
+        moy = sum(vols[-21:-1]) / 20
+        ratio = vols[-1] / moy if moy > 0 else 0
+        p["volume"] = 15 if ratio >= 1.0 else 7 if ratio >= 0.7 else 0
+    else:
+        p["volume"] = 0
+        p["volume_indisponible"] = True
+    R = list(rsis or []) + [50] * 11
+    rsiT = {"SWING": R[7], "DAY": R[2], "SCALPING": R[0]}[strat] or 50
+    sain = rsiT < 70 if d == 1 else rsiT > 30
+    p["indicateurs"] = (10 if sens == d else 5) if sain else 0
+    rr = abs(plan["tp1"] - plan["e"]) / max(abs(plan["e"] - plan["sl"]), 1e-9)
+    p["rr"] = 10 if rr >= 2 else 7 if rr >= 1.5 else 0
+    total = p["alignement"] + p["structure"] + p["zone"] + p["volume"] + p["indicateurs"] + p["rr"]
+    if total < 60:
+        dec = "AUCUNE ENTRÉE : configuration insuffisante"
+    elif etat != "CONFIRMÉ":
+        dec = "À SURVEILLER : confirmation manquante"
+    elif total >= 85:
+        dec = "ENTRÉE POSSIBLE : fortement aligné"
+    elif total >= 75:
+        dec = "INTÉRESSANT : attendre les conditions finales"
+    else:
+        dec = "À SURVEILLER : confirmation manquante"
+    return total, p, dec
+
+
+def ligne_strategie(r):
+    """Même lecture que la barre TradingView v12 : stratégie, état, score /100, motif."""
+    d = r.get("dirPlan") or 0
+    strat, etat, motif = strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)
+    if not strat:
+        return [f"🏷 Stratégie : aucune — {motif}"]
+    total, p, dec = score_validation(strat, etat, r.get("dirs"), d, r.get("dirW") or 0, r.get("prix", 0),
+                                     r.get("plan"), r.get("atr", 0) or 0, r.get("rsis"), r.get("sens"),
+                                     [x.get("v") for x in (r.get("b15") or [])])
+    ic = "✅" if etat == "CONFIRMÉ" and total >= 75 else "⏳"
+    vol = " (volume indisponible)" if p.get("volume_indisponible") else ""
+    return [f"🏷 Stratégie : {strat} {ic} {etat} • score {total}/100",
+            f"📊 Alignement {p['alignement']}/25 • structure {p['structure']}/20 • zone {p['zone']}/20 • volume {p['volume']}/15{vol} • indicateurs {p['indicateurs']}/10 • R/R {p['rr']}/10",
+            f"🧭 {motif}",
+            f"🚦 {dec}"]
 
 
 def lecture_unite_active(r):
@@ -862,7 +946,7 @@ def strategie_mtf(r):
          f"🎯 Timing 5 min : {fl(d5)}",
          f"📅 Contexte Daily : {fl(dD)}",
          f"🧩 PROFIL RETENU : {profil['mode']}",
-         f"🏷 Barre TradingView : {profil_indicateur(D, profil['direction']) or 'ATTENDRE'}",
+         *ligne_strategie(r),
          f"🧭 Lecture : {profil['contexte']}",
          f"⏱ Horizon indicatif : {profil['horizon']}",
          f"🚦 {profil['statut']}"]
@@ -1647,7 +1731,7 @@ TRAD.update({
     "court terme ; ne pas transformer en position swing": "short term; do not turn into a swing position",
     "aucune durée de position à annoncer": "no holding period to announce",
     "SCALPING CONTRE-TENDANCE": "COUNTER-TREND SCALPING",
-    "SWING": "SWING", "INTRADAY": "INTRADAY", "SCALPING": "SCALPING", "ATTENTE": "WAIT",
+    "SWING": "SWING", "INTRADAY": "INTRADAY", "DAY TRADING": "DAY TRADING", "SCALPING": "SCALPING", "ATTENTE": "WAIT",
     "🚦 CONFLUENCE M5 — attendre le déclencheur clôturé": "🚦 M5 CONFLUENCE — wait for the confirmed trigger",
     "🚦 PRÉPARATION — attendre l’alignement ou le retournement M5": "🚦 SETUP FORMING — wait for M5 alignment or reversal",
     "⚠️ Contre-tendance : objectif court, risque réduit selon les règles, aucune conservation swing.": "⚠️ Counter-trend: short target, reduced risk per rules, never hold as a swing.",

@@ -25,6 +25,9 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_strategy_profile_selects_swing_when_h4_h1_m15_align(self):
         dirs = [0] * 11
         dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, 1, 1
+        # Règle validée par Adel : sans D1 aligné ce n'est pas un swing mais du DAY TRADING
+        self.assertEqual(align_bot.profil_strategie({"dirs": list(dirs)})["mode"], "DAY TRADING")
+        dirs[10] = 1
         profile = align_bot.profil_strategie({"dirs": dirs})
         self.assertEqual(profile["mode"], "SWING")
         self.assertTrue(profile["m5_aligne"])
@@ -34,7 +37,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         dirs = [0] * 11
         dirs[9], dirs[7], dirs[4], dirs[2] = 1, 1, -1, 1
         profile = align_bot.profil_strategie({"dirs": dirs})
-        self.assertEqual(profile["mode"], "INTRADAY")
+        self.assertEqual(profile["mode"], "DAY TRADING")
         self.assertIn("retracement", profile["contexte"])
         self.assertTrue(profile["m5_aligne"])
 
@@ -2713,27 +2716,49 @@ class TestGuaranteedShutdown(unittest.TestCase):
         align_bot.SHUTDOWN_REQUESTED.clear(); align_bot.TELEGRAM_POLL_STOP.clear()
 
 
-class TestProfileMatchesIndicator(unittest.TestCase):
-    def test_same_profiles_as_tradingview_bar(self):
-        f = align_bot.profil_indicateur
-        # capture d'écran GOLD : 1 neutre, 5/15/1h baisse, 4h neutre, D baisse → INTRADAY
-        self.assertEqual(f([0, 0, -1, -1, -1, -1, -1, -1, -1, 0, -1], -1), "INTRADAY")
-        self.assertEqual(f([-1] * 11, -1), "SWING")
-        self.assertEqual(f([0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0], 1), "SWING")
-        self.assertEqual(f([0, 0, 0, 0, -1, 0, 0, 1, 0, 1, 0], 1), "INTRADAY (retracement 15 min)")
-        self.assertEqual(f([0, 0, 1, 0, 1, 0, 0, -1, 0, 0, 0], 1), "SCALP contre-tendance")
-        self.assertEqual(f([1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], 1), "SNIPER")
-        self.assertEqual(f([1] * 11, 0), "")
+class TestStrategiesScalpingDaySwing(unittest.TestCase):
+    """Règles identiques à l'indicateur v12 (index UT : 0=1m 2=5m 4=15m 7=1h 9=4h 10=D)."""
+    def test_swing_confirmed_and_waiting(self):
+        f = align_bot.strategie_alignement
+        self.assertEqual(f([-1] * 9 + [0, -1], -1)[:2], ("SWING", "CONFIRMÉ"))
+        s = f([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1], 1)   # D1 ↑, H4 ↑ pas retracé, H1 neutre → pas de swing
+        self.assertNotEqual(s[:2], ("SWING", "CONFIRMÉ"))
+        w = f([0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 1], 1)
+        self.assertEqual(w[:2], ("SWING", "EN ATTENTE"))
+        self.assertIn("Retracement H4 détecté, H1 non confirmé", w[2])
 
+    def test_weekly_against_blocks_swing(self):
+        self.assertNotEqual(align_bot.strategie_alignement([1] * 11, 1, dW=-1)[0], "SWING")
 
-class TestPlanFollowsProfile(unittest.TestCase):
-    def test_levels_by_profile_match_indicator(self):
-        f = align_bot.niveaux_profil
-        self.assertEqual(f("SWING"), (("4h",), ("4h", "Daily")))
-        self.assertEqual(f("INTRADAY (retracement 15 min)"), (("1h",), ("1h", "4h")))
-        self.assertEqual(f("SCALP contre-tendance"), (("15m",), ("15m", "1h")))
-        self.assertEqual(f("SNIPER"), (("15m",), ("15m", "1h")))
-        self.assertEqual(f("SIGNAL FAIBLE"), (("1h", "4h"), ("1h", "4h", "Daily")))
+    def test_day_and_scalping(self):
+        f = align_bot.strategie_alignement
+        self.assertEqual(f([0, 0, 1, 0, -1, 0, 0, 1, 0, 0, -1], 1)[:2], ("DAY", "CONFIRMÉ"))
+        self.assertEqual(f([0, 0, -1, 0, -1, 0, 0, 1, 0, 0, -1], 1)[:2], ("DAY", "EN ATTENTE"))
+        self.assertEqual(f([1, 0, 1, 0, 1, 0, 0, 0, 0, 0, -1], 1)[:2], ("SCALPING", "CONFIRMÉ"))
+        self.assertEqual(f([0, 0, 1, 0, 1, 0, 0, 0, 0, 0, -1], 1)[:2], ("SCALPING", "EN ATTENTE"))
+        self.assertEqual(f([1] * 11, 0)[0], "")
+
+    def test_levels_by_strategy(self):
+        f = align_bot.niveaux_strategie
+        self.assertEqual(f("SWING"), (("1h", "4h"), ("4h", "Daily")))
+        self.assertEqual(f("DAY"), (("1h",), ("1h", "4h")))
+        self.assertEqual(f("SCALPING"), (("15m",), ("15m", "1h")))
+        self.assertEqual(f(""), (("1h", "4h"), ("1h", "4h", "Daily")))
+
+    def test_score_thresholds_and_no_compensation(self):
+        plan = {"e": 100.0, "sl": 101.0, "tp1": 97.0}
+        tot, p, dec = align_bot.score_validation("SWING", "CONFIRMÉ", [-1] * 11, -1, -1, 100.2, plan, 1.0,
+                                                 [50] * 11, -1, [10] * 20 + [15])
+        self.assertEqual(tot, 100); self.assertIn("ENTRÉE POSSIBLE", dec)
+        tot2, p2, dec2 = align_bot.score_validation("SWING", "EN ATTENTE", [-1] * 11, -1, -1, 100.2, plan, 1.0,
+                                                    [50] * 11, -1, [10] * 20 + [15])
+        self.assertIn("confirmation manquante", dec2)          # un score élevé ne remplace pas la confirmation
+        tot3, p3, _ = align_bot.score_validation("DAY", "CONFIRMÉ", [-1] * 11, -1, 0, 100.2, plan, 1.0,
+                                                 [50] * 11, -1, [])
+        self.assertTrue(p3.get("volume_indisponible")); self.assertEqual(p3["volume"], 0)
+        _, _, dec4 = align_bot.score_validation("SCALPING", "CONFIRMÉ", [0] * 11, -1, 0, 105.0, plan, 1.0,
+                                                [20] * 11, 1, [])
+        self.assertIn("AUCUNE ENTRÉE", dec4)
 
 
 class TestStopNotTooTight(unittest.TestCase):
