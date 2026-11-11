@@ -432,9 +432,9 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("\n💹 Prix actuel", message)
                 self.assertNotIn("\\n", message)
                 self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None
+                self.assertLess(len(message), 4096)
         self.assertEqual(align_bot.traduire("📊 INDICATEURS PAR UNITÉ DE TEMPS"), "📊 TIMEFRAME INDICATORS")
         self.assertEqual(align_bot.traduire("📈 RSI PAR UNITÉ DE TEMPS"), "📈 RSI BY TIMEFRAME")
-                self.assertLess(len(message), 4096)
 
     def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
         r = {"m1": [candle(1, c=67500.0)], "news": "📰 Calendrier économique"}
