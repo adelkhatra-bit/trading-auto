@@ -403,7 +403,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         english = json.loads(align_bot.traduire_clavier(align_bot.markup_analyse(state, "GOLD", {})))
         fr_buttons = [b for row in french["inline_keyboard"] for b in row]
         en_buttons = [b for row in english["inline_keyboard"] for b in row]
-        self.assertEqual([b["callback_data"] for b in fr_buttons], [b["callback_data"] for b in en_buttons])
+        self.assertEqual([b.get("callback_data") or b.get("url") for b in fr_buttons], [b.get("callback_data") or b.get("url") for b in en_buttons])
         self.assertEqual(
             [align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons],
             [b["text"] for b in en_buttons],
@@ -467,7 +467,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_previous_analysis_button_is_market_specific(self):
         import json
         keyboard = json.loads(align_bot.bouton_rappel("GOLD"))["inline_keyboard"]
-        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         labels = [button["text"] for row in keyboard for button in row]
         self.assertIn("previous:GOLD", callbacks)
         self.assertIn("📌 Revoir l'analyse GOLD", labels)
@@ -1282,7 +1282,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.traiter(state, set(), [update])
         self.assertIn("Messages 26 à 33 sur 41", send.call_args.kwargs["text"])
         buttons = json.loads(send.call_args.kwargs["reply_markup"])["inline_keyboard"]
-        callbacks = [button["callback_data"] for row in buttons for button in row]
+        callbacks = [button.get("callback_data") for row in buttons for button in row if button.get("callback_data")]
         self.assertIn("history:BTC:0", callbacks)
         self.assertIn("history:BTC:16", callbacks)
 
