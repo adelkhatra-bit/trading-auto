@@ -538,12 +538,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             [align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons],
             [b["text"] for b in en_buttons],
         )
-        self.assertIn("❓ Why this decision?", [b["text"] for b in en_buttons])
-        self.assertIn("📊 Full analysis", [b["text"] for b in en_buttons])
-        self.assertIn("🎯 Levels / prices", [b["text"] for b in en_buttons])
-        self.assertIn("⏱ All timeframes", [b["text"] for b in en_buttons])
-        self.assertIn("🗂 Message history", [b["text"] for b in en_buttons])
-        self.assertIn("🔔 Follow the next position", [b["text"] for b in en_buttons])
+        self.assertEqual([b["text"] for b in en_buttons], ["🔔 Follow the next position"])
+        self.assertEqual([b["callback_data"] for b in en_buttons], ["auto:GOLD"])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):
         labels = [
@@ -813,8 +809,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         import json
         keyboard = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("in:GOLD", callbacks)
-        self.assertIn("out:GOLD", callbacks)
+        self.assertEqual(callbacks, ["position:GOLD", "out:GOLD"])
+        self.assertNotIn("in:GOLD", callbacks)
         self.assertNotIn("auto:GOLD", callbacks)
 
     def test_telegram_formatter_splits_compound_information(self):
@@ -1586,7 +1582,9 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertIn("timeframes:BTC", callbacks)
+        # The detailed timeframe callback remains supported when explicitly requested,
+        # but is intentionally absent from the default analysis keyboard.
+        self.assertEqual(callbacks, ["auto:BTC"])
         update = {"update_id": 9210, "callback_query": {
             "id": "cb-timeframes", "data": "timeframes:BTC",
             "message": {"chat": {"id": 123, "type": "private"}}, "from": {"id": 123}
@@ -1610,12 +1608,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         labels = [button["text"] for row in keyboard for button in row]
-        self.assertIn("why:BTC", callbacks)
-        self.assertIn("details:BTC", callbacks)
-        self.assertIn("levels:BTC", callbacks)
-        self.assertIn("Pourquoi cette décision ?", " ".join(labels))
-        self.assertIn("Analyse complète", " ".join(labels))
-        self.assertIn("Niveaux / prix", " ".join(labels))
+        self.assertEqual(callbacks, ["auto:BTC"])
+        self.assertEqual(labels, ["🔔 Suivre la prochaine position"])
 
     def test_why_callback_returns_short_explanation_and_more_detail_buttons(self):
         from unittest.mock import patch
@@ -1914,10 +1908,11 @@ class TestTelegramCompactKeyboards(unittest.TestCase):
             self.assertFalse(any("tradingview.com" in url for url in urls))
         analysis = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
         callbacks = [button.get("callback_data") for row in analysis for button in row]
-        self.assertIn("why:BTC", callbacks)
-        self.assertIn("details:BTC", callbacks)
-        self.assertIn("levels:BTC", callbacks)
-        self.assertIn("timeframes:BTC", callbacks)
+        self.assertEqual(callbacks, ["auto:BTC"])
+        self.assertEqual(
+            [button.get("text") for row in analysis for button in row],
+            ["🔔 Suivre la prochaine position"],
+        )
 
 
 class TestTradingViewReportRegression(unittest.TestCase):
