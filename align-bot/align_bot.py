@@ -3804,13 +3804,27 @@ def macro(etat):
             print("taux US", ex)
     return mc
 
+def variation_une_heure(historique):
+    """Variation 1h seulement si un échantillon existe entre 40 et 80 minutes."""
+    if len(historique) < 2:
+        return None
+    now_t, valeur = historique[-1]
+    candidats = [x for x in historique[:-1] if 2400 <= now_t - x[0] <= 4800 and x[1]]
+    if not candidats or not valeur:
+        return None
+    ref = min(candidats, key=lambda x: abs((now_t - x[0]) - 3600))
+    return (valeur - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
+
+
 def dxy_info(etat):
     h = (etat.get("macro") or {}).get("dxy") or []
-    if len(h) < 2:
+    if not h:
         return None
-    now_t, v = h[-1]
-    ref = min(h, key=lambda x: abs((now_t - x[0]) - 3600))
-    return v, (v - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
+    variation = variation_une_heure(h)
+    if variation is None:
+        return None
+    ch, mn = variation
+    return h[-1][1], ch, mn
 
 def macro_confluence(etat, m, r=None):
     """Biais dollar/EURUSD et divergence avec l'actif ; contexte seulement, jamais un déclencheur."""
@@ -3821,19 +3835,17 @@ def macro_confluence(etat, m, r=None):
     dxy, variation, age_min = di
     hist_eur = mc.get("eurusd") or []
     eur_change = None
-    if len(hist_eur) >= 2:
-        now_t = hist_eur[-1][0]
-        ref = min(hist_eur, key=lambda x: abs((now_t - x[0]) - 3600))
-        if ref[1]:
-            eur_change = (hist_eur[-1][1] - ref[1]) / ref[1] * 100
+    eur_variation = variation_une_heure(hist_eur)
+    if eur_variation is not None:
+        eur_change = eur_variation[0]
     if variation >= 0.25:
         dollar_state = "FORTE HAUSSE — IMPULSION HAUSSIÈRE"
     elif variation <= -0.25:
         dollar_state = "FORTE BAISSE — IMPULSION BAISSIÈRE"
     elif variation > 0.03:
-        dollar_state = "HAUSSIER"
+        dollar_state = "HAUSSIER (BULLISH)"
     elif variation < -0.03:
-        dollar_state = "BAISSIER"
+        dollar_state = "BAISSIER (BEARISH)"
     else:
         dollar_state = "NEUTRE"
     fx_check = "INDISPONIBLE"
@@ -4366,9 +4378,11 @@ def un_tour(etat, chats):
         r["fermeture"] = nom_marche == "GOLD" and (0 < f_ <= 35 or -120 <= f_ <= 0)   # jusqu'à 10 min après la réouverture
         r["news"] = news_txt(etat)
         try:
+            r["macro_data"] = macro_confluence(etat, nom_marche, r)
             r["macro"] = contexte_macro(etat, nom_marche, r)
-        except Exception:
-            pass
+        except Exception as ex:
+            print("macro analyse", nom_marche, ex)
+            r["macro_data"] = {"disponible": False, "statut": "DONNÉES MACRO INDISPONIBLES"}
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
