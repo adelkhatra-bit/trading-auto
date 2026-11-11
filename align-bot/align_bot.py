@@ -1965,6 +1965,18 @@ def url_tradingview(m, timeframe):
 def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
 
+def menu_suivi(etat, cid):
+    """Demande quels marchés l'utilisateur veut suivre avant l'inscription."""
+    anglais = str(cid) in LANG_EN
+    texte = ("🎯 CHOOSE THE MARKETS TO FOLLOW\\nSelect BTC, GOLD or both. You'll be alerted when an entry is confirmed."
+             if anglais else
+             "🎯 CHOISIS LES MARCHÉS À SUIVRE\\nSélectionne BTC, GOLD ou les deux. Je t'alerterai lorsqu'un point d'entrée sera confirmé.")
+    labels = ["🟠 BTC", "🥇 GOLD", "🟠 BTC + 🥇 GOLD"]
+    choix = ["BTC", "GOLD", "BOTH"]
+    lignes = [[{"text": label, "callback_data": f"followmarket:{market}"}]
+              for label, market in zip(labels, choix)]
+    _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
+
 def bouton_rappel(m):
     """Rappelle la bonne analyse de marché, même si un autre marché a envoyé des messages depuis."""
     return json.dumps({"inline_keyboard": [
@@ -3051,6 +3063,27 @@ def traiter(etat, chats, updates):
                     pass
                 menu_marches(etat, qui)
                 continue
+            if choix == "followmarket" and mk in ("BTC", "GOLD", "BOTH"):
+                if not (autorise(etat, qui, cb.get("from", {}).get("id")) or qui not in etat.get("bienvenue", {})):
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Réservé aux VIP")
+                    except Exception:
+                        pass
+                    _envoi_sur(qui, text="🔒 Réservé aux VIP\\n🎁 Ta position gratuite du jour est déjà utilisée\\n💎 VIP 49,90 € / mois 👇",
+                               **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
+                    continue
+                marches = ("BTC", "GOLD") if mk == "BOTH" else (mk,)
+                for marche in marches:
+                    inscrire_auto(etat, qui, marche)
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Suivi activé")
+                except Exception:
+                    pass
+                noms = "BTC + GOLD" if mk == "BOTH" else mk
+                _envoi_sur(qui, text=(f"✅ FOLLOW ACTIVATED: {noms}\\nI'll alert you when an entry is confirmed."
+                                      if qui in LANG_EN else
+                                      f"✅ SUIVI ACTIVÉ : {noms}\\nJe t'alerterai lorsqu'un point d'entrée sera confirmé."))
+                continue
             if choix == "results":
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📈 Tes résultats")
@@ -3225,13 +3258,13 @@ def traiter(etat, chats, updates):
                 continue
             if choix == "auto" and mk in MARCHES:
                 try:
-                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Noté")
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🎯 Choisis les marchés")
                 except Exception:
                     pass
                 if autorise(etat, qui, cb["from"]["id"]) or qui not in etat.get("bienvenue", {}):
-                    inscrire_auto(etat, qui, mk)
+                    menu_suivi(etat, qui)
                 else:
-                    _envoi_sur(qui, text="🔒 Réservé aux VIP\n🎁 Ta position gratuite du jour est déjà utilisée\n⏰ Une nouvelle demain\n💎 VIP 49,90 € / mois 👇",
+                    _envoi_sur(qui, text="🔒 Réservé aux VIP\\n🎁 Ta position gratuite du jour est déjà utilisée\\n⏰ Une nouvelle demain\\n💎 VIP 49,90 € / mois 👇",
                                **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
                 continue
             if choix in ("pub", "refus") and qui in proprio(etat):
