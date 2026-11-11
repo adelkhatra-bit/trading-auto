@@ -2713,34 +2713,21 @@ def notifier_clotures(etat, m, r, cle):
             etat["veille_cloture"][m].pop(cid, None)
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
-    """Une analyse = une seule carte lisible, pas un aperçu puis un deuxième rapport."""
+    """Une demande produit une seule analyse complète et lisible pour le marché choisi."""
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
-    sig = signature_analyse(m, r, cle); der = vu.get(str(cid))
-    if der and der["sig"] == sig and time.time() - der["t"] < 1200:
-        armer_cloture(etat, cid, m, r, cle)
-        lignes = chrono_txt(m, r, cle, time.time()).split("\n")
-        utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
-        _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\n".join(
-            [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
-             f"🕒 Analyse de référence : {heure(der['t'])}",
-             "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
-        # Même traitement pour BTC et GOLD : une analyse répétée conserve aussi son avis IA.
-        avis = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
-        if avis:
-            _envoi_sur(cid, text=avis, reply_markup=CLAVIER)
-        return
+    sig = signature_analyse(m, r, cle)
     vu[str(cid)] = {"sig": sig, "t": time.time()}
     armer_cloture(etat, cid, m, r, cle)
-    res = telegram("sendMessage", chat_id=cid, text=texte_apercu(m, r, cle),
+    avis = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
+    prix = px(r["m1"][-1]["c"])
+    entete = f"{ICONE.get(m, '📊')}  ALIGN • {m}  |  {prix}"
+    texte = entete + "\\n━━━━━━━━━━━━━━━━━━\\n" + (avis or texte_apercu(m, r, cle))
+    res = telegram("sendMessage", chat_id=cid, text=texte,
                    reply_markup=markup_analyse(etat, m, r))
     try:
         vu[str(cid)]["mid"] = res["result"]["message_id"]
     except (KeyError, TypeError):
         pass
-    # L'avis IA reste envoyé séparément : aucune information existante n'est supprimée.
-    a_ = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
-    if a_:
-        _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
 
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
