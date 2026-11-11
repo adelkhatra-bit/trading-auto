@@ -1937,8 +1937,48 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         chats = {"101", "202", "303"}
         btc = align_bot.destinataires_message(state, chats, "🟠 BTC — SIGNAL EN ATTENTE\\nPrix 70000")
         gold = align_bot.destinataires_message(state, chats, "🥇 GOLD — SIGNAL CONFIRMÉ\\nPrix 4000")
-        self.assertEqual(set(btc), {"101", "303", "-1000"})
-        self.assertEqual(set(gold), {"202", "303", "-1000"})
+        # Le flux VIP complet part uniquement dans la chaîne VIP (plus de doublon en privé)
+        self.assertEqual(btc, ["-1000"])
+        self.assertEqual(gold, ["-1000"])
+        state.pop("canal")
+        self.assertEqual(set(align_bot.destinataires_message(state, chats, "🟠 BTC — SIGNAL EN ATTENTE\\nPrix 70000")), {"101", "303"})
+
+    def test_free_flow_one_proposed_position_then_masked(self):
+        from unittest.mock import patch
+        state = {"prospects": ["7"], "proprio": ["1"], "lien": "https://t.me/+x", "GOLD": {"trade": {"cree": 5, "qui": {}}}}
+        entree = "🥇 GOLD — J'ENTRE MAINTENANT\nEntrée 3990.50"
+        with patch.object(align_bot, "telegram") as tg:
+            align_bot.envoyer_prospects(state, "📰 NEWS USA DANS 1 H", False)
+            self.assertEqual(tg.call_count, 0)          # plus de news côté gratuit
+            align_bot.envoyer_prospects(state, entree, True)
+            textes = {c.kwargs["chat_id"]: c.kwargs["text"] for c in tg.call_args_list}
+            self.assertIn("POSITION GRATUITE DU JOUR", textes["7"])
+            self.assertIn("POSITION GRATUITE DU JOUR", textes["1"])   # le propriétaire voit le gratuit
+            tg.reset_mock()
+            state["GOLD"]["trade"]["cree"] = 6
+            align_bot.envoyer_prospects(state, entree, True)
+            self.assertIn("🔒", tg.call_args_list[0].kwargs["text"])
+            self.assertNotIn("3990", tg.call_args_list[0].kwargs["text"])
+            tg.reset_mock()
+            align_bot.envoyer_prospects(state, entree, True)
+            self.assertEqual(tg.call_count, 0)          # pas deux fois le même avis
+
+    def test_free_bot_off_gets_only_masked_and_respects_market(self):
+        from unittest.mock import patch
+        state = {"prospects": ["7", "8"], "bot_off": ["7"], "marches_par_chat": {"8": "BTC"}, "GOLD": {"trade": {"cree": 5}}}
+        with patch.object(align_bot, "telegram") as tg, patch.object(align_bot, "PROPRIO_VUE_GRATUITE", False):
+            align_bot.envoyer_prospects(state, "🥇 GOLD — J'ENTRE MAINTENANT\nEntrée 3990.50", True)
+        self.assertEqual([c.kwargs["chat_id"] for c in tg.call_args_list], ["7"])
+        self.assertIn("OFF", tg.call_args_list[0].kwargs["text"])
+
+    def test_share_reminder_once_per_planned_day(self):
+        import datetime
+        state = {}
+        jour = datetime.datetime(2026, 11, 12, align_bot.PARTAGE_HEURE, 5, tzinfo=align_bot.PARIS)
+        while jour.date().toordinal() % align_bot.PARTAGE_JOURS:
+            jour += datetime.timedelta(days=1)
+        self.assertTrue(align_bot.partage_du(state, jour))
+        self.assertFalse(align_bot.partage_du(state, jour + datetime.timedelta(minutes=5)))
 
     def test_mixed_market_macro_alert_requires_both_selection(self):
         state = {"marches_par_chat": {"101": "BTC", "202": "GOLD", "303": "BOTH"}}
