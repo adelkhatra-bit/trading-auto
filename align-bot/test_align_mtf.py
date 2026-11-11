@@ -2050,3 +2050,44 @@ class TestFollowPositionMarketChoice(unittest.TestCase):
             align_bot.traiter(state, set(), [update])
         self.assertEqual([call.args[2] for call in subscribe.call_args_list], ["BTC", "GOLD"])
         self.assertEqual(state["marches_par_chat"]["102"], "BOTH")
+
+
+class TelegramSimpleMenuTest(unittest.TestCase):
+    def test_persistent_keyboard_has_only_analysis_and_follow_actions(self):
+        import json
+        for raw in (align_bot.CLAVIER, align_bot.CLAVIER_VISITEUR):
+            keyboard = json.loads(raw)["keyboard"]
+            self.assertEqual([[button["text"] for button in row] for row in keyboard],
+                             [["📊 Analyse", "🔔 Suivre"]])
+
+    def test_analysis_result_keyboard_has_one_follow_action(self):
+        import json
+        markup = json.loads(align_bot.markup_analyse({}, "GOLD", {}))
+        self.assertEqual(len(markup["inline_keyboard"]), 1)
+        self.assertEqual(len(markup["inline_keyboard"][0]), 1)
+        self.assertEqual(markup["inline_keyboard"][0][0]["callback_data"], "auto:GOLD")
+
+    def test_analysis_request_returns_only_the_selected_market(self):
+        from unittest.mock import patch
+        update = {"update_id": 99701, "message": {
+            "text": "📊 Analyse", "chat": {"id": 101, "type": "private"},
+            "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "_envoi_sur") as send:
+            demandes = align_bot.traiter({}, set(), [update])
+        self.assertEqual(demandes, [])
+        self.assertIn("GOLD", str(send.call_args))
+        self.assertIn("BTC", str(send.call_args))
+        self.assertIn("BOTH", str(send.call_args))
+
+    def test_follow_button_opens_follow_selection_not_analysis_selection(self):
+        from unittest.mock import patch
+        update = {"update_id": 99702, "message": {
+            "text": "🔔 Suivre", "chat": {"id": 101, "type": "private"},
+            "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "_envoi_sur") as send:
+            demandes = align_bot.traiter({}, set(), [update])
+        self.assertEqual(demandes, [])
+        self.assertIn("followmarket:GOLD", str(send.call_args))
+        self.assertNotIn("analysechoice", str(send.call_args))
