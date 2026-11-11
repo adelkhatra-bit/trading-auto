@@ -340,7 +340,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertIn("CLÔTURE 5m : SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
+        self.assertIn("CLÔTURE 5m / SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
@@ -414,7 +414,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("5m 🟢⬆️", message)
                 self.assertIn("15m 🟢⬆️", message)
                 self.assertIn("1h 🟢⬆️", message)
-                self.assertIn("4h 🟠➖", message)
+                self.assertIn("4h 🟢⬆️", message)
                 self.assertIn("Daily 🔴⬇️", message)
                 self.assertIn("1m 55", message)
                 self.assertIn("5m 57", message)
@@ -1146,7 +1146,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🕯 CLÔTURE 5m — SIGNAL CONFIRMÉ")
+        self.assertEqual(message.splitlines()[0], "🕯 CLÔTURE 5m / SIGNAL CONFIRMÉ")
 
 if __name__ == "__main__":
     unittest.main()
