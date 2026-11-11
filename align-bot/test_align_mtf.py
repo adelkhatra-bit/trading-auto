@@ -359,9 +359,11 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
         labels = [button["text"] for row in keyboard for button in row]
         callbacks = [button["callback_data"] for row in keyboard for button in row]
-        self.assertIn("ℹ️ Comprendre l'analyse", labels)
-        self.assertIn("📊 Voir les niveaux", labels)
-        self.assertIn("🎯 Suivre la prochaine position", labels)
+        self.assertIn("❓ Pourquoi cette décision ?", labels)
+        self.assertIn("📊 Analyse complète", labels)
+        self.assertIn("🎯 Niveaux / prix", labels)
+        self.assertIn("🔔 Suivre la prochaine position", labels)
+        self.assertIn("why:GOLD", callbacks)
         self.assertIn("details:GOLD", callbacks)
         self.assertIn("levels:GOLD", callbacks)
         self.assertIn("auto:GOLD", callbacks)
