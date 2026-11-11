@@ -1846,7 +1846,11 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
 
     def _r(self, **kw):
         b5 = kw.pop("b5", None) or self._bars()
-        return {"b5": b5, "m1": [{"t": self.NOW - 30, "c": 100.4}], **kw}
+        base = {"b5": b5, "m1": [{"t": self.NOW - 30, "c": 100.4}], "dirPlan": -1, "bull": 2, "bear": 6, "sens": -1, "pctH": 30,
+                "strat": "DAY", "dirs": [-1, -1, -1, -1, -1, 0, 0, 1, 0, 0, -1], "dirW": 0, "atr": 2.0, "prix": 100.4,
+                "zone_pine": {"za": 101.0, "zb": 103.0, "zmil": 102.0, "f50": 102.5, "f618": 102.0, "f786": 101.2}}
+        base.update(kw)
+        return base
 
     def _state(self, cid="501", m="GOLD", vip=True):
         return {"veille_cloture": {m: {cid: {"multi": True, "derniers_t": {}, "expire": 9e12}}},
@@ -1864,30 +1868,100 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
             align_bot.battement_coeur(state, m, r, cle or {}, now=n_)
         return sent
 
-    def test_calm_heartbeat_real_data_then_no_spam(self):
-        st = self._state()
-        r = self._r(b5=self._bars(rng=1.0, last_rng=0.3))
-        sent = self._run(st, r)
-        self.assertEqual(len(sent), 1)
-        self.assertIn("marché calme, pas d'entrée pour l'instant", sent[0][1])
-        self.assertIn("Je surveille", sent[0][1])
-        self.assertEqual(self._run(st, r, now=self.NOW + 60), [])           # même bougie : rien
-        r2 = self._r(b5=self._bars(rng=1.0, last_rng=0.3, t0=self.NOW - 25 * 300 + 300))
-        self.assertEqual(self._run(st, r2, now=self.NOW + 120), [])         # < 5 min : pas de spam
-        self.assertEqual(len(self._run(st, r2, now=self.NOW + 400)), 1)     # ≥ 5 min : nouvelle info
+    # ───── battement de cœur : aucun doublon, délais respectés, contenu issu de l'indicateur ─────
+    def _cycle(self, etat, r, minute, m="GOLD", cle=None, mutate=None):
+        """Une poll à T0 + minute min. b5 : nouvelle bougie M5 toutes les 5 min ; m1 : cotation fraîche."""
+        from unittest.mock import patch
+        t = self.NOW + minute * 60
+        r = dict(r, b5=self._bars(t0=(t // 300) * 300 - 24 * 300), m1=[{"t": t - 20, "c": r["prix"]}])
+        sent = []
+        with patch.object(align_bot, "_envoi_sur", side_effect=lambda c, **k: sent.append((minute, c, k["text"], k.get("disable_notification"))) or {"ok": True}), \
+             patch.object(align_bot, "verdict", return_value=("⏳ ATTEND", "")), patch.object(align_bot, "cme_ouvert", return_value=True), \
+             patch.object(align_bot, "POSITIONS_GRATUITES", False):
+            if mutate:
+                mutate(etat)
+            align_bot.battement_coeur(etat, m, r, cle or {}, now=t)
+        return sent
 
-    def test_moving_market_is_not_called_calm(self):
-        sent = self._run(self._state(), self._r(b5=self._bars(rng=1.0, last_rng=2.5)))
-        self.assertIn("ça bouge", sent[0][1])
-        self.assertNotIn("marché calme", sent[0][1])
+    def test_same_situation_for_an_hour_sends_one_message_only(self):
+        etat = self._state()
+        envois = []
+        for minute in range(0, 61):
+            # le prix bouge à chaque minute : sans évolution de l'indicateur, rien ne doit partir
+            envois += self._cycle(etat, self._r(prix=100.0 + minute * 0.01), minute)
+        self.assertEqual(len(envois), 1, [e[0] for e in envois])
 
-    def test_free_heartbeat_is_spaced(self):
-        st = self._state(vip=False)
-        r = self._r(b5=self._bars(rng=1.0, last_rng=0.3))
-        self.assertEqual(len(self._run(st, r)), 1)
-        r2 = self._r(b5=self._bars(rng=1.0, last_rng=0.3, t0=self.NOW - 25 * 300 + 300))
-        self.assertEqual(self._run(st, r2, now=self.NOW + 900), [])         # gratuit : 30 min
-        self.assertEqual(len(self._run(st, r2, now=self.NOW + 1900)), 1)
+    def test_memory_survives_restart_and_suivi_rearming(self):
+        etat = self._state()
+        envois = self._cycle(etat, self._r(), 0)
+        self.assertEqual(len(envois), 1)
+        for minute in range(1, 40):
+            # le suivi est supprimé puis recréé (nouvelle réservation, fin de position, expiration) et l'état est rechargé du disque
+            etat = json.loads(json.dumps(etat))
+            etat["veille_cloture"]["GOLD"]["501"] = {"multi": True, "derniers_t": {}, "expire": 9e12}
+            envois += self._cycle(etat, self._r(prix=100.4 + minute * 0.02), minute)
+        self.assertEqual(len(envois), 1)
+
+    def test_real_evolution_sends_once_and_respects_vip_delay(self):
+        etat = self._state()
+        envois = self._cycle(etat, self._r(bear=6), 0)
+        envois += self._cycle(etat, self._r(bear=7), 1)           # évolution trop tôt : retenue
+        envois += self._cycle(etat, self._r(bear=7), 4)
+        self.assertEqual(len(envois), 1)
+        envois += self._cycle(etat, self._r(bear=7), 5)           # délai de 5 min écoulé + nouvelle bougie M5 : un seul envoi
+        envois += self._cycle(etat, self._r(bear=7), 6)
+        envois += self._cycle(etat, self._r(bear=7), 10)
+        self.assertEqual([e[0] for e in envois], [0, 5])
+        self.assertTrue(all(b[0] - a[0] >= 5 for a, b in zip(envois, envois[1:])))
+        self.assertNotEqual(envois[0][2], envois[1][2])
+        self.assertNotEqual(align_bot._forme(envois[0][2]), align_bot._forme(envois[1][2]))
+
+    def test_free_delay_30_minutes_discreet_without_direction_or_levels(self):
+        etat = self._state(vip=False)
+        envois = self._cycle(etat, self._r(bear=6), 0)
+        envois += self._cycle(etat, self._r(bear=7), 10)
+        envois += self._cycle(etat, self._r(bear=7), 29)
+        self.assertEqual(len(envois), 1)
+        envois += self._cycle(etat, self._r(bear=7), 30)
+        self.assertEqual([e[0] for e in envois], [0, 30])
+        for _, _, txt, silencieux in envois:
+            self.assertEqual(silencieux, "true")
+            self.assertNotIn("LONG", txt); self.assertNotIn("SHORT", txt); self.assertNotIn("101", txt); self.assertNotIn("102", txt)
+            self.assertIn("VIP", txt)
+
+    def test_message_says_what_is_watched(self):
+        etat = self._state()
+        txt = self._cycle(etat, self._r(bear=6), 0)[0][2]
+        self.assertIn("SHORT", txt)                                   # sens probable
+        self.assertIn("6/11", txt); self.assertIn("il en faut 8", txt)  # UT alignées
+        self.assertIn("101", txt); self.assertIn("103", txt)          # zone min–max
+        self.assertIn("J'attends une clôture 5 min sous 102", txt)      # trait de décision de la stratégie DAY
+        self.assertIn("Profil visé", txt)
+        self.assertIn("prix à 0,6", txt)                              # distance au prix (100,4 -> zone 101)
+
+    def test_english_and_three_markets(self):
+        for m, ic in (("BTC", "🟠"), ("GOLD", "🥇"), ("NASDAQ", "💠")):
+            etat = self._state(m=m)
+            align_bot.LANG_EN.add("501")
+            try:
+                txt = self._cycle(etat, self._r(bear=6), 0, m=m)[0][2]
+            finally:
+                align_bot.LANG_EN.discard("501")
+            self.assertIn(ic, txt); self.assertIn(m, txt)
+            self.assertIn("Aligned timeframes: 6/11 (need 8)", txt)
+            self.assertIn("Waiting for a 5 min close below 102", txt)
+            self.assertNotIn("Je surveille", txt)
+
+    def test_ten_successive_evolutions_never_repeat_the_same_message(self):
+        etat = self._state()
+        textes = []
+        for k in range(10):
+            textes += [e[2] for e in self._cycle(etat, self._r(bear=3 + k % 8, pctH=40 - k), k * 5)]
+        self.assertGreaterEqual(len(textes), 9)
+        for a, b in zip(textes, textes[1:]):
+            self.assertNotEqual(a, b)
+            self.assertNotEqual(align_bot._forme(a), align_bot._forme(b))
+        self.assertGreaterEqual(len({t.split("\n")[0].split(":", 1)[1] for t in textes}), 4)   # formulation variée
 
     def test_no_heartbeat_with_open_trade_or_missing_data(self):
         self.assertEqual(self._run(self._state(), self._r(), cle={"trade": {"d": 1}}), [])
@@ -1915,14 +1989,6 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         self.assertIn("⏸ GOLD : marché fermé, reprise à", sent[0])
         self.assertRegex(sent[0], r"reprise à lundi 00:00")
-
-    def test_english_heartbeat(self):
-        align_bot.LANG_EN.add("501")
-        try:
-            sent = self._run(self._state(), self._r(b5=self._bars(rng=1.0, last_rng=0.3)))
-        finally:
-            align_bot.LANG_EN.discard("501")
-        self.assertIn("market is calm, no entry for now", sent[0][1])
 
     def test_gemini_error_shows_http_code_without_key(self):
         import io
@@ -1955,7 +2021,7 @@ class AlignSoundAndAiBudgetTest(unittest.TestCase):
         t = AlignHeartbeatAndGeminiTest
         from unittest.mock import patch
         for vip, attendu in ((True, None), (False, "true")):
-            tc = t("test_calm_heartbeat_real_data_then_no_spam")
+            tc = t("test_same_situation_for_an_hour_sends_one_message_only")
             sent = []
             st = tc._state("501", vip=vip)
             r = tc._r(b5=tc._bars(rng=1.0, last_rng=0.3))
@@ -1998,7 +2064,7 @@ class AlignSoundAndAiBudgetTest(unittest.TestCase):
         appels = []
         def faux_ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False):
             appels.append(cle_cache); return "🧠 test"
-        etat, tc = {}, AlignHeartbeatAndGeminiTest("test_calm_heartbeat_real_data_then_no_spam")
+        etat, tc = {}, AlignHeartbeatAndGeminiTest("test_same_situation_for_an_hour_sends_one_message_only")
         horloge = [tc.NOW]
         with patch.object(align_bot, "ia", side_effect=faux_ia), patch.object(align_bot, "donnees_ia", return_value={}), \
              patch.object(align_bot.time, "time", side_effect=lambda: horloge[0]), \

@@ -3605,28 +3605,71 @@ def etat_marche_hb(m, r, now):
         return "perime", None
     return "ouvert", None
 
-def texte_battement(m, r, cle, anglais=False):
-    """Info courte réelle à la clôture d'une bougie M5 : calme ou non, uniquement d'après les bougies reçues."""
-    b5 = r.get("b5") or []
-    if len(b5) < 21:
+HB_VARIANTES_FR = ("🟡 {ic} {m} : je surveille, pas d'entrée pour l'instant", "👀 {ic} {m} : rien de validé, je garde l'œil dessus",
+                   "⏳ {ic} {m} : toujours en attente d'une confirmation", "🧐 {ic} {m} : le marché n'a pas encore validé d'entrée")
+HB_VARIANTES_EN = ("🟡 {ic} {m}: watching, no entry for now", "👀 {ic} {m}: nothing confirmed yet, keeping an eye on it",
+                   "⏳ {ic} {m}: still waiting for a confirmation", "🧐 {ic} {m}: the market has not confirmed an entry yet")
+HB_UNITE_VALIDATION = {"SWING": "1h", "DAY": "5 min", "SCALPING": "1 min"}        # unité de validation de l'indicateur (15 min sans stratégie)
+
+def hb_etat_surveille(r):
+    """Ce que l'indicateur surveille, uniquement à partir des vraies données : sens, UT alignées, zone, profil, trait de décision."""
+    d = r.get("dirPlan") or 0
+    strat = r.get("strat") or ""
+    etat_s = strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)[1] if d else "AUCUNE"
+    n = r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
+    zp = r.get("zone_pine") if d else None
+    a = float(r.get("atr") or 0) or 1.0
+    prix = r.get("prix") or (r.get("m1") or [{}])[-1].get("c")
+    sens = r.get("sens", 0)
+    pct = r.get("pctH", 50)
+    return dict(d=d, strat=strat, etat=etat_s, n=n, zp=zp, a=a, prix=prix, sens=sens, pct=pct if sens >= 0 else 100 - pct,
+                sig=(d, n, strat, etat_s, sens, round(zp["zmil"] / (0.5 * a)) if zp else None))
+
+def texte_battement(m, r, cle, anglais=False, vip=True, variante=0):
+    """Message de veille : CE QUI EST SURVEILLÉ (jamais inventé). Gratuit : sobre, sans sens ni niveaux (réservés aux VIP)."""
+    if len(r.get("b5") or []) < 21 and "bull" not in r:
         return None
-    x = b5[-1]
-    rng = x["h"] - x["l"]
-    moy = sum(y["h"] - y["l"] for y in b5[-21:-1]) / 20
-    if moy <= 0:
-        return None
-    calme = rng <= 0.7 * moy
-    prix = (r.get("m1") or [x])[-1].get("c", x["c"])
+    e = hb_etat_surveille(r)
     ic = ICONE.get(m, "📊")
-    if anglais:
-        tete = f"🟡 {ic} {m}: market is calm, no entry for now" if calme else f"🟡 {ic} {m}: price is moving, no confirmed entry yet"
-        return "\n".join([tete, f"💰 Price {px(prix)}", "👀 I keep watching"])
-    tete = f"🟡 {ic} {m} : marché calme, pas d'entrée pour l'instant" if calme else f"🟡 {ic} {m} : ça bouge, pas d'entrée confirmée pour l'instant"
-    return "\n".join([tete, f"💰 Prix {px(prix)}", "👀 Je surveille"])
+    tete = (HB_VARIANTES_EN if anglais else HB_VARIANTES_FR)[variante % 4].format(ic=ic, m=m)
+    n, seuil = e["n"], MIN_ALIGN
+    if not vip:
+        return "\n".join([tete, (f"📊 Aligned timeframes: {n}/11 (need {seuil})" if anglais else f"📊 UT alignées : {n}/11 (il en faut {seuil})"),
+                          ("🔒 Direction and levels: VIP" if anglais else "🔒 Sens et niveaux : VIP")])
+    lignes = [tete]
+    sens_txt = {1: "LONG ⬆️", -1: "SHORT ⬇️", 0: "INDÉCIS" if not anglais else "UNDECIDED"}[e["sens"]]
+    lignes.append((f"🧭 Likely direction: {sens_txt}" if anglais else f"🧭 Sens probable : {sens_txt}") + (f" ({e['pct']} %)" if e["sens"] else ""))
+    atteint = n >= seuil
+    lignes.append((f"📊 Aligned timeframes: {n}/11 " + (f"(threshold {seuil} reached)" if atteint else f"(need {seuil})")) if anglais else
+                  (f"📊 UT alignées : {n}/11 " + (f"(seuil {seuil} atteint)" if atteint else f"(il en faut {seuil})")))
+    zp, prix, d = e["zp"], e["prix"], e["d"]
+    if zp and prix:
+        dedans = zp["za"] <= prix <= zp["zb"]
+        dist = 0 if dedans else min(abs(prix - zp["za"]), abs(prix - zp["zb"]))
+        if anglais:
+            lignes.append(f"📍 Entry zone: {px(zp['za'])} – {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)"))
+        else:
+            lignes.append(f"📍 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})"))
+        unite = HB_UNITE_VALIDATION.get(e["strat"], "15 min")
+        if anglais:
+            lignes.append(f"🕯 Waiting for a {unite} close {'below' if d == -1 else 'above'} {px(zp['zmil'])}")
+        else:
+            lignes.append(f"🕯 J'attends une clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(zp['zmil'])}")
+    profil = {"SWING": "SWING", "DAY": "INTRADAY" if not anglais else "DAY", "SCALPING": "SCALP"}.get(e["strat"], "")
+    if profil:
+        etat_t = {"CONFIRMÉ": "confirmed" if anglais else "confirmé", "EN ATTENTE": "pending" if anglais else "en attente"}.get(e["etat"], "")
+        lignes.append((f"🎯 Target profile: {profil} ({etat_t})" if anglais else f"🎯 Profil visé : {profil} ({etat_t})"))
+    else:
+        lignes.append("🎯 Target profile: none yet" if anglais else "🎯 Profil visé : aucun pour l'instant")
+    return "\n".join(lignes)
+
+def _forme(texte):
+    """Forme d'un message sans chiffres : deux messages à la même forme sont « quasi identiques »."""
+    return re.sub(r"[\d.,]+", "#", str(texte))
 
 def battement_coeur(etat, m, r, cle, now=None):
-    """Battement de cœur : une info courte à chaque clôture M5 pour les abonnés qui suivent ce marché.
-    Réutilise veille_cloture (aucun second suivi) ; n'envoie rien si une alerte de clôture est partie récemment."""
+    """Veille : une info seulement à une VRAIE évolution (sens, UT alignées, stratégie, zone), au plus à une clôture M5, avec
+    5 min minimum (VIP) ou 30 min (gratuit). Mémoire dédiée dans etat['hb_mem'] : indépendante de la vie des suivis, sauvegardée avec l'état."""
     now = now or time.time()
     if cle.get("trade"):
         return                                    # position ouverte : le coach parle déjà
@@ -3635,43 +3678,47 @@ def battement_coeur(etat, m, r, cle, now=None):
         return                                    # signal validé : l'alerte d'entrée s'en charge
     statut, reprise = etat_marche_hb(m, r, now)
     b5 = r.get("b5") or []
+    memoire = etat.setdefault("hb_mem", {}).setdefault(m, {})
     for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
         if not suivi.get("multi") or not marche_autorise(etat, cid, m):
             continue
-        anglais = str(cid) in LANG_EN
+        cid = str(cid)
+        anglais = cid in LANG_EN
+        mem = memoire.setdefault(cid, {})
         if statut == "ferme":
-            if suivi.get("ferme_dit") != reprise:
+            if mem.get("ferme_dit") != reprise:
                 quand = heure_reprise(reprise, anglais) if reprise else "?"
                 txt = (f"⏸ {m}: market closed, back at {quand} (Paris time)" if anglais
                        else f"⏸ {m} : marché fermé, reprise à {quand} (heure de Paris)")
                 res = _envoi_sur(cid, text=txt)
                 if isinstance(res, dict) and res.get("ok") is not False:
-                    suivi["ferme_dit"] = reprise
-                    suivi["hb_t"] = now
+                    mem["ferme_dit"] = reprise; mem["t"] = now
             continue
-        suivi.pop("ferme_dit", None)
+        mem.pop("ferme_dit", None)
         if statut == "perime":
-            if not suivi.get("perime_dit"):
+            if not mem.get("perime_dit"):
                 res = _envoi_sur(cid, text=(f"⚠️ {m}: data not up to date, I can't judge right now" if anglais
                                             else f"⚠️ {m} : données pas à jour, je ne peux pas juger pour l'instant"))
                 if isinstance(res, dict) and res.get("ok") is not False:
-                    suivi["perime_dit"] = True
-                    suivi["hb_t"] = now
+                    mem["perime_dit"] = True; mem["t"] = now
             continue
-        suivi.pop("perime_dit", None)
-        if not b5 or int(b5[-1]["t"]) <= int(suivi.get("hb_bar", 0)):
+        mem.pop("perime_dit", None)
+        if not b5 or int(b5[-1]["t"]) <= int(mem.get("bar", 0)):
             continue                              # pas de nouvelle clôture M5
-        intervalle = HB_INTERVALLE_VIP if autorise(etat, cid, cid) else HB_INTERVALLE_GRATUIT
-        if now - float(suivi.get("hb_t", 0)) < intervalle:
-            continue
-        txt = texte_battement(m, r, cle, anglais)
-        if not txt:
-            continue
-        # Gratuit : battement discret (sans son). VIP : notification normale.
-        res = _envoi_sur(cid, text=txt, **({} if intervalle == HB_INTERVALLE_VIP else {"disable_notification": "true"}))
+        vip = bool(autorise(etat, cid, cid))
+        if now - float(mem.get("t", 0)) < (HB_INTERVALLE_VIP if vip else HB_INTERVALLE_GRATUIT):
+            continue                              # délai minimal non écoulé (mémoire du dernier envoi)
+        sig = list(hb_etat_surveille(r)["sig"])
+        mem["bar"] = int(b5[-1]["t"])
+        if mem.get("sig") == sig:
+            continue                              # rien n'a changé : on n'envoie rien
+        txt = texte_battement(m, r, cle, anglais, vip=vip, variante=int(mem.get("i", 0)))
+        if not txt or _forme(txt) == mem.get("forme"):
+            continue                              # jamais deux messages quasi identiques de suite
+        # Gratuit : discret (sans son). VIP : notification normale.
+        res = _envoi_sur(cid, text=txt, **({} if vip else {"disable_notification": "true"}))
         if isinstance(res, dict) and res.get("ok") is not False:
-            suivi["hb_t"] = now
-            suivi["hb_bar"] = int(b5[-1]["t"])
+            mem.update(t=now, sig=sig, forme=_forme(txt), i=int(mem.get("i", 0)) + 1)
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
