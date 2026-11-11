@@ -124,6 +124,26 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("🛑 Stop Loss\n4 020,00\nsous la mèche basse — bougie 15 minutes", message)
         self.assertIn("📌 Entrée\n4 050,00", message)
 
+    def test_analysis_keyboard_exposes_details_levels_and_explicit_position_action(self):
+        import json
+        keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
+        labels = [button["text"] for row in keyboard for button in row]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        self.assertIn("ℹ️ Comprendre l'analyse", labels)
+        self.assertIn("📊 Voir les niveaux", labels)
+        self.assertIn("🎯 Me prévenir pour prendre position", labels)
+        self.assertIn("details:GOLD", callbacks)
+        self.assertIn("levels:GOLD", callbacks)
+        self.assertIn("auto:GOLD", callbacks)
+
+    def test_active_trade_keyboard_has_manual_entry_and_exit_controls(self):
+        import json
+        keyboard = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        self.assertIn("in:GOLD", callbacks)
+        self.assertIn("out:GOLD", callbacks)
+        self.assertNotIn("auto:GOLD", callbacks)
+
     def test_telegram_formatter_splits_compound_information(self):
         message = align_bot.mise_en_forme(
             "ALIGN • GOLD\n"
