@@ -2344,3 +2344,37 @@ class TelegramAnalysisActionsRegressionTest(unittest.TestCase):
         self.assertIn("in:BTC", callbacks)
         self.assertIn("why:BTC", callbacks)
         self.assertIn("timeframes:BTC", callbacks)
+
+
+class TelegramResponsivePollingRegressionTest(unittest.TestCase):
+    def test_pending_telegram_updates_are_drained_between_analysis_stages(self):
+        from unittest.mock import patch
+        state = {"offset": 77}
+        chats = {"123"}
+        update = {"update_id": 77, "message": {"chat": {"id": 123, "type": "private"}}}
+        demandes = []
+        with patch.object(align_bot, "TOKEN", "test-token"), \
+             patch.object(align_bot, "telegram", return_value={"result": [update]}) as api, \
+             patch.object(align_bot, "traiter", return_value=[("123", "GOLD")]) as handle:
+            count = align_bot.recevoir_updates_telegram(state, chats, demandes)
+        self.assertEqual(count, 1)
+        self.assertEqual(demandes, [("123", "GOLD")])
+        api.assert_called_once_with("getUpdates", offset=77, timeout=0)
+        handle.assert_called_once_with(state, chats, [update])
+
+    def test_telegram_polling_helper_is_safe_when_token_is_not_configured(self):
+        from unittest.mock import patch
+        with patch.object(align_bot, "TOKEN", ""), patch.object(align_bot, "telegram") as api:
+            self.assertEqual(align_bot.recevoir_updates_telegram({}, set(), []), 0)
+        api.assert_not_called()
+
+    def test_mon_bot_slash_command_reaches_the_existing_menu_handler(self):
+        from unittest.mock import patch
+        update = {"update_id": 99801, "message": {
+            "text": "/mon_bot", "chat": {"id": 123, "type": "private"},
+            "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "menu_bot") as menu:
+            align_bot.traiter({"proprio": ["123"]}, {"123"}, [update])
+        menu.assert_called_once()
