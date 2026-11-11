@@ -461,6 +461,50 @@ ICONE = {"BTC": "🟠", "GOLD": "🥇"}
 PIP = {"BTC": 1.0, "GOLD": 0.1}      # 1 pip : 1 $ sur le BTC, 0,10 $ sur l'or
 SENS = {1: "🟩 LONG ⬆️", -1: "🟥 SHORT ⬇️"}
 
+# Tampon des messages sortants : transféré dans state.json à chaque sauvegarde.
+JOURNAL_SORTANT = []
+JOURNAL_MAX = 2500
+
+
+def journal_ajouter(etat, entree):
+    journal = etat.setdefault("journal_telegram", [])
+    cle = (entree.get("direction"), entree.get("update_id"), entree.get("message_id"),
+           entree.get("chat_id"), entree.get("text"))
+    if entree.get("update_id") is not None and any(
+        (x.get("direction"), x.get("update_id")) == (entree.get("direction"), entree.get("update_id"))
+        for x in journal[-20:]
+    ):
+        return
+    journal.append(entree)
+    del journal[:-JOURNAL_MAX]
+
+
+def journal_vider_sortants(etat):
+    while JOURNAL_SORTANT:
+        entree = JOURNAL_SORTANT.pop(0)
+        journal_ajouter(etat, entree)
+
+
+def texte_historique(etat, cid, limite=15):
+    entrees = [x for x in etat.get("journal_telegram", []) if str(x.get("chat_id")) == str(cid)]
+    entrees = entrees[-limite:]
+    lignes = ["🗂 HISTORIQUE ALIGN — TES ÉCHANGES",
+              "━━━━━━━━━━━━━━━━━━━━",
+              f"{len(entrees)} dernier(s) message(s) conservé(s) pour cette conversation."]
+    if not entrees:
+        lignes.append("Aucun message n'a encore été consigné depuis l'activation de l'historique.")
+    for x in entrees:
+        ts = x.get("timestamp")
+        try:
+            date = datetime.datetime.fromtimestamp(float(ts), PARIS).strftime("%d/%m %H:%M:%S")
+        except Exception:
+            date = "Date inconnue"
+        sens = "📤 ALIGN" if x.get("direction") == "sortant" else "📥 TOI"
+        lignes.append(f"\n{date} • {sens}\n{str(x.get('text') or x.get('type') or 'Message')[:900]}")
+    lignes += ["━━━━━━━━━━━━━━━━━━━━",
+               "ℹ️ Historique enregistré à partir de l'activation de cette fonction. Telegram ne permet pas au bot de relire rétroactivement tous les anciens messages."]
+    return "\\n".join(lignes)
+
 def alignement(r):
     """Le 1h confirme la tendance 4h ; le 15m n'est pas un filtre."""
     d1h, d4h = r["dirs"][7], r["dirs"][9]
@@ -1279,7 +1323,20 @@ def telegram(methode, **params):
             if k in params:
                 params[k] = mise_en_forme(params[k])
     url = f"https://api.telegram.org/bot{TOKEN}/{methode}"
-    return http_json(url, urllib.parse.urlencode(params).encode())
+    resultat = http_json(url, urllib.parse.urlencode(params).encode())
+    if methode in ("sendMessage", "editMessageText", "sendPhoto", "copyMessage") and resultat.get("ok"):
+        payload = resultat.get("result") or {}
+        texte = params.get("text") or params.get("caption")
+        if methode == "copyMessage":
+            texte = f"Message copié depuis le message Telegram {params.get('message_id', '?')}"
+        JOURNAL_SORTANT.append({
+            "direction": "sortant", "timestamp": time.time(),
+            "chat_id": str(params.get("chat_id", "")),
+            "message_id": payload.get("message_id") or params.get("message_id"),
+            "type": methode, "text": str(texte or "")[:4096]
+        })
+        del JOURNAL_SORTANT[:-JOURNAL_MAX]
+    return resultat
 
 # ───────── Boutons et jauge ─────────
 CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
@@ -1522,7 +1579,8 @@ def markup_analyse(etat, m, r):
         [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
          {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
         [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
-         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}]
+         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
+        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
     ]
     if cle.get("trade"):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
@@ -2380,6 +2438,22 @@ def traiter(etat, chats, updates):
     demandes = []
     for u in updates:
         etat["offset"] = u["update_id"] + 1
+        message_recu = (u.get("message") or u.get("edited_message") or
+                        u.get("channel_post") or u.get("edited_channel_post") or {})
+        callback_recu = u.get("callback_query") or {}
+        chat_recu = (message_recu.get("chat") or
+                     (callback_recu.get("message") or {}).get("chat") or {})
+        contenu_recu = (message_recu.get("text") or message_recu.get("caption") or
+                        callback_recu.get("data") or
+                        ("Demande d'entrée dans un canal" if u.get("chat_join_request") else
+                         "Mise à jour du statut du bot" if u.get("my_chat_member") else ""))
+        journal_ajouter(etat, {
+            "direction": "entrant", "timestamp": time.time(),
+            "update_id": u.get("update_id"), "chat_id": str(chat_recu.get("id", "")),
+            "user_id": str((message_recu.get("from") or callback_recu.get("from") or {}).get("id", "")),
+            "type": "callback" if callback_recu else "message" if message_recu else "update",
+            "text": str(contenu_recu or "")[:4096]
+        })
         mcm = u.get("my_chat_member")
         if mcm and mcm["chat"].get("type") in ("channel", "supergroup"):
             connecter_canal(etat, mcm)
@@ -2392,6 +2466,14 @@ def traiter(etat, chats, updates):
         if cb:
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
+            if choix == "history":
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🗂 Historique")
+                except Exception:
+                    pass
+                _envoi_sur(qui, text=texte_historique(etat, qui),
+                           reply_markup=json.dumps({"inline_keyboard": [[{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}) if mk in MARCHES else None)
+                continue
             if choix == "previous" and mk in MARCHES:
                 if not autorise(etat, qui, cb.get("from", {}).get("id")):
                     try:
@@ -4068,6 +4150,7 @@ def un_tour(etat, chats):
                     maj_chronos(etat, nom_marche, derniers[nom_marche])
                 except Exception as ex:
                     print("chronos", ex)
+    journal_vider_sortants(etat)
     print(f"{len(envois)} signal(s) envoyé(s) à {len(chats)} téléphone(s)")
     json.dump(dict(etat, chats=sorted(chats)), open(ETAT_FICHIER, "w"))
 
@@ -4108,12 +4191,14 @@ def main():
                 except Exception as ex:
                     print("tick chrono", marche, ex)
             etat["chats"] = sorted(chats)
+            journal_vider_sortants(etat)
             json.dump(etat, open(ETAT_FICHIER, "w"))
         if time.time() >= debut + DUREE_SEC:
             break
         if not TOKEN:
             time.sleep(max(0, prochain - time.time()))
     etat["chats"] = sorted(chats)
+    journal_vider_sortants(etat)
     json.dump(etat, open(ETAT_FICHIER, "w"))
 
 if __name__ == "__main__":
