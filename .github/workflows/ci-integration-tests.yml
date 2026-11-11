@@ -24,9 +24,13 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
-      - name: Lint check (if eslint exists)
-        run: npm run lint || echo "No lint script defined"
-        continue-on-error: true
+      - name: Lint check (only when a lint script is defined)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
+            npm run lint
+          else
+            echo "No lint script defined — skipped"
+          fi
 
       - name: Start backend for smoke tests
         run: |
