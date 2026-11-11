@@ -867,6 +867,24 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("STOP À BE", message)
         self.assertIn("ne passe aucun ordre", message)
 
+    def test_closed_trade_keyboard_links_to_results_history_and_next_setup(self):
+        import json
+        buttons = json.loads(align_bot.markup_cloture("BTC"))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in buttons for button in row]
+        self.assertIn("results:x", callbacks)
+        self.assertIn("history:BTC", callbacks)
+        self.assertIn("auto:BTC", callbacks)
+
+    def test_results_callback_returns_personal_results(self):
+        from unittest.mock import patch
+        update = {"update_id": 9230, "callback_query": {
+            "id": "cb-results", "data": "results:x",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.traiter({}, set(), [update])
+        self.assertIn("Mes résultats", send.call_args.kwargs["text"])
+
     def test_position_button_is_attached_to_following_alerts(self):
         import json
         buttons = json.loads(align_bot.markup_position("GOLD"))["inline_keyboard"]
