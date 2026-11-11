@@ -1828,6 +1828,9 @@ def armer_cloture(etat, cid, m, r, cle):
     if not bars:
         return
     surveillances = etat.setdefault("veille_cloture", {}).setdefault(m, {})
+    existant = surveillances.get(str(cid), {})
+    if existant.get("multi"):
+        return
     surveillances[str(cid)] = {"tf": tf, "dernier_t": int(bars[-1]["t"]), "restants": 3}
 
 
@@ -1855,7 +1858,7 @@ def texte_cloture(m, tf, bougie, r, cle):
     maj, n_ok = alignement(r)
     confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (4 h + 1 h)"
     lignes = [
-        f"🕯 CLÔTURE {tf} TERMINÉE — {ICONE.get(m, '📊')} {m}",
+        f"🕯 CLÔTURE CONFIRMÉE — {tf} — {ICONE.get(m, '📊')} {m}",
         f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
         f"📊 Résultat : bougie {couleur} — ouverture {px(bougie['o'])}, clôture {px(bougie['c'])}",
         f"🧭 Tendance : 4 h {'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'} ; confirmation 1 h {'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'}",
