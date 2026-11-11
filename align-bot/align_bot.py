@@ -3501,7 +3501,7 @@ COMMANDES = {"/faire_analyse": "📊 Faire une analyse", "/analyse_btc": "🟠 A
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
-    if etat.get("menu") == 7:
+    if etat.get("menu") == 8:
         return
     fr = [("faire_analyse", "📊 Faire une analyse"), ("mon_bot", "🤖 Mon bot ON / OFF"),
           ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
@@ -3514,17 +3514,17 @@ def installer_menu(etat):
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in en]), language_code="en")
         telegram("setChatMenuButton", menu_button=json.dumps({"type": "commands"}))
         try:
-            telegram("setMyName", name="ALIGN Signaux BTC & Gold")
+            telegram("setMyName", name="ALIGN Gratuit 🎁 BTC & Gold")
         except Exception as ex:
             print("nom", ex)
-        telegram("setMyShortDescription", short_description="💎 VIP : tout, en direct • 🎁 Gratuit : 1 position BTC / Gold par jour")
-        telegram("setMyDescription", description=("📈 ALIGN Signaux — BTC & Gold\n\n🎁 Gratuit : 1 position proposée chaque jour, expliquée en bougies\n"
+        telegram("setMyShortDescription", short_description="🎁 ALIGN Gratuit : 1 position BTC / Gold proposée chaque jour • 💎 Tout le reste dans ALIGN VIP")
+        telegram("setMyDescription", description=("🎁 ALIGN Gratuit — BTC & Gold\n\n🎁 1 position proposée chaque jour, expliquée en bougies\n"
                                                   "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n\n"
                                                   "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux et le coach (BE, TP)\n"
                                                   "🤖 Les abonnés au suivi sont enregistrés automatiquement à l'ouverture du signal.\n"
                                                   "📍 Suivi personnel : SL, BE, TP et sortie manuelle depuis Telegram.\n\n"
                                                   "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
-        etat["menu"] = 7
+        etat["menu"] = 8
     except Exception as ex:
         print("menu", ex)
 
