@@ -56,6 +56,14 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertFalse(align_bot.etire(r, 1))
 
 
+    def test_next_candle_close_is_strictly_in_the_future(self):
+        self.assertEqual(align_bot.prochaine_cloture(601, 300), 900)
+        self.assertEqual(align_bot.prochaine_cloture(899, 300), 900)
+        self.assertEqual(align_bot.prochaine_cloture(900, 300), 1200)
+        self.assertGreater(align_bot.prochaine_cloture(1000, 300), 1000)
+        with self.assertRaises(ValueError):
+            align_bot.prochaine_cloture(1000, 0)
+
     def test_regrouping_accepts_only_a_fully_closed_bucket(self):
         bars = [candle(0), candle(60, o=100.0, h=103.0, l=98.0, c=102.0)]
         self.assertEqual(align_bot.regrouper(bars, 2, 60, now_ts=119), [])

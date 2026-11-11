@@ -114,7 +114,7 @@ def yahoo_or(interval):
     out = [dict(t=b["t"], o=b["o"] + ecart, h=b["h"] + ecart, l=b["l"] + ecart, c=b["c"] + ecart) for b in c[1]]
     if interval == 1 and spot and out:
         # Dernière minute = prix spot EN DIRECT (comme le graphique XAUUSD), pour ne pas avoir 10 min de retard
-        t = int(time.time()) // 60 * 60 - 60
+        t = int(time.time()) // 60 * 60
         if t > out[-1]["t"]:
             out.append(dict(t=t, o=out[-1]["c"], h=max(out[-1]["c"], spot), l=min(out[-1]["c"], spot), c=spot))
     return out
@@ -141,7 +141,7 @@ def paxg_or(interval):
     e = _CACHE.get("ecart_paxg", 0.0)
     out = [dict(t=b["t"], o=b["o"] + e, h=b["h"] + e, l=b["l"] + e, c=b["c"] + e) for b in c[1]]
     if interval == 1 and spot and out:
-        t = int(time.time()) // 60 * 60 - 60
+        t = int(time.time()) // 60 * 60
         if t > out[-1]["t"]:
             out.append(dict(t=t, o=out[-1]["c"], h=max(out[-1]["c"], spot), l=min(out[-1]["c"], spot), c=spot))
     return out
@@ -1550,13 +1550,20 @@ def texte_apercu(m, r, cle):
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
 
+def prochaine_cloture(ts, interval_sec=300):
+    """Retourne la prochaine clôture strictement future (horodatage UTC)."""
+    if interval_sec < 1:
+        raise ValueError("interval_sec doit être positif")
+    return (int(ts) // interval_sec + 1) * interval_sec
+
+
 def mmss(sec):
     sec = max(0, int(sec)); return f"{sec // 60} min {sec % 60:02d} s" if sec < 3600 else f"{sec // 3600} h {sec % 3600 // 60:02d}"
 
 def chrono_txt(m, r, cle, t0):
     """Chronomètre en direct : tendance 4h, confirmation 1h, déclencheur à la clôture 5m."""
     now = time.time(); p = r["m1"][-1]["c"]; d = r["confirme"]; a = r["atr"]
-    cloture = r["b5"][-1]["t"] + 300 if r.get("b5") else now      # prochaine échéance 5 min
+    cloture = prochaine_cloture(now, 300)  # prochaine clôture future, jamais la bougie déjà terminée
     tr = cle.get("trade"); o = cle.get("ordre")
     l = [f"⏱ CHRONO EN DIRECT — {ICONE.get(m, '')} {m}   {px(p)}",
          f"🎯 Inscrit depuis {mmss(now - t0)}"]
