@@ -1434,7 +1434,7 @@ TRAD.update({
     "M15 = préparation, M5 = timing après clôture confirmée": "M15 = setup, M5 = timing after confirmed close",
     "Biais H4/H1 validé": "H4/H1 bias confirmed",
     "Le 15 min retrace : attendre le retour du M5 dans le sens du biais": "15m is pulling back: wait for M5 to turn back with the bias",
-    "Biais de fond H4/H1 validé": "H4/H1 higher-timeframe bias confirmed"
+    "Biais de fond H4/H1 validé": "H4/H1 higher-timeframe bias confirmed",
     "📈 TradingView 5 min": "📈 TradingView 5 min",
     "📈 TradingView 15 min": "📈 TradingView 15 min",
     "📈 TradingView 1 h": "📈 TradingView 1 h",
