@@ -33,13 +33,21 @@ function storeTradingViewTimeframe(entry) {
   const timeframe = String(entry.timeframe).toUpperCase();
   if (!tvMtfStore[symbol]) tvMtfStore[symbol] = Object.create(null);
   const previous = tvMtfStore[symbol][timeframe] || {};
-  const hasIndicatorPlan = !!(entry.robotV12 && typeof entry.robotV12 === 'object');
+  const robot = entry.robotV12 && typeof entry.robotV12 === 'object' ? entry.robotV12 : null;
+  const meaningfulRobotFields = [
+    'signal', 'verdict', 'entry', 'sl', 'tp', 'lecture_1m', 'lecture_5m',
+    'lecture_15m', 'lecture_60m', 'rsi_1m', 'rsi_5m', 'rsi_15m', 'rsi_60m',
+    'long_score', 'short_score', 'macro_bull', 'macro_bear'
+  ];
+  const hasIndicatorPlan = !!(robot && meaningfulRobotFields.some(key =>
+    robot[key] !== null && robot[key] !== undefined && String(robot[key]).trim() !== ''
+  ));
   const next = {
     ...previous,
     ...entry,
     // The periodic extension scrape carries price/legend only. It must never erase
     // the last Pine/ROBOT V12 plan for this timeframe.
-    robotV12: hasIndicatorPlan ? entry.robotV12 : (previous.robotV12 || null),
+    robotV12: hasIndicatorPlan ? robot : (previous.robotV12 || null),
     entry: entry.entry != null ? entry.entry : previous.entry,
     sl: entry.sl != null ? entry.sl : previous.sl,
     tp: entry.tp != null ? entry.tp : previous.tp,
@@ -100,6 +108,12 @@ app.post('/tradingview/live', (req, res) => {
       updatedAt:  Date.now()
     };
     storeTradingViewTimeframe(tvDataStore[normalizedSymbol]);
+    // The chart's selected timeframe is sourced only from the live extension scrape,
+    // never inferred from a webhook alert that may belong to another timeframe.
+    const activeFrames = tvMtfStore[normalizedSymbol] || (tvMtfStore[normalizedSymbol] = Object.create(null));
+    activeFrames._activeTimeframe = { timeframe: String(timeframe).toUpperCase().trim(), updatedAt: Date.now() };
+    try { fs.writeFileSync(TV_MTF_CACHE_PATH, JSON.stringify(tvMtfStore, null, 2)); }
+    catch (e) { console.warn('[tvMtfStore] Active timeframe cache write failed:', e.message); }
     console.log('[BACKEND STORED]', normalizedSymbol, '→', tvDataStore[normalizedSymbol]);
     console.log(`[TV LIVE] ${normalizedSymbol} price=${parsedPrice} tf=${timeframe} stored at ${new Date().toISOString()}`);
 
@@ -163,14 +177,13 @@ app.get('/bridge/robot-v12/mtf', (req, res) => {
   const frames = tvMtfStore[symbol] || {};
   const now = Date.now();
   const snapshots = {};
-  let activeTimeframe = null;
-  let activeStoredAt = -1;
+  const activeState = frames._activeTimeframe || null;
+  const activeTimeframeAgeMs = activeState ? Math.max(0, now - Number(activeState.updatedAt || 0)) : null;
+  const activeTimeframe = activeTimeframeAgeMs !== null && activeTimeframeAgeMs <= 30000
+    ? String(activeState.timeframe || '').toUpperCase() || null
+    : null;
   for (const [tf, entry] of Object.entries(frames)) {
-    const updatedAt = Number(entry.storedAt || 0);
-    if (updatedAt > activeStoredAt) {
-      activeStoredAt = updatedAt;
-      activeTimeframe = tf;
-    }
+    if (tf === '_activeTimeframe') continue;
     const hasIndicatorPlan = !!entry.robotV12;
     const ageMs = Math.max(0, now - Number(hasIndicatorPlan ? entry.planStoredAt : entry.storedAt || 0));
     const maxAgeMs = timeframeFreshnessMs(tf);
@@ -183,7 +196,13 @@ app.get('/bridge/robot-v12/mtf', (req, res) => {
         || entry.robotV12?.bar_confirmed === true
     };
   }
-  return res.json({ ok: true, symbol, activeTimeframe, snapshots, receivedTimeframes: Object.keys(snapshots) });
+  return res.json({
+    ok: true, symbol, activeTimeframe,
+    activeTimeframeAgeMs,
+    activeTimeframeFresh: activeTimeframe !== null,
+    snapshots,
+    receivedTimeframes: Object.keys(snapshots)
+  });
 });
 
 function requireLivePrice(symbol, res) {
