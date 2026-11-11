@@ -377,6 +377,26 @@ class AlignMtfRulesTest(unittest.TestCase):
         register.assert_called_once()
         self.assertEqual(register.call_args.args[1:], ("123", "BTC"))
 
+    def test_user_facing_ai_commentary_uses_internal_analysis_when_providers_fail(self):
+        from unittest.mock import patch
+        r = {
+            "m1": [candle(1, c=100.0)],
+            "dirs": [0] * 11,
+            "rsis": [50] * 11,
+            "posD": 0.5,
+            "posW": 0.5,
+            "confirme": 0,
+            "b5": []
+        }
+        with patch.object(align_bot, "ia", return_value=""), \
+             patch.object(align_bot, "strategie_mtf", return_value=["Tendance 4h", "Confirmation 1h"]), \
+             patch.object(align_bot, "verdict", return_value=("ATTENDRE", "Pas de confirmation")):
+            message = align_bot.avis_ia({}, "GOLD", r, {})
+        self.assertIn("L'avis ALIGN (analyse interne)", message)
+        self.assertIn("Tendance 4h", message)
+        self.assertIn("ATTENDRE", message)
+        self.assertNotIn("L'avis de l'IA ALIGN", message)
+
     def test_internal_ai_fallback_is_explicit_when_all_external_providers_fail(self):
         from unittest.mock import patch
         state = {}
