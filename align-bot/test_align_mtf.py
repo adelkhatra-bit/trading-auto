@@ -148,6 +148,22 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("FOREXCOM%3AXAUUSD", gold)
         self.assertIn("interval=240", gold)
 
+    def test_entry_stop_uses_m15_structure_not_the_trigger_m5_wick(self):
+        r = {"b15": [candle(0, l=98.0, h=102.0), candle(900, l=97.5, h=102.5),
+                      candle(1800, l=97.0, h=103.0)], "atr": 2.0}
+        sl = align_bot.stop_structure_15m(r, 1, 100.0)
+        self.assertAlmostEqual(sl, 96.5)
+        self.assertLess(sl, min(x["l"] for x in r["b15"]))
+
+    def test_entry_is_rejected_when_m15_structure_requires_too_wide_a_stop(self):
+        r = {"b15": [candle(0, l=90.0), candle(900, l=89.0), candle(1800, l=88.0)], "atr": 2.0}
+        self.assertIsNone(align_bot.stop_structure_15m(r, 1, 100.0))
+
+    def test_short_entry_stop_is_above_m15_structure(self):
+        r = {"b15": [candle(0, h=102.0), candle(900, h=102.5), candle(1800, h=103.0)], "atr": 2.0}
+        sl = align_bot.stop_structure_15m(r, -1, 100.0)
+        self.assertGreater(sl, max(x["h"] for x in r["b15"]))
+
     def test_breakout_uses_closed_5m_bars(self):
         bars = [candle(i) for i in range(21)]
         bars.append(candle(21, o=100.5, h=103.0, l=100.2, c=102.0))
