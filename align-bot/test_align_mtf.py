@@ -64,6 +64,79 @@ class AlignMtfRulesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             align_bot.prochaine_cloture(1000, 0)
 
+
+    def test_countdown_keeps_seconds_visible_over_one_hour(self):
+        self.assertEqual(align_bot.mmss(59), "0 min 59 s")
+        self.assertEqual(align_bot.mmss(3599), "59 min 59 s")
+        self.assertEqual(align_bot.mmss(3600), "1 h 00 min 00 s")
+        self.assertEqual(align_bot.mmss(3617), "1 h 00 min 17 s")
+
+    def test_next_close_uses_latest_closed_candle_timestamp(self):
+        r = {"b5": [candle(300), candle(600)]}
+        self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m", 899), 900)
+        self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m", 900), 1200)
+        self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m", 901), 1200)
+
+    def test_chronometer_counts_down_the_timeframe_that_is_actually_blocking(self):
+        from unittest.mock import patch
+        dirs = [0] * 11
+        dirs[9] = 1  # 4h haussière
+        r = {
+            "m1": [candle(7200, c=4031.42)],
+            "dirs": dirs, "confirme": 0, "atr": 1.0,
+            "b1h": [candle(3600)], "b4h": [candle(0)]
+        }
+        with patch.object(align_bot.time, "time", return_value=7200):
+            message = align_bot.chrono_txt("GOLD", r, {}, 0)
+        self.assertIn("DIRECTION : 4 h LONG — confirmation 1 h manquante", message)
+        self.assertIn("PROCHAINE CLÔTURE 1h : 1 h 00 min 00 s", message)
+        self.assertNotIn("PROCHAINE CLÔTURE 5m", message)
+        self.assertIn("J'attends une clôture 1 h", message)
+
+    def test_neutral_market_is_explained_without_inventing_long_or_short(self):
+        r = {"dirs": [0] * 11, "confirme": 0, "m1": [candle(1, c=100.0)]}
+        reason = align_bot.raison_attente(r, {})
+        self.assertIn("marché est neutre", reason)
+        self.assertNotIn("LONG est confirmé", reason)
+        self.assertNotIn("SHORT est confirmé", reason)
+
+    def test_multi_timeframe_watcher_reports_each_new_close_only_once(self):
+        from unittest.mock import patch
+        state = {"veille_cloture": {"GOLD": {"123": {
+            "multi": True, "derniers_t": {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400},
+            "expire": 999999
+        }}}}
+        r = {
+            "b5": [candle(300), candle(600)],
+            "b15": [candle(900), candle(1800)],
+            "b1h": [candle(3600), candle(7200)],
+            "b4h": [candle(14400), candle(28800)]
+        }
+        with patch.object(align_bot.time, "time", return_value=100), \
+             patch.object(align_bot, "texte_cloture", side_effect=lambda m, tf, b, r, c: f"close-{tf}"), \
+             patch.object(align_bot, "markup_analyse", return_value=None), \
+             patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.notifier_clotures(state, "GOLD", r, {})
+            align_bot.notifier_clotures(state, "GOLD", r, {})
+        self.assertEqual(send.call_count, 4)
+        self.assertEqual({x.kwargs["text"] for x in send.call_args_list},
+                         {"close-5m", "close-15m", "close-1h", "close-4h"})
+
+    def test_signup_message_does_not_invent_a_yellow_entry_zone(self):
+        from unittest.mock import patch
+        state = {"GOLD": {"aligne": 0}}
+        r = {"dirs": [0] * 11, "confirme": 0, "m1": [candle(1, c=100.0)]}
+        with patch.dict(align_bot.DERNIERS, {"GOLD": r}), \
+             patch.object(align_bot, "_envoi_sur") as send, \
+             patch.object(align_bot, "armer_clotures_multi"), \
+             patch.object(align_bot, "lancer_chrono"):
+            align_bot.inscrire_auto(state, "123", "GOLD")
+        message = send.call_args.kwargs["text"]
+        self.assertIn("NEUTRE", message)
+        self.assertIn("Aucune zone d'entrée validée", message)
+        self.assertIn("Aucun ordre n'est envoyé", message)
+        self.assertNotIn("zone 🟨", message)
+
     def test_regrouping_accepts_only_a_fully_closed_bucket(self):
         bars = [candle(0), candle(60, o=100.0, h=103.0, l=98.0, c=102.0)]
         self.assertEqual(align_bot.regrouper(bars, 2, 60, now_ts=119), [])
