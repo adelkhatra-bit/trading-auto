@@ -1729,12 +1729,11 @@ def telegram(methode, **params):
 CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
                                    [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
                                    [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
-                                   [{"text": "📡 Mes marchés"}],
                                    [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
                                             [{"text": "💎 Devenir VIP"}],
-                                            [{"text": "📸 Partager mon gain"}, {"text": "📡 Mes marchés"}],
+                                            [{"text": "📸 Partager mon gain"}],
                                             [{"text": "🌐 English"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
@@ -2867,17 +2866,17 @@ def changer_langue(etat, cid, anglais, membre_ok):
 COMMANDES = {"/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
              "/resultats": "📈 Mes résultats", "/gain": "📸 Partager mon gain", "/vip": "💎 Devenir VIP",
              "/english": "🌐 English", "/francais": "🌐 Français", "/rentre": "✅ Je suis rentré", "/sorti": "🚪 Je suis sorti",
-             "/indicateur": "🧩 Indicateur TradingView", "/marches": "📡 Mes marchés"}
+             "/indicateur": "🧩 Indicateur TradingView"}
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
     if etat.get("menu") == 4:
         return
     fr = [("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
-          ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"), ("marches", "📡 Mes marchés"),
+          ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
           ("boutons", "⌨️ Faire revenir les boutons"), ("english", "🌐 English")]
     en = [("analyse_btc", "🟠 BTC Analysis"), ("analyse_gold", "🥇 Gold Analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
-          ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"), ("marches", "📡 My markets"),
+          ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"),
           ("boutons", "⌨️ Bring back the buttons"), ("francais", "🌐 Français")]
     try:
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in fr]))
@@ -3291,13 +3290,22 @@ def traiter(etat, chats, updates):
                 regler_bot(etat, qui, choix == "boton")
                 continue
             if choix == "auto" and mk in MARCHES:
-                try:
-                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🎯 Choisis les marchés")
-                except Exception:
-                    pass
+                # Le marché est déjà connu depuis le bouton de l'analyse : activation en un seul appui.
                 if autorise(etat, qui, cb["from"]["id"]) or qui not in etat.get("bienvenue", {}):
-                    menu_suivi(etat, qui)
+                    selectionner_marches_suivi(etat, qui, mk)
+                    inscrire_auto(etat, qui, mk, notifier=False)
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔔 Suivi activé pour " + mk)
+                    except Exception:
+                        pass
+                    _envoi_sur(qui, text=(f"🔔 SUIVI ACTIVÉ : {mk}\\nJe t'alerterai dès qu'une entrée sera confirmée."
+                                          if qui not in LANG_EN else
+                                          f"🔔 FOLLOWING {mk}\\nI'll alert you when an entry is confirmed."))
                 else:
+                    try:
+                        telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Réservé aux VIP")
+                    except Exception:
+                        pass
                     _envoi_sur(qui, text="🔒 Réservé aux VIP\\n🎁 Ta position gratuite du jour est déjà utilisée\\n⏰ Une nouvelle demain\\n💎 VIP 49,90 € / mois 👇",
                                **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
                 continue
