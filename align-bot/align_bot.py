@@ -662,7 +662,7 @@ def calculer_analyse(S, stable=None, comp_prev=None):
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, dirBrut=dirBrut, strat=strat_plan,
                 plan=plan(dirPlan if dirPlan else 1, strat_plan), planH=plan(1), planB=plan(-1), rC=rC,
-                dirW=dW_, ohlc15=b[-30:])
+                dirW=dW_, ohlc15=b[-30:], b3=series["3"][-80:], atr3=(atr(series["3"], 14)[-1] if len(series["3"]) >= 16 else None))
 
 def analyser_avec_memoire(S, mem=None):
     """Sens stable, plan figé et retournement exactement comme l'indicateur (vue 15 min = unité de référence du bot).
@@ -706,7 +706,80 @@ def analyser_avec_memoire(S, mem=None):
     r["ret_conf"] = bool(r["ret_dir"]) and r["dirPlan"] == r["ret_dir"]
     r["nVoy"] = sum(1 for k in range(5) if r["dirPlan"] != 0 and r["dirs"][k] == -r["dirPlan"])
     r["pine"] = mem
+    r["sniper"] = entree_sniper(r)
     return r
+
+# ───────── ENTRÉE SNIPER M1 / M3 ─────────
+# Contexte HTF aligné et sens clair -> ordre LIMITE sur la dernière résistance (vente) / le dernier support (achat) : zone de l'ancienne
+# structure 15 min / 1 h (ou dernier swing M3), SL juste derrière la mèche (M1/M3) + marge ATR M3, TP sur la structure suivante.
+# Jamais forcé : pas de contexte HTF contraire, pas de zone déjà traversée, pas de cible structurelle respectant gainMin -> aucune proposition.
+SNIPER_PORTEE_ATR15 = 3.0       # zone au plus à 3 ATR 15 min du prix (au-delà : trop loin, on attend)
+SNIPER_MARGE_ATR3 = 0.5         # marge du SL derrière la mèche (en ATR M3)
+
+def entree_sniper(r):
+    d = r.get("dirPlan") or 0
+    dirs, b3, a3, a15 = r.get("dirs") or [], r.get("b3") or [], r.get("atr3"), r.get("atr")
+    if d not in (1, -1) or len(dirs) < 11 or len(b3) < 12 or not a3 or not a15 or not r.get("m1"):
+        return None
+    if (r["bull"] if d == 1 else r["bear"]) < MIN_ALIGN or r.get("sens") != d:
+        return None                                         # contexte HTF non aligné ou sens pas clair
+    if dirs[9] == -d or dirs[7] == -d:
+        return None                                         # jamais contre la 4 h / la 1 h
+    prix = r["m1"][-1]["c"]
+    extreme = (lambda x: x["h"]) if d == -1 else (lambda x: x["l"])          # SHORT : on vend sous un haut ; LONG : on achète sur un bas
+    au_bon_cote = lambda v: (v - prix) * (-d) >= 0.3 * a3                    # SHORT : niveau AU-DESSUS du prix ; LONG : EN DESSOUS
+    # 1) ancre : structure 15 min / 1 h la plus proche à portée ; sinon dernier swing M3 (pivot 2-2)
+    cote = [(v, n) for v, n in (r.get("niveaux") or []) if n in ("15m", "1h") and au_bon_cote(v) and abs(v - prix) <= SNIPER_PORTEE_ATR15 * a15]
+    if cote:
+        niveau, nom = min(cote, key=lambda z: abs(z[0] - prix))
+        src = "structure " + nom
+    else:
+        fort = lambda x: -d * extreme(x)                                       # plus grand = plus extrême
+        piv = [x for i, x in enumerate(b3[:-2]) if i >= 2 and fort(x) >= max(fort(y) for y in b3[i - 2:i + 3]) and au_bon_cote(extreme(x))]
+        if not piv or abs(extreme(piv[-1]) - prix) > SNIPER_PORTEE_ATR15 * a15:
+            return None
+        niveau, src = extreme(piv[-1]), "swing M3"
+    # 2) mèche : extrême touché près de la zone par M3 / M1 sur la dernière heure (le pic lui-même)
+    t0 = r["m1"][-1]["t"] - 3600
+    proches = [extreme(y) for y in list(b3) + [m for m in r["m1"][-60:] if m["t"] >= t0] if abs(extreme(y) - niveau) <= 3 * a3]
+    meche = max(proches + [niveau]) if d == -1 else min(proches + [niveau])
+    # 3) ordre limite, SL, TP
+    e = niveau - d * 0.15 * a3
+    za, zb = sorted((niveau - d * 0.4 * a3, niveau + d * 0.1 * a3))
+    sl = meche - d * SNIPER_MARGE_ATR3 * a3
+    mini = max(a3, e * SL_RISQUE_MIN_PCT)
+    if abs(sl - e) < mini:
+        sl = e - d * mini
+    risque = abs(e - sl)
+    if d * (prix - sl) <= 0 or d * (prix - e) <= 0:
+        return None                                         # prix déjà au-delà du SL ou de la zone : trop tard, on ne force pas
+    ut_tp = niveaux_strategie(r.get("strat") or "")[1]
+    cibles = sorted([(v, n) for v, n in (r.get("niveaux") or []) if n in ut_tp and d * (v - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+    if not cibles:
+        return None                                         # gainMin non respecté par une vraie cible : aucune proposition
+    tp1, n1 = cibles[0]
+    loin = [z for z in cibles if d * (z[0] - tp1) >= a3]
+    tp2, n2 = loin[0] if loin else (e + d * risque * (GAIN_MIN + 2), "projection")
+    return dict(d=d, e=e, za=za, zb=zb, sl=sl, tp1=tp1, n1=n1, tp2=tp2, n2=n2, rr=abs(tp1 - e) / risque, niveau=niveau, src=src, meche=meche, t=r["m1"][-1]["t"])
+
+def simuler_sniper(sn, m1_futur, duree_min=240):
+    """Que serait-il arrivé ? Ordre limite rempli quand le prix touche e ; SL et TP1 testés bougie par bougie (SL prioritaire si les deux)."""
+    d, rempli, t_fill = sn["d"], False, None
+    touche = lambda b, v: (b["h"] >= v) if d == -1 else (b["l"] <= v)         # le prix atteint v par le bon côté
+    tp_touche = lambda b: (b["l"] <= sn["tp1"]) if d == -1 else (b["h"] >= sn["tp1"])
+    for b in m1_futur:
+        if b["t"] - sn["t"] > duree_min * 60:
+            break
+        if not rempli:
+            if touche(b, sn["e"]):
+                rempli, t_fill = True, b["t"]
+            else:
+                continue
+        if touche(b, sn["sl"]):
+            return dict(etat="SL", t_fill=t_fill, t_exit=b["t"], pnl=-abs(sn["sl"] - sn["e"]))
+        if tp_touche(b):
+            return dict(etat="TP1", t_fill=t_fill, t_exit=b["t"], pnl=abs(sn["tp1"] - sn["e"]))
+    return dict(etat="en cours" if rempli else "non rempli", t_fill=t_fill, pnl=0.0)
 
 def figer_plan(r, stable):
     """Valeurs de plan à mémoriser (ent, tp1, tp2, sl, sens et stratégie figés)."""
@@ -4869,6 +4942,9 @@ _PINE_TEXTES = {   # type -> variantes (FR, EN) ; {ic} {m} {n} {c} {seuil} {sens
                  ("🏁 {ic} {m} : retournement confirmé, direction {sens}", "🧭 {strat}")),
     "ret_cancel": (("⛔ {ic} {m} : SL cassé à la clôture", "↩ Retournement en cours, j'attends 15 min / 1h"), ("🛑 {ic} {m} : le stop du plan est franchi", "🔄 Je guette la confirmation 15 min / 1h"),
                    ("🚧 {ic} {m} : plan annulé (stop cassé)", "👀 Retournement possible, rien n'est validé")),
+    "sniper": (("🎯 Entrée sniper {ic} {m} : {ordre} limite {za}–{zb}", "🛑 SL {sl} • TP1 {tp1}", "📐 Gain/risque {rr}"),
+               ("🔫 {ic} {m} : {ordre} limite à {za}–{zb}", "🛑 Stop {sl} • 🎯 TP1 {tp1}", "📐 x{rr} le risque"),
+               ("🎯 Sniper {ic} {m} : {ordre} sur la dernière structure {za}–{zb}", "🛑 SL {sl} • TP1 {tp1}", "⏳ Ordre limite, rien n'est forcé")),
     "confirmation": (("✅ {ic} {m} : CONFIRMATION {sens}", "🕯 Clôture {u} {pos} {niv}"), ("🔔 {ic} {m} : confirmation {sens} validée", "🕯 {u} clôturée {pos} {niv}"),
                      ("🎯 {ic} {m} : {sens} confirmé à la clôture {u}", "📍 Ligne de décision {niv}")),
 }
@@ -4887,10 +4963,13 @@ _PINE_TEXTES_EN = {
                  ("🏁 {ic} {m}: reversal confirmed, direction {sens}", "🧭 {strat}")),
     "ret_cancel": (("⛔ {ic} {m}: SL broken at the close", "↩ Reversal in progress, waiting for 15 min / 1h"), ("🛑 {ic} {m}: the plan's stop is crossed", "🔄 Watching for the 15 min / 1h confirmation"),
                    ("🚧 {ic} {m}: plan cancelled (stop broken)", "👀 Reversal possible, nothing validated")),
+    "sniper": (("🎯 Sniper entry {ic} {m}: {ordre} limit {za}–{zb}", "🛑 SL {sl} • TP1 {tp1}", "📐 Reward/risk {rr}"),
+               ("🔫 {ic} {m}: {ordre} limit at {za}–{zb}", "🛑 Stop {sl} • 🎯 TP1 {tp1}", "📐 x{rr} the risk"),
+               ("🎯 Sniper {ic} {m}: {ordre} on the last structure {za}–{zb}", "🛑 SL {sl} • TP1 {tp1}", "⏳ Limit order, nothing is forced")),
     "confirmation": (("✅ {ic} {m}: CONFIRMATION {sens}", "🕯 {u} close {pos} {niv}"), ("🔔 {ic} {m}: {sens} confirmation validated", "🕯 {u} closed {pos} {niv}"),
                      ("🎯 {ic} {m}: {sens} confirmed at the {u} close", "📍 Decision line {niv}")),
 }
-_PINE_PRIO = {"ret_conf": 0, "confirmation": 1, "ret_cancel": 2, "impulsion": 3, "surcharge": 4, "relache": 5, "align_haut": 6, "align_bas": 7}
+_PINE_PRIO = {"ret_conf": 0, "sniper": 1, "confirmation": 1, "ret_cancel": 2, "impulsion": 3, "surcharge": 4, "relache": 5, "align_haut": 6, "align_bas": 7}
 
 def evenements_pine(etat, m, r, cle, now):
     """Évènements de l'indicateur au moment où ils arrivent : chacun une seule fois (fronts montants mémorisés par marché)."""
@@ -4927,6 +5006,14 @@ def evenements_pine(etat, m, r, cle, now):
     elif rd and not rc and not mem.get("rd"):
         ev.append(dict(kind="ret_cancel", **base))
     mem["rc"], mem["rd"] = rc, bool(rd)
+    sn = r.get("sniper")
+    if sn and not cle.get("trade"):                      # entrée sniper M1/M3 : une fois par niveau (seau d'un demi-ATR M3), 30 min mini
+        cle_sn = f"{sn['d']}:{round(sn['niveau'] / max(sn['niveau'] * 0.0004, 1e-9))}"
+        if mem.get("sn_cle") != cle_sn and now - mem.get("sn_t", 0) >= 1800:
+            mem["sn_cle"], mem["sn_t"] = cle_sn, now
+            f = lambda v: px(v)
+            ev.append(dict(kind="sniper", **base, ordre="vente" if sn["d"] == -1 else "achat", za=f(sn["za"]), zb=f(sn["zb"]), sl=f(sn["sl"]), tp1=f(sn["tp1"]),
+                           rr=str(round(sn["rr"], 1)).replace(".", ",")))
     zp, strat = r.get("zone_pine"), r.get("strat") or ""
     if d and zp and strat and not cle.get("trade") and strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)[1] == "CONFIRMÉ":
         barres = {"SWING": r.get("b1h"), "DAY": r.get("b5"), "SCALPING": r.get("m1")}.get(strat) or []
@@ -4947,7 +5034,7 @@ def texte_pine(etat, ev, anglais=False):
         ev["pos"] = {"au-dessus de": "above", "sous": "below"}.get(ev.get("pos"), ev.get("pos"))
         ev["etat_seuil"] = "reached ✅" if "atteint" in str(ev.get("etat_seuil", "")) else "almost"
         ev["etat_seuil_court"] = "Threshold reached" if "atteint" in str(ev.get("etat_seuil_court", "")) else "Almost at the threshold"
-        ev["u"] = str(ev.get("u", "")).replace(" min", " min")
+        ev["ordre"] = {"vente": "sell", "achat": "buy"}.get(ev.get("ordre"), ev.get("ordre"))
     return [l.format(**{k: v for k, v in ev.items() if k != "kind"}) for l in lignes]
 
 def regrouper_alertes(blocs):

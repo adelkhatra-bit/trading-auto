@@ -1,0 +1,40 @@
+name: ALIGN rejeu entrée sniper (manuel)
+
+# Rejoue l'entrée sniper M1/M3 sur les vraies bougies (mêmes sources que le bot), sans toucher au worker de production ni envoyer de message.
+on:
+  workflow_dispatch:
+    inputs:
+      pair:
+        description: "Paire (XAUUSD, XBTUSD, NAS100)"
+        default: "XAUUSD"
+      marche:
+        description: "Nom du marché (GOLD, BTC, NASDAQ)"
+        default: "GOLD"
+      heures:
+        description: "Fenêtre rejouée, en heures"
+        default: "8"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: align-sniper-replay
+  cancel-in-progress: true
+
+jobs:
+  rejeu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: align-bot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: align-bot
+      - name: Rejeu sniper
+        env:
+          PAIR: ${{ inputs.pair }}
+          MARCHE: ${{ inputs.marche }}
+          HEURES: ${{ inputs.heures }}
+        run: python3 replay_sniper.py --pair "$PAIR" --marche "$MARCHE" --heures "$HEURES"
