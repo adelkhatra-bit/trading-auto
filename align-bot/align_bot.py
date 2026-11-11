@@ -1388,7 +1388,9 @@ def mise_en_forme(t):
                 if out and out[-1]:
                     out.append("")
                 valeur = d_.strip()
-                if re.match(r"^[+-]?\d", valeur):
+                # Ne compacter que les valeurs numériques pures : une durée ou une heure
+                # (ex. « 1 h 00 min 05 s », « 04:30:00 ») doit garder ses espaces.
+                if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?%?", valeur):
                     valeur = _compacte_prix(valeur)
                 out += [g.strip(), ("≈ " if "≈" in mt.group() else "") + valeur, ""]
                 continue
