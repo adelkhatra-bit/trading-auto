@@ -2843,7 +2843,7 @@ def _texte_resultats(etat, cid):
     return "\n".join(l)
 
 def controle_entree(etat, m, d):
-    """Vérification en direct au moment où l'abonné dit « Je suis rentré »."""
+    """Vérifie les confirmations du marché au moment de l'activation du suivi personnel."""
     try:
         r = analyse_marche(etat, MARCHES[m])
     except Exception as ex:
@@ -2855,25 +2855,24 @@ def controle_entree(etat, m, d):
             f"{r['news']}")
 
 def repondre(etat, cid, oui, mk=None):
-    """✅ Je suis rentré : l'entrée et le stop sont FIGÉS pour cet abonné. 🚪 Je suis sorti : calcul automatique du résultat."""
+    """Active le suivi personnel d'une position en cours ou enregistre une sortie manuelle."""
     trades = [m for m in MARCHES if etat.get(m, {}).get("trade") and (mk is None or m == mk)]
     CLAVIER = CLAVIER_VISITEUR if cid in etat.get("prospects", []) else globals()["CLAVIER"]
     if oui:
         cands = [m for m in trades if not isinstance(etat[m]["trade"].get("qui", {}).get(cid), dict)]
         if not cands and trades:
-            _envoi_sur(cid, text="✅ Ton bot t'a déjà mis dedans 🤖\n🎯 Le coach te suit jusqu'au TP", reply_markup=CLAVIER)
+            m = trades[0]
+            _envoi_sur(cid, text="✅ Ton suivi personnel est déjà actif.\n🎯 Le coach surveille ton SL, BE et TP.", reply_markup=markup_position(m))
             return
         if not cands:
-            _envoi_sur(cid, text=("🔴 Le bot n'a pas de position ouverte\n"
-                                  "👉 Attends 🟢 J'ENTRE MAINTENANT\n"
-                                  "🟠 / 🥇 Ou appuie sur Analyse BTC / Gold\n"
-                                  "🔔 Je te préviens dès qu'il y en a une"), reply_markup=CLAVIER)
+            _envoi_sur(cid, text=("🔴 Aucune position ouverte à suivre pour le moment.\n"
+                                  "🔔 Choisis « Suivre la prochaine position » pour recevoir le prochain signal confirmé."), reply_markup=CLAVIER)
             return
         m = cands[0]; tr = etat[m]["trade"]
         e = prix_actuel(m) or tr["e"]
         tr.setdefault("qui", {})[cid] = {"e": e, "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
-        _envoi_sur(cid, reply_markup=CLAVIER, text=(
-            f"👊 {ICONE.get(m, '')} {m}\n{SENS[tr['d']]}\n"
+        _envoi_sur(cid, reply_markup=markup_position(m), text=(
+            f"👊 SUIVI PERSONNEL ACTIVÉ — {ICONE.get(m, '')} {m}\n{SENS[tr['d']]}\n"
             f"📌 Entrée   {px(e)}\n"
             f"🛑 Stop   {px(tr['sl'])}\n"
             f"💰 TP1   {px(tr['tp1'])}\n"
@@ -4192,7 +4191,7 @@ def point_entree(r, d, p):
                 za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(b, d, sl), sl_ut="5 min")
 
 def coach(etat, m, r, cle):
-    """Agent individuel : messages courts envoyés UNIQUEMENT aux abonnés qui ont dit « Je suis rentré »."""
+    """Agent individuel : messages courts envoyés aux abonnés effectivement inscrits sur la position."""
     tr = cle.get("trade")
     if not tr:
         return
