@@ -2184,13 +2184,8 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
         etat["ia_dernier_statut"] = "ALL_EXTERNAL_PROVIDERS_FAILED"
         print("AI_PROVIDER_USED=INTERNAL_FALLBACK", flush=True)
         etat["ia_err"] = " | ".join(erreurs)
-        if time.time() - etat.get("ia_err_t", 0) > 21600:        # le propriétaire est prévenu (1 fois / 6 h)
-            etat["ia_err_t"] = time.time()
-            for pid in proprio(etat):
-                try:
-                    _envoi_sur(pid, text=f"⚠️ Toutes les IA gratuites sont tombées (l'analyse interne prend le relais)\n{etat['ia_err'][:250]}")
-                except Exception:
-                    pass
+        # Panne IA : uniquement dans les journaux techniques, jamais dans Telegram (rien à voir avec le trading).
+        print("AI_ALL_PROVIDERS_FAILED", etat["ia_err"][:250], flush=True)
         return ""
     for k in list(compte):
         if k != jour:
@@ -2351,9 +2346,9 @@ def avis_ia(etat, m, r, cle, anglais=False):
         fournisseur = etat.get("ia_dernier_fournisseur")
         modele = etat.get("ia_dernier_modele")
         # Le fournisseur n'est affiché que si un appel externe réel a abouti.
+        # Le nom du fournisseur IA reste dans les journaux : rien de technique dans Telegram.
         if etat.get("ia_dernier_statut") == "CONNECTED" and fournisseur:
-            origine = f" • {fournisseur}" + (f" / {modele}" if modele else "")
-            titre += origine
+            print(f"AI_OPINION_PROVIDER={fournisseur}/{modele or ''}", flush=True)
         return f"{titre}\n{t}"
     # Toutes les IA en panne : l'analyse interne du bot répond (jamais de silence)
     titre, raison = verdict(r, cle)
@@ -5658,11 +5653,11 @@ def un_tour(etat, chats):
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
             cle["trade"]["auto_fait"] = True
             trx = cle["trade"]
-            t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite.",
+            t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite. FORMAT : 4 lignes courtes maximum, une info par ligne, chaque ligne commence par un emoji, 12 mots maximum par ligne, aucun paragraphe ni conclusion.",
                     dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
                                                                     "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}))
             if t_:
-                envois.append(f"🧠 L'IA ALIGN sur cette entrée {ICONE.get(nom_marche, '')} {nom_marche}\n{t_}")
+                envois.append(f"🧠 L'IA ALIGN sur cette entrée — {ICONE.get(nom_marche, '')} {nom_marche}\n{compacter_ia(t_)}")
             entrer_inscrits(etat, nom_marche, cle["trade"], chats)
         if TOKEN:
             coach(etat, nom_marche, r, cle)
@@ -5685,10 +5680,10 @@ def un_tour(etat, chats):
                               f"📚 {pr.get('type', 'position')} {'LONG' if pr.get('d') == 1 else 'SHORT'} en session {pr.get('session', '?')}\n"
                               f"🧠 Bilan de ce type : {w_}/{n_} gagnés\n"
                               + ("💡 Leçon : je serai plus prudent sur ce type de position" if gain <= 0 else "💪 Je garde ce type de position"))
-                t_ = ia(etat, "La position est terminée. Tire UNE leçon simple et utile pour la prochaine fois (pourquoi TP ou pourquoi SL).",
+                t_ = ia(etat, "La position est terminée. Tire UNE leçon simple et utile pour la prochaine fois (pourquoi TP ou pourquoi SL). FORMAT : 4 lignes courtes maximum, une info par ligne, chaque ligne commence par un emoji, 12 mots maximum par ligne, aucun paragraphe ni conclusion.",
                         {"marché": nom_marche, "résultat %": round(gain, 2), "motif": motif, "profil": pr, "bilan de ce type": f"{w_}/{n_}"})
                 if t_:
-                    envois.append(f"🧠 La leçon de l'IA ALIGN\n{t_}")
+                    envois.append(f"🧠 La leçon de l'IA ALIGN\n{compacter_ia(t_)}")
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         synchroniser_veille_auto(etat, nom_marche, r)
         notifier_clotures(etat, nom_marche, r, cle)
