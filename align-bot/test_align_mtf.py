@@ -308,6 +308,23 @@ class AlignMtfRulesTest(unittest.TestCase):
         watcher = state["veille_cloture"]["GOLD"]["123"]
         self.assertTrue(watcher["multi"])
         self.assertEqual(watcher["derniers_t"], {"5m": 600, "15m": 900, "1h": 3600, "4h": 14400})
+        self.assertEqual(watcher["expire"], 100 + align_bot.CHRONO_MAX + 300)
+        self.assertTrue(watcher["h4_close_grace_v1"])
+
+    def test_existing_multi_watcher_gets_h4_grace_once_without_repeated_extension(self):
+        from unittest.mock import patch
+        state = {"auto": {"GOLD": ["123"]}, "veille_cloture": {"GOLD": {"123": {
+            "multi": True, "derniers_t": {"4h": 14400}, "expire": 10000
+        }}}}
+        r = {"b5": [], "b15": [], "b1h": [], "b4h": [candle(14400)]}
+        with patch.object(align_bot.time, "time", return_value=100):
+            align_bot.synchroniser_veille_auto(state, "GOLD", r)
+        watcher = state["veille_cloture"]["GOLD"]["123"]
+        self.assertEqual(watcher["expire"], 10300)
+        self.assertTrue(watcher["h4_close_grace_v1"])
+        with patch.object(align_bot.time, "time", return_value=200):
+            align_bot.synchroniser_veille_auto(state, "GOLD", r)
+        self.assertEqual(watcher["expire"], 10300)
 
     def test_multi_timeframe_watcher_only_notifies_the_blocking_timeframe(self):
         from unittest.mock import patch
