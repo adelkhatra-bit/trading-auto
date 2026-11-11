@@ -2647,9 +2647,11 @@ def notifier_clotures(etat, m, r, cle):
         close = next((b for b in bars if int(b["t"]) > int(suivi.get("dernier_t", 0))), None)
         if not close:
             continue
+        resultat = _envoi_sur(cid, text=texte_cloture(m, tf, close, r, cle),
+                               reply_markup=markup_analyse(etat, m, r))
+        if resultat is None or (isinstance(resultat, dict) and resultat.get("ok") is False):
+            continue
         suivi["dernier_t"] = int(close["t"])
-        _envoi_sur(cid, text=texte_cloture(m, tf, close, r, cle),
-                   reply_markup=markup_analyse(etat, m, r))
         suivi["restants"] = int(suivi.get("restants", 1)) - 1
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
