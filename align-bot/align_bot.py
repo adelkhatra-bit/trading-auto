@@ -1695,6 +1695,10 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
         vu[str(cid)]["mid"] = res["result"]["message_id"]
     except (KeyError, TypeError):
         pass
+    # L'avis IA reste envoyé séparément : aucune information existante n'est supprimée.
+    a_ = avis_ia(etat, m, r, cle)
+    if a_:
+        _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
 
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
