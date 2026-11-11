@@ -867,6 +867,35 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("STOP À BE", message)
         self.assertIn("ne passe aucun ordre", message)
 
+    def test_history_callback_supports_older_and_newer_pages(self):
+        import json
+        from unittest.mock import patch
+        now = align_bot.time.time()
+        state = {"journal_telegram": [
+            {"direction": "entrant", "chat_id": "123", "timestamp": now, "text": f"Message {i}"}
+            for i in range(40)
+        ]}
+        update = {"update_id": 9240, "callback_query": {
+            "id": "cb-history-page", "data": "history:BTC:15",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.traiter(state, set(), [update])
+        self.assertIn("Messages 11 à 25 sur 40", send.call_args.kwargs["text"])
+        buttons = json.loads(send.call_args.kwargs["reply_markup"])["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in buttons for button in row]
+        self.assertIn("history:BTC:0", callbacks)
+        self.assertIn("history:BTC:30", callbacks)
+
+    def test_personal_close_notification_attaches_results_and_history_buttons(self):
+        from unittest.mock import patch
+        state = {}
+        pos = {"d": 1, "e": 100.0, "sl": 95.0, "tp1": 110.0, "fini": False}
+        with patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.noter(state, "123", "BTC", pos, 110.0, "🎯 TP1 touché")
+        self.assertIn("results:x", send.call_args.kwargs["reply_markup"])
+        self.assertIn("history:BTC", send.call_args.kwargs["reply_markup"])
+
     def test_closed_trade_keyboard_links_to_results_history_and_next_setup(self):
         import json
         buttons = json.loads(align_bot.markup_cloture("BTC"))["inline_keyboard"]
