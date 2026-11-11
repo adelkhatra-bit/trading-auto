@@ -3818,8 +3818,9 @@ def macro(etat):
             req = urllib.request.Request(f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{an}/all?type=daily_treasury_yield_curve&field_tdr_date_value={an}&page&_format=csv",
                                          headers={"User-Agent": "align-bot"})
             lignes = urllib.request.urlopen(req, timeout=30).read().decode().splitlines()
-            tete = [x.strip('"') for x in lignes[0].split(",")]; i10 = tete.index("10 Yr")
-            l0, l1 = lignes[1].split(","), lignes[2].split(",")
+            tete = [x.strip().strip('"') for x in lignes[0].split(",")]; i10 = tete.index("10 Yr")
+            l0 = [x.strip().strip('"') for x in lignes[1].split(",")]
+            l1 = [x.strip().strip('"') for x in lignes[2].split(",")]
             mc["us10"] = (float(l0[i10]), float(l1[i10]), l0[0])
             mc["us10_t"] = now
         except Exception as ex:
@@ -4616,15 +4617,17 @@ def main():
                 maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=1).get("result", [])
             except Exception as ex:
                 print("ecoute", ex); time.sleep(5); continue
-            for cid, mq in traiter(etat, chats, maj):
-                envoyer_analyse(cid, etat, mq)
-            # Le polling Telegram reste à 1 s afin de faire vivre les chronomètres
-            # sans relancer l'analyse complète des marchés à chaque seconde.
+            # Priorité au chronomètre : l'édition Telegram passe AVANT les callbacks
+            # qui peuvent lancer une analyse IA ou une requête réseau plus lente.
             for marche, derniere in list(DERNIERS.items()):
                 try:
                     maj_chronos(etat, marche, derniere)
                 except Exception as ex:
                     print("tick chrono", marche, ex)
+            for cid, mq in traiter(etat, chats, maj):
+                envoyer_analyse(cid, etat, mq)
+            # Le polling Telegram reste à 1 s ; l'horloge n'attend plus le traitement
+            # des demandes d'analyse avant d'actualiser le message du compte à rebours.
             sauver_etat(etat, chats)
         if time.time() >= debut + DUREE_SEC:
             break
