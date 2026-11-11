@@ -35,7 +35,7 @@ def http_json(url, data=None):
                 raise
             time.sleep(2 * (essai + 1))
 
-TTL_KRAKEN = {1: 15, 5: 30, 15: 45, 30: 90, 60: 120, 240: 300, 1440: 900, 10080: 1800}
+TTL_KRAKEN = {1: 5, 5: 10, 15: 30, 30: 60, 60: 120, 240: 300, 1440: 900, 10080: 1800}
 
 def kraken(pair, interval):
     c = _CACHE_K.get((pair, interval))
@@ -71,7 +71,7 @@ YAHOO = {1: ("1m", "5d", 50), 5: ("5m", "1mo", 50), 15: ("15m", "1mo", 50), 30: 
 def or_spot():
     """Prix spot XAUUSD en direct (Swissquote, gratuit) : milieu achat / vente."""
     c = _CACHE.get("spot")
-    if c and time.time() - c[0] < 20:
+    if c and time.time() - c[0] < 5:
         return c[1]
     j = http_json("https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD")
     q = j[0]["spreadProfilePrices"][0]
@@ -463,7 +463,8 @@ SENS = {1: "🟩 LONG ⬆️", -1: "🟥 SHORT ⬇️"}
 
 # Tampon des messages sortants : transféré dans state.json à chaque sauvegarde.
 JOURNAL_SORTANT = []
-JOURNAL_MAX = 2500
+JOURNAL_MAX = 10000
+JOURNAL_PAR_CHAT = 500
 
 
 def journal_ajouter(etat, entree):
@@ -481,6 +482,11 @@ def journal_ajouter(etat, entree):
     ):
         return
     journal.append(entree)
+    cid = str(entree.get("chat_id", ""))
+    memes_chat = [i for i, x in enumerate(journal) if str(x.get("chat_id", "")) == cid]
+    if len(memes_chat) > JOURNAL_PAR_CHAT:
+        a_supprimer = set(memes_chat[:-JOURNAL_PAR_CHAT])
+        journal[:] = [x for i, x in enumerate(journal) if i not in a_supprimer]
     del journal[:-JOURNAL_MAX]
 
 
@@ -510,7 +516,7 @@ def texte_historique(etat, cid, limite=8, offset=0):
         sens = "📤 ALIGN" if x.get("direction") == "sortant" else "📥 TOI"
         lignes.append(f"\n{date} • {sens}\n{str(x.get('text') or x.get('type') or 'Message')[:400]}")
     lignes += ["━━━━━━━━━━━━━━━━━━━━",
-               f"ℹ️ Conservation : {JOURNAL_MAX} derniers échanges au maximum, tous chats confondus.",
+               f"ℹ️ Conservation : {JOURNAL_PAR_CHAT} échanges maximum par conversation, dans une limite globale de {JOURNAL_MAX}.",
                "Les messages antérieurs à l'activation ne sont pas récupérables par le Bot API Telegram."]
     return "\n".join(lignes)
 
@@ -4249,12 +4255,51 @@ def un_tour(etat, chats):
                     print("chronos", ex)
     journal_vider_sortants(etat)
     print(f"{len(envois)} signal(s) envoyé(s) à {len(chats)} téléphone(s)")
-    json.dump(dict(etat, chats=sorted(chats)), open(ETAT_FICHIER, "w"))
+    sauver_etat(etat, chats)
+
+STATE_SCHEMA_VERSION = 2
+
+def charger_etat():
+    """Charge l'état sans jamais repartir à zéro silencieusement si le fichier est abîmé."""
+    if not os.path.exists(ETAT_FICHIER):
+        return {"schema_version": STATE_SCHEMA_VERSION}
+    try:
+        with open(ETAT_FICHIER, "r", encoding="utf-8") as f:
+            etat = json.load(f)
+    except Exception as ex:
+        raise RuntimeError(f"ÉTAT ALIGN ILLISIBLE — arrêt préventif, aucune donnée écrasée : {ex}") from ex
+    if not isinstance(etat, dict):
+        raise RuntimeError("ÉTAT ALIGN INVALIDE — arrêt préventif, aucune donnée écrasée")
+    version = int(etat.get("schema_version", 1) or 1)
+    if version > STATE_SCHEMA_VERSION:
+        raise RuntimeError(f"ÉTAT ALIGN version {version} plus récente que ce bot ({STATE_SCHEMA_VERSION})")
+    # Migration additive : on conserve toutes les clés historiques (positions, abonnés,
+    # offset Telegram, suivis, résultats et journal) sans réinitialiser les instructions.
+    etat.setdefault("journal_telegram", [])
+    etat.setdefault("chats", [])
+    etat["schema_version"] = STATE_SCHEMA_VERSION
+    if version < STATE_SCHEMA_VERSION:
+        print(f"STATE_MIGRATION={version}->{STATE_SCHEMA_VERSION} (conservation des données)", flush=True)
+    return etat
+
+
+def sauver_etat(etat, chats=None):
+    """Écriture atomique : un arrêt du runner ne laisse pas un state.json tronqué."""
+    if chats is not None:
+        etat["chats"] = sorted(str(x) for x in chats)
+    etat["schema_version"] = STATE_SCHEMA_VERSION
+    journal_vider_sortants(etat)
+    dossier = os.path.dirname(os.path.abspath(ETAT_FICHIER))
+    temporaire = ETAT_FICHIER + ".tmp"
+    with open(temporaire, "w", encoding="utf-8") as f:
+        json.dump(etat, f, ensure_ascii=False, separators=(",", ":"))
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temporaire, ETAT_FICHIER)
+
 
 def main():
-    etat = {}
-    if os.path.exists(ETAT_FICHIER):
-        etat = json.load(open(ETAT_FICHIER))
+    etat = charger_etat()
     chats = set(etat.get("chats", []))
     if os.environ.get("TELEGRAM_CHAT_ID"):
         chats.add(os.environ["TELEGRAM_CHAT_ID"].strip())
@@ -4287,16 +4332,12 @@ def main():
                     maj_chronos(etat, marche, derniere)
                 except Exception as ex:
                     print("tick chrono", marche, ex)
-            etat["chats"] = sorted(chats)
-            journal_vider_sortants(etat)
-            json.dump(etat, open(ETAT_FICHIER, "w"))
+            sauver_etat(etat, chats)
         if time.time() >= debut + DUREE_SEC:
             break
         if not TOKEN:
             time.sleep(max(0, prochain - time.time()))
-    etat["chats"] = sorted(chats)
-    journal_vider_sortants(etat)
-    json.dump(etat, open(ETAT_FICHIER, "w"))
+    sauver_etat(etat, chats)
 
 if __name__ == "__main__":
     main()
