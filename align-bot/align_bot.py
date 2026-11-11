@@ -1016,7 +1016,7 @@ TRAD = {
 # Boutons
 "🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis", "📊 Faire une analyse": "📊 Run an analysis",
 "📡 Mes marchés": "📡 My markets",
-"📍 Suivre cette position": "📍 Follow this position", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
+"📍 Suivre cette position": "📍 Follow this position", "📍 Ma position • SL / TP": "📍 My position • SL / TP", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
  "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
 "🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
 "✅ Sélection enregistrée": "✅ Selection saved",
@@ -1084,7 +1084,7 @@ TRAD = {
 "Prix dans la zone 🟨": "Price in the zone 🟨", "⏳ Surcharge RSI 5 min": "⏳ RSI 5 min overextension",
 "✅ Pas de news proche": "✅ No news nearby", "Pas de news proche": "No news nearby",
 "🚦 Attends mon 🟢 J'ENTRE MAINTENANT": "🚦 Wait for my 🟢 I'M ENTERING NOW",
-"👉 Puis appuie sur ✅ Je suis rentré": "👉 Then tap ✅ I'm in",
+"📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
 "⏰ Trop tard : la position": "⏰ Too late: the position", "est déjà partie": "has already gone",
 "⏳ J'attends le prochain setup": "⏳ Waiting for the next setup",
 "🔜 Prochaine entrée   ➖ pas encore de sens": "🔜 Next entry   ➖ no direction yet", "🧭 STRATÉGIE MULTI-UT": "🧭 MULTI-TIMEFRAME STRATEGY", "💵 Dollar (DXY)": "💵 Dollar (DXY)", "💵 DXY ": "💵 DXY ",
@@ -1172,7 +1172,7 @@ TRAD = {
 "🎯 Confiance": "🎯 Confidence", "15 min • 1 h • 4 h alignées": "15 min • 1 h • 4 h aligned",
 "Daily / Weekly favorables": "Daily / Weekly favourable", "Zone Fibonacci 50 – 78,6 %": "Fibonacci zone 50 – 78.6 %",
 "Niveau 15m / 1h / 4h ou EMA": "15m / 1h / 4h level or EMA", "RSI en surcharge (": "RSI overextended (",
-"Confirmé en 1 h": "Confirmed on 1 h", "Gain / risque x": "Reward / risk x", "Tu es rentré ?": "Are you in?",
+"Confirmé en 1 h": "Confirmed on 1 h", "Gain / risque x": "Reward / risk x", "📍 POSITION SUIVIE AUTOMATIQUEMENT": "📍 POSITION AUTOMATICALLY TRACKED",
 "🕯 EN BOUGIES (marche sur toutes les plateformes) :": "🕯 IN CANDLES (works on every platform):",
 "1️⃣ 👀 Mets-toi en vue 15 minutes": "1️⃣ 👀 Switch to the 15-minute chart",
 "2️⃣ 🛑 SL : un tout petit peu": "2️⃣ 🛑 SL: just a little", "3️⃣ 🟨 Entrée": "3️⃣ 🟨 Entry",
@@ -1276,7 +1276,7 @@ TRAD = {
 "⏸ Arrêter mon bot": "⏸ Stop my bot", "▶️ Relancer mon bot": "▶️ Restart my bot", "▶️ Ton bot est relancé": "▶️ Your bot is restarted",
 "🤖 Il entre tout seul dans la prochaine position": "🤖 It will enter the next position by itself", "⏸ Ton bot est arrêté": "⏸ Your bot is stopped",
 "🔔 Tu reçois toujours les positions": "🔔 You still get the positions", "▶️ Relance-le avec 🤖 Mon bot": "▶️ Restart it with 🤖 My bot",
-": JE SUIS RENTRÉ, SUIS-MOI": ": I'M IN, FOLLOW ME", "📍 Repère prix : entrée ≈": "📍 Price guide: entry ≈", "🎯 Je rentre dans la prochaine position": "🎯 I'm in for the next position",
+": POSITION SUIVIE AUTOMATIQUEMENT": ": POSITION AUTOMATICALLY TRACKED", "📍 Repère prix : entrée ≈": "📍 Price guide: entry ≈", "🎯 Je rentre dans la prochaine position": "🎯 I'm in for the next position",
 "✅ Noté ! Prochaine position": "✅ Got it! Next position", "📲 Place ton ordre limite dans la zone 🟨 (vue 15 min)": "📲 Place your limit order in the zone 🟨 (15-min chart)",
 "🤖 Dès que j'entre, tu es compté dedans automatiquement": "🤖 As soon as I enter, you're counted in automatically", "🎯 Le coach te suit : SL à BE, SL remonté, TP": "🎯 The coach follows you: SL to BE, raised SL, TP",
 "ℹ️ Le bot ne passe pas d'ordre à ta place sur ta plateforme": "ℹ️ The bot doesn't place orders on your platform for you", ": TU ES DEDANS": ": YOU'RE IN",
@@ -2563,7 +2563,7 @@ def entrer_inscrits(etat, m, tr, chats=()):
             etat.setdefault("bienvenue", {}).setdefault(cid, m)
         stats_bot(etat, cid)["auto"] += 1
         _envoi_sur(cid, reply_markup=markup_position(m), text=(
-            f"🤖 {ICONE.get(m, '')} {m} : JE SUIS RENTRÉ, SUIS-MOI\n{SENS[tr['d']]}\n"
+            f"🤖 {ICONE.get(m, '')} {m} : POSITION SUIVIE AUTOMATIQUEMENT\n{SENS[tr['d']]}\n"
             "👀 Mets-toi en vue 15 minutes\n"
             f"🛑 SL un peu {meche_sl(tr)}\n"
             f"📍 Repère prix : entrée ≈ {px(tr['e'])} • SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n"
