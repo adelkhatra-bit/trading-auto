@@ -2582,9 +2582,8 @@ def texte_apercu(m, r, cle):
         direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else "AUCUNE DIRECTION CONFIRMÉE"
 
     prof = profil_strategie(r) if r.get("dirs") and len(r.get("dirs")) >= 11 else {}
-    sens = (tr or {}).get("d") or maj or prof.get("direction") or 0
-    if not tr and not maj and sens:
-        direction = ("LONG ⬆️" if sens == 1 else "SHORT ⬇️") + " — pas encore confirmé"
+    # Même sens que la décision : pas de cible tant que la 4 h + 1 h ne donnent pas de direction.
+    sens = (tr or {}).get("d") or maj or 0
     type_ = prof.get("mode") or ""
     lignes = [
         f"{ICONE.get(m, '📊')} {m} — {px(prix)}",
@@ -3128,7 +3127,7 @@ def carte_avis_courte(m, r, cle, anglais=False):
     ligne2 = v[1].split(" : ", 1)[1] if len(v) > 1 else ""
     titre, raison = verdict(r, cle)
     prof = profil_strategie(r)
-    sens = prof.get("direction") or 0
+    sens = (cle.get("trade") or {}).get("d") or alignement(r)[0] or 0
     raison = re.sub(r"\s+", " ", str(raison or "")).strip()
     if len(raison) > 110:
         raison = raison[:110].rsplit(" ", 1)[0].rstrip(",;: ") + "…"
