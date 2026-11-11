@@ -3926,10 +3926,11 @@ def macro_confluence(etat, m, r=None, maintenant=None):
     eur_change = None
     # EUR/USD et DXY doivent avoir des cotations récentes et synchronisées.
     hist_dxy = mc.get("dxy") or []
+    instant_reference = time.time() if maintenant is None else maintenant
     eur_synchrone = bool(hist_eur and hist_dxy and
                          abs(hist_eur[-1][0] - hist_dxy[-1][0]) <= 8 * 60 and
-                         maintenant - hist_eur[-1][0] <= 15 * 60 if maintenant is not None
-                         else hist_eur and hist_dxy and abs(hist_eur[-1][0] - hist_dxy[-1][0]) <= 8 * 60)
+                         instant_reference - hist_eur[-1][0] <= 15 * 60 and
+                         hist_eur[-1][0] <= instant_reference + 60)
     eur_variation = variation_une_heure(hist_eur) if eur_synchrone else None
     if eur_variation is not None:
         eur_change = eur_variation[0]
