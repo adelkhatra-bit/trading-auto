@@ -191,18 +191,18 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("CLÔTURE CONFIRMÉE", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
-    def test_chronometer_edits_again_on_the_next_second(self):
+    def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
         from unittest.mock import patch
-        state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1}}}, "GOLD": {}}
-        with patch.object(align_bot.time, "time", side_effect=[100.1, 101.1]), \
-             patch.object(align_bot, "chrono_txt", side_effect=["tick-100", "tick-101"]), \
+        state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1, "maj": 100.0}}}, "GOLD": {}}
+        with patch.object(align_bot.time, "time", side_effect=[100.1, 104.9, 105.1]), \
+             patch.object(align_bot, "chrono_txt", return_value="tick-105") as render, \
              patch.object(align_bot, "telegram") as send:
             align_bot.maj_chronos(state, "GOLD", {})
             align_bot.maj_chronos(state, "GOLD", {})
-        self.assertEqual(send.call_count, 2)
-        self.assertEqual(send.call_args_list[0].kwargs["text"], "tick-100")
-        self.assertEqual(send.call_args_list[1].kwargs["text"], "tick-101")
-
+            align_bot.maj_chronos(state, "GOLD", {})
+        self.assertEqual(send.call_count, 1)
+        self.assertEqual(render.call_count, 1)
+        self.assertEqual(send.call_args.kwargs["text"], "tick-105")
     def test_analysis_keyboard_exposes_details_levels_and_explicit_position_action(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
@@ -318,6 +318,120 @@ class AlignMtfRulesTest(unittest.TestCase):
             messages = align_bot.annonces_et_sessions({}, now, {})
         closure = [x for x in messages if "FERMETURE DU GOLD DANS 40 MIN" in x]
         self.assertEqual(len(closure), 1)
+
+
+    def test_telegram_wrapper_formats_every_outgoing_message(self):
+        import urllib.parse
+        from unittest.mock import patch
+        with patch.object(align_bot, "TOKEN", "test-token"), patch.object(align_bot, "http_json", return_value={"ok": True}) as request:
+            align_bot.telegram("sendMessage", chat_id="123", text="PLAN\n💰 TP1 : 4 075,50")
+        url = request.call_args.args[0]
+        payload = urllib.parse.parse_qs(request.call_args.args[1].decode())
+        self.assertIn("test-token", url)
+        self.assertIn("💰 TP1\n4075,50", payload["text"][0])
+
+    def test_unknown_telegram_callback_never_becomes_manual_exit(self):
+        from unittest.mock import patch
+        update = {
+            "update_id": 9001,
+            "callback_query": {
+                "id": "cb-unknown",
+                "data": "unknown:GOLD",
+                "message": {"chat": {"id": 123}},
+                "from": {"id": 123}
+            }
+        }
+        with patch.object(align_bot, "telegram") as api, \
+             patch.object(align_bot, "repondre") as reply:
+            align_bot.traiter({}, set(), [update])
+        reply.assert_not_called()
+        api.assert_called_once()
+        self.assertEqual(api.call_args.args[0], "answerCallbackQuery")
+        self.assertEqual(api.call_args.kwargs["text"], "Action inconnue ou expirée")
+
+    def test_unknown_market_auto_callback_is_rejected(self):
+        from unittest.mock import patch
+        update = {
+            "update_id": 9002,
+            "callback_query": {
+                "id": "cb-auto-invalid",
+                "data": "auto:UNKNOWN",
+                "message": {"chat": {"id": 123}},
+                "from": {"id": 123}
+            }
+        }
+        with patch.object(align_bot, "telegram"), \
+             patch.object(align_bot, "inscrire_auto") as register:
+            align_bot.traiter({}, set(), [update])
+        register.assert_not_called()
+
+    def test_explicit_in_and_out_callbacks_route_to_the_requested_market(self):
+        from unittest.mock import patch
+        for action, expected in (("in", True), ("out", False)):
+            update = {
+                "update_id": 9010 if expected else 9011,
+                "callback_query": {
+                    "id": "cb-" + action,
+                    "data": action + ":GOLD",
+                    "message": {"chat": {"id": 123}},
+                    "from": {"id": 123}
+                }
+            }
+            with patch.object(align_bot, "autorise", return_value=True), \
+                 patch.object(align_bot, "telegram"), \
+                 patch.object(align_bot, "repondre") as reply:
+                align_bot.traiter({}, set(), [update])
+            reply.assert_called_once()
+            self.assertEqual(reply.call_args.args[1:], ("123", expected, "GOLD"))
+
+    def test_valid_auto_callback_registers_only_the_requested_market(self):
+        from unittest.mock import patch
+        update = {
+            "update_id": 9012,
+            "callback_query": {
+                "id": "cb-auto",
+                "data": "auto:BTC",
+                "message": {"chat": {"id": 123}},
+                "from": {"id": 123}
+            }
+        }
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "telegram"), \
+             patch.object(align_bot, "inscrire_auto") as register:
+            align_bot.traiter({}, set(), [update])
+        register.assert_called_once()
+        self.assertEqual(register.call_args.args[1:], ("123", "BTC"))
+
+    def test_user_facing_ai_commentary_uses_internal_analysis_when_providers_fail(self):
+        from unittest.mock import patch
+        r = {
+            "m1": [candle(1, c=100.0)],
+            "dirs": [0] * 11,
+            "rsis": [50] * 11,
+            "posD": 0.5,
+            "posW": 0.5,
+            "confirme": 0,
+            "b5": []
+        }
+        with patch.object(align_bot, "ia", return_value=""), \
+             patch.object(align_bot, "strategie_mtf", return_value=["Tendance 4h", "Confirmation 1h"]), \
+             patch.object(align_bot, "verdict", return_value=("ATTENDRE", "Pas de confirmation")):
+            message = align_bot.avis_ia({}, "GOLD", r, {})
+        self.assertIn("L'avis ALIGN (analyse interne)", message)
+        self.assertIn("Tendance 4h", message)
+        self.assertIn("ATTENDRE", message)
+        self.assertNotIn("L'avis de l'IA ALIGN", message)
+
+    def test_internal_ai_fallback_is_explicit_when_all_external_providers_fail(self):
+        from unittest.mock import patch
+        state = {}
+        with patch.object(align_bot, "_appel_ia", side_effect=RuntimeError("provider offline")):
+            answer = align_bot.ia(state, "Explique le contexte", {"market": "BTC"})
+        self.assertEqual(answer, "")
+        self.assertEqual(state["ia_dernier_fournisseur"], "INTERNAL_FALLBACK")
+        self.assertEqual(state["ia_dernier_statut"], "ALL_EXTERNAL_PROVIDERS_FAILED")
+        self.assertTrue(state.get("ia_err"))
+
 
 if __name__ == "__main__":
     unittest.main()
