@@ -391,7 +391,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
         r = {
-            "dirs": [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+            "dirs": [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, -1],
             "rsis": [55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
             "m1": [candle(1, c=67500.0)],
             "confirme": 1, "posD": 0.55, "posW": 0.60,
@@ -415,7 +415,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("15m 🟢⬆️", message)
                 self.assertIn("1h 🟢⬆️", message)
                 self.assertIn("4h 🟠➖", message)
-                self.assertIn("Daily 🟢⬆️", message)
+                self.assertIn("Daily 🔴⬇️", message)
                 self.assertIn("1m 55", message)
                 self.assertIn("5m 57", message)
                 self.assertIn("Daily 65", message)
@@ -432,6 +432,8 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertIn("\n💹 Prix actuel", message)
                 self.assertNotIn("\\n", message)
                 self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None
+        self.assertEqual(align_bot.traduire("📊 INDICATEURS PAR UNITÉ DE TEMPS"), "📊 TIMEFRAME INDICATORS")
+        self.assertEqual(align_bot.traduire("📈 RSI PAR UNITÉ DE TEMPS"), "📈 RSI BY TIMEFRAME")
                 self.assertLess(len(message), 4096)
 
     def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
