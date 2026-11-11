@@ -583,8 +583,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertTrue(send.call_args.kwargs["text"].startswith("🔴 SIGNAL NON CONFIRMÉ"))
-        self.assertIn("🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL", send.call_args.kwargs["text"])
+        self.assertTrue(send.call_args.kwargs["text"].startswith("🟠 BTC"))
+        self.assertIn("🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
         self.assertIn("N'ENTRE PAS", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
@@ -601,13 +601,13 @@ class AlignMtfRulesTest(unittest.TestCase):
             with patch.object(align_bot, "raison_attente", return_value="La 1 h doit confirmer la 4 h"):
                 with patch.object(align_bot, "prochaine", return_value="Pas encore de sens"):
                     msg = align_bot.texte_cloture("GOLD", "5m", candle(300, o=4029.73, h=4032, l=4028, c=4031.11), r, {})
-        self.assertTrue(msg.startswith("🔴 SIGNAL NON CONFIRMÉ"))
-        self.assertLess(msg.index("🔴 SIGNAL NON CONFIRMÉ"), msg.index("🕯 BOUGIE 5m CLÔTURÉE"))
-        self.assertIn("BOUGIE 5m CLÔTURÉE", msg)
-        self.assertNotIn("CLÔTURE 5m —", msg)
-        self.assertIn("N'ENTRE PAS", msg)
-        self.assertIn("POURQUOI", msg)
-        self.assertIn("CE QUE TU DOIS FAIRE", msg)
+        self.assertTrue(msg.startswith("🥇 GOLD"))
+        self.assertLess(msg.index("🥇 GOLD"), msg.index("PAS D'ENTRÉE"))
+        self.assertIn("5m clôturée", msg)
+        self.assertIn("H4 LONG", msg)
+        self.assertIn("H1 NEUTRE", msg)
+        self.assertNotIn("POURQUOI", msg)
+        self.assertNotIn("CE QUE TU DOIS FAIRE", msg)
 
     def test_upcoming_position_is_distinguished_from_open_trade(self):
         from unittest.mock import patch
@@ -1573,8 +1573,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🟢 SIGNAL CONFIRMÉ")
-        self.assertEqual(message.splitlines()[1], "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX")
+        self.assertTrue(message.startswith("🟠 BTC"))
+        self.assertEqual(message.splitlines()[1], "🟢 SIGNAL VALIDÉ — VÉRIFIE LES NIVEAUX")
         self.assertNotIn("SIGNAL NON CONFIRMÉ", message)
 
 if __name__ == "__main__":
