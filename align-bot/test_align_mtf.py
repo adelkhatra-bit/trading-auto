@@ -447,6 +447,17 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(result["controle_dxy_eurusd"], "INDISPONIBLE")
         self.assertIsNone(result["eurusd_variation_1h_pct"])
 
+    def test_eurusd_quote_older_than_fifteen_minutes_is_not_used(self):
+        now = align_bot.time.time()
+        state = {"macro": {
+            "dxy": [(now - 3600, 100.0), (now, 100.4)],
+            "eurusd": [(now - 5400, 1.1000), (now - 1200, 1.0950)]
+        }}
+        bars = [{"c": 100.0} for _ in range(5)]
+        result = align_bot.macro_confluence(state, "BTC", {"b15": bars}, maintenant=now)
+        self.assertEqual(result["controle_dxy_eurusd"], "INDISPONIBLE")
+        self.assertIsNone(result["eurusd_variation_1h_pct"])
+
     def test_us10y_is_included_as_official_daily_data_for_ai_context(self):
         today = align_bot.datetime.datetime.now(align_bot.PARIS).date()
         yesterday = today - align_bot.datetime.timedelta(days=1)
