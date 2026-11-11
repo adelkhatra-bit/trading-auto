@@ -1194,7 +1194,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(send.call_args.kwargs["text"], "DONNEES TECHNIQUES GOLD")
 
 
-    def test_verified_external_ai_provider_is_named_in_telegram_commentary(self):
+    def test_external_ai_provider_name_stays_out_of_telegram_commentary(self):
         from unittest.mock import patch
         state = {"ia_dernier_fournisseur": "Gemini", "ia_dernier_modele": "gemini-flash-latest",
                  "ia_dernier_statut": "CONNECTED"}
@@ -1203,8 +1203,8 @@ class AlignMtfRulesTest(unittest.TestCase):
              patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}), \
              patch.object(align_bot, "ia", return_value="Gold is neutral; wait for a confirmed close."):
             message = align_bot.avis_ia(state, "GOLD", r, {})
-        self.assertIn("Gemini", message)
-        self.assertIn("gemini-flash-latest", message)
+        self.assertNotIn("Gemini", message)  # rien de technique dans Telegram
+        self.assertNotIn("gemini-flash-latest", message)
         self.assertIn("Gold is neutral", message)
 
     def test_ai_daily_limit_is_explicitly_marked_as_internal_fallback(self):
