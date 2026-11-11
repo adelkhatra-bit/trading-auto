@@ -2591,6 +2591,11 @@ def texte_cloture(m, tf, bougie, r, cle):
     profil = profil_strategie(r) if len(dirs) > 9 else {"mode": "ATTENTE", "direction": 0}
     if profil.get("mode") not in ("ATTENTE", None):
         lignes.append(f"🎯 {profil['mode']} {sens(profil.get('direction', 0))}")
+    tv_plan = plan_indicateur(r)
+    if tv_plan.get("available"):
+        sens_tv = "LONG" if tv_plan["direction"] == 1 else "SHORT"
+        etat_tv = "snapshot confirmé" if tv_plan.get("confirmed") else "snapshot non confirmé"
+        lignes.append(f"📡 PLAN TV {tv_plan.get('timeframe') or '?'} {sens_tv} · E {px(tv_plan['entry'])} · SL {px(tv_plan['sl'])} · TP {px(tv_plan['tp'])} · {etat_tv}")
     tr = cle.get("trade")
     ordre = cle.get("ordre")
     niveau = lambda value: px(value) if value is not None else "—"
