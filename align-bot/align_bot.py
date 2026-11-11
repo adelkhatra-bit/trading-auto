@@ -1466,7 +1466,7 @@ def avis_ia(etat, m, r, cle):
     return "🧠 L'avis ALIGN (analyse interne)\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
 
 def bouton_auto(m):
-    return json.dumps({"inline_keyboard": [[{"text": "🔔 Me prévenir pour prendre position", "callback_data": f"auto:{m}"}]]})
+    return json.dumps({"inline_keyboard": [[{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
 
 def markup_analyse(etat, m, r):
     """Clavier inline de la fiche : détails, niveaux et action explicite sur la position."""
@@ -1479,7 +1479,7 @@ def markup_analyse(etat, m, r):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
                        {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
     else:
-        lignes.append([{"text": "🎯 Me prévenir pour prendre position", "callback_data": f"auto:{m}"}])
+        lignes.append([{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
     return json.dumps({"inline_keyboard": lignes})
 
 def texte_apercu(m, r, cle):
