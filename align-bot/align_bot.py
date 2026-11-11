@@ -3553,19 +3553,8 @@ def un_tour(etat, chats):
     if TOKEN:
         demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
         if etat.get("clavier") != 9:
-            # Mise à jour silencieuse du clavier : aucun message promotionnel ou de démarrage.
-            for cid in chats:
-                try:
-                    telegram("sendMessage", chat_id=cid, text=" ", reply_markup=CLAVIER,
-                             disable_notification="true")
-                except Exception as ex:
-                    print("clavier", cid, ex)
-            for cid in etat.get("prospects", []):
-                try:
-                    telegram("sendMessage", chat_id=cid, text=" ", reply_markup=CLAVIER_VISITEUR,
-                             disable_notification="true")
-                except Exception as ex:
-                    print("clavier visiteur", cid, ex)
+            # Le nouveau clavier sera joint au prochain vrai message du bot.
+            # Aucun message vide, promotionnel ou de démarrage n'est envoyé.
             etat["clavier"] = 9
         if not etat.get("bot"):
             try:
