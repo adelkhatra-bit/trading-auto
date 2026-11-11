@@ -340,7 +340,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertIn("CLÔTURE 5m : SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
+        self.assertIn("CLÔTURE 5m / SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
@@ -391,7 +391,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
         r = {
-            "dirs": [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+            "dirs": [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, -1],
             "rsis": [55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
             "m1": [candle(1, c=67500.0)],
             "confirme": 1, "posD": 0.55, "posW": 0.60,
@@ -410,8 +410,17 @@ class AlignMtfRulesTest(unittest.TestCase):
                 message = align_bot.texte_etat(market, r, {})
                 self.assertIn(f"ALIGN • {market}", message)
                 self.assertIn("📊 INDICATEURS PAR UNITÉ DE TEMPS", message)
-                self.assertIn("UNITÉ 1m\n⬆️", message)
-                self.assertIn("RSI 1m\n55", message)
+                self.assertIn("1m 🟢⬆️", message)
+                self.assertIn("5m 🟢⬆️", message)
+                self.assertIn("15m 🟢⬆️", message)
+                self.assertIn("1h 🟢⬆️", message)
+                self.assertIn("4h 🟢⬆️", message)
+                self.assertIn("Daily 🔴⬇️", message)
+                self.assertIn("1m 55", message)
+                self.assertIn("5m 57", message)
+                self.assertIn("Daily 65", message)
+                self.assertNotIn("UNITÉ 1m\n", message)
+                self.assertNotIn("RSI 1m\n", message)
                 self.assertIn("🧭 CONFIRMATION DE TENDANCE", message)
                 self.assertIn("ALIGNEMENT 1H + 4H\n2/2", message)
                 self.assertIn("🧭 PLAN MULTI-TIMEFRAME", message)
@@ -424,6 +433,17 @@ class AlignMtfRulesTest(unittest.TestCase):
                 self.assertNotIn("\\n", message)
                 self.assertIn("Plus haut d'hier", message) if "niv_cles" in r else None
                 self.assertLess(len(message), 4096)
+        self.assertEqual(align_bot.traduire("📊 INDICATEURS PAR UNITÉ DE TEMPS"), "📊 TIMEFRAME INDICATORS")
+        self.assertEqual(align_bot.traduire("📈 RSI PAR UNITÉ DE TEMPS"), "📈 RSI BY TIMEFRAME")
+
+    def test_multi_timeframe_strategy_uses_consistent_direction_colors(self):
+        r = {"dirs": [1, 1, 1, 1, -1, 0, 0, -1, 0, 1, 0], "confirme": 0}
+        message = "\\n".join(align_bot.strategie_mtf(r))
+        self.assertIn("Tendance principale 4 h : 🟢⬆️", message)
+        self.assertIn("Tendance Daily : 🟠➖", message)
+        self.assertIn("Confirmation 1 h : 🔴⬇️", message)
+        self.assertIn("Contexte 15 min   🔴⬇️", message)
+        self.assertIn("Déclencheur 5 min   🟢⬆️", message)
 
     def test_telegram_public_market_card_keeps_vip_restriction_clear(self):
         r = {"m1": [candle(1, c=67500.0)], "news": "📰 Calendrier économique"}
@@ -1126,7 +1146,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🕯 CLÔTURE 5m — SIGNAL CONFIRMÉ")
+        self.assertEqual(message.splitlines()[0], "🕯 CLÔTURE 5m / SIGNAL CONFIRMÉ")
 
 if __name__ == "__main__":
     unittest.main()
