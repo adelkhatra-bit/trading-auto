@@ -106,7 +106,7 @@ Les callbacks doivent répondre à Telegram, contrôler les droits avant toute a
 | MSG-02 | niveaux complets et lisibles | tests BTC et Gold |
 | BTN-01 | chaque callback a un chemin valide | tests de callbacks et droits |
 | CLOSE-01 | prochaine clôture strictement future | tests aux frontières temporelles |
-| CLOSE-02 | notification de clôture unique | test de déduplication |
+| CLOSE-02 | notification de clôture unique | test de déduplication et de routage sûr des callbacks |
 | CLOSE-03 | aucune notification sur bougie incomplète | test de données partielles |
 | AI-01 | healthcheck identique au moteur réel | appel via le helper de production |
 | AI-02 | repli interne actif si IA externe indisponible | test avec fournisseurs simulés indisponibles |
