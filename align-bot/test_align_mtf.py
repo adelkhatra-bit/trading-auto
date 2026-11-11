@@ -1073,7 +1073,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         r = {
             "m1": [candle(1, c=100.0)], "dirs": [0] * 11, "rsis": [50] * 11,
             "posD": 0.5, "posW": 0.5, "confirme": 0, "b5": [
-                {"o": 100, "h": 101, "l": 99, "c": 100} for _ in range(12)
+                {"o": 100, "h": 101, "l": 99, "c": 100, "v": 100.0,
+                 "volume_source": "Kraken BTC"} for _ in range(12)
             ], "b15": [], "b1h": [], "b4h": [], "atr": 2.0,
             "macro_data": {}, "tv_indicator_mtf": {}
         }
@@ -1087,6 +1088,9 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(data["distance_plan_entree"]["entree_visee"], 104.0)
         self.assertEqual(data["distance_plan_entree"]["distance_prix"], 4.0)
         self.assertEqual(data["estimation_approche_entree"]["minutes_indicatives"], 10)
+        self.assertTrue(data["volume"]["M5"]["disponible"])
+        self.assertEqual(data["volume"]["M5"]["provenance"], "Kraken BTC")
+        self.assertFalse(data["volume"]["M15"]["disponible"])
 
     def test_details_button_returns_ai_briefing_and_keeps_raw_technical_details(self):
         import json
