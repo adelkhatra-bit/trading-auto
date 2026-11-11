@@ -824,6 +824,16 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertGreaterEqual(message.count("\n"), 3)
         self.assertNotIn("\\n", message)
 
+    def test_history_page_stays_under_telegram_message_limit(self):
+        now = align_bot.time.time()
+        state = {"journal_telegram": [
+            {"direction": "sortant", "chat_id": "123", "timestamp": now, "text": "X" * 4096}
+            for _ in range(8)
+        ]}
+        message = align_bot.texte_historique(state, "123")
+        self.assertLess(len(message), 4096)
+        self.assertEqual(message.count("📤 ALIGN"), 8)
+
     def test_telegram_history_coalesces_edits_of_the_same_live_timer(self):
         state = {}
         first = {"direction": "sortant", "chat_id": "123", "message_id": 88,
