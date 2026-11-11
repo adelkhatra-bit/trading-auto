@@ -490,7 +490,7 @@ def journal_vider_sortants(etat):
         journal_ajouter(etat, entree)
 
 
-def texte_historique(etat, cid, limite=15, offset=0):
+def texte_historique(etat, cid, limite=8, offset=0):
     entrees = [x for x in etat.get("journal_telegram", []) if str(x.get("chat_id")) == str(cid)]
     total = len(entrees)
     fin = max(0, total - max(0, offset))
@@ -2560,12 +2560,12 @@ def traiter(etat, chats, updates):
                 total = sum(1 for x in etat.get("journal_telegram", []) if str(x.get("chat_id")) == qui)
                 boutons = []
                 if offset > 0:
-                    boutons.append([{"text": "⬅️ Plus récents", "callback_data": f"history:{marche or 'x'}:{max(0, offset - 15)}"}])
-                if offset + 15 < total:
+                    boutons.append([{"text": "⬅️ Plus récents", "callback_data": f"history:{marche or 'x'}:{max(0, offset - 8)}"}])
+                if offset + 8 < total:
                     boutons.append([{"text": "Plus anciens ➡️", "callback_data": f"history:{marche or 'x'}:{offset + 15}"}])
                 if marche:
                     boutons.append([{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{marche}"}])
-                _envoi_sur(qui, text=texte_historique(etat, qui, offset=offset),
+                _envoi_sur(qui, text=texte_historique(etat, qui, limite=8, offset=offset),
                            reply_markup=json.dumps({"inline_keyboard": boutons}) if boutons else None)
                 continue
             if choix == "previous" and mk in MARCHES:
