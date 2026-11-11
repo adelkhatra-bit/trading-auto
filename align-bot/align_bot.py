@@ -28,8 +28,20 @@ def http_json(url, data=None):
             req = urllib.request.Request(url, data=data, headers={"User-Agent": "align-bot"})
             with urllib.request.urlopen(req, timeout=70) as r:
                 return json.loads(r.read().decode())
-        except urllib.error.HTTPError:
-            raise                      # vraie réponse d'erreur de l'API : inutile de réessayer
+        except urllib.error.HTTPError as ex:
+            # Lire le corps JSON : Telegram y donne la cause exacte (message non modifié,
+            # message supprimé, droits insuffisants, etc.). Sans cela urllib ne remonte que
+            # « HTTP Error 400: Bad Request » et le réparateur de chronomètre ne peut agir.
+            try:
+                corps = ex.read().decode("utf-8", errors="replace")
+            except Exception:
+                corps = ""
+            try:
+                payload = json.loads(corps) if corps else {}
+                description = payload.get("description") or corps or str(ex)
+            except Exception:
+                description = corps or str(ex)
+            raise RuntimeError(f"HTTP Error {ex.code}: {description}") from ex
         except Exception:
             if essai == 2:
                 raise
