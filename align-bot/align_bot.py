@@ -1851,6 +1851,15 @@ def armer_clotures_multi(etat, cid, m, r):
     }
 
 
+def synchroniser_veille_auto(etat, m, r):
+    """Migre aussi les réservations déjà enregistrées vers le suivi multi-UT."""
+    surveillances = etat.setdefault("veille_cloture", {}).setdefault(m, {})
+    for cid in list(etat.get("auto", {}).get(m, [])):
+        suivi = surveillances.get(str(cid), {})
+        if not suivi.get("multi"):
+            armer_clotures_multi(etat, cid, m, r)
+
+
 def texte_cloture(m, tf, bougie, r, cle):
     """Compte rendu déterministe après clôture réelle : résultat, blocage et prochaine action."""
     duree = TF_SECONDES[tf]
@@ -3833,6 +3842,7 @@ def un_tour(etat, chats):
                 if t_:
                     envois.append(f"🧠 La leçon de l'IA ALIGN\n{t_}")
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
+        synchroniser_veille_auto(etat, nom_marche, r)
         notifier_clotures(etat, nom_marche, r, cle)
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
