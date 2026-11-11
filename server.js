@@ -13,6 +13,35 @@ const SAFE_MODE = process.env.SAFE_MODE !== '0';
 
 // ─── TRADINGVIEW LIVE INGESTION ─────────────────────────────────────────────
 const tvDataStore = {};
+// Keep one independent TradingView indicator snapshot per symbol AND timeframe.
+// tvDataStore remains the legacy latest-per-symbol view used by existing agents.
+const tvMtfStore = Object.create(null);
+const TV_MTF_CACHE_PATH = path.join(__dirname, 'tradingview-mtf-cache.json');
+try {
+  if (fs.existsSync(TV_MTF_CACHE_PATH)) {
+    const cachedMtf = JSON.parse(fs.readFileSync(TV_MTF_CACHE_PATH, 'utf8'));
+    if (cachedMtf && typeof cachedMtf === 'object') Object.assign(tvMtfStore, cachedMtf);
+  }
+} catch (e) {
+  console.warn('[tvMtfStore] Cache reload failed:', e.message);
+}
+function storeTradingViewTimeframe(entry) {
+  if (!entry || !entry.symbol || !entry.timeframe) return;
+  const symbol = String(entry.symbol).toUpperCase();
+  const timeframe = String(entry.timeframe).toUpperCase();
+  if (!tvMtfStore[symbol]) tvMtfStore[symbol] = Object.create(null);
+  tvMtfStore[symbol][timeframe] = { ...entry, storedAt: Date.now() };
+  try {
+    fs.writeFileSync(TV_MTF_CACHE_PATH, JSON.stringify(tvMtfStore, null, 2));
+  } catch (e) {
+    console.warn('[tvMtfStore] Cache write failed:', e.message);
+  }
+}
+function timeframeFreshnessMs(tf) {
+  const minutes = ({ M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H2: 120, H4: 240, D1: 1440, W1: 10080 })[String(tf || '').toUpperCase()];
+  return minutes ? Math.min(Math.max(minutes * 3 * 60000, 120000), 86400000) : 0;
+}
+
 
 // Toutes les routes et middlewares doivent être après l'init express/app
 app.post('/tradingview/live', (req, res) => {
@@ -54,6 +83,7 @@ app.post('/tradingview/live', (req, res) => {
       source:     req.body.source || 'tradingview',
       updatedAt:  Date.now()
     };
+    storeTradingViewTimeframe(tvDataStore[normalizedSymbol]);
     console.log('[BACKEND STORED]', normalizedSymbol, '→', tvDataStore[normalizedSymbol]);
     console.log(`[TV LIVE] ${normalizedSymbol} price=${parsedPrice} tf=${timeframe} stored at ${new Date().toISOString()}`);
 
@@ -103,6 +133,34 @@ function getLivePrice(symbol) {
   if (!entry.price || entry.price <= 0) return null;
   return { price: entry.price, ageMs, symbol: entry.symbol, timeframe: entry.timeframe };
 }
+
+// Authenticated read API for the ALIGN Telegram worker.
+app.get('/bridge/robot-v12/mtf', (req, res) => {
+  const expected = String(process.env.ALIGN_TV_READ_TOKEN || '');
+  const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '')
+    || String(req.headers['x-align-token'] || '');
+  if (!expected || supplied.length !== expected.length || supplied !== expected) {
+    return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+  }
+  const symbol = String(req.query.symbol || '').toUpperCase().trim();
+  if (!symbol) return res.status(400).json({ ok: false, error: 'symbol required' });
+  const frames = tvMtfStore[symbol] || {};
+  const now = Date.now();
+  const snapshots = {};
+  for (const [tf, entry] of Object.entries(frames)) {
+    const ageMs = Math.max(0, now - Number(entry.storedAt || 0));
+    const maxAgeMs = timeframeFreshnessMs(tf);
+    snapshots[tf] = {
+      ...entry,
+      ageMs,
+      fresh: maxAgeMs > 0 && ageMs <= maxAgeMs,
+      confirmed: entry.robotV12?.confirmed === true
+        || entry.robotV12?.candle_confirmed === true
+        || entry.robotV12?.bar_confirmed === true
+    };
+  }
+  return res.json({ ok: true, symbol, snapshots, receivedTimeframes: Object.keys(snapshots) });
+});
 
 function requireLivePrice(symbol, res) {
   const live = getLivePrice(symbol);
@@ -5751,6 +5809,9 @@ function handleTvWebhook(req, res) {
     // Store under both the raw key and canonical so getRobotV12ForSymbol always finds it
     tvDataStore[symbol] = tvStoreEntry;
     if (canonical && canonical !== symbol) tvDataStore[canonical] = tvStoreEntry;
+    // Preserve independent timeframe plans; changing the chart from M5 to M15
+    // must never overwrite the previously received M5 indicator plan.
+    storeTradingViewTimeframe({ ...tvStoreEntry, symbol: canonical || symbol, receivedAt, robotV12 });
     const bridgeEnabled = bridgeConfig.bridgeEnabled !== false;
     if (bridgeEnabled) {
       marketStore.systemStatus = { source: 'tradingview', fluxStatus: 'LIVE', lastUpdate: new Date().toISOString() };
