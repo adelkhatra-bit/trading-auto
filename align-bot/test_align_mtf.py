@@ -821,8 +821,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Analyse Gold", message)
         self.assertIn("Attendre la clôture", message)
         self.assertNotIn("Message privé autre chat", message)
-        self.assertIn("\\n", message)
-        self.assertNotIn("\\\\n", message)
+        self.assertGreaterEqual(message.count("\n"), 3)
+        self.assertNotIn("\\n", message)
 
     def test_telegram_wrapper_records_successful_outgoing_messages(self):
         from unittest.mock import patch
@@ -853,6 +853,28 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("HISTORIQUE ALIGN", send.call_args.kwargs["text"])
         self.assertIn("Signal GOLD", send.call_args.kwargs["text"])
         self.assertNotIn("Private other", send.call_args.kwargs["text"])
+
+    def test_position_summary_uses_personal_stop_and_both_targets(self):
+        r = {"m1": [candle(1, c=105.0)]}
+        state = {"trade": {
+            "d": 1, "e": 100.0, "sl": 95.0, "tp1": 110.0, "tp2": 120.0,
+            "qui": {"123": {"e": 101.0, "sl": 96.0, "sl_conseil": 102.0, "tp1": 110.0}}
+        }}
+        message = align_bot.texte_position("BTC", r, state, "123")
+        self.assertIn("Ton entrée : 101", message)
+        self.assertIn("Ton SL actuel : 102", message)
+        self.assertIn("TP1 : 110", message)
+        self.assertIn("TP2 : 120", message)
+        self.assertIn("STOP À BE", message)
+        self.assertIn("ne passe aucun ordre", message)
+
+    def test_position_button_is_attached_to_following_alerts(self):
+        import json
+        buttons = json.loads(align_bot.markup_position("GOLD"))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in buttons for button in row]
+        self.assertIn("position:GOLD", callbacks)
+        self.assertIn("timeframes:GOLD", callbacks)
+        self.assertIn("history:GOLD", callbacks)
 
     def test_all_timeframe_breakdown_lists_every_calculated_unit_and_strategy_role(self):
         r = {
