@@ -3844,10 +3844,10 @@ def dxy_info(etat, maintenant=None):
     ch, mn = variation
     return h[-1][1], ch, mn
 
-def macro_confluence(etat, m, r=None):
+def macro_confluence(etat, m, r=None, maintenant=None):
     """Biais dollar/EURUSD et divergence avec l'actif ; contexte seulement, jamais un déclencheur."""
     mc = etat.get("macro") or {}
-    di = dxy_info(etat)
+    di = dxy_info(etat, maintenant=maintenant)
     if not di:
         return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES"}
     dxy, variation, age_min = di
