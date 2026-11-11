@@ -1852,6 +1852,7 @@ def boutons_canal(etat, texte):
 # 1) Google Gemini (si la clé GEMINI_API_KEY existe)  2) OVHcloud Llama 3.3 70B (sans clé)  3) OVHcloud Mistral (sans clé)
 # 4) Pollinations (sans clé)  5) LLM7 (sans clé). Et si TOUT tombe : l'analyse interne du bot répond quand même.
 IA_FOURNISSEURS = [
+    ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL", "chat-latest"), os.environ.get("OPENAI_API_KEY", ""), True),
     ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-flash-latest", os.environ.get("GEMINI_API_KEY", ""), True),
     ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta-Llama-3_3-70B-Instruct", "", False),
     ("OVH Mistral", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Mistral-Small-3.2-24B-Instruct", "", False),
@@ -1859,21 +1860,18 @@ IA_FOURNISSEURS = [
     ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", "", False),
 ]
 IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "300"))
-IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds en français, 3 lignes maximum, style simple. "
-             "Architecture: 4h tendance principale, 1h confirmation, 15m contexte, 5m déclencheur après clôture; 1m sert au prix/monitoring. "
-             "Tu t'appuies UNIQUEMENT sur les données fournies : aucun prix inventé, jamais de contradiction avec le verdict du bot. "
-             "Si le prix est en haut de sa zone Daily/Weekly, près d'une résistance, avec divergence ou essoufflement, déconseille de poursuivre un LONG; "
-             "ne propose un SHORT que si le retournement est confirmé par les clôtures et le contexte 1h. "
-             "Analyse le DXY comme mesure de la force du dollar face à son panier de devises. Contrôle EUR/USD seulement en vérification secondaire. "
-             "Analyse aussi le rendement US Treasury 10 ans (US10Y), sa dernière date officielle de publication et sa variation en points de base. "
-             "Compare leur direction et leur variation sur 1h avec le BTC ou le Gold. Signale une impulsion forte du dollar, "
-             "une relation inverse cohérente ou une divergence haussière/baissière de l'actif. "
-             "Ne déduis JAMAIS un signal inverse automatique : le DXY est un contexte, pas un déclencheur. "
-             "Si les données macro sont absentes ou trop anciennes, dis-le explicitement et n'invente rien. US10Y est une donnée officielle quotidienne, jamais une cotation intraday. "
-             "Une confluence en % n'est pas une probabilité de gain. Rappelle le SL et le risque. Pas de promesse de gain.")
+IA_REGLES = ("Tu es l'analyste de marché du bot ALIGN. Tu reçois des données chiffrées réelles calculées par le moteur ; tu dois les interpréter, pas les remplacer. "
+             "Architecture : H4 = biais directeur, H1 = confirmation, M15 = structure/retracement, M5 = déclencheur après clôture ; M1 = suivi du prix. "
+             "Sépare tendance, scénario privilégié, scénario alternatif, validation, invalidation et prochaine action. "
+             "Utilise UNIQUEMENT les données fournies : aucun prix, niveau, indicateur, événement ou horaire inventé. "
+             "Ne transforme jamais une probabilité en certitude. N'annonce jamais une entrée avant confirmation. Respecte le verdict interne ALIGN. "
+             "Un setup M15/M5 contre H4/H1 est un scalp contre-tendance, jamais un swing. Une mèche seule ne confirme pas une entrée. "
+             "Le prochain horaire de clôture fourni est une heure de réévaluation, PAS une promesse d'entrée. "
+             "DXY, EUR/USD et US10Y sont du contexte uniquement ; si les données sont absentes ou anciennes, signale-le. "
+             "US10Y est une donnée officielle quotidienne, jamais une cotation intraday. Pas de promesse de gain. Langage direct, concret et sans remplissage.")
 
 def _appel_ia(url, modele, cle, messages):
-    corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 700, "messages": messages}).encode()
+    corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 1000, "messages": messages}).encode()
     h = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "align-bot"}
     if cle:
         h["Authorization"] = f"Bearer {cle}"
@@ -1943,7 +1941,7 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
 def donnees_ia(m, r, cle):
     titre, raison = verdict(r, cle)
     o = (cle or {}).get("ordre") or {}
-    return {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
+    data = {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
             "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
             "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
             "profil_strategie": profil_strategie(r),
@@ -1956,13 +1954,22 @@ def donnees_ia(m, r, cle):
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
             "contexte_macro_dollar": r.get("macro_data") or {}, 
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
+    tf = timeframe_attendu(r, cle or {})
+    close_ts = prochaine_cloture_bougie(r, tf, time.time())
+    data["prochaine_reevaluation"] = {
+        "unite_bloquante": tf,
+        "heure_locale": datetime.datetime.fromtimestamp(close_ts, PARIS).strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "secondes_restantes": max(0, int(close_ts - time.time())),
+        "signification": "réévaluation à la clôture, pas une prévision d'entrée"
+    }
+    return data
 
 def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
     consigne = (
-        "You MUST assess H4, H1, M15 and M5. Separate higher-timeframe bias, M15 pullback/setup and M5 timing. Classify SCALPING, INTRADAY, SWING or WAIT. Counter-trend M15/M5 setups are scalp-only, never swing. Directional alignment is not an entry trigger: require a confirmed candle close and respect the internal verdict. State indicative holding horizon and missing conditions. Assess DXY, EUR/USD and macro divergences. Clear English, maximum 4 short lines."
+        "Write in clear English, maximum 8 compact sections: (1) market direction now; (2) H4/H1 primary bias and conflicts; (3) M15 pullback/setup and intended direction; (4) M5 trigger and exact candle-close condition; (5) entry zone, SL and TP only if supplied, otherwise unavailable; (6) invalidation; (7) next review time from the supplied blocking timeframe; (8) what to do now, including when to check again or rest. Never predict an exact entry time or tick count. The next candle close is a review time, not an entry promise. Countertrend M15/M5 is scalp-only. Never override the internal verdict."
         if anglais else
-        "Analyse obligatoirement H4, H1, M15 et M5. Distingue le biais H4/H1, le retracement et la préparation M15, puis le timing M5. Classe SCALPING, INTRADAY, SWING ou ATTENTE selon les données. Un setup M15/M5 contre H1/H4 reste un scalp contre-tendance, jamais un swing. L'alignement directionnel n'est pas un déclencheur : exige une clôture confirmée et respecte le verdict interne. Précise l'horizon indicatif et les conditions manquantes. Vérifie DXY, EUR/USD et les divergences macro. Français clair, 4 lignes maximum."
+        "Rédige en français clair, 8 rubriques courtes maximum : (1) sens actuel du marché ; (2) biais directeur H4/H1 et conflits ; (3) retracement/setup M15 et direction visée ; (4) déclencheur M5 et condition exacte de clôture ; (5) zone d'entrée, SL et TP uniquement si les données les fournissent ; (6) invalidation ; (7) prochaine heure de réévaluation selon l'unité bloquante ; (8) action maintenant, y compris quand revenir vérifier ou se reposer. Ne prédis jamais une heure exacte d'entrée ni un nombre de ticks. La prochaine clôture est une heure de réévaluation, pas une promesse d'entrée. Un setup M15/M5 contre H4/H1 reste un scalp contre-tendance. Ne contredis jamais le verdict interne."
     )
     langue_cache = "en" if anglais else "fr"
     t = ia(etat, consigne, donnees_ia(m, r, cle),
@@ -3196,14 +3203,18 @@ def traiter(etat, chats, updates):
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "📊 Analyse complète", "callback_data": f"details:{mk}"},
                                                                              {"text": "🎯 Niveaux / prix", "callback_data": f"levels:{mk}"}],
                                                                             [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
+                elif choix == "rawdetails":
+                    _envoi_sur(qui, text=texte_etat(mk, r_detail, cle_detail, vip=True),
+                               reply_markup=json.dumps({"inline_keyboard": [[{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
                 elif choix == "timeframes":
                     _envoi_sur(qui, text=texte_timeframes(mk, r_detail),
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{mk}"},
                                                                              {"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
                 elif choix == "details":
-                    _envoi_sur(qui, text=texte_etat(mk, r_detail, cle_detail, vip=True),
+                    rapport = avis_ia(etat, mk, r_detail, cle_detail, anglais=str(qui) in LANG_EN)
+                    _envoi_sur(qui, text=rapport,
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎯 Voir les niveaux", "callback_data": f"levels:{mk}"}],
-                                                                                 [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{mk}"}],
+                                                                                 [{"text": "📊 Données techniques complètes", "callback_data": f"rawdetails:{mk}"}],
                                                                                  [{"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
                 else:
                     tr_detail = cle_detail.get("trade")
