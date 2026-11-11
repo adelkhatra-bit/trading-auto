@@ -2389,7 +2389,8 @@ def texte_apercu(m, r, cle):
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
-CHRONO_REFRESH_SEC = 5       # édition du compte à rebours toutes les 5 s pour limiter les rafales Telegram
+CHRONO_REFRESH_SEC = 30      # 1 édition / 30 s par chrono : au-delà, Telegram bloque le chat pendant des heures (429)
+JAUGE_REFRESH_SEC = 60       # la jauge de prix n'est rééditée qu'une fois par minute au maximum
 CHRONO_LOCK = threading.RLock()  # un seul éditeur Telegram par chronomètre, même pendant l'analyse réseau
 
 def prochaine_cloture(ts, interval_sec=300):
@@ -3981,8 +3982,12 @@ def maj_jauge(etat, m, r, cle, chats, canal=None):
         mid = cle.get("jauge", {}).get(cid)
         try:
             if txt and mid:
-                if cle.setdefault("jauge_txt", {}).get(cid) != txt:
+                derniere_maj = cle.setdefault("jauge_t", {}).get(cid, 0)
+                if cle.setdefault("jauge_txt", {}).get(cid) != txt and time.time() - derniere_maj >= JAUGE_REFRESH_SEC:
                     telegram("editMessageText", chat_id=cid, message_id=mid, text=txt)
+                    cle["jauge_t"][cid] = time.time()
+                else:
+                    continue
             elif txt:
                 res = telegram("sendMessage", chat_id=cid, text=txt, disable_notification="true")
                 cle.setdefault("jauge", {})[cid] = res["result"]["message_id"]
@@ -5431,11 +5436,24 @@ def charger_etat():
     return etat
 
 
+def restaurer_cooldowns_telegram(etat, maintenant=None):
+    """Un nouveau worker respecte le blocage 429 du précédent au lieu de le prolonger."""
+    maintenant = time.time() if maintenant is None else float(maintenant)
+    for cle, fin in (etat.get("telegram_retry_until") or {}).items():
+        try:
+            if float(fin) > maintenant:
+                TELEGRAM_RETRY_UNTIL[str(cle)] = max(float(TELEGRAM_RETRY_UNTIL.get(str(cle), 0)), float(fin))
+        except (TypeError, ValueError):
+            continue
+
+
 def _sauver_etat_sous_verrou(etat, chats=None):
     """Écriture atomique : un arrêt du runner ne laisse pas un state.json tronqué."""
     if chats is not None:
         etat["chats"] = sorted(str(x) for x in chats)
     etat["schema_version"] = STATE_SCHEMA_VERSION
+    maintenant = time.time()
+    etat["telegram_retry_until"] = {k: v for k, v in TELEGRAM_RETRY_UNTIL.items() if float(v) > maintenant}
     journal_vider_sortants(etat)
     dossier = os.path.dirname(os.path.abspath(ETAT_FICHIER))
     temporaire = ETAT_FICHIER + ".tmp"
@@ -5464,6 +5482,8 @@ def main():
         etat["proprio"] = sorted(chats)
     if POSITIONS_GRATUITES and etat.get("prospects"):
         chats |= set(etat["prospects"]); etat["prospects"] = []
+
+    restaurer_cooldowns_telegram(etat)
 
     signal.signal(signal.SIGINT, _demander_arret)
     signal.signal(signal.SIGTERM, _demander_arret)
