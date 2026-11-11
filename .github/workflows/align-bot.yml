@@ -1,4 +1,5 @@
 name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
+# Release trigger after verified cleanup of the previous production worker.
 
 on:
   # Les pushes sont validés par align-bot-validation.yml. Le worker ne redémarre
