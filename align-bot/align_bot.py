@@ -5079,15 +5079,17 @@ def _menu_analyse_rapide(cid):
                ]}))
 
 
-def _traiter_lecture_rapide(etat, update):
+def _traiter_lecture_rapide(etat, chats, update):
     """Répond sans attendre l'analyse aux commandes Telegram qui ne modifient pas le trading."""
     msg = update.get("message") or update.get("edited_message") or {}
     if not msg or not msg.get("text"):
         return False
     chat = msg.get("chat") or {}
     cid = str(chat.get("id", ""))
-    if not cid:
+    if not cid or chat.get("type") != "private":
         return False
+    localement_autorise = (POSITIONS_GRATUITES or cid in chats or cid in proprio(etat)
+                           or cid in etat.get("offerts", []))
     text = msg.get("text", "").strip()
     words = text.split() if text.startswith("/") else []
     cmd = words[0].split("@")[0].lower() if words else ""
@@ -5095,24 +5097,30 @@ def _traiter_lecture_rapide(etat, update):
     if cmd == "/start":
         if payload:
             return False
-        reply = CLAVIER if autorise(etat, cid, msg.get("from", {}).get("id")) else CLAVIER_VISITEUR
+        if not localement_autorise:
+            return False  # laisse le handler principal vérifier les abonnements Telegram
         _envoi_sur(cid, text="⬇️ Tes boutons sont là 👇\n💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ",
-                   reply_markup=reply)
+                   reply_markup=CLAVIER)
         update["_align_fast_handled"] = True
         return True
     if cmd == "/boutons":
-        reply = CLAVIER if autorise(etat, cid, msg.get("from", {}).get("id")) else CLAVIER_VISITEUR
-        _envoi_sur(cid, text="⬇️ Tes boutons sont là 👇", reply_markup=reply)
+        if not localement_autorise:
+            return False
+        _envoi_sur(cid, text="⬇️ Tes boutons sont là 👇", reply_markup=CLAVIER)
         update["_align_fast_handled"] = True
         return True
     if cmd in COMMANDES:
         text = COMMANDES[cmd]
     normalized = text.lower().replace("é", "e").replace("è", "e")
     if "mon bot" in normalized or "mon_bot" in normalized:
+        if not localement_autorise:
+            return False
         menu_bot(etat, cid)
         update["_align_fast_handled"] = True
         return True
     if "mes resultats" in normalized or "my results" in normalized or "resultat" in normalized:
+        if not localement_autorise:
+            return False
         _envoi_sur(cid, text=texte_resultats(etat, cid), reply_markup=CLAVIER)
         update["_align_fast_handled"] = True
         return True
@@ -5131,7 +5139,7 @@ def _ack_callback_rapide(cb, text):
         print("callback ack", ex)
 
 
-def boucle_polling_telegram(etat):
+def boucle_polling_telegram(etat, chats):
     """Poll Telegram indépendamment des analyses longues; les actions d'écriture restent dans le thread principal."""
     offset = int(etat.get("offset", 0) or 0)
     while TOKEN and not TELEGRAM_POLL_STOP.is_set():
@@ -5154,7 +5162,7 @@ def boucle_polling_telegram(etat):
                 else:
                     _ack_callback_rapide(cb, "⌛ Action reçue, traitement en cours.")
             else:
-                _traiter_lecture_rapide(etat, update)
+                _traiter_lecture_rapide(etat, chats, update)
             TELEGRAM_UPDATES.put(update)
 
 
@@ -5457,7 +5465,7 @@ def main():
     # Un seul poller lit getUpdates. Il accuse réception des callbacks et répond aux
     # menus simples pendant que le thread principal calcule les marchés.
     if TOKEN:
-        threading.Thread(target=boucle_polling_telegram, args=(etat,),
+        threading.Thread(target=boucle_polling_telegram, args=(etat, chats),
                          name="ALIGN-Telegram-Poller", daemon=True).start()
         threading.Thread(target=boucle_chronos, args=(etat,),
                          name="ALIGN-Telegram-Chrono", daemon=True).start()
