@@ -2459,7 +2459,7 @@ def texte_timeframes(m, r):
         f"Timing M5 : {'direction alignée ; déclencheur clôturé à vérifier' if profil_strategie(r)['m5_aligne'] else 'attendre la confirmation dans le sens du setup'}",
     ]
     for nom, direction, valeur in zip(noms, directions, r["rsis"]):
-        lignes.append(f"{nom} : {direction} • RSI {valeur:.0f}")
+        lignes.append(f"{nom} : {direction} — RSI {valeur:.0f}")
     lignes += [
         "━━━━━━━━━━━━━━━━━━━━",
         "🧭 COMMENT ALIGN PREND SA DÉCISION",
@@ -2592,11 +2592,14 @@ def texte_apercu(m, r, cle):
         "⚠️ Le biais n'est pas une autorisation d'entrée." if not tr else "📍 Position ouverte : suis les alertes du coach.",
         "",
     ] + voyants_unites(r) + [""]
-    obj = objectifs_marche(r, sens)
+    # Position ouverte : les niveaux du trade font foi (pas de cible différente du TP).
+    obj = ([f"📌 Entrée : {px(tr['e'])}", f"🛑 Stop : {px(tr['sl'])}", f"🎯 TP1 : {px(tr['tp1'])}"]
+           + ([f"🏁 TP2 : {px(tr['tp2'])}"] if tr.get("tp2") else [])) if tr else objectifs_marche(r, sens)
     if obj:
         lignes += obj + [""]
+    if not tr:
+        lignes.append(f"❓ Pourquoi : {court(raison or 'Aucune entrée autorisée pour le moment.', 150)}")
     lignes += [
-        f"❓ Pourquoi : {court(raison or 'Aucune entrée autorisée pour le moment.', 150)}",
         "➡️ À faire : " + ("gérer la position ouverte et suivre les alertes de sortie." if tr else
                          "Attendre un nouveau message explicite « ENTRÉE AUTORISÉE »."),
     ]
