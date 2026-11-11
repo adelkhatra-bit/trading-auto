@@ -3874,6 +3874,13 @@ def traiter(etat, chats, updates):
                     pass
                 menu_marches(etat, qui)
                 continue
+            if choix == "markets" and mk == "OK":
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Marchés enregistrés")
+                except Exception:
+                    pass
+                valider_et_suivre_marches(etat, qui, cb.get("from", {}).get("id"))
+                continue
             if choix == "markets" and (mk in MARCHES or mk in ("BOTH", "ALL")):
                 if mk in MARCHES:
                     basculer_marche(etat, qui, mk)
@@ -4467,6 +4474,25 @@ def selectionner_marches_suivi(etat, cid, choix):
         veilles = etat.setdefault("veille_cloture", {}).setdefault(marche, {})
         veilles.pop(cid, None)
 
+def valider_et_suivre_marches(etat, cid, user_id):
+    """« ✅ Valider et suivre » : enregistre les marchés cochés puis lance leur suivi.
+    Même règle d'accès que le bouton de suivi existant (followmarket) : le gratuit n'a qu'une position."""
+    cid = str(cid)
+    anglais = cid in LANG_EN
+    if not (autorise(etat, cid, user_id) or cid not in etat.get("bienvenue", {})):
+        _envoi_sur(cid, text=("🔒 VIP only\n🎁 Your free position of the day is already used\n💎 VIP 49,90 € / month 👇" if anglais
+                              else "🔒 Réservé aux VIP\n🎁 Ta position gratuite du jour est déjà utilisée\n💎 VIP 49,90 € / mois 👇"),
+                   **({"reply_markup": bouton_payer(etat)} if etat.get("lien") else {}))
+        return False
+    choisis = [m for m in MARCHES if m in marches_choisis(etat, cid)]
+    selectionner_marches_suivi(etat, cid, choisis)
+    for m in choisis:
+        inscrire_auto(etat, cid, m, notifier=False)
+    noms = " + ".join(m for m in choisis)
+    _envoi_sur(cid, text=(f"✅ MARKETS CONFIRMED: {noms}\nI'll alert you when an entry is confirmed." if anglais
+                          else f"✅ MARCHÉS VALIDÉS : {noms}\nJe t'alerterai lorsqu'un point d'entrée sera confirmé."))
+    return True
+
 def basculer_marche(etat, cid, marche):
     """Coche / décoche un marché (au moins 1 reste coché)."""
     actuels = set(marches_choisis(etat, cid))
@@ -4500,6 +4526,7 @@ def menu_marches(etat, cid):
     anglais = str(cid) in LANG_EN
     lignes = [[{"text": ("✅ " if m in choisis else "⬜ ") + NOMS_MARCHES[m], "callback_data": f"markets:{m}"}] for m in MARCHES]
     lignes.append([{"text": ("✅ Everything" if anglais else "✅ Tout recevoir"), "callback_data": "markets:ALL"}])
+    lignes.append([{"text": ("✅ Confirm & follow" if anglais else "✅ Valider et suivre"), "callback_data": "markets:OK"}])
     texte = ("📡 MY MARKETS\n━━━━━━━━━━━━━━━\n👆 Tap to tick / untick\n🔔 You only get alerts for ticked markets\n"
              "📍 Prices can differ by a few points from your broker: follow the candles (wicks)"
              if anglais else
