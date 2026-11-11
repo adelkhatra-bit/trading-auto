@@ -131,7 +131,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         callbacks = [button["callback_data"] for row in keyboard for button in row]
         self.assertIn("ℹ️ Comprendre l'analyse", labels)
         self.assertIn("📊 Voir les niveaux", labels)
-        self.assertIn("🎯 Me prévenir pour prendre position", labels)
+        self.assertIn("🎯 Suivre la prochaine position", labels)
         self.assertIn("details:GOLD", callbacks)
         self.assertIn("levels:GOLD", callbacks)
         self.assertIn("auto:GOLD", callbacks)
