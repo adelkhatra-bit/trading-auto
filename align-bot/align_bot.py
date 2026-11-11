@@ -1213,7 +1213,7 @@ def mise_en_forme(t):
             label = niveau.group("label").strip().rstrip(" :：≈=")
             value = niveau.group("value").strip()
             detail = (niveau.group("detail") or "").strip()
-            detail = re.sub(r"^[()\\[\\]—–,:; ]+|[()\\[\\] ]+$", "", detail)
+            detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             if out and out[-1]:
                 out.append("")
             out.append(label)
@@ -1223,8 +1223,8 @@ def mise_en_forme(t):
             out.append("")
             continue
         mesure = re.match(
-            r"^(?P<label>(?:Basse|Haute|Bas|Haut|Low|High|Support|Résistance|Resistance))\\s+"
-            r"(?P<value>[+-]?(?:\\d{1,3}(?:[ \\u202f]\\d{3})+|\\d+)(?:[.,]\\d+)?%?)$",
+            r"^(?P<label>(?:Basse|Haute|Bas|Haut|Low|High|Support|Résistance|Resistance))\s+"
+            r"(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)$",
             l, re.IGNORECASE)
         if mesure:
             if out and out[-1]:
