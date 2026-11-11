@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ALIGN LIVE</title>
+<style>
+  /* Scène verticale 1080x1920, fond transparent : source « Lien » de TikTok LIVE Studio posée sur le graphique TradingView. */
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; height: 100%; }
+  body { font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; color: #f4f7ff; }
+  #scene { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; background: transparent; }
+  .titre { position: absolute; top: 40px; left: 40px; right: 40px; display: flex; justify-content: space-between; align-items: center; }
+  .titre h1 { margin: 0; font-size: 54px; letter-spacing: 3px; text-shadow: 0 2px 12px #000; }
+  .titre h1 span { color: #3ddc97; }
+  .maj { font-size: 28px; padding: 8px 18px; border-radius: 30px; background: rgba(8,12,22,.72); }
+  .maj.vieux { background: rgba(190,60,60,.85); }
+  #cartes { position: absolute; top: 140px; left: 40px; right: 40px; display: flex; flex-direction: column; gap: 22px; }
+  .carte { background: rgba(8,12,22,.74); border: 2px solid rgba(255,255,255,.14); border-radius: 28px; padding: 24px 30px; backdrop-filter: blur(4px); }
+  .carte .ligne1 { display: flex; justify-content: space-between; align-items: center; }
+  .nom { font-size: 46px; font-weight: 800; }
+  .badge { font-size: 28px; font-weight: 700; padding: 8px 22px; border-radius: 30px; }
+  .b-calme { background: #2d4a7a; } .b-preparation { background: #b8860b; animation: pulse 1.6s infinite; }
+  .b-entree { background: #1f9d68; animation: pulse 1.2s infinite; } .b-ferme { background: #5b5f6b; } .b-perime { background: #8b3a3a; }
+  .detail { margin-top: 14px; font-size: 32px; display: flex; gap: 28px; flex-wrap: wrap; color: #dbe4ff; }
+  .barre { margin-top: 16px; display: flex; gap: 6px; }
+  .barre i { flex: 1; height: 16px; border-radius: 8px; background: rgba(255,255,255,.14); }
+  .barre i.on { background: #3ddc97; } .barre i.seuil { outline: 2px solid #ffd166; }
+  #annonce { position: absolute; top: 790px; left: 40px; right: 40px; min-height: 0; font-size: 34px; font-weight: 700; text-align: center;
+             background: rgba(184,134,11,.92); border-radius: 24px; padding: 22px 26px; display: none; }
+  #hotes { position: absolute; left: 40px; right: 40px; bottom: 210px; display: flex; flex-direction: column; gap: 22px; }
+  .hote { display: flex; align-items: flex-end; gap: 20px; }
+  .hote.droite { flex-direction: row-reverse; }
+  .avatar { width: 150px; height: 150px; border-radius: 50%; flex: none; position: relative; box-shadow: 0 6px 20px #000a; animation: flotte 3.2s ease-in-out infinite; }
+  .avatar.t { background: linear-gradient(145deg, #4d7cff, #243b8a); } .avatar.l { background: linear-gradient(145deg, #ff6fb1, #8a2455); animation-delay: -1.6s; }
+  .avatar .yeux { position: absolute; top: 56px; left: 34px; right: 34px; display: flex; justify-content: space-between; }
+  .avatar .yeux b { width: 20px; height: 26px; border-radius: 50%; background: #fff; animation: cligne 5s infinite; }
+  .avatar .bouche { position: absolute; bottom: 36px; left: 55px; width: 40px; height: 12px; border-radius: 0 0 24px 24px; background: #fff; }
+  .avatar.parle .bouche { animation: parle .35s infinite alternate; }
+  .avatar span { position: absolute; bottom: -6px; left: 0; right: 0; text-align: center; font-size: 26px; font-weight: 800; text-shadow: 0 2px 8px #000; }
+  .bulle { flex: 1; background: rgba(255,255,255,.95); color: #10172a; border-radius: 30px; padding: 22px 28px; font-size: 34px; line-height: 1.25; min-height: 70px;
+           opacity: .0; transform: translateY(14px); transition: opacity .5s, transform .5s; }
+  .bulle.visible { opacity: 1; transform: none; }
+  .bulle small { display: block; font-size: 24px; color: #5b6479; margin-bottom: 4px; font-weight: 700; }
+  #avis { position: absolute; left: 40px; right: 40px; bottom: 120px; text-align: center; font-size: 26px; color: #fff; background: rgba(8,12,22,.74); border-radius: 18px; padding: 12px; }
+  @keyframes pulse { 50% { filter: brightness(1.35); } }
+  @keyframes flotte { 50% { transform: translateY(-8px); } }
+  @keyframes cligne { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+  @keyframes parle { to { height: 24px; } }
+</style>
+</head>
+<body>
+<div id="scene">
+  <div class="titre"><h1>ALIGN <span>LIVE</span></h1><div class="maj" id="maj">en attente des données…</div></div>
+  <div id="cartes"></div>
+  <div id="annonce"></div>
+  <div id="hotes">
+    <div class="hote"><div class="avatar t" id="av-t"><div class="yeux"><b></b><b></b></div><div class="bouche"></div><span>Thomas</span></div><div class="bulle" id="b-t"></div></div>
+    <div class="hote droite"><div class="avatar l" id="av-l"><div class="yeux"><b></b><b></b></div><div class="bouche"></div><span>Leïla</span></div><div class="bulle" id="b-l"></div></div>
+  </div>
+  <div id="avis">Pas un conseil financier • Tout peut changer à chaque clôture • Décide toujours avec ton propre plan</div>
+</div>
+<script>
+/* Données publiques (niveau gratuit seulement) écrites par le bot sur la branche live-data : aucun prix, aucun niveau, aucun jeton. */
+var SOURCE = "https://raw.githubusercontent.com/adelkhatra-bit/trading-auto/live-data/live.json";
+var BOT = "@align_mtf_adel_bot";
+var ICONES = { BTC: "🟠", GOLD: "🥇", NASDAQ: "💠" };
+var BIAIS = { haussier: "haussier", baissier: "baissier", indecis: "indécis" };
+var ETATS = { calme: "Marché calme", preparation: "En préparation", entree: "Entrée en cours", ferme: "Marché fermé", perime: "Données en pause" };
+var donnees = null, vu = 0, recents = [], tour = 0;
+
+function echelle() {
+  var s = Math.min(window.innerWidth / 1080, window.innerHeight / 1920);
+  document.getElementById("scene").style.transform = "scale(" + s + ")";
+}
+window.addEventListener("resize", echelle); echelle();
+
+function pad(n) { return (n < 10 ? "0" : "") + n; }
+function heure(t) { var d = new Date(t * 1000); return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+
+function rendre() {
+  var cartes = document.getElementById("cartes"), maj = document.getElementById("maj"), ann = document.getElementById("annonce");
+  cartes.innerHTML = ""; ann.style.display = "none";
+  if (!donnees || !donnees.marches) { maj.textContent = "en attente des données…"; maj.className = "maj vieux"; return; }
+  var age = Date.now() / 1000 - donnees.maj;
+  maj.textContent = "MAJ " + heure(donnees.maj); maj.className = "maj" + (age > 600 ? " vieux" : "");
+  var prep = [];
+  donnees.marches.forEach(function (m) {
+    var etat = age > 600 ? "perime" : m.etat;
+    if (etat === "preparation" || etat === "entree") prep.push(m.m);
+    var c = document.createElement("div"); c.className = "carte";
+    var barre = ""; for (var i = 1; i <= 11; i++) barre += '<i class="' + (i <= m.ut ? "on" : "") + (i === m.seuil ? " seuil" : "") + '"></i>';
+    c.innerHTML = '<div class="ligne1"><div class="nom">' + (ICONES[m.m] || "") + " " + m.m + '</div><div class="badge b-' + etat + '">' + ETATS[etat] + "</div></div>" +
+      '<div class="detail"><span>Biais : ' + m.biais + "</span><span>UT alignées : " + m.ut + "/11 (seuil " + m.seuil + ")</span><span>Profil : " + m.profil + "</span></div>" +
+      '<div class="barre">' + barre + "</div>";
+    cartes.appendChild(c);
+  });
+  if (prep.length) { ann.style.display = "block"; ann.textContent = "🔔 Position en préparation sur " + prep.join(" + ") + " → les niveaux sont sur le Telegram gratuit " + BOT; }
+}
+
+/* ─────────── Les deux animateurs : phrases composées à partir des données, jamais deux fois la même de suite ─────────── */
+function pick(liste) {
+  var choix = liste.filter(function (x) { return recents.indexOf(x) < 0; });
+  var x = (choix.length ? choix : liste)[Math.floor(Math.random() * (choix.length ? choix.length : liste.length))];
+  recents.push(x); if (recents.length > 12) recents.shift(); return x;
+}
+function remplir(t, m) { return t.replace(/\{m\}/g, m.m).replace(/\{ut\}/g, m.ut).replace(/\{seuil\}/g, m.seuil).replace(/\{biais\}/g, BIAIS[m.biais] || m.biais).replace(/\{profil\}/g, m.profil); }
+var DIALOGUES = {
+  calme: [
+    ["{m} est calme pour l'instant : {ut} unités alignées sur 11, il en faut {seuil}.", "On laisse le marché venir, rien à forcer."],
+    ["Sur {m}, ça respire. Le biais reste {biais}, mais rien n'est validé.", "Et on attend la clôture, pas une mèche."],
+    ["{ut}/11 sur {m} : le seuil de {seuil} n'est pas atteint.", "Donc aucune entrée proposée, on reste patients."],
+    ["Petit point {m} : peu de mouvement, profil visé {profil}.", "Le calme, c'est aussi une information."],
+    ["Côté {m}, les unités ne sont pas d'accord entre elles.", "Quand elles ne s'alignent pas, on ne force rien."],
+    ["{m} traîne un peu, {ut} unités sur 11 dans le même sens.", "On regarde, on note, on ne devance pas."]
+  ],
+  preparation: [
+    ["{m} se prépare : {ut}/11 alignées, biais {biais}.", "Attention, préparer ne veut pas dire entrer. On attend la validation."],
+    ["Ça bouge sur {m}, le profil {profil} se dessine.", "Les niveaux précis sont sur Telegram, ici on reste sur la lecture."],
+    ["{m} s'approche d'une zone de décision.", "Une bougie doit d'abord clôturer au bon endroit, sinon rien."],
+    ["Sur {m}, {ut} unités vont dans le même sens.", "C'est encourageant, mais le seuil et la clôture décident."],
+    ["{m} : mise en place en cours, biais {biais}.", "On garde la tête froide, le plan passe avant l'envie."],
+    ["Le scénario {profil} prend forme sur {m}.", "Et il peut s'annuler à la prochaine clôture, comme toujours."]
+  ],
+  entree: [
+    ["Une position est en cours sur {m}.", "Les niveaux sont dans Telegram, le suivi aussi. Ici on commente seulement."],
+    ["{m} : l'entrée a été validée par l'indicateur.", "Chacun reste responsable de sa gestion du risque."],
+    ["Sur {m}, le plan {profil} est actif.", "On surveille les clôtures, pas les émotions."],
+    ["{m} est en mouvement, biais {biais}.", "Le stop existe pour protéger le capital, on le respecte."]
+  ],
+  ferme: [
+    ["{m} est fermé pour le moment.", "On profite pour préparer la reprise, sans rien inventer."],
+    ["Pause sur {m} : le marché dort.", "Rendez-vous à la réouverture."],
+    ["Pas de cotation sur {m} en ce moment.", "Donc pas d'analyse, juste de la patience."]
+  ],
+  perime: [
+    ["Les données sont en pause pour l'instant.", "On ne commente pas ce qu'on ne peut pas vérifier."],
+    ["Petit trou dans la mise à jour.", "Dès que le flux revient, on reprend."]
+  ],
+  liens: [
+    ["Rappel : ce live explique la lecture du marché, rien de plus.", "Pas un conseil financier, chacun décide pour soi."],
+    ["Le risque de perte existe toujours en trading.", "Un plan, un stop, et pas plus que ce qu'on peut perdre."],
+    ["Les niveaux détaillés se trouvent sur le Telegram gratuit " + BOT + ".", "Et le plan prime toujours sur l'impatience."]
+  ]
+};
+function parler(qui, texte) {
+  var bulle = document.getElementById("b-" + qui), av = document.getElementById("av-" + qui);
+  var autre = qui === "t" ? "l" : "t";
+  document.getElementById("b-" + autre).classList.remove("visible"); document.getElementById("av-" + autre).classList.remove("parle");
+  bulle.innerHTML = "<small>" + (qui === "t" ? "Thomas" : "Leïla") + "</small>" + texte; bulle.classList.add("visible"); av.classList.add("parle");
+  setTimeout(function () { av.classList.remove("parle"); }, Math.min(6000, 1200 + texte.length * 45));
+}
+function echange() {
+  tour++;
+  var age = donnees ? Date.now() / 1000 - donnees.maj : 1e9;
+  var cat, m;
+  if (!donnees || !donnees.marches || !donnees.marches.length || age > 600) { cat = "perime"; m = { m: "", ut: 0, seuil: 8, biais: "", profil: "" }; }
+  else if (tour % 5 === 0) { cat = "liens"; m = donnees.marches[0]; }
+  else { m = donnees.marches[Math.floor(Math.random() * donnees.marches.length)]; cat = ETATS[m.etat] ? m.etat : "calme"; }
+  var paire = pick(DIALOGUES[cat].map(function (p, i) { return i; }).map(function (i) { return DIALOGUES[cat][i][0] + "§" + i; }));
+  var i = parseInt(paire.split("§")[1], 10), dialogue = DIALOGUES[cat][i];
+  var premier = tour % 2 === 0 ? "t" : "l", second = premier === "t" ? "l" : "t";
+  parler(premier, remplir(dialogue[0], m));
+  setTimeout(function () { parler(second, remplir(dialogue[1], m)); }, 5200);
+}
+
+function charger() {
+  fetch(SOURCE + "?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); })
+    .then(function (j) { donnees = j; vu = Date.now(); rendre(); })
+    .catch(function () { rendre(); });
+}
+var demo = /[?&]demo=1/.test(location.search);
+if (demo) {
+  donnees = { maj: Math.floor(Date.now() / 1000), bot: BOT, marches: [
+    { m: "BTC", etat: "calme", biais: "indecis", ut: 5, seuil: 8, profil: "aucun" },
+    { m: "GOLD", etat: "preparation", biais: "baissier", ut: 6, seuil: 8, profil: "INTRADAY" },
+    { m: "NASDAQ", etat: "ferme", biais: "haussier", ut: 7, seuil: 8, profil: "SWING" }] };
+  rendre();
+} else { charger(); setInterval(charger, 30000); }
+setInterval(rendre, 15000);
+setTimeout(echange, 800); setInterval(echange, 11000);
+</script>
+</body>
+</html>

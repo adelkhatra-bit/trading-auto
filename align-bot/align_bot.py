@@ -4662,6 +4662,95 @@ def recevoir_pseudo(etat, cid, pseudo):
                             "👉 TradingView → ton script → Gérer l'accès → ajoute ce pseudo"),
                    reply_markup=json.dumps({"inline_keyboard": [[{"text": "✅ C'est fait, accès donné", "callback_data": f"tvok:{cid}"}]]}))
 
+# ───────── ALIGN LIVE : état PUBLIC (niveau gratuit) pour la page TikTok LIVE ─────────
+# Fichier unique sur la branche « live-data » (jamais main : aucun redémarrage du bot). Aucune donnée VIP : ni prix, ni entrée, ni SL, ni TP.
+LIVE_DEPOT = os.environ.get("GITHUB_REPOSITORY") or "adelkhatra-bit/trading-auto"
+LIVE_BRANCHE, LIVE_FICHIER = "live-data", "live.json"
+LIVE_INTERVALLE, LIVE_RAFRAICHIR = 120, 300      # tentative toutes les 2 min ; republication forcée au plus toutes les 5 min
+
+def construire_live(etat, derniers, now=None):
+    """Contenu public : marché, biais probable, UT alignées x/11, profil, état, heure. Rien d'autre."""
+    now = now or time.time()
+    marches = []
+    for m in MARCHES:
+        r = derniers.get(m)
+        if not r:
+            continue
+        cle = etat.get(m, {})
+        statut, _ = etat_marche_hb(m, r, now)
+        e = hb_etat_surveille(r)
+        etat_l = ("ferme" if statut == "ferme" else "perime" if statut == "perime" else "entree" if cle.get("trade") else
+                  "preparation" if (cle.get("ordre") or cle.get("prep") or e["strat"]) else "calme")
+        marches.append({"m": m, "etat": etat_l, "biais": {1: "haussier", -1: "baissier", 0: "indecis"}[e["sens"]],
+                        "ut": int(e["n"]), "seuil": MIN_ALIGN,
+                        "profil": {"SWING": "SWING", "DAY": "INTRADAY", "SCALPING": "SCALP"}.get(e["strat"], "aucun")})
+    return {"v": 1, "maj": int(now), "bot": "@" + str(etat.get("bot") or "align_mtf_adel_bot"), "marches": marches}
+
+def _api_github(chemin, methode="GET", corps=None):
+    req = urllib.request.Request(f"https://api.github.com/repos/{LIVE_DEPOT}{chemin}",
+                                 data=json.dumps(corps).encode() if corps is not None else None, method=methode,
+                                 headers={"Authorization": "Bearer " + os.environ.get("GITHUB_TOKEN", ""), "Accept": "application/vnd.github+json",
+                                          "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "align-live", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=15) as rep_:
+        return json.loads(rep_.read().decode() or "{}")
+
+def publier_live(etat, derniers, now=None):
+    """Publie le JSON public sur la branche live-data (commit léger, 1 fichier). Aucun jeton dans les journaux ni dans le fichier."""
+    now = now or time.time()
+    if not os.environ.get("GITHUB_TOKEN") or now - etat.get("live_t", 0) < LIVE_INTERVALLE:
+        return False
+    etat["live_t"] = now                          # même en cas d'erreur : pas de rafale d'appels
+    data = construire_live(etat, derniers, now)
+    if not data["marches"]:
+        return False
+    stable = json.dumps(data["marches"], sort_keys=True)
+    if stable == etat.get("live_sig") and now - etat.get("live_pub", 0) < LIVE_RAFRAICHIR:
+        return False                              # rien n'a changé : pas de commit
+    try:
+        try:
+            sha = _api_github(f"/contents/{LIVE_FICHIER}?ref={LIVE_BRANCHE}").get("sha")
+        except urllib.error.HTTPError as ex:
+            if ex.code != 404:
+                raise
+            sha = None
+            try:
+                _api_github(f"/git/ref/heads/{LIVE_BRANCHE}")
+            except urllib.error.HTTPError as ex2:
+                if ex2.code != 404:
+                    raise
+                base = _api_github("/git/ref/heads/main")["object"]["sha"]
+                _api_github("/git/refs", "POST", {"ref": f"refs/heads/{LIVE_BRANCHE}", "sha": base})
+        corps = {"message": "live: mise à jour", "branch": LIVE_BRANCHE,
+                 "content": __import__("base64").b64encode(json.dumps(data, ensure_ascii=False).encode()).decode()}
+        if sha:
+            corps["sha"] = sha
+        _api_github(f"/contents/{LIVE_FICHIER}", "PUT", corps)
+        etat["live_sig"], etat["live_pub"] = stable, now
+        return True
+    except Exception as ex:
+        print("live public", type(ex).__name__, getattr(ex, "code", ""))      # jamais le jeton
+        etat["live_t"] = now + 180                # erreur : on réessaie dans 5 min
+        return False
+
+def notifier_securite_vip(etat):
+    """Message « SÉCURITÉ VIP » : une seule fois par utilisateur, avec le bouton « Rejoindre le VIP » (lien d'abonnement payant Stars
+    déjà utilisé par le bot, etat['lien'] créé avec createChatSubscriptionInviteLink) et le prix réellement configuré."""
+    if not etat.get("lien_primaire_revoque_v1") or not etat.get("lien"):
+        return                                    # pas de bouton sans lien payant : on attend qu'il existe
+    vus = etat.setdefault("secu_vip_vu", [])
+    for p in proprio(etat):
+        if str(p) in vus:
+            continue
+        anglais = str(p) in LANG_EN
+        texte = ("🔐 VIP SECURITY\n⛔ The old free link to the VIP channel is revoked\n💳 Only the paid link lets people in\n"
+                 f"💎 VIP subscription: {PRIX_STARS} ⭐ / month" if anglais else
+                 "🔐 SÉCURITÉ VIP\n⛔ L'ancien lien gratuit de la chaîne VIP est révoqué\n💳 Seul le lien payant permet d'entrer\n"
+                 f"💎 Abonnement VIP : {PRIX_STARS} ⭐ / mois")
+        kb = json.dumps({"inline_keyboard": [[{"text": "💎 Join VIP" if anglais else "💎 Rejoindre le VIP", "url": etat["lien"]}]]})
+        res = _envoi_sur(p, text=texte, reply_markup=kb)
+        if isinstance(res, dict) and res.get("ok") is not False:
+            vus.append(str(p))
+
 def bouton_payer(etat):
     lien = etat.get("lien")
     return json.dumps({"inline_keyboard": [[{"text": "👀 Voir plus", "url": lien}], [{"text": "🔓 Débloquer les positions (49,90 € / mois)", "url": lien}]]}) if lien else None
@@ -6349,10 +6438,9 @@ def un_tour(etat, chats):
             try:
                 telegram("exportChatInviteLink", chat_id=etat["canal"])
                 etat["lien_primaire_revoque_v1"] = time.time()
-                for p in proprio(etat):
-                    _envoi_sur(p, text="🔐 SÉCURITÉ VIP\n⛔ L'ancien lien gratuit de la chaîne VIP est révoqué\n💳 Seul le lien payant permet d'entrer")
             except Exception as ex:
                 print("révocation lien VIP", ex)
+        notifier_securite_vip(etat)
         # Toutes les heures : on retire les abonnés qui n'ont pas renouvelé
         if etat.get("canal") and time.time() - etat.get("purge", 0) > 3600:
             etat["purge"] = time.time()
@@ -6478,6 +6566,11 @@ def un_tour(etat, chats):
                 envoyer_analyse_a(etat, cid, nom_marche, r, cle)
                 demandes_servies.add((index, nom_marche))
         print(texte_etat(nom_marche, r), "\n")
+
+    try:
+        publier_live(etat, derniers)
+    except Exception as ex:
+        print("live public", type(ex).__name__)
 
     try:
         di = dxy_info(etat)
