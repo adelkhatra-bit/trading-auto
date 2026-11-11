@@ -897,7 +897,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         }}
         with patch.object(align_bot, "telegram"), patch.object(align_bot, "_envoi_sur") as send:
             align_bot.traiter(state, set(), [update])
-        self.assertIn("Messages 11 à 25 sur 40", send.call_args.kwargs["text"])
+        self.assertIn("Messages 12 à 26 sur 41", send.call_args.kwargs["text"])
         buttons = json.loads(send.call_args.kwargs["reply_markup"])["inline_keyboard"]
         callbacks = [button["callback_data"] for row in buttons for button in row]
         self.assertIn("history:BTC:0", callbacks)
