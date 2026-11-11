@@ -5156,11 +5156,12 @@ def boucle_polling_telegram(etat, chats):
             if cb:
                 chat = (cb.get("message") or {}).get("chat") or {}
                 user_id = str((cb.get("from") or {}).get("id", ""))
+                anglais = user_id in etat.get("en", [])
                 if chat.get("type") != "private" or str(chat.get("id", "")) != user_id:
-                    _ack_callback_rapide(cb, "🔒 Ouvre le bot en conversation privée.")
+                    _ack_callback_rapide(cb, "🔒 Open the bot in a private chat." if anglais else "🔒 Ouvre le bot en conversation privée.")
                     update["_align_fast_handled"] = True
                 else:
-                    _ack_callback_rapide(cb, "⌛ Action reçue, traitement en cours.")
+                    _ack_callback_rapide(cb, "⌛ Action received, processing." if anglais else "⌛ Action reçue, traitement en cours.")
             else:
                 _traiter_lecture_rapide(etat, chats, update)
             TELEGRAM_UPDATES.put(update)
@@ -5450,6 +5451,8 @@ def sauver_etat(etat, chats=None):
 
 def main():
     etat = charger_etat()
+    LANG_EN.clear(); LANG_EN.update(etat.get("en", []))
+    MEMOIRE[:] = etat.get("memoire", [])
     maintenant_paris = datetime.datetime.now(PARIS)
     print(f"ALIGN_TZ=Europe/Paris LOCAL_NOW={maintenant_paris.isoformat()} UTC_NOW={datetime.datetime.now(datetime.timezone.utc).isoformat()}", flush=True)
     chats = set(etat.get("chats", []))
