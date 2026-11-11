@@ -544,7 +544,11 @@ def profil_strategie(r):
     """Classe le setup sans confondre alignement directionnel et autorisation d’entrée."""
     D = r["dirs"]
     d5, d15, d1h, d4h = D[2], D[4], D[7], D[9]
-    if d4h and d1h == d4h:
+    if d4h and d1h == d4h and d15 == -d4h and d5 == d15:
+        direction = d15
+        mode, horizon = "SCALPING CONTRE-TENDANCE", "court terme ; ne pas transformer en position swing"
+        contexte, contre = "M15 et M5 sont alignés contre le biais H4/H1", True
+    elif d4h and d1h == d4h:
         direction = d4h
         if d15 == direction:
             mode, horizon = "SWING", "plusieurs séances si la structure H4 reste valide"
