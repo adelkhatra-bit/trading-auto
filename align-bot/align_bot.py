@@ -2362,6 +2362,8 @@ def menu_canal_vip(etat):
 # 1) Google Gemini (si la clé GEMINI_API_KEY existe)  2) OVHcloud Llama 3.3 70B (sans clé)  3) OVHcloud Mistral (sans clé)
 # 4) Pollinations (sans clé)  5) LLM7 (sans clé). Et si TOUT tombe : l'analyse interne du bot répond quand même.
 IA_FOURNISSEURS = [
+    # Claude Haiku : payant (clé ANTHROPIC_API_KEY dans les secrets GitHub), UNIQUEMENT pour les moments clés (premium=True), plafond/jour ANTHROPIC_MAX_JOUR.
+    ("Anthropic", "https://api.anthropic.com/v1/messages", os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5", os.environ.get("ANTHROPIC_API_KEY", ""), True),
     ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL") or "chat-latest", os.environ.get("OPENAI_API_KEY", ""), True),
     ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash", os.environ.get("GEMINI_API_KEY", ""), True),
     ("Gemini Lite", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.5-flash-lite", os.environ.get("GEMINI_API_KEY", ""), True),
@@ -2371,6 +2373,8 @@ IA_FOURNISSEURS = [
     ("LLM7", "https://api.llm7.io/v1/chat/completions", "default", "", False),
 ]
 IA_MAX_JOUR = int(os.environ.get("IA_MAX_JOUR", "300"))
+ANTHROPIC_MAX_JOUR = int(os.environ.get("ANTHROPIC_MAX_JOUR") or "300")     # appels Claude par jour (au-delà : IA gratuites)
+ANTHROPIC_MAX_TOKENS = 400                                                  # réponse courte : 4 lignes
 IA_REGLES = ("Tu es l'analyste de marché du bot ALIGN. Tu reçois des données chiffrées réelles calculées par le moteur ; tu dois les interpréter, pas les remplacer. "
              "Architecture : H4 = biais directeur, H1 = confirmation, M15 = structure/retracement, M5 = déclencheur après clôture ; M1 = suivi du prix. "
              "Sépare tendance, scénario privilégié, scénario alternatif, validation, invalidation et prochaine action. "
@@ -2397,21 +2401,31 @@ def detail_erreur_ia(ex, cle=""):
         texte = f"{type(ex).__name__} {ex}".strip()
     if cle:
         texte = texte.replace(cle, "***")
-    return re.sub(r"AIza[0-9A-Za-z_\-]{20,}", "***", texte)[:200]
+    return re.sub(r"(AIza|sk-ant-)[0-9A-Za-z_\-]{20,}", "***", texte)[:200]
 
 def _appel_ia(url, modele, cle, messages):
-    corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 1000, "messages": messages}).encode()
     h = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "align-bot"}
-    if cle:
-        h["Authorization"] = f"Bearer {cle}"
+    anthropic = "api.anthropic.com" in url
+    if anthropic:                                   # API Messages d'Anthropic : consigne système séparée, clé dans x-api-key
+        systeme = "\n".join(m["content"] for m in messages if m.get("role") == "system")
+        corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": ANTHROPIC_MAX_TOKENS, "system": systeme,
+                            "messages": [m for m in messages if m.get("role") != "system"]}).encode()
+        h["x-api-key"] = cle; h["anthropic-version"] = "2023-06-01"
+    else:
+        corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 1000, "messages": messages}).encode()
+        if cle:
+            h["Authorization"] = f"Bearer {cle}"
     with urllib.request.urlopen(urllib.request.Request(url, data=corps, headers=h), timeout=25) as rep_:
         j = json.loads(rep_.read().decode())
-    txt = (j["choices"][0]["message"].get("content") or "").strip()
+    if anthropic:
+        txt = "".join(b.get("text", "") for b in j.get("content", []) if b.get("type") == "text").strip()
+    else:
+        txt = (j["choices"][0]["message"].get("content") or "").strip()
     if len(txt) < 8:
         raise ValueError("réponse vide")
     return txt
 
-def ia(etat, consigne, donnees, cle_cache=None, duree=600):
+def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False):
     """Commentaire court d'une vraie IA. Essaie chaque IA gratuite à la suite ; '' seulement si toutes sont tombées."""
     cache = etat.setdefault("ia_cache", {})
     if cle_cache and cle_cache in cache and time.time() - cache[cle_cache][0] < duree:
@@ -2427,9 +2441,12 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
     messages = [{"role": "system", "content": IA_REGLES},
                 {"role": "user", "content": consigne + "\n\nDonnées :\n" + json.dumps(donnees, ensure_ascii=False)}]
     txt, erreurs = "", []
+    claude_jour = etat.setdefault("ia_claude_jour", {})
     for nom, url, modele, cle, besoin_cle in IA_FOURNISSEURS:
         if besoin_cle and not cle:
             continue
+        if nom == "Anthropic" and (not premium or claude_jour.get(jour, 0) >= ANTHROPIC_MAX_JOUR):
+            continue                                   # Claude : moments clés seulement, dans la limite du plafond du jour
         if time.time() < etat.get("ia_pause", {}).get(nom, 0):
             continue                                   # IA en panne récemment : on passe à la suivante
         try:
@@ -2438,6 +2455,10 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
             etat["ia_dernier_fournisseur"] = nom
             etat["ia_dernier_modele"] = modele
             etat["ia_dernier_statut"] = "CONNECTED"
+            if nom == "Anthropic":
+                claude_jour[jour] = claude_jour.get(jour, 0) + 1
+                for k in [k for k in claude_jour if k != jour]:
+                    claude_jour.pop(k)
             print(f"AI_PROVIDER_USED={nom} model={modele}", flush=True)
             break
         except Exception as ex:
@@ -2492,7 +2513,7 @@ def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
             vus[k] = time.time()
             try:
                 avis = ia(etat, consigne + " " + IA_TON_JEUNE, dict(donnees_ia(m, r, cle), evenement=str(texte)[:600]),
-                          cle_cache=f"moment:{k}", duree=delai)
+                          cle_cache=f"moment:{k}", duree=delai, premium=True)
             except Exception as ex:
                 print("ia moment", ex); avis = ""
             if avis:
@@ -2648,7 +2669,7 @@ def avis_ia(etat, m, r, cle, anglais=False):
     empreinte["prochaine_reevaluation"] = reevaluation
     signature = hashlib.sha256(json.dumps(empreinte, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
     t = ia(etat, consigne, donnees,
-           cle_cache=f"analyse_{m}_{langue_cache}_{signature}")
+           cle_cache=f"analyse_{m}_{langue_cache}_{signature}", premium=True)
     t = compacter_ia(t)
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
@@ -5004,7 +5025,7 @@ def annonces_et_sessions(etat, maintenant, derniers):
                     etat,
                     "Après cette annonce économique, interprète uniquement la réaction de prix observée sur BTC et Gold. Dis si le mouvement est net ou limité, rappelle que les deux sens restent possibles et indique d'attendre la clôture 15 min avant toute reprise. N'invente aucun chiffre et ne donne pas d'ordre d'entrée.",
                     {"annonce": e["titre"], "réaction observée": lr, "consigne": "aucune entrée avant clôture 15 min"},
-                    cle_cache=f"newsreaction{e['t']}{e['titre']}", duree=3600)
+                    cle_cache=f"newsreaction{e['t']}{e['titre']}", duree=3600, premium=True)
                 message = f"📰 RÉACTION À LA NEWS — {e['titre']}\n" + "\n".join(lr)
                 message += "\n⏳ J'attends la clôture de la bougie 15 min avant de reprendre"
                 if avis_apres:
@@ -5013,7 +5034,7 @@ def annonces_et_sessions(etat, maintenant, derniers):
         if 6 * 60 < reste <= 30 * 60 and f"ev{e['t']}{e['titre']}" not in vus:
             vus.append(f"ev{e['t']}{e['titre']}")
             avis = ia(etat, "Explique en 2 lignes très simples ce que cette annonce peut faire au Gold et au BTC (sans donner de sens à trader, juste le risque).",
-                      {"annonce": e["titre"], "prévu": e.get("prev"), "avant": e.get("avant")}, cle_cache=f"news{e['t']}{e['titre']}", duree=3600)
+                      {"annonce": e["titre"], "prévu": e.get("prev"), "avant": e.get("avant")}, cle_cache=f"news{e['t']}{e['titre']}", duree=3600, premium=True)
             out.append(f"⚠️⚠️ NEWS USA dans {round(reste / 60)} min ({heure(e['t'])})\n📰 {e['titre']}\n\n"
                        f"🟥 N'ouvre AUCUN trade\n🛡 Déjà en position ? Vérifie que ton STOP est bien placé\n"
                        f"💥 Le prix peut bouger très fort dans les 2 sens\n⏳ On reprend à {fin}" + (f"\n\n🧠 L'avis de l'IA ALIGN\n{avis}" if avis else ""))
@@ -6359,7 +6380,7 @@ def un_tour(etat, chats):
             trx = cle["trade"]
             t_ = ia(etat, "Le bot vient d'entrer en position. Explique en bougies pourquoi c'est une bonne entrée et rappelle de mettre le SL tout de suite. " + IA_TON_JEUNE,
                     dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
-                                                                    "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}))
+                                                                    "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}), premium=True)
             if t_:
                 envois.append(f"🧠 L'IA ALIGN sur cette entrée — {ICONE.get(nom_marche, '')} {nom_marche}\n{compacter_ia(t_)}")
             entrer_inscrits(etat, nom_marche, cle["trade"], chats)

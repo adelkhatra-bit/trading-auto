@@ -33,17 +33,20 @@ attempts = []
 for name, url, model, key, needs_key in align_bot.IA_FOURNISSEURS:
     if needs_key and not key:
         attempts.append(name + "=NOT_CONFIGURED")
+        print(f"AI_PROVIDER_STATUS {name}=NOT_CONFIGURED", flush=True)
         continue
     try:
         # Même fonction HTTP, même modèle, même extraction et même seuil
         # minimal que le véritable commentaire produit par le bot.
         reply = align_bot._appel_ia(url, model, key, messages)
         attempts.append(name + "=CONNECTED")
+        print(f"AI_PROVIDER_STATUS {name}=CONNECTED model={model}", flush=True)
         print("AI_EXTERNAL_REPLY=" + " ".join(reply.split())[:220], flush=True)
         write_summary("CONNECTED", name, ", ".join(attempts))
         sys.exit(0)
     except Exception as exc:
         attempts.append(name + "=" + align_bot.detail_erreur_ia(exc, key)[:40])
+        print(f"AI_PROVIDER_STATUS {name}=ERROR", flush=True)
         print("AI_PROVIDER_CHECK_FAILED", name, "model=" + model, align_bot.detail_erreur_ia(exc, key), flush=True)
 
 write_summary("UNAVAILABLE", "", ", ".join(attempts))
