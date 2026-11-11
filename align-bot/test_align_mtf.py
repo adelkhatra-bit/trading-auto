@@ -1778,12 +1778,12 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         update = {"update_id": 1, "callback_query": {
             "id": "callback-1", "from": {"id": 101},
             "message": {"chat": {"id": 101, "type": "private"}},
-            "data": "markets:BTC"
+            "data": "markets:GOLD"
         }}
         with patch.object(align_bot, "telegram", return_value={"ok": True}), \
              patch.object(align_bot, "_envoi_sur") as send:
             align_bot.traiter(state, {"101", "202"}, [update])
-        self.assertEqual(align_bot.marche_selection(state, "101"), "BTC")
+        self.assertEqual(align_bot.marche_selection(state, "101"), "GOLD")
         self.assertEqual(align_bot.marche_selection(state, "202"), "GOLD")
         self.assertNotIn("101", state["auto"]["BTC"])
         self.assertNotIn("101", state["veille_cloture"]["BTC"])
