@@ -1204,7 +1204,7 @@ def mise_en_forme(t):
             label = niveau.group("label").strip().rstrip(" :：≈=")
             value = niveau.group("value").strip()
             detail = (niveau.group("detail") or "").strip()
-            detail = re.sub(r"^[()\\[\\]—–,:; ]+|[()\\[\\] ]+$", "", detail)
+            detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             if out and out[-1]:
                 out.append("")
             out.append(label)
