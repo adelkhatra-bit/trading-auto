@@ -73,6 +73,8 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
+          ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
           DUREE_SEC: "20400"
           PAUSE_SEC: "5"
         run: python3 align_bot.py
