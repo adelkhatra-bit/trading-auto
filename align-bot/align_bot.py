@@ -170,7 +170,9 @@ def _kraken(pair, interval):
         raise RuntimeError(j["error"])
     rows = next(v for k, v in j["result"].items() if k != "last")
     rows = rows[:-1]  # on enlève la bougie en cours : calcul à la clôture, comme l'alerte TradingView
-    return [dict(t=int(r[0]), o=float(r[1]), h=float(r[2]), l=float(r[3]), c=float(r[4])) for r in rows]
+    return [dict(t=int(r[0]), o=float(r[1]), h=float(r[2]), l=float(r[3]), c=float(r[4]),
+                 v=float(r[6]) if len(r) > 6 and r[6] not in (None, "") else None,
+                 trades=int(r[7]) if len(r) > 7 and r[7] not in (None, "") else None) for r in rows]
 
 # ───────── Gold = XAUUSD spot (même prix que FOREXCOM:XAUUSD sur TradingView) ─────────
 _CACHE = {}
@@ -206,7 +208,10 @@ def yahoo_or(interval):
         if j is None:
             raise RuntimeError("Yahoo indisponible")
         res = j["chart"]["result"][0]; q = res["indicators"]["quote"][0]
-        rows = [dict(t=int(t), o=o, h=h, l=l, c=cl) for t, o, h, l, cl in zip(res["timestamp"], q["open"], q["high"], q["low"], q["close"])
+        volumes = q.get("volume") or []
+        rows = [dict(t=int(t), o=o, h=h, l=l, c=cl,
+                     v=float(volumes[i]) if i < len(volumes) and volumes[i] is not None else None)
+                for i, (t, o, h, l, cl) in enumerate(zip(res["timestamp"], q["open"], q["high"], q["low"], q["close"]))
                 if None not in (o, h, l, cl)]
         _CACHE[("gc", interval)] = (time.time(), rows[:-1][-720:], res["meta"].get("regularMarketPrice") or rows[-1]["c"])
         c = _CACHE[("gc", interval)]
@@ -298,6 +303,8 @@ def regrouper(bars, n, base_sec, now_ts=None):
             "h": max(x["h"] for x in groupe),
             "l": min(x["l"] for x in groupe),
             "c": groupe[-1]["c"],
+            "v": sum(float(x.get("v") or 0) for x in groupe) if any(x.get("v") is not None for x in groupe) else None,
+            "trades": sum(int(x.get("trades") or 0) for x in groupe) if any(x.get("trades") is not None for x in groupe) else None,
         })
     return out
 
@@ -1939,6 +1946,25 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
             cache.pop(k)
     return txt
 
+def resume_volume(bars, provenance):
+    """Résumé de volume sur bougies clôturées. La provenance indique si c'est un flux réel ou proxy."""
+    valeurs = [float(b["v"]) for b in (bars or []) if b.get("v") is not None and float(b["v"]) >= 0]
+    if not valeurs:
+        return {"disponible": False, "provenance": provenance, "interpretation": "volume indisponible : ne pas en tirer de confirmation"}
+    recent = valeurs[-1]
+    reference = valeurs[-21:-1]
+    moyenne = sum(reference) / len(reference) if reference else 0.0
+    ratio = recent / moyenne if moyenne > 0 else None
+    return {
+        "disponible": True, "provenance": provenance, "derniere_bougie": round(recent, 4),
+        "moyenne_20_bougies": round(moyenne, 4) if reference else None,
+        "ratio_vs_moyenne": round(ratio, 2) if ratio is not None else None,
+        "etat": ("pic" if ratio is not None and ratio >= 1.5 else "faible" if ratio is not None and ratio <= 0.7 else "normal" if ratio is not None else "reference_insuffisante"),
+        "nb_bougies": len(valeurs),
+        "interpretation": "volume indicatif du flux source ; ne confirme jamais seul une entrée"
+    }
+
+
 def donnees_ia(m, r, cle):
     titre, raison = verdict(r, cle)
     o = (cle or {}).get("ordre") or {}
@@ -1955,7 +1981,13 @@ def donnees_ia(m, r, cle):
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
-            "contexte_macro_dollar": r.get("macro_data") or {}, 
+            "contexte_macro_dollar": r.get("macro_data") or {},
+            "volume": {
+                "M5": resume_volume(r.get("b5"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
+                "M15": resume_volume(r.get("b15"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
+                "H1": resume_volume(r.get("b1h"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD"),
+                "H4": resume_volume(r.get("b4h"), "Kraken spot BTC" if m == "BTC" else "PAXG/Kraken proxy pour XAUUSD")
+            },
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
     # Distance réelle au plan d'entrée et rythme observé : aide à décider si l'attente vaut la peine.
     prix_actuel = float(r["m1"][-1]["c"])
@@ -2014,9 +2046,9 @@ def donnees_ia(m, r, cle):
 def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
     consigne = (
-        "Give a concise, decision-ready desk brief in English: current move (rising/falling/ranging/rebound/pullback), H4/H1 bias, M15 structure and intended direction, M5 entry trigger, exact planned entry/SL/TP only from supplied live plan, distance from current price to entry, indicative minutes based on observed 5m candle ranges, and what to do now. If the target is far, say plainly whether it is worth waiting and give the indicative check-back window; never tell the user to wait for hours when the supplied distance/range data show otherwise. Label the time estimate as mechanical and uncertain, never a promise. If no fresh entry plan exists, say NO VALID ENTRY PRICE and do not invent one. Mention the next blocking candle close only as the next review, not an entry time. No broker, macro filler, generic warnings, or indicator dump. Never override ALIGN's internal verdict."
+        "Give a concise, decision-ready desk brief in English: current move (rising/falling/ranging/rebound/pullback), H4/H1 bias, M15 structure and intended direction, M5 entry trigger, volume context on M5/M15/H1/H4 including source provenance and relative spike/weakness when available (never treat GOLD proxy volume as actual XAUUSD spot volume), exact planned entry/SL/TP only from supplied live plan, distance from current price to entry, indicative minutes based on observed 5m candle ranges, and what to do now. If the target is far, say plainly whether it is worth waiting and give the indicative check-back window; never tell the user to wait for hours when the supplied distance/range data show otherwise. Label the time estimate as mechanical and uncertain, never a promise. If no fresh entry plan exists, say NO VALID ENTRY PRICE and do not invent one. Mention the next blocking candle close only as the next review, not an entry time. No broker, macro filler, generic warnings, or indicator dump. Never override ALIGN's internal verdict."
         if anglais else
-        "Fais un briefing de trading court et directement exploitable : mouvement actuel (hausse, baisse, range, rebond ou retracement), biais H4/H1, structure M15 et direction visée, déclencheur d'entrée M5, prix d'entrée/SL/TP exacts uniquement s'ils viennent d'un plan actif et frais, distance entre prix actuel et entrée, estimation indicative en minutes fondée sur les amplitudes réellement observées des bougies 5 min, puis quoi faire maintenant. Si l'entrée est loin, dis clairement si cela vaut la peine d'attendre et dans combien de temps revenir vérifier ; ne demande pas d'attendre des heures si la distance et le rythme observé indiquent le contraire. Présente le délai comme une projection mécanique incertaine, jamais comme une promesse. Sans plan d'entrée frais, écris AUCUN PRIX D'ENTRÉE VALIDE et n'invente rien. La prochaine clôture de l'unité bloquante est une réévaluation, pas une heure d'entrée. Aucun broker, remplissage macro, avertissement générique ou catalogue d'indicateurs. Ne contredis jamais le verdict interne."
+        "Fais un briefing de trading court et directement exploitable : mouvement actuel (hausse, baisse, range, rebond ou retracement), biais H4/H1, structure M15 et direction visée, déclencheur d'entrée M5, lecture des volumes M5/M15/H1/H4 avec provenance et comparaison à la moyenne lorsqu'elle est disponible (ne jamais présenter le volume proxy GOLD comme le volume réel du spot XAUUSD), prix d'entrée/SL/TP exacts uniquement s'ils viennent d'un plan actif et frais, distance entre prix actuel et entrée, estimation indicative en minutes fondée sur les amplitudes réellement observées des bougies 5 min, puis quoi faire maintenant. Si l'entrée est loin, dis clairement si cela vaut la peine d'attendre et dans combien de temps revenir vérifier ; ne demande pas d'attendre des heures si la distance et le rythme observé indiquent le contraire. Présente le délai comme une projection mécanique incertaine, jamais comme une promesse. Sans plan d'entrée frais, écris AUCUN PRIX D'ENTRÉE VALIDE et n'invente rien. La prochaine clôture de l'unité bloquante est une réévaluation, pas une heure d'entrée. Aucun broker, remplissage macro, avertissement générique ou catalogue d'indicateurs. Ne contredis jamais le verdict interne."
     )
     langue_cache = "en" if anglais else "fr"
     donnees = donnees_ia(m, r, cle)
