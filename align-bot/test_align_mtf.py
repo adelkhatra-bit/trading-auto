@@ -338,9 +338,11 @@ class AlignMtfRulesTest(unittest.TestCase):
         from unittest.mock import patch
         state = {}
         r = {"macro_data": {"disponible": False}}
-        with patch.object(align_bot, "macro_confluence", return_value={"disponible": False}), \\
-             patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}), \\
-             patch.object(align_bot, "ia", return_value="Gold is neutral; wait for a confirmed 4h close.") as call:
+        with (
+            patch.object(align_bot, "macro_confluence", return_value={"disponible": False}),
+            patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}),
+            patch.object(align_bot, "ia", return_value="Gold is neutral; wait for a confirmed 4h close.") as call,
+        ):
             message = align_bot.avis_ia(state, "GOLD", r, {}, anglais=True)
         self.assertIn("ALIGN AI opinion", message)
         self.assertIn("Gold is neutral", message)
