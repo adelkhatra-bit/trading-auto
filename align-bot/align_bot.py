@@ -3830,9 +3830,13 @@ def variation_une_heure(historique):
     return (valeur - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
 
 
-def dxy_info(etat):
+def dxy_info(etat, maintenant=None):
     h = (etat.get("macro") or {}).get("dxy") or []
     if not h:
+        return None
+    maintenant = time.time() if maintenant is None else maintenant
+    # Une cotation de plus de 15 minutes est trop ancienne pour guider un biais intraday.
+    if maintenant - h[-1][0] > 15 * 60 or h[-1][0] > maintenant + 60:
         return None
     variation = variation_une_heure(h)
     if variation is None:
@@ -3849,9 +3853,10 @@ def macro_confluence(etat, m, r=None):
     dxy, variation, age_min = di
     hist_eur = mc.get("eurusd") or []
     eur_change = None
-    eur_variation = variation_une_heure(hist_eur)
-    if eur_variation is not None:
-        eur_change = eur_variation[0]
+    if hist_eur and abs(hist_eur[-1][0] - (mc.get("dxy") or [[0]])[-1][0]) <= 8 * 60:
+        eur_variation = variation_une_heure(hist_eur)
+        if eur_variation is not None:
+            eur_change = eur_variation[0]
     if variation >= 0.25:
         dollar_state = "FORTE HAUSSE — IMPULSION HAUSSIÈRE"
     elif variation <= -0.25:
