@@ -1599,6 +1599,14 @@ def markup_position(m):
     ]})
 
 
+def markup_cloture(m):
+    return json.dumps({"inline_keyboard": [
+        [{"text": "📈 Mes résultats", "callback_data": "results:x"},
+         {"text": "🗂 Historique", "callback_data": f"history:{m}"}],
+        [{"text": "🔔 Suivre le prochain setup", "callback_data": f"auto:{m}"}]
+    ]})
+
+
 def texte_position(m, r, cle, cid):
     """Résumé opérationnel individuel : prix, stop réellement conseillé et objectifs."""
     tr = (cle or {}).get("trade")
@@ -2204,7 +2212,7 @@ def noter(etat, cid, m, pos, sortie, motif):
     st["pct"] += pct
     st["hist"] = (st["hist"] + [[m, round(pts, 2), round(pct, 2), motif, int(time.time()), pos["e"], sortie]])[-20:]
     pos["fini"] = True
-    _envoi_sur(cid, reply_markup=CLAVIER, text=(
+    _envoi_sur(cid, reply_markup=markup_cloture(m), text=(
         f"{'✅' if pts > 0 else '❌'} {m} clôturé\n"
         f"{motif}\n"
         f"📌 Entrée   {px(pos['e'])}\n"
@@ -2430,7 +2438,11 @@ def publier_resultat(etat, m, tr, sortie, motif, gain):
                 f"🛡 {ICONE.get(m, '')} {m} : SL touché, risque maîtrisé\n📊 Ça fait partie du jeu : on coupe petit, on gagne gros\n"
                 "💎 En VIP : toutes les positions pour se refaire + le coach\n🔓 VIP 49,90 € / mois 👇"))
         elif isinstance(pos, dict):
-            _envoi_sur(c, reply_markup=kb, text=(
+            kb_fin = json.dumps({"inline_keyboard": [
+                [{"text": "📈 Mes résultats", "callback_data": "results:x"},
+                 {"text": "🗂 Historique", "callback_data": f"history:{m}"}]
+            ]})
+            _envoi_sur(c, reply_markup=kb_fin, text=(
                 f"🔥 {ICONE.get(m, '')} {m} : bravo !\n📸 N'hésite pas à partager ta capture dans ALIGN Résultats\n👇 Bouton 📸 Partager mon gain"
                 if gain > 0 else
                 f"🛡 {ICONE.get(m, '')} {m} : SL touché, risque maîtrisé\n📊 Tous les résultats (TP et SL) sont publiés en toute transparence\n👇 Bouton ci-dessous"))
@@ -2508,6 +2520,13 @@ def traiter(etat, chats, updates):
         if cb:
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
+            if choix == "results":
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📈 Tes résultats")
+                except Exception:
+                    pass
+                _envoi_sur(qui, text=texte_resultats(etat, qui))
+                continue
             if choix == "history":
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🗂 Historique")
