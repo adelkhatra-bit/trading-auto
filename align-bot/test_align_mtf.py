@@ -1736,12 +1736,10 @@ class TelegramRateLimitTest(unittest.TestCase):
         self.assertNotIn("gold-chat", align_bot.TELEGRAM_RETRY_UNTIL)
 
     def test_telegram_does_not_repeat_network_calls_during_retry_after(self):
-        import io
-        error = align_bot.urllib.error.HTTPError(
-            "https://api.telegram.org/botTEST/sendMessage", 429, "Too Many Requests", {},
-            io.BytesIO(b'{"ok":false,"description":"Too Many Requests: retry after 120"}')
-        )
-        with unittest.mock.patch.object(align_bot.urllib.request, "urlopen", side_effect=error) as request:
+        with unittest.mock.patch.object(
+            align_bot, "http_json",
+            side_effect=RuntimeError("HTTP Error 429: Too Many Requests: retry after 120")
+        ) as request:
             with self.assertRaisesRegex(RuntimeError, "HTTP Error 429"):
                 align_bot.telegram("sendMessage", chat_id="gold-chat", text="test")
             with self.assertRaisesRegex(RuntimeError, "cooldown actif"):
@@ -1749,7 +1747,7 @@ class TelegramRateLimitTest(unittest.TestCase):
             self.assertEqual(request.call_count, 1)
 
     def test_telegram_cooldown_does_not_block_another_chat(self):
-        align_bot.TELEGRAM_RETRY_UNTIL["gold-chat"] = 2000
+        align_bot.TELEGRAM_RETRY_UNTIL["gold-chat"] = __import__("time").time() + 2000
         with self.assertRaisesRegex(RuntimeError, "cooldown actif"):
             align_bot.telegram("sendMessage", chat_id="gold-chat", text="test")
         with unittest.mock.patch.object(
