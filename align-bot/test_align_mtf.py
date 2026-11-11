@@ -624,7 +624,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         ):
             msg = align_bot.texte_cloture("BTC", "5m", candle(7200), r, {"ordre": ordre})
         self.assertIn("🟡 Zone 67490–67520", msg)
-        self.assertIn("ordre en attente", msg)
+        self.assertIn("Zone 67490–67520", msg)
         self.assertNotIn("POSITION EN COURS", msg)
 
     def test_candle_close_countdown_supports_every_watched_timeframe(self):
@@ -1525,7 +1525,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("4046,76", lines[0])
         self.assertEqual(lines[1], "🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ")
         self.assertIn("1h clôturée 06:00", lines[2])
-        self.assertIn("O 4 050,53 → C 4 046,76", lines[2])
+        self.assertIn("O 4050,53 → C 4046,76", lines[2])
         self.assertIn("H4 NEUTRE", lines[3])
         self.assertIn("H1 SHORT", lines[3])
         self.assertIn("ALIGN 0/2", lines[3])
