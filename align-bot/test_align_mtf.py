@@ -2880,3 +2880,14 @@ class TestMessagesPropres(unittest.TestCase):
         self.assertIn("3978,40", l[1])
         self.assertEqual(align_bot.voyants_unites(r)[0], "⚡ Petites unités : 1m🟥 3m🟥 5m🟥 15m🟥")
         self.assertEqual(align_bot.objectifs_marche(r, 0), [])
+
+    def test_alerte_retournement_3_sur_5_une_seule_fois(self):
+        tr = {"d": -1, "e": 74410.2}
+        r = {"dirs": [1, 1, 1, 0, -1, 0, 0, -1, 0, -1, -1]}
+        t = align_bot.alerte_retournement("BTC", r, tr)
+        self.assertIn("RETOURNEMENT EN PRÉPARATION", t)
+        self.assertIn("3/5", t)
+        self.assertIsNone(align_bot.alerte_retournement("BTC", r, tr))
+        r["dirs"][:5] = [-1, -1, -1, -1, -1]
+        self.assertIsNone(align_bot.alerte_retournement("BTC", r, tr))
+        self.assertNotIn("ret_dit", tr)

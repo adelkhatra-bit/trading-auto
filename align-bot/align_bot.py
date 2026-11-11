@@ -1260,7 +1260,7 @@ TRAD = {
 "🕒 Heure de clôture de la bougie :": "🕒 Candle close time:",
 "⏳ PROCHAINE CLÔTURE ": "⏳ NEXT CANDLE CLOSE ",
 "⏱ Temps restant :": "⏱ Time remaining:",
-"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT": "⏳ 4h is neutral: no LONG or SHORT direction", "⏳ Le 1h ne confirme pas la tendance 4h": "⏳ 1h does not confirm the 4h trend", "🔔 Je te préviens dès que c'est validé": "🔔 I'll tell you as soon as it's validated", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
+"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "↩ RETOURNEMENT EN PRÉPARATION": "↩ REVERSAL BUILDING", "petites unités ont tourné contre le": "small timeframes turned against the", "🔒 Sécurise : stop à BE": "🔒 Secure: stop at BE", "si tu es en gain": "if you are in profit", "✅ Retournement confirmé si le 15 min ET la 1 h clôturent vers le": "✅ Reversal confirmed if the 15m AND the 1h close towards", "🙅 Aucune entrée en sens inverse avant cette confirmation": "🙅 No entry the other way before this confirmation", "⚡ Petites unités": "⚡ Small timeframes", "🏔 Grandes unités": "🏔 Big timeframes", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT": "⏳ 4h is neutral: no LONG or SHORT direction", "⏳ Le 1h ne confirme pas la tendance 4h": "⏳ 1h does not confirm the 4h trend", "🔔 Je te préviens dès que c'est validé": "🔔 I'll tell you as soon as it's validated", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
 "🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
 "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
 "🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
@@ -2529,6 +2529,30 @@ def direction_attente(r):
     if d4 == -1:
         return "AUCUNE DIRECTION CONFIRMÉE (4 h SHORT, 1 h pas encore d'accord)"
     return "AUCUNE DIRECTION CONFIRMÉE (4 h neutre)"
+
+
+def alerte_retournement(m, r, tr):
+    """Même voyant que l'indicateur (↩ 3/5) : les petites unités 1 / 3 / 5 / 10 / 15 min tournent contre la position.
+    Une seule alerte par position ; elle se réarme si les unités repartent dans le bon sens."""
+    dirs = r.get("dirs") or []
+    if len(dirs) < 8 or not tr:
+        return None
+    d = tr["d"]
+    n = sum(1 for k in range(5) if dirs[k] == -d)
+    if n < 3:
+        if n <= 1:
+            tr.pop("ret_dit", None)
+        return None
+    if tr.get("ret_dit"):
+        return None
+    tr["ret_dit"] = True
+    inverse = "LONG ⬆️" if d == -1 else "SHORT ⬇️"
+    return (f"↩ RETOURNEMENT EN PRÉPARATION — {ICONE.get(m, '')} {m}\n"
+            f"⚠️ {n}/5 petites unités ont tourné contre le {'LONG' if d == 1 else 'SHORT'}\n"
+            + "\n".join(voyants_unites(r)) + "\n"
+            f"🔒 Sécurise : stop à BE ≈ {px(tr['e'])} si tu es en gain\n"
+            f"✅ Retournement confirmé si le 15 min ET la 1 h clôturent vers le {inverse}\n"
+            "🙅 Aucune entrée en sens inverse avant cette confirmation")
 
 
 def court(texte, n=120):
@@ -5350,6 +5374,11 @@ def agent(m, r, cle, ferme):
             out.append(f"🎯 TP1 TOUCHÉ — {ICONE.get(m, '')} {m}\n🚦 🟢 ON RESTE EN POSITION\n{SENS[d]}\n"
                        f"💰 TP1 ≈ {px(t1)} ✅\n✂️ Prends une partie des gains\n🔒 Vérifie que ton SL est à BE ≈ {px(e)}\n"
                        f"📈 Garde le reste : le marché peut encore pousser\n🏁 TP2 visé ≈ {px(t2)}\n🙅 Ne coupe pas tout sur le TP1")
+            return out
+        # ↩ Voyants de retournement (comme l'indicateur) : 3/5 petites unités contre la position = alerte, 1 fois.
+        alerte_r = alerte_retournement(m, r, tr)
+        if alerte_r:
+            out.append(alerte_r)
             return out
         risque_ = abs(e - sl)
         if not tr.get("be_dit") and risque_ > 0 and d * (p - e) >= 1.2 * risque_ and d * (r["b15"][-1]["c"] - e) >= r["atr"]:
