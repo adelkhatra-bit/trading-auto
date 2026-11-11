@@ -1,13 +1,6 @@
 name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "align-bot/**"
-      - "!align-bot/test_*.py"
-      - ".github/workflows/align-bot.yml"
-      - ".github/workflows/align-bot-validation.yml"
   schedule:
     - cron: "0 */6 * * *"
   workflow_dispatch:
@@ -19,7 +12,7 @@ permissions:
 concurrency:
   group: align-bot
   # Remplacer immédiatement l'ancien worker lors d'une mise à jour ; son état est sauvegardé dans le cache avant le relais. Les tests précèdent toujours le redémarrage.
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -85,53 +78,3 @@ jobs:
         with:
           path: align-bot/state.json
           key: align-etat-${{ github.run_id }}
-
-      - name: Alerter les administrateurs si le robot échoue ou est annulé
-        if: always() && (failure() || cancelled())
-        continue-on-error: true
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          JOB_STATUS: ${{ job.status }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          python3 - <<'PY'
-          import json, os, urllib.parse, urllib.request
-          token = os.environ.get("TELEGRAM_TOKEN", "").strip()
-          if not token:
-              print("Alerte Telegram impossible: TELEGRAM_TOKEN absent")
-              raise SystemExit(0)
-          recipients = set()
-          try:
-              with open("state.json", encoding="utf-8") as f:
-                  state = json.load(f)
-              recipients.update(str(x) for x in state.get("proprio", []) if str(x).strip())
-          except Exception as exc:
-              print("Mémoire propriétaire indisponible:", type(exc).__name__)
-          fallback = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-          if fallback:
-              recipients.add(fallback)
-          if not recipients:
-              print("Aucun destinataire administrateur disponible")
-              raise SystemExit(0)
-          status = os.environ.get("JOB_STATUS", "failure").upper()
-          message = (
-              "⚠️ ALIGN — ALERTE TECHNIQUE\n"
-              f"Le workflow du robot est {status}.\n"
-              "Aucune entrée broker n'a été envoyée par cette alerte.\n"
-              "Consulte les journaux GitHub pour le diagnostic.\n"
-              + os.environ.get("RUN_URL", "")
-          )
-          for chat_id in recipients:
-              data = urllib.parse.urlencode({"chat_id": chat_id, "text": message}).encode()
-              req = urllib.request.Request(
-                  "https://api.telegram.org/bot" + token + "/sendMessage",
-                  data=data,
-                  method="POST"
-              )
-              try:
-                  with urllib.request.urlopen(req, timeout=15) as response:
-                      print("ALERT_SENT", chat_id, response.status)
-              except Exception as exc:
-                  print("ALERT_FAILED", chat_id, type(exc).__name__)
-          PY
