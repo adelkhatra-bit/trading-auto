@@ -1071,6 +1071,26 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(data["prochaine_reevaluation"]["unite_bloquante"], "4h")
         self.assertIn("pas une prévision d'entrée", data["prochaine_reevaluation"]["signification"])
 
+    def test_ai_context_calculates_distance_and_mechanical_approach_time_from_live_plan(self):
+        from unittest.mock import patch
+        r = {
+            "m1": [candle(1, c=100.0)], "dirs": [0] * 11, "rsis": [50] * 11,
+            "posD": 0.5, "posW": 0.5, "confirme": 0, "b5": [
+                {"o": 100, "h": 101, "l": 99, "c": 100} for _ in range(12)
+            ], "b15": [], "b1h": [], "b4h": [], "atr": 2.0,
+            "macro_data": {}, "tv_indicator_mtf": {}
+        }
+        plan = {"available": True, "entry": 104.0, "sl": 98.0, "tp": 112.0, "direction": 1}
+        with patch.object(align_bot, "verdict", return_value=("ATTENTE", "Attendre le déclencheur")), \
+             patch.object(align_bot, "plan_indicateur", return_value=plan), \
+             patch.object(align_bot, "profil_strategie", return_value={"mode": "INTRADAY"}), \
+             patch.object(align_bot, "timeframe_attendu", return_value="5m"), \
+             patch.object(align_bot, "prochaine_cloture_bougie", return_value=18000):
+            data = align_bot.donnees_ia("GOLD", r, {})
+        self.assertEqual(data["distance_plan_entree"]["entree_visee"], 104.0)
+        self.assertEqual(data["distance_plan_entree"]["distance_prix"], 4.0)
+        self.assertEqual(data["estimation_approche_entree"]["minutes_indicatives"], 10)
+
     def test_details_button_returns_ai_briefing_and_keeps_raw_technical_details(self):
         import json
         from unittest.mock import patch
@@ -1912,6 +1932,27 @@ class TestTradingViewReportRegression(unittest.TestCase):
         self.assertIn("Entrée indicateur", message)
         self.assertIn("Profil SWING", message)
 
+
+class TestOneTapMarketAnalysis(unittest.TestCase):
+    def test_analysis_button_asks_market_and_gold_choice_returns_only_gold_request(self):
+        from unittest.mock import patch
+        update = {"update_id": 99601, "callback_query": {
+            "id": "choose-gold", "data": "analysechoice:GOLD",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "telegram"):
+            demandes = align_bot.traiter({}, set(), [update])
+        self.assertEqual(demandes, [("101", "GOLD")])
+
+    def test_both_market_choice_returns_exactly_btc_and_gold(self):
+        from unittest.mock import patch
+        update = {"update_id": 99602, "callback_query": {
+            "id": "choose-both", "data": "analysechoice:BOTH",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "telegram"):
+            demandes = align_bot.traiter({}, set(), [update])
+        self.assertEqual(set(demandes), {("101", "BTC"), ("101", "GOLD")})
 
 class TestFollowPositionMarketChoice(unittest.TestCase):
     def test_follow_button_opens_explicit_btc_gold_or_both_menu(self):

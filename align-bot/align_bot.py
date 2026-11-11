@@ -1014,7 +1014,7 @@ def verdict(r, cle):
 # ───────── Langue : chaque utilisateur choisit 🇫🇷 / 🇬🇧, tout le système suit ─────────
 TRAD = {
 # Boutons
-"🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis",
+"🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis", "📊 Faire une analyse": "📊 Run an analysis",
 "📡 Mes marchés": "📡 My markets", "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
 "🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
 "✅ Sélection enregistrée": "✅ Selection saved",
@@ -1726,13 +1726,13 @@ def telegram(methode, **params):
     return resultat
 
 # ───────── Boutons et jauge ─────────
-CLAVIER = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
+CLAVIER = json.dumps({"keyboard": [[{"text": "📊 Faire une analyse"}],
                                    [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
                                    [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
                                    [{"text": "📡 Mes marchés"}],
                                    [{"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
-CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🟠 Analyse BTC"}, {"text": "🥇 Analyse Gold"}],
+CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "📊 Faire une analyse"}],
                                             [{"text": "💎 Devenir VIP"}],
                                             [{"text": "📸 Partager mon gain"}, {"text": "📡 Mes marchés"}],
                                             [{"text": "🌐 English"}]],
@@ -1941,19 +1941,65 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
 def donnees_ia(m, r, cle):
     titre, raison = verdict(r, cle)
     o = (cle or {}).get("ordre") or {}
+    dirs = r.get("dirs") or [0] * 11
+    rsis = r.get("rsis") or [50] * 11
     data = {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
-            "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
-            "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
+            "sens 1m/5m/15m/1h/4h/Daily": [dirs[i] if len(dirs) > i else 0 for i in (0, 2, 4, 7, 9, 10)],
+            "RSI 5m/15m/1h/4h": [round(rsis[i]) if len(rsis) > i else 50 for i in (2, 4, 7, 9)],
             "profil_strategie": profil_strategie(r),
             "plan_indicateur_tradingview": plan_indicateur(r),
             "snapshots_indicateur_tradingview": (r.get("tv_indicator_mtf") or {}).get("snapshots", {}),
-            "lecture_multi_unites": {"M5": r["dirs"][2], "M15": r["dirs"][4], "H1": r["dirs"][7], "H4": r["dirs"][9]},
-            "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
+            "lecture_multi_unites": {"M5": dirs[2] if len(dirs) > 2 else 0, "M15": dirs[4] if len(dirs) > 4 else 0, "H1": dirs[7] if len(dirs) > 7 else 0, "H4": dirs[9] if len(dirs) > 9 else 0},
+            "position Daily (0 bas, 1 haut)": round(r.get("posD", 0.5), 2), "position Weekly": round(r.get("posW", 0.5), 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
             "contexte_macro_dollar": r.get("macro_data") or {}, 
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
+    # Distance réelle au plan d'entrée et rythme observé : aide à décider si l'attente vaut la peine.
+    prix_actuel = float(r["m1"][-1]["c"])
+    plan = plan_indicateur(r)
+    cible_entree = None
+    origine_plan = None
+    if plan.get("available"):
+        cible_entree, origine_plan = float(plan["entry"]), "TradingView ROBOT V12 frais"
+    elif o.get("e") is not None:
+        cible_entree, origine_plan = float(o["e"]), "ordre ALIGN actif"
+    if cible_entree is not None:
+        distance = abs(cible_entree - prix_actuel)
+        data["distance_plan_entree"] = {
+            "prix_actuel": round(prix_actuel, 5), "entree_visee": round(cible_entree, 5),
+            "distance_prix": round(distance, 5), "sens_du_deplacement": "hausse" if cible_entree > prix_actuel else "baisse" if cible_entree < prix_actuel else "au niveau actuel",
+            "origine": origine_plan,
+            "distance_en_ATR_15m": round(distance / max(float(r.get("atr") or 0), 1e-9), 2) if r.get("atr") else None
+        }
+    else:
+        data["distance_plan_entree"] = {"disponible": False, "raison": "aucun ordre ALIGN ni plan TradingView frais avec prix d'entrée exploitable"}
+    # Rythme des dernières bougies 5m : estimation indicative, jamais un compte à rebours garanti.
+    b5 = r.get("b5") or []
+    ranges = [max(float(b.get("h", 0)) - float(b.get("l", 0)), abs(float(b.get("h", 0)) - float(b.get("c", 0))), abs(float(b.get("l", 0)) - float(b.get("c", 0)))) for b in b5[-12:] if b.get("h") is not None and b.get("l") is not None and b.get("c") is not None]
+    moyenne_5m = sum(ranges) / len(ranges) if ranges else 0
+    if cible_entree is not None and moyenne_5m > 0:
+        bougies = distance / moyenne_5m
+        data["estimation_approche_entree"] = {
+            "mouvement_moyen_5m": round(moyenne_5m, 5),
+            "bougies_5m_indicatives": round(bougies, 1),
+            "minutes_indicatives": round(bougies * 5),
+            "avertissement": "projection mécanique fondée sur les 12 dernières bougies, non prédictive et à ne pas traiter comme heure d'entrée"
+        }
+    else:
+        data["estimation_approche_entree"] = {"disponible": False, "raison": "pas de plan d'entrée exploitable ou historique 5m insuffisant"}
+    # Les dernières bougies fournissent à l'IA une vraie lecture de structure (rebond, retracement, range).
+    structure = {}
+    for label, key in (("M5", "b5"), ("M15", "b15"), ("H1", "b1h"), ("H4", "b4h")):
+        bars = (r.get(key) or [])[-4:]
+        structure[label] = [
+            {"o": round(float(b["o"]), 5), "h": round(float(b["h"]), 5),
+             "l": round(float(b["l"]), 5), "c": round(float(b["c"]), 5)}
+            for b in bars if all(b.get(k) is not None for k in ("o", "h", "l", "c"))
+        ]
+    data["structure_bougies_recentes"] = structure
+    data["ATR_15m"] = round(float(r.get("atr") or 0), 5) or None
     tf = timeframe_attendu(r, cle or {})
     close_ts = prochaine_cloture_bougie(r, tf, time.time())
     data["prochaine_reevaluation"] = {
@@ -1967,9 +2013,9 @@ def donnees_ia(m, r, cle):
 def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
     consigne = (
-        "Write in clear English, maximum 8 compact sections: (1) market direction now; (2) H4/H1 primary bias and conflicts; (3) M15 pullback/setup and intended direction; (4) M5 trigger and exact candle-close condition; (5) entry zone, SL and TP only if supplied, otherwise unavailable; (6) invalidation; (7) next review time from the supplied blocking timeframe; (8) what to do now, including when to check again or rest. Never predict an exact entry time or tick count. The next candle close is a review time, not an entry promise. Countertrend M15/M5 is scalp-only. Never override the internal verdict."
+        "Give a concise, decision-ready desk brief in English: current move (rising/falling/ranging/rebound/pullback), H4/H1 bias, M15 structure and intended direction, M5 entry trigger, exact planned entry/SL/TP only from supplied live plan, distance from current price to entry, indicative minutes based on observed 5m candle ranges, and what to do now. If the target is far, say plainly whether it is worth waiting and give the indicative check-back window; never tell the user to wait for hours when the supplied distance/range data show otherwise. Label the time estimate as mechanical and uncertain, never a promise. If no fresh entry plan exists, say NO VALID ENTRY PRICE and do not invent one. Mention the next blocking candle close only as the next review, not an entry time. No broker, macro filler, generic warnings, or indicator dump. Never override ALIGN's internal verdict."
         if anglais else
-        "Rédige en français clair, 8 rubriques courtes maximum : (1) sens actuel du marché ; (2) biais directeur H4/H1 et conflits ; (3) retracement/setup M15 et direction visée ; (4) déclencheur M5 et condition exacte de clôture ; (5) zone d'entrée, SL et TP uniquement si les données les fournissent ; (6) invalidation ; (7) prochaine heure de réévaluation selon l'unité bloquante ; (8) action maintenant, y compris quand revenir vérifier ou se reposer. Ne prédis jamais une heure exacte d'entrée ni un nombre de ticks. La prochaine clôture est une heure de réévaluation, pas une promesse d'entrée. Un setup M15/M5 contre H4/H1 reste un scalp contre-tendance. Ne contredis jamais le verdict interne."
+        "Fais un briefing de trading court et directement exploitable : mouvement actuel (hausse, baisse, range, rebond ou retracement), biais H4/H1, structure M15 et direction visée, déclencheur d'entrée M5, prix d'entrée/SL/TP exacts uniquement s'ils viennent d'un plan actif et frais, distance entre prix actuel et entrée, estimation indicative en minutes fondée sur les amplitudes réellement observées des bougies 5 min, puis quoi faire maintenant. Si l'entrée est loin, dis clairement si cela vaut la peine d'attendre et dans combien de temps revenir vérifier ; ne demande pas d'attendre des heures si la distance et le rythme observé indiquent le contraire. Présente le délai comme une projection mécanique incertaine, jamais comme une promesse. Sans plan d'entrée frais, écris AUCUN PRIX D'ENTRÉE VALIDE et n'invente rien. La prochaine clôture de l'unité bloquante est une réévaluation, pas une heure d'entrée. Aucun broker, remplissage macro, avertissement générique ou catalogue d'indicateurs. Ne contredis jamais le verdict interne."
     )
     langue_cache = "en" if anglais else "fr"
     donnees = donnees_ia(m, r, cle)
@@ -2873,10 +2919,10 @@ def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
     if etat.get("menu") == 4:
         return
-    fr = [("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
+    fr = [("faire_analyse", "📊 Faire une analyse"), ("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
           ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"), ("marches", "📡 Mes marchés"),
           ("boutons", "⌨️ Faire revenir les boutons"), ("english", "🌐 English")]
-    en = [("analyse_btc", "🟠 BTC Analysis"), ("analyse_gold", "🥇 Gold Analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
+    en = [("faire_analyse", "📊 Run an analysis"), ("analyse_btc", "🟠 BTC Analysis"), ("analyse_gold", "🥇 Gold Analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
           ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"), ("marches", "📡 My markets"),
           ("boutons", "⌨️ Bring back the buttons"), ("francais", "🌐 Français")]
     try:
@@ -3081,6 +3127,14 @@ def traiter(etat, chats, updates):
                 continue
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb_chat["id"])
+            if choix == "analysechoice" and mk in ("BTC", "GOLD", "BOTH"):
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📊 Analyse en cours")
+                except Exception:
+                    pass
+                for marche in (("BTC", "GOLD") if mk == "BOTH" else (mk,)):
+                    demandes.append((qui, marche))
+                continue
             if choix == "markets" and mk in ("BTC", "GOLD", "BOTH"):
                 selectionner_marches_suivi(etat, qui, mk)
                 try:
@@ -3424,7 +3478,14 @@ def traiter(etat, chats, updates):
         if "mon bot" in txt or "mon_bot" in txt:
             menu_bot(etat, cid)
             continue
-        if "analyse" in txt or "etat" in txt:
+        if "faire une analyse" in txt or "run an analysis" in txt:
+            _envoi_sur(cid, text=("📊 Quel marché veux-tu analyser ?" if cid not in LANG_EN else "📊 Which market do you want to analyse?"),
+                       reply_markup=json.dumps({"inline_keyboard": [
+                           [{"text": "🥇 GOLD", "callback_data": "analysechoice:GOLD"}],
+                           [{"text": "🟠 BTC", "callback_data": "analysechoice:BTC"}],
+                           [{"text": "🥇 + 🟠 Les deux", "callback_data": "analysechoice:BOTH"}]
+                       ]}))
+        elif "analyse" in txt or "etat" in txt:
             demandes.append((cid, marche_demande(txt)))
         elif "rentre" in txt or txt.strip() == "oui":
             repondre(etat, cid, True)
@@ -3697,7 +3758,7 @@ def destinataires_message(etat, chats, texte):
     # La chaîne VIP reste commune et reçoit les deux marchés, sans préférence individuelle.
     if etat.get("canal"):
         cibles.append(str(etat["canal"]))
-    return list(dict.fromkeys(cibles))
+    return sorted(set(cibles))
 
 def destinataires(etat, chats):
     """Téléphones qui reçoivent les signaux + la chaîne VIP."""
