@@ -1489,6 +1489,16 @@ TRAD.update({
     "↩️ Retour à l'analyse": "↩️ Back to analysis",
     "🎯 Voir les niveaux": "🎯 View levels",
     "ℹ️ Comprendre l'analyse": "ℹ️ Understand the analysis",
+    "📡 Mes marchés": "📡 My markets",
+    "🟠 BTC uniquement": "🟠 BTC only",
+    "🥇 GOLD uniquement": "🥇 GOLD only",
+    "🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD",
+    "✅ 🟠 BTC uniquement": "✅ 🟠 BTC only",
+    "✅ 🥇 GOLD uniquement": "✅ 🥇 GOLD only",
+    "✅ 🟠 BTC + 🥇 GOLD": "✅ 🟠 BTC + 🥇 GOLD",
+    "📡 CHOISIS LES MARCHÉS QUE TU SOUHAITES SUIVRE": "📡 CHOOSE THE MARKETS YOU WANT TO FOLLOW",
+    "Les analyses et alertes privées seront filtrées selon ton choix.": "Private analyses and alerts will be filtered according to your choice.",
+    "Les positions déjà ouvertes restent suivies jusqu'à leur clôture.": "Already-open positions will continue to be monitored until closed.",
 })
 
 TRAD.update({
@@ -2831,13 +2841,13 @@ COMMANDES = {"/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse 
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
-    if etat.get("menu") == 3:
+    if etat.get("menu") == 4:
         return
     fr = [("analyse_btc", "🟠 Analyse BTC"), ("analyse_gold", "🥇 Analyse Gold"), ("mon_bot", "🤖 Mon bot ON / OFF"),
-          ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"),
+          ("resultats", "📈 Mes résultats"), ("gain", "📸 Partager mon gain"), ("vip", "💎 Devenir VIP"), ("marches", "📡 Mes marchés"),
           ("boutons", "⌨️ Faire revenir les boutons"), ("english", "🌐 English")]
     en = [("analyse_btc", "🟠 BTC Analysis"), ("analyse_gold", "🥇 Gold Analysis"), ("mon_bot", "🤖 My bot ON / OFF"),
-          ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"),
+          ("resultats", "📈 My results"), ("gain", "📸 Share my profit"), ("vip", "💎 Become VIP"), ("marches", "📡 My markets"),
           ("boutons", "⌨️ Bring back the buttons"), ("francais", "🌐 Français")]
     try:
         telegram("setMyCommands", commands=json.dumps([{"command": c, "description": d} for c, d in fr]))
@@ -2852,7 +2862,7 @@ def installer_menu(etat):
                                                   "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n📰 News et discours Fed gratuits\n\n"
                                                   "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux, le coach (BE, TP)\n\n"
                                                   "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
-        etat["menu"] = 3
+        etat["menu"] = 4
     except Exception as ex:
         print("menu", ex)
 
@@ -3580,14 +3590,14 @@ def menu_marches(etat, cid):
     lignes = [[{"text": ("✅ " if choix == "BTC" else "") + labels["BTC"], "callback_data": "markets:BTC"}],
               [{"text": ("✅ " if choix == "GOLD" else "") + labels["GOLD"], "callback_data": "markets:GOLD"}],
               [{"text": ("✅ " if choix == "BOTH" else "") + labels["BOTH"], "callback_data": "markets:BOTH"}]]
-    _envoi_sur(cid, text="📡 CHOISIS LES MARCHÉS QUE TU SOUHAITES SUIVRE\\n\\nLes analyses et alertes privées seront filtrées selon ton choix.\\nLes positions déjà ouvertes restent suivies jusqu'à leur clôture.",
+    _envoi_sur(cid, text="📡 CHOISIS LES MARCHÉS QUE TU SOUHAITES SUIVRE\n\nLes analyses et alertes privées seront filtrées selon ton choix.\nLes positions déjà ouvertes restent suivies jusqu'à leur clôture.",
                reply_markup=json.dumps({"inline_keyboard": lignes}))
 
 def marche_du_message(texte):
     """Détecte le marché dans l'en-tête d'une notification ; les messages macro mixtes exigent BOTH."""
     tete = " ".join(str(texte or "").splitlines()[:3]).upper()
-    btc = bool(re.search(r"\\bBTC\\b|BITCOIN", tete))
-    gold = bool(re.search(r"\\bGOLD\\b|XAUUSD", tete))
+    btc = bool(re.search(r"\bBTC\b|BITCOIN", tete))
+    gold = bool(re.search(r"\bGOLD\b|XAUUSD", tete))
     if btc and gold:
         return "BOTH"
     if btc:
@@ -3654,7 +3664,7 @@ def jauge(m, r, cle, cid=None, canal=False):
     return (f"{tete}\n🔌 Prochaine position   {SENS[d]}\n{barre_pct(pct)}\n"
             f"🟨 Zone   {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}\n{etape}")
 
-def maj_jauge(m, r, cle, chats, canal=None):
+def maj_jauge(etat, m, r, cle, chats, canal=None):
     for cid in list(chats) + ([canal] if canal else []):
         if cid != canal and not marche_autorise(etat, cid, m):
             mid = cle.get("jauge", {}).pop(cid, None)
@@ -4937,7 +4947,7 @@ def un_tour(etat, chats):
             envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and any(k in texte for k in ("JE PRÉPARE", "J'ENTRE MAINTENANT")), clavier)
         for nom_marche in MARCHES:
             if nom_marche in derniers:
-                maj_jauge(nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
+                maj_jauge(etat, nom_marche, derniers[nom_marche], etat[nom_marche], chats, etat.get("canal"))
                 try:
                     maj_chronos(etat, nom_marche, derniers[nom_marche])
                 except Exception as ex:
