@@ -1527,7 +1527,7 @@ def analyse_marche(etat, pair):
     r["annonce"] = annonce_proche(etat or {}, int(time.time()))
     r["news"] = news_txt(etat or {})
     try:
-        r["macro"] = contexte_macro(etat or {}, m)
+        r["macro"] = contexte_macro(etat or {}, m, r)
     except Exception:
         pass
     return r
@@ -1565,6 +1565,11 @@ IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds 
              "Tu t'appuies UNIQUEMENT sur les données fournies : aucun prix inventé, jamais de contradiction avec le verdict du bot. "
              "Si le prix est en haut de sa zone Daily/Weekly, près d'une résistance, avec divergence ou essoufflement, déconseille de poursuivre un LONG; "
              "ne propose un SHORT que si le retournement est confirmé par les clôtures et le contexte 1h. "
+             "Analyse aussi le DXY et EUR/USD : le DXY mesure la force du dollar face à un panier de devises, dominé par l'euro. "
+             "Compare leur direction et leur variation sur 1h avec le BTC ou le Gold. Signale une impulsion forte du dollar, "
+             "une relation inverse cohérente ou une divergence haussière/baissière de l'actif. "
+             "Ne déduis JAMAIS un signal inverse automatique : le DXY est un contexte, pas un déclencheur. "
+             "Si les données macro sont absentes ou trop anciennes, dis-le explicitement et n'invente rien. "
              "Une confluence en % n'est pas une probabilité de gain. Rappelle le SL et le risque. Pas de promesse de gain.")
 
 def _appel_ia(url, modele, cle, messages):
@@ -1641,10 +1646,12 @@ def donnees_ia(m, r, cle):
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
             "niveau de cassure 5 min": round(niveau_cassure(r, r["confirme"]), 2) if r["confirme"] and len(r["b5"]) >= 22 else None,
+            "contexte_macro_dollar": r.get("macro_data") or {}, 
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
 
 def avis_ia(etat, m, r, cle):
-    t = ia(etat, "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer.", donnees_ia(m, r, cle),
+    r["macro_data"] = macro_confluence(etat, m, r)
+    t = ia(etat, "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer. Vérifie explicitement le DXY, EUR/USD et les divergences macro fournies.", donnees_ia(m, r, cle),
            cle_cache=f"analyse_{m}_{int(time.time() // 600)}")
     if t:
         return f"🧠 L'avis de l'IA ALIGN\n{t}"
@@ -3777,6 +3784,10 @@ def macro(etat):
                   * v["USDCAD"] ** 0.091 * v["USDSEK"] ** 0.042 * v["USDCHF"] ** 0.036)
             mc["dxy"].append((now, round(dx, 3)))
             mc["dxy"] = [x for x in mc["dxy"] if now - x[0] <= 3 * 3600 + 600]
+            # EUR/USD est la paire majeure de référence du panier DXY : on la conserve
+            # au même instant pour contrôler la relation inverse sans mélanger les horaires.
+            mc.setdefault("eurusd", []).append((now, round(v["EURUSD"], 6)))
+            mc["eurusd"] = [x for x in mc["eurusd"] if now - x[0] <= 3 * 3600 + 600]
         except Exception as ex:
             print("dxy", ex)
     if now - mc.get("us10_t", 0) >= 3 * 3600:
@@ -3801,15 +3812,76 @@ def dxy_info(etat):
     ref = min(h, key=lambda x: abs((now_t - x[0]) - 3600))
     return v, (v - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
 
-def contexte_macro(etat, m):
-    """Lignes « contexte » propres à CHAQUE marché (Gold et BTC bien séparés)."""
-    l = []
+def macro_confluence(etat, m, r=None):
+    """Biais dollar/EURUSD et divergence avec l'actif ; contexte seulement, jamais un déclencheur."""
+    mc = etat.get("macro") or {}
     di = dxy_info(etat)
-    if di:
-        v, ch, mn = di
-        fl = "⬆️" if ch > 0.03 else "⬇️" if ch < -0.03 else "➖"
-        effet = ("favorable au 🟩 LONG" if ch < -0.03 else "frein pour le 🟩 LONG" if ch > 0.03 else "neutre")
-        l.append(f"💵 Dollar (DXY) {v:.2f} {fl} {ch:+.2f} % en {mn} min → {effet} {m}")
+    if not di:
+        return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES"}
+    dxy, variation, age_min = di
+    hist_eur = mc.get("eurusd") or []
+    eur_change = None
+    if len(hist_eur) >= 2:
+        now_t = hist_eur[-1][0]
+        ref = min(hist_eur, key=lambda x: abs((now_t - x[0]) - 3600))
+        if ref[1]:
+            eur_change = (hist_eur[-1][1] - ref[1]) / ref[1] * 100
+    if variation >= 0.25:
+        dollar_state = "FORTE HAUSSE — IMPULSION HAUSSIÈRE"
+    elif variation <= -0.25:
+        dollar_state = "FORTE BAISSE — IMPULSION BAISSIÈRE"
+    elif variation > 0.03:
+        dollar_state = "HAUSSIER"
+    elif variation < -0.03:
+        dollar_state = "BAISSIER"
+    else:
+        dollar_state = "NEUTRE"
+    fx_check = "INDISPONIBLE"
+    if eur_change is not None:
+        if variation > 0.03 and eur_change < -0.03 or variation < -0.03 and eur_change > 0.03:
+            fx_check = "COHÉRENT : DXY et EUR/USD évoluent en sens inverse"
+        elif abs(variation) <= 0.03 or abs(eur_change) <= 0.03:
+            fx_check = "MIXTE : mouvement faible"
+        else:
+            fx_check = "DIVERGENCE : DXY et EUR/USD évoluent dans le même sens"
+    asset_change = None
+    if r and r.get("b15") and len(r["b15"]) >= 5:
+        b = r["b15"]
+        ref_close = b[-5]["c"]
+        if ref_close:
+            asset_change = (b[-1]["c"] - ref_close) / ref_close * 100
+    divergence = "NON ÉVALUABLE"
+    if asset_change is not None and abs(variation) > 0.03 and abs(asset_change) > 0.03:
+        if variation > 0 and asset_change > 0:
+            divergence = "DIVERGENCE HAUSSIÈRE : l'actif résiste malgré un dollar en hausse"
+        elif variation < 0 and asset_change < 0:
+            divergence = "DIVERGENCE BAISSIÈRE : l'actif baisse malgré un dollar en recul"
+        elif variation > 0 and asset_change < 0:
+            divergence = "CORRÉLATION INVERSE : dollar en hausse, actif en baisse"
+        else:
+            divergence = "CORRÉLATION INVERSE : dollar en baisse, actif en hausse"
+    return {
+        "disponible": True, "dxy": dxy, "dxy_variation_1h_pct": round(variation, 4),
+        "age_reference_min": age_min, "dollar_direction": dollar_state,
+        "eurusd_variation_1h_pct": round(eur_change, 4) if eur_change is not None else None,
+        "controle_dxy_eurusd": fx_check, "actif": m,
+        "actif_variation_1h_pct": round(asset_change, 4) if asset_change is not None else None,
+        "divergence_actif_dollar": divergence,
+        "regle": "Contexte macro uniquement : ne jamais inverser LONG/SHORT ni autoriser une entrée sans confirmations 4h/1h/15m/5m."
+    }
+
+
+def contexte_macro(etat, m, r=None):
+    """Lignes macro vérifiables et propres à chaque marché."""
+    l = []
+    mc = macro_confluence(etat, m, r)
+    if mc["disponible"]:
+        d = mc["dxy_variation_1h_pct"]
+        fleche = "⬆️" if d > 0.03 else "⬇️" if d < -0.03 else "➖"
+        l.append(f"💵 DXY {mc['dxy']:.2f} {fleche} {d:+.2f} % / 1 h — dollar {mc['dollar_direction']}")
+        l.append(f"💶 EUR/USD : {mc['controle_dxy_eurusd']}" +
+                 (f" ({mc['eurusd_variation_1h_pct']:+.2f} % / 1 h)" if mc["eurusd_variation_1h_pct"] is not None else " (historique en constitution)"))
+        l.append(f"🔀 {m} / dollar : {mc['divergence_actif_dollar']}")
     us = (etat.get("macro") or {}).get("us10")
     if us and m == "GOLD":
         dv = us[0] - us[1]
@@ -4294,7 +4366,7 @@ def un_tour(etat, chats):
         r["fermeture"] = nom_marche == "GOLD" and (0 < f_ <= 35 or -120 <= f_ <= 0)   # jusqu'à 10 min après la réouverture
         r["news"] = news_txt(etat)
         try:
-            r["macro"] = contexte_macro(etat, nom_marche)
+            r["macro"] = contexte_macro(etat, nom_marche, r)
         except Exception:
             pass
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
