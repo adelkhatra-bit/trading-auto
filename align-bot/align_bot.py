@@ -2256,7 +2256,8 @@ def menu_canal_vip(etat):
 # 4) Pollinations (sans clé)  5) LLM7 (sans clé). Et si TOUT tombe : l'analyse interne du bot répond quand même.
 IA_FOURNISSEURS = [
     ("OpenAI", "https://api.openai.com/v1/chat/completions", os.environ.get("OPENAI_MODEL") or "chat-latest", os.environ.get("OPENAI_API_KEY", ""), True),
-    ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-flash-latest", os.environ.get("GEMINI_API_KEY", ""), True),
+    ("Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash", os.environ.get("GEMINI_API_KEY", ""), True),
+    ("Gemini Lite", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "gemini-2.5-flash-lite", os.environ.get("GEMINI_API_KEY", ""), True),
     ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta-Llama-3_3-70B-Instruct", "", False),
     ("OVH Mistral", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Mistral-Small-3.2-24B-Instruct", "", False),
     ("Pollinations", "https://text.pollinations.ai/openai", "openai", "", False),
@@ -2272,6 +2273,24 @@ IA_REGLES = ("Tu es l'analyste de marché du bot ALIGN. Tu reçois des données 
              "Le prochain horaire de clôture fourni est une heure de réévaluation, PAS une promesse d'entrée. "
              "DXY, EUR/USD et US10Y sont du contexte uniquement ; si les données sont absentes ou anciennes, signale-le. "
              "US10Y est une donnée officielle quotidienne, jamais une cotation intraday. Pas de promesse de gain. Langage direct, concret et sans remplissage.")
+
+def detail_erreur_ia(ex, cle=""):
+    """Code HTTP exact + message du fournisseur, sans jamais afficher la clé."""
+    if isinstance(ex, urllib.error.HTTPError):
+        msg = ""
+        try:
+            corps = json.loads(ex.read().decode("utf-8", "replace"))
+            corps = corps[0] if isinstance(corps, list) and corps else corps
+            err = corps.get("error", {}) if isinstance(corps, dict) else {}
+            msg = f"{err.get('status', '')} {err.get('message', '')}".strip()
+        except Exception:
+            pass
+        texte = f"HTTP {ex.code} {msg}".strip()
+    else:
+        texte = f"{type(ex).__name__} {ex}".strip()
+    if cle:
+        texte = texte.replace(cle, "***")
+    return re.sub(r"AIza[0-9A-Za-z_\-]{20,}", "***", texte)[:200]
 
 def _appel_ia(url, modele, cle, messages):
     corps = json.dumps({"model": modele, "temperature": 0.4, "max_tokens": 1000, "messages": messages}).encode()
@@ -2315,9 +2334,10 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600):
             print(f"AI_PROVIDER_USED={nom} model={modele}", flush=True)
             break
         except Exception as ex:
-            erreurs.append(f"{nom}: {str(ex)[:80]}")
+            detail = detail_erreur_ia(ex, cle)
+            erreurs.append(f"{nom}: {detail[:80]}")
             etat.setdefault("ia_pause", {})[nom] = time.time() + 300   # on la laisse souffler 5 min
-            print("ia", nom, ex, flush=True)
+            print("ia", nom, modele, detail, flush=True)
     if not txt:
         etat["ia_dernier_fournisseur"] = "INTERNAL_FALLBACK"
         etat["ia_dernier_statut"] = "ALL_EXTERNAL_PROVIDERS_FAILED"
@@ -3382,6 +3402,7 @@ def notifier_clotures(etat, m, r, cle):
                 # Ne consommer la clôture que si Telegram a accepté l'envoi : sinon réessayer au tour suivant.
                 if resultat is not None and not (isinstance(resultat, dict) and resultat.get("ok") is False):
                     derniers[tf] = int(bougie["t"])
+                    suivi["hb_t"] = time.time()           # évite un battement de cœur juste après cette alerte
             continue
         tf = suivi.get("tf")
         bars = r.get(champs.get(tf, ""), []) or []
@@ -3398,6 +3419,102 @@ def notifier_clotures(etat, m, r, cle):
         suivi["restants"] = int(suivi.get("restants", 1)) - 1
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
+
+HB_INTERVALLE_VIP = 300        # 5 min minimum entre deux infos : une clôture M5 sur deux au plus, jamais de spam
+HB_INTERVALLE_GRATUIT = 1800   # gratuit : discret et espacé (30 min)
+
+def prochaine_ouverture_cme(ts):
+    """Prochaine réouverture CME/CFD (Gold, Nasdaq), cherchée par pas de 5 min avec la même règle que cme_ouvert."""
+    t = int(ts) // 300 * 300
+    for _ in range(12 * 80):
+        t += 300
+        if cme_ouvert(t):
+            return t
+    return None
+
+def heure_reprise(ts, anglais=False):
+    d = datetime.datetime.fromtimestamp(ts, PARIS)
+    jours_fr = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+    jours_en = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    jour = (jours_en if anglais else jours_fr)[d.weekday()]
+    auj = datetime.datetime.now(PARIS).date()
+    return d.strftime("%H:%M") if d.date() == auj else f"{jour} {d.strftime('%H:%M')}"
+
+def etat_marche_hb(m, r, now):
+    """(« ferme » | « perime » | « ouvert »), réouverture. Uniquement à partir des vraies horloges et des vraies bougies."""
+    if m != "BTC" and not cme_ouvert(now):
+        return "ferme", prochaine_ouverture_cme(now)
+    derniere = (r.get("m1") or [{}])[-1].get("t")
+    if not derniere or now - float(derniere) > 900:
+        return "perime", None
+    return "ouvert", None
+
+def texte_battement(m, r, cle, anglais=False):
+    """Info courte réelle à la clôture d'une bougie M5 : calme ou non, uniquement d'après les bougies reçues."""
+    b5 = r.get("b5") or []
+    if len(b5) < 21:
+        return None
+    x = b5[-1]
+    rng = x["h"] - x["l"]
+    moy = sum(y["h"] - y["l"] for y in b5[-21:-1]) / 20
+    if moy <= 0:
+        return None
+    calme = rng <= 0.7 * moy
+    prix = (r.get("m1") or [x])[-1].get("c", x["c"])
+    ic = ICONE.get(m, "📊")
+    if anglais:
+        tete = f"🟡 {ic} {m}: market is calm, no entry for now" if calme else f"🟡 {ic} {m}: price is moving, no confirmed entry yet"
+        return "\n".join([tete, f"💰 Price {px(prix)}", "👀 I keep watching"])
+    tete = f"🟡 {ic} {m} : marché calme, pas d'entrée pour l'instant" if calme else f"🟡 {ic} {m} : ça bouge, pas d'entrée confirmée pour l'instant"
+    return "\n".join([tete, f"💰 Prix {px(prix)}", "👀 Je surveille"])
+
+def battement_coeur(etat, m, r, cle, now=None):
+    """Battement de cœur : une info courte à chaque clôture M5 pour les abonnés qui suivent ce marché.
+    Réutilise veille_cloture (aucun second suivi) ; n'envoie rien si une alerte de clôture est partie récemment."""
+    now = now or time.time()
+    if cle.get("trade"):
+        return                                    # position ouverte : le coach parle déjà
+    titre = str(verdict(r, cle)[0]).upper()
+    if "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
+        return                                    # signal validé : l'alerte d'entrée s'en charge
+    statut, reprise = etat_marche_hb(m, r, now)
+    b5 = r.get("b5") or []
+    for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
+        if not suivi.get("multi") or not marche_autorise(etat, cid, m):
+            continue
+        anglais = str(cid) in LANG_EN
+        if statut == "ferme":
+            if suivi.get("ferme_dit") != reprise:
+                quand = heure_reprise(reprise, anglais) if reprise else "?"
+                txt = (f"⏸ {m}: market closed, back at {quand} (Paris time)" if anglais
+                       else f"⏸ {m} : marché fermé, reprise à {quand} (heure de Paris)")
+                res = _envoi_sur(cid, text=txt)
+                if isinstance(res, dict) and res.get("ok") is not False:
+                    suivi["ferme_dit"] = reprise
+                    suivi["hb_t"] = now
+            continue
+        suivi.pop("ferme_dit", None)
+        if statut == "perime":
+            if not suivi.get("perime_dit"):
+                res = _envoi_sur(cid, text=(f"⚠️ {m}: data not up to date, I can't judge right now" if anglais
+                                            else f"⚠️ {m} : données pas à jour, je ne peux pas juger pour l'instant"))
+                if isinstance(res, dict) and res.get("ok") is not False:
+                    suivi["perime_dit"] = True
+                    suivi["hb_t"] = now
+            continue
+        suivi.pop("perime_dit", None)
+        if not b5 or int(b5[-1]["t"]) <= int(suivi.get("hb_bar", 0)):
+            continue                              # pas de nouvelle clôture M5
+        intervalle = HB_INTERVALLE_VIP if autorise(etat, cid, cid) else HB_INTERVALLE_GRATUIT
+        if now - float(suivi.get("hb_t", 0)) < intervalle:
+            continue
+        txt = texte_battement(m, r, cle, anglais)
+        if not txt:
+            continue
+        res = _envoi_sur(cid, text=txt)
+        if isinstance(res, dict) and res.get("ok") is not False:
+            suivi["hb_t"] = now
+            suivi["hb_bar"] = int(b5[-1]["t"])
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
@@ -3879,7 +3996,7 @@ def traiter(etat, chats, updates):
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Marchés enregistrés")
                 except Exception:
                     pass
-                valider_et_suivre_marches(etat, qui, cb.get("from", {}).get("id"))
+                valider_et_suivre_marches(etat, qui, cb.get("from", {}).get("id"), (cb.get("message") or {}).get("message_id"))
                 continue
             if choix == "markets" and (mk in MARCHES or mk in ("BOTH", "ALL")):
                 if mk in MARCHES:
@@ -4474,7 +4591,7 @@ def selectionner_marches_suivi(etat, cid, choix):
         veilles = etat.setdefault("veille_cloture", {}).setdefault(marche, {})
         veilles.pop(cid, None)
 
-def valider_et_suivre_marches(etat, cid, user_id):
+def valider_et_suivre_marches(etat, cid, user_id, message_id=None):
     """« ✅ Valider et suivre » : enregistre les marchés cochés puis lance leur suivi.
     Même règle d'accès que le bouton de suivi existant (followmarket) : le gratuit n'a qu'une position."""
     cid = str(cid)
@@ -4489,8 +4606,16 @@ def valider_et_suivre_marches(etat, cid, user_id):
     for m in choisis:
         inscrire_auto(etat, cid, m, notifier=False)
     noms = " + ".join(m for m in choisis)
-    _envoi_sur(cid, text=(f"✅ MARKETS CONFIRMED: {noms}\nI'll alert you when an entry is confirmed." if anglais
-                          else f"✅ MARCHÉS VALIDÉS : {noms}\nJe t'alerterai lorsqu'un point d'entrée sera confirmé."))
+    if message_id:                      # ferme le menu : plus de cases ni de bouton à l'écran
+        try:
+            telegram("deleteMessage", chat_id=cid, message_id=message_id)
+        except Exception:
+            try:
+                telegram("editMessageReplyMarkup", chat_id=cid, message_id=message_id, reply_markup=json.dumps({"inline_keyboard": []}))
+            except Exception as ex:
+                print("fermeture menu marchés", ex)
+    _envoi_sur(cid, text=(f"✅ Tracking on: {noms}\n🔔 I'll alert you when an entry is confirmed." if anglais
+                          else f"✅ Suivi activé : {noms}\n🔔 Je t'alerterai lorsqu'un point d'entrée sera confirmé."))
     return True
 
 def basculer_marche(etat, cid, marche):
@@ -6101,6 +6226,10 @@ def un_tour(etat, chats):
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         synchroniser_veille_auto(etat, nom_marche, r)
         notifier_clotures(etat, nom_marche, r, cle)
+        try:
+            battement_coeur(etat, nom_marche, r, cle)
+        except Exception as ex:
+            print("battement cœur", nom_marche, ex)
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
                                  f"📍 Prix {zone_txt(r['posD'])} Daily\n🙅 Prudence sur les 🟩 LONG\n👀 Un 🟥 SHORT ⬇️ peut se préparer"),

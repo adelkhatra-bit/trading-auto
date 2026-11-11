@@ -43,8 +43,8 @@ for name, url, model, key, needs_key in align_bot.IA_FOURNISSEURS:
         write_summary("CONNECTED", name, ", ".join(attempts))
         sys.exit(0)
     except Exception as exc:
-        attempts.append(name + "=" + type(exc).__name__)
-        print("AI_PROVIDER_CHECK_FAILED", name, type(exc).__name__, flush=True)
+        attempts.append(name + "=" + align_bot.detail_erreur_ia(exc, key)[:40])
+        print("AI_PROVIDER_CHECK_FAILED", name, "model=" + model, align_bot.detail_erreur_ia(exc, key), flush=True)
 
 write_summary("UNAVAILABLE", "", ", ".join(attempts))
 # Code non nul pour signaler l'indisponibilité ; le workflow est non bloquant.
