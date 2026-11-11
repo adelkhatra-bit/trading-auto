@@ -1980,11 +1980,7 @@ def markup_analyse(etat, m, r):
          {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
         [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
-        [{"text": "📈 TradingView 5 min", "url": url_tradingview(m, 5)},
-         {"text": "📈 TradingView 15 min", "url": url_tradingview(m, 15)}],
-        [{"text": "📈 TradingView 1 h", "url": url_tradingview(m, 60)},
-         {"text": "📈 TradingView 4 h", "url": url_tradingview(m, 240)}]
+        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
     ]
     if cle.get("trade"):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
@@ -1999,10 +1995,6 @@ def markup_position(m):
         [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
         [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
-        [{"text": "📈 TradingView 5 min", "url": url_tradingview(m, 5)},
-         {"text": "📈 TradingView 15 min", "url": url_tradingview(m, 15)}],
-        [{"text": "📈 TradingView 1 h", "url": url_tradingview(m, 60)},
-         {"text": "📈 TradingView 4 h", "url": url_tradingview(m, 240)}],
         [{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]
     ]})
 
