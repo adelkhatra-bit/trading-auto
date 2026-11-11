@@ -421,17 +421,22 @@ def analyser(pair):
                 dirPlan=dirPlan, plan=plan(dirPlan if dirPlan else 1), planH=plan(1), planB=plan(-1), rC=rC)
 
 # ───────── Messages ─────────
+def _compacte_prix(valeur):
+    """Un prix ne contient jamais de séparateur de milliers ; les décimales nulles sont omises."""
+    valeur = re.sub(r"[ \u00a0\u202f]", "", str(valeur))
+    if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?%?", valeur):
+        valeur = valeur.replace(".", ",")
+        valeur = re.sub(r",0+$", "", valeur)
+    return valeur
+
 def px(v):
-    # Format français compact : 4075,50 ; aucun séparateur de milliers.
-    return f"{v:.2f}".replace(".", ",")
+    # Format français compact : 4075,50 ; 4000 ; aucun séparateur de milliers.
+    return _compacte_prix(f"{v:.2f}")
 
 def _normalise_prix_dans_texte(texte):
     """Retire les séparateurs de milliers des prix, même sur une ligne déjà formatée."""
     motif = r"(?<![\w])([+-]?\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d+)?%?)(?!\w)"
-    def compact(match):
-        valeur = re.sub(r"[ \u00a0\u202f]", "", match.group(1))
-        return valeur.replace(".", ",")
-    return re.sub(motif, compact, texte)
+    return re.sub(motif, lambda m: _compacte_prix(m.group(1)), texte)
 
 def cme_ouvert(ts):
     ct = datetime.datetime.fromtimestamp(ts, datetime.timezone(datetime.timedelta(hours=-6)))  # heure de Chicago (approx. hiver)
@@ -1223,9 +1228,7 @@ def mise_en_forme(t):
             r"(?:\s*(?P<detail>.*))?$", l, re.IGNORECASE)
         if niveau and len(niveau.group("label").strip()) <= 48:
             label = niveau.group("label").strip().rstrip(" :：≈=")
-            value = niveau.group("value").strip()
-            # Les prix Telegram ne doivent jamais contenir de séparateur de milliers : 4000,00 et non 4 000,00.
-            value = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:[ \u00a0\u202f]|[.,]|$))", "", value)
+            value = _compacte_prix(niveau.group("value"))
             detail = (niveau.group("detail") or "").strip()
             detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             if out and out[-1]:
@@ -1243,7 +1246,7 @@ def mise_en_forme(t):
         if mesure:
             if out and out[-1]:
                 out.append("")
-            value = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:[ \u00a0\u202f]|[.,]|$))", "", mesure.group("value"))
+            value = _compacte_prix(mesure.group("value"))
             out += [mesure.group("label"), value, ""]
             continue
         mt = re.search(r" ?: | ≈ ", l)
@@ -1254,7 +1257,7 @@ def mise_en_forme(t):
                     out.append("")
                 valeur = d_.strip()
                 if re.match(r"^[+-]?\d", valeur):
-                    valeur = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:[ \u00a0\u202f]|[.,]|$))", "", valeur)
+                    valeur = _compacte_prix(valeur)
                 out += [g.strip(), ("≈ " if "≈" in mt.group() else "") + valeur, ""]
                 continue
         if l.endswith(" :") or l.endswith(":"):
