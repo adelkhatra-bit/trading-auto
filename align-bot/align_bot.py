@@ -1560,7 +1560,7 @@ def chrono_txt(m, r, cle, t0):
     return "\n".join(l)
 
 def maj_chronos(etat, m, r):
-    """Met à jour chaque chronomètre (1 fois par minute). Fin : entrée, ou délai max dépassé."""
+    """Actualise le compte à rebours à la seconde pendant que le processus Telegram tourne."""
     ch = etat.setdefault("chrono", {}).setdefault(m, {})
     cle = etat.get(m, {})
     for cid, c in list(ch.items()):
@@ -1574,11 +1574,14 @@ def maj_chronos(etat, m, r):
                 ch.pop(cid, None)
                 etat.setdefault("auto", {})[m] = [x for x in etat["auto"].get(m, []) if str(x) != str(cid)]
                 telegram("editMessageText", chat_id=cid, message_id=c["mid"],
-                         text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n😎 La position n'est pas venue : pas de mauvaise entrée\n🎯 Réappuie sur le bouton pour la prochaine")
+                         text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\\n😎 La position n'est pas venue : pas de mauvaise entrée\\n🎯 Réappuie sur le bouton pour la prochaine")
                 continue
-            if now - c.get("maj", 0) >= 60:
+            seconde = int(now)
+            if c.get("derniere_seconde") != seconde:
+                c["derniere_seconde"] = seconde
                 c["maj"] = now
-                telegram("editMessageText", chat_id=cid, message_id=c["mid"], text=chrono_txt(m, r, cle, c["t0"]))
+                telegram("editMessageText", chat_id=cid, message_id=c["mid"],
+                         text=chrono_txt(m, r, cle, c["t0"]))
         except Exception as ex:
             if "not modified" not in str(ex):
                 print("chrono", ex)
@@ -1667,21 +1670,28 @@ def signature_analyse(m, r, cle):
     return "|".join([titre, str(r["confirme"]), str(bool(cle.get("trade"))), str(round(o.get("e", 0) / max(r["atr"], 1e-9)))])
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
-    """Analyse à la demande. Rien n'a bougé depuis la dernière (moins de 20 min) → message court : regarde au-dessus + estimation."""
+    """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
     sig = signature_analyse(m, r, cle); der = vu.get(str(cid))
     if der and der["sig"] == sig and time.time() - der["t"] < 1200:
-        lignes = chrono_txt(m, r, cle, time.time()).split("\n")
+        lignes = chrono_txt(m, r, cle, time.time()).split("\\n")
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
-        _envoi_sur(cid, reply_markup=CLAVIER, text="\n".join(
+        clavier_rappel = json.dumps({"inline_keyboard": [
+            [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
+            [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
+        ]})
+        _envoi_sur(cid, reply_markup=clavier_rappel, text="\\n".join(
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
-             f"👆 Mon analyse de {heure(der['t'])} est juste au-dessus : elle est toujours bonne"] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
+             f"🕒 Analyse de référence : {heure(der['t'])}",
+             "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
         return
     vu[str(cid)] = {"sig": sig, "t": time.time()}
-    _envoi_sur(cid, text=texte_apercu(m, r, cle), reply_markup=markup_analyse(etat, m, r))
-    a_ = avis_ia(etat, m, r, cle)
-    if a_:
-        _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
+    res = telegram("sendMessage", chat_id=cid, text=texte_apercu(m, r, cle),
+                   reply_markup=markup_analyse(etat, m, r))
+    try:
+        vu[str(cid)]["mid"] = res["result"]["message_id"]
+    except (KeyError, TypeError):
+        pass
 
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
@@ -2001,6 +2011,34 @@ def traiter(etat, chats, updates):
         if cb:
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb["message"]["chat"]["id"])
+            if choix == "previous" and mk in MARCHES:
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text=f"📌 Analyse {mk}")
+                except Exception:
+                    pass
+                reference = etat.get("vu_analyse", {}).get(mk, {}).get(qui, {})
+                mid = reference.get("mid")
+                if mid:
+                    try:
+                        telegram("copyMessage", chat_id=qui, from_chat_id=qui, message_id=mid)
+                    except Exception as ex:
+                        print("rappel analyse", qui, mk, ex)
+                        r_ref = DERNIERS.get(mk)
+                        if r_ref:
+                            _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
+                                      reply_markup=markup_analyse(etat, mk, r_ref))
+                        else:
+                            _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est plus disponible. Relance l'analyse du marché.")
+                else:
+                    r_ref = DERNIERS.get(mk)
+                    if r_ref:
+                        res = _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
+                                         reply_markup=markup_analyse(etat, mk, r_ref))
+                        if res and res.get("ok"):
+                            etat.setdefault("vu_analyse", {}).setdefault(mk, {}).setdefault(qui, {})["mid"] = res["result"]["message_id"]
+                    else:
+                        _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est pas encore disponible. Appuie sur Analyse {mk}.")
+                continue
             if choix in ("details", "levels") and mk in MARCHES:
                 if not autorise(etat, qui, cb.get("from", {}).get("id")):
                     try:
@@ -2370,9 +2408,10 @@ def envoyer_prospects(etat, texte, signal, clavier=None):
 
 def _envoi_sur(cid, **kw):
     try:
-        telegram("sendMessage", chat_id=cid, **kw)
+        return telegram("sendMessage", chat_id=cid, **kw)
     except Exception as ex:
         print("envoi", cid, ex)
+        return None
 
 def connecter_canal(etat, mcm):
     """Le bot vient d'être ajouté (ou retiré) comme administrateur d'une chaîne : il la prend comme chaîne VIP."""
