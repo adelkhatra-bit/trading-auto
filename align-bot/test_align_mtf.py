@@ -499,13 +499,13 @@ class AlignMtfRulesTest(unittest.TestCase):
             "🛑 Stop Loss : 4 020,00 (sous la mèche basse — bougie 15 minutes)\n"
             "📌 Entrée : 4 050,00"
         )
-        self.assertIn("💰 TP1\n4075,50\nancienne mèche haute — bougie 15 minutes", message)
-        self.assertIn("🛑 Stop Loss\n4020\nsous la mèche basse — bougie 15 minutes", message)
-        self.assertIn("📌 Entrée\n4050", message)
+        self.assertIn("💰 TP1 : 4075,50 (ancienne mèche haute — bougie 15 minutes)", message)
+        self.assertIn("🛑 Stop Loss : 4020 (sous la mèche basse — bougie 15 minutes)", message)
+        self.assertIn("📌 Entrée : 4050", message)
 
     def test_telegram_price_values_remove_all_thousands_grouping_spaces(self):
         message = align_bot.mise_en_forme("PLAN\n💰 TP1 : 12 345 678,90 (niveau majeur)")
-        self.assertIn("💰 TP1\n12345678,90\nniveau majeur", message)
+        self.assertIn("💰 TP1 : 12345678,90 (niveau majeur)", message)
 
 
     def test_telegram_price_formatting_is_idempotent_after_card_layout(self):
@@ -513,7 +513,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "PLAN\n💰 TP1 ≈ 4 075,50 (ancienne mèche haute — bougie 15 minutes)"
         )
         second = align_bot.mise_en_forme(first)
-        self.assertIn("💰 TP1\n4075,50\nancienne mèche haute — bougie 15 minutes", second)
+        self.assertIn("💰 TP1 : 4075,50 (ancienne mèche haute — bougie 15 minutes)", second)
         self.assertNotIn("4 075", second)
         self.assertEqual(first, second)
 
@@ -522,15 +522,15 @@ class AlignMtfRulesTest(unittest.TestCase):
             "💰 TP1\n4 075,50\nancienne mèche haute — bougie 15 minutes\n"
             "📌 Entrée\n4 000,00"
         )
-        self.assertIn("💰 TP1\n4075,50", message)
-        self.assertIn("📌 Entrée\n4000", message)
+        self.assertIn("4075,50", message)
+        self.assertIn("4000", message)
         self.assertNotIn("4 075", message)
         self.assertNotIn("4 000", message)
 
     def test_price_helper_uses_french_decimal_without_thousands_separator(self):
         self.assertEqual(align_bot.px(4075.5), "4075,50")
         self.assertEqual(align_bot.px(4000), "4000")
-        self.assertEqual(align_bot.mise_en_forme("TP1 : 4 000,00"), "TP1\n4000")
+        self.assertEqual(align_bot.mise_en_forme("TP1 : 4 000,00"), "TP1 : 4000")
 
     def test_repeated_analysis_keeps_ai_commentary_for_btc_and_gold(self):
         from unittest.mock import patch
@@ -825,8 +825,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             message = align_bot.chrono_txt("GOLD", r, {}, 0)
         self.assertIn("⏳ PROCHAINE CLÔTURE 1h\n⏱ Temps restant : 60:00\n🕒 Heure prévue : 04:00 (heure de Paris)", message)
         formatted = align_bot.mise_en_forme(message)
-        self.assertIn("⏱ Temps restant\n60:00", formatted)
-        self.assertIn("🕒 Heure prévue\n04:00 (heure de Paris)", formatted)
+        self.assertIn("⏱ Temps restant : 60:00", formatted)
+        self.assertIn("🕒 Heure prévue : 04:00 (heure de Paris)", formatted)
 
     def test_independent_chronometer_tick_updates_every_market_with_cached_data(self):
         from unittest.mock import patch
@@ -873,10 +873,10 @@ class AlignMtfRulesTest(unittest.TestCase):
             "Tendance : haussière • Confirmation : 2/2\n"
             "FVG 15m : haussière | Basse 4 050,00 | Haute 4 060,00"
         )
-        self.assertIn("Tendance\nhaussière", message)
-        self.assertIn("Confirmation\n2/2", message)
-        self.assertIn("Basse\n4050", message)
-        self.assertIn("Haute\n4060", message)
+        self.assertIn("Tendance : haussière", message)
+        self.assertIn("Confirmation : 2/2", message)
+        self.assertIn("Basse 4050", message)
+        self.assertIn("Haute 4060", message)
 
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
@@ -993,7 +993,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         url = request.call_args.args[0]
         payload = urllib.parse.parse_qs(request.call_args.args[1].decode())
         self.assertIn("test-token", url)
-        self.assertIn("💰 TP1\n4075,50", payload["text"][0])
+        self.assertIn("💰 TP1 : 4075,50", payload["text"][0])
 
     def test_unknown_telegram_callback_never_becomes_manual_exit(self):
         from unittest.mock import patch
@@ -2868,6 +2868,16 @@ class TestMessagesPropres(unittest.TestCase):
     def test_entree_encore_possible_en_carte(self):
         t = align_bot.mise_en_forme("✅ ENTRÉE ENCORE POSSIBLE — 🟠 BTC\n🟥 SHORT ⬇️\n📌 Entrée : 74508.80\n🛑 Stop : 74824.57\n🎯 TP1 : 73672.44")
         lignes = t.split("\n")
-        self.assertIn("📌 Entrée", lignes)
-        self.assertEqual(lignes[lignes.index("📌 Entrée") + 1], "74508,80")
-        self.assertEqual(lignes[lignes.index("🛑 Stop") + 1], "74824,57")
+        self.assertIn("📌 Entrée : 74508,80", lignes)
+        self.assertIn("🛑 Stop : 74824,57", lignes)
+        self.assertIn("🎯 TP1 : 73672,44", lignes)
+
+    def test_carte_analyse_donne_cible_essoufflement_et_voyants(self):
+        r = {"dirs": [-1] * 7 + [0, -1, -1, -1], "m1": [{"t": 0, "o": 1, "h": 1, "l": 1, "c": 3993.56}], "atr": 6.0, "atr5": 2.5,
+             "niveaux": [(3984.2, "1h"), (3971.0, "4h"), (4010, "1h")], "niv_cles": [(3978.4, "plus bas d'hier")]}
+        l = align_bot.objectifs_marche(r, -1)
+        self.assertIn("3984,20", l[0])
+        self.assertIn("Essoufflement", l[1])
+        self.assertIn("3978,40", l[1])
+        self.assertEqual(align_bot.voyants_unites(r)[0], "⚡ Petites unités : 1m🟥 3m🟥 5m🟥 15m🟥")
+        self.assertEqual(align_bot.objectifs_marche(r, 0), [])
