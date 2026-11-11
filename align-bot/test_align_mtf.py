@@ -315,6 +315,55 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(align_bot.px(4000), "4000")
         self.assertEqual(align_bot.mise_en_forme("TP1 : 4 000,00"), "TP1\n4000")
 
+    def test_repeated_analysis_keeps_ai_commentary_for_btc_and_gold(self):
+        from unittest.mock import patch
+        for market in ("BTC", "GOLD"):
+            state = {"vu_analyse": {market: {"123": {"sig": "same", "t": align_bot.time.time() - 30}}}}
+            r = {"m1": [candle(300, c=100.0)], "atr": 1.0, "dirs": [0] * 11}
+            with (
+                patch.object(align_bot, "signature_analyse", return_value="same"),
+                patch.object(align_bot, "armer_cloture") as arm,
+                patch.object(align_bot, "chrono_txt", return_value="⏳ Prochaine clôture"),
+                patch.object(align_bot, "statut_txt", return_value="⏳ ATTENTE"),
+                patch.object(align_bot, "avis_ia", return_value="🧠 AI opinion") as ai,
+                patch.object(align_bot, "_envoi_sur") as send,
+            ):
+                align_bot.envoyer_analyse_a(state, "123", market, r, {})
+            arm.assert_called_once()
+            ai.assert_called_once_with(state, market, r, {}, anglais=False)
+            self.assertEqual(send.call_count, 2, market)
+            self.assertIn("AI opinion", send.call_args.kwargs["text"])
+
+    def test_ai_commentary_uses_english_for_english_subscribers(self):
+        from unittest.mock import patch
+        state = {}
+        r = {"macro_data": {"disponible": False}}
+        with (
+            patch.object(align_bot, "macro_confluence", return_value={"disponible": False}),
+            patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}),
+            patch.object(align_bot, "ia", return_value="Gold is neutral; wait for a confirmed 4h close.") as call,
+        ):
+            message = align_bot.avis_ia(state, "GOLD", r, {}, anglais=True)
+        self.assertIn("ALIGN AI opinion", message)
+        self.assertIn("Gold is neutral", message)
+        self.assertIn("English", call.call_args.args[1])
+
+    def test_english_and_french_main_keyboards_keep_identical_button_actions(self):
+        import json
+        french = json.loads(align_bot.CLAVIER)
+        english = json.loads(align_bot.traduire_clavier(align_bot.CLAVIER))
+        self.assertEqual([[align_bot.TRAD.get(b.get("text"), b.get("text")) for b in row] for row in french["keyboard"]],
+                         [[b.get("text") for b in row] for row in english["keyboard"]])
+        self.assertEqual(len(french["keyboard"]), len(english["keyboard"]))
+
+    def test_english_and_french_analysis_buttons_keep_identical_callbacks(self):
+        import json
+        french = json.loads(align_bot.markup_analyse({}, "GOLD", {}))
+        english = json.loads(align_bot.traduire_clavier(align_bot.markup_analyse({}, "GOLD", {})))
+        self.assertEqual([[b["callback_data"] for b in row] for row in french["inline_keyboard"]],
+                         [[b["callback_data"] for b in row] for row in english["inline_keyboard"]])
+        self.assertTrue(all(b["text"] for row in english["inline_keyboard"] for b in row))
+
     def test_previous_analysis_button_is_market_specific(self):
         import json
         keyboard = json.loads(align_bot.bouton_rappel("GOLD"))["inline_keyboard"]

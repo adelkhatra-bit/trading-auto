@@ -1672,14 +1672,22 @@ def donnees_ia(m, r, cle):
             "contexte_macro_dollar": r.get("macro_data") or {}, 
             "news": (r.get("news") or "").replace("\n", " "), "distribution": bool(r.get("distrib")), "accumulation": bool(r.get("accum"))}
 
-def avis_ia(etat, m, r, cle):
+def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
-    t = ia(etat, "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer. Vérifie explicitement le DXY, EUR/USD et les divergences macro fournies.", donnees_ia(m, r, cle),
+    consigne = (
+        "Explain the current market structure and what must happen before an entry. Explicitly assess DXY, EUR/USD and the supplied macro divergences. Reply in clear, natural English, maximum 3 short lines."
+        if anglais else
+        "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer. Vérifie explicitement le DXY, EUR/USD et les divergences macro fournies. Réponds en français clair, 3 lignes courtes maximum."
+    )
+    t = ia(etat, consigne, donnees_ia(m, r, cle),
            cle_cache=f"analyse_{m}_{int(time.time() // 600)}")
     if t:
-        return f"🧠 L'avis de l'IA ALIGN\n{t}"
+        titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
+        return f"{titre}\n{t}"
     # Toutes les IA en panne : l'analyse interne du bot répond (jamais de silence)
     titre, raison = verdict(r, cle)
+    if anglais:
+        return "🧠 ALIGN internal analysis\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
     return "🧠 L'avis ALIGN (analyse interne)\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
 
 def bouton_auto(m):
@@ -2370,6 +2378,10 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
              f"🕒 Analyse de référence : {heure(der['t'])}",
              "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
+        # Même traitement pour BTC et GOLD : une analyse répétée conserve aussi son avis IA.
+        avis = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
+        if avis:
+            _envoi_sur(cid, text=avis, reply_markup=CLAVIER)
         return
     vu[str(cid)] = {"sig": sig, "t": time.time()}
     armer_cloture(etat, cid, m, r, cle)
@@ -2380,7 +2392,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     except (KeyError, TypeError):
         pass
     # L'avis IA reste envoyé séparément : aucune information existante n'est supprimée.
-    a_ = avis_ia(etat, m, r, cle)
+    a_ = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
     if a_:
         _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
 
