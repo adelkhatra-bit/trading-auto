@@ -1080,6 +1080,41 @@ class AlignMtfRulesTest(unittest.TestCase):
             self.assertIn(required, message)
 
 
+    def test_candle_close_alert_is_translated_for_english_users(self):
+        from unittest.mock import patch
+        dirs = [0] * 11
+        r = {"dirs": dirs, "confirme": 0, "m1": [candle(7200, c=100.0)]}
+        b = candle(7200, o=99.0, h=101.0, l=98.0, c=100.0)
+        with (
+            patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "Conditions insuffisantes")),
+            patch.object(align_bot, "raison_attente", return_value="Attendre la confirmation."),
+            patch.object(align_bot, "prochaine", return_value="Prochaine entrée LONG"),
+            patch.object(align_bot, "heure", return_value="03:00"),
+        ):
+            raw = align_bot.texte_cloture("BTC", "5m", b, r, {})
+        translated = align_bot.traduire(raw)
+        self.assertEqual(translated.splitlines()[0], "🕯 CANDLE CLOSE 5m — SIGNAL NOT CONFIRMED")
+        for expected in ("CANDLE RESULT", "Open:", "Close:", "MULTI-TIMEFRAME TREND",
+                         "ALIGN DECISION", "WHY", "NEXT STEP", "IMPORTANT",
+                         "A candle close alone does not trigger an entry.",
+                         "No order is sent to your broker."):
+            self.assertIn(expected, translated)
+
+    def test_candle_close_titles_support_all_watched_timeframes(self):
+        from unittest.mock import patch
+        dirs = [0] * 11
+        r = {"dirs": dirs, "confirme": 0, "m1": [candle(7200, c=100.0)]}
+        b = candle(7200, o=99.0, h=101.0, l=98.0, c=100.0)
+        with (
+            patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "Conditions insuffisantes")),
+            patch.object(align_bot, "raison_attente", return_value="Attendre."),
+            patch.object(align_bot, "prochaine", return_value="Prochaine entrée"),
+            patch.object(align_bot, "heure", return_value="03:00"),
+        ):
+            for tf in ("5m", "15m", "1h", "4h", "D", "W"):
+                message = align_bot.texte_cloture("BTC", tf, b, r, {})
+                self.assertEqual(message.splitlines()[0], f"🕯 CLÔTURE {tf} — SIGNAL NON CONFIRMÉ")
+
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
         from unittest.mock import patch
         r = {"dirs": [0] * 11, "confirme": 1, "m1": [candle(7200, c=73498.30)]}
