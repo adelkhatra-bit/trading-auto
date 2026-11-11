@@ -3179,7 +3179,7 @@ def traiter(etat, chats, updates):
                     else:
                         _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est pas encore disponible. Appuie sur Analyse {mk}.")
                 continue
-            if choix in ("why", "details", "levels", "timeframes", "position") and mk in MARCHES:
+            if choix in ("why", "details", "rawdetails", "levels", "timeframes", "position") and mk in MARCHES:
                 if not autorise(etat, qui, cb.get("from", {}).get("id")):
                     try:
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔒 Détails réservés aux VIP")
