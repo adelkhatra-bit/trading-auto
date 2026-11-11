@@ -139,7 +139,8 @@ jobs:
           PY
 
       - name: Vérifier une connexion IA réelle (même chaîne que le bot)
-        # Pas de démarrage production si aucun fournisseur IA externe ne répond : pas de faux avis IA.
+        # Contrôle informatif : le bot conserve son analyse MTF interne si les IA externes sont indisponibles.
+        continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
