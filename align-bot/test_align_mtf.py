@@ -418,18 +418,34 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(change[1], 60)
 
     def test_macro_confluence_detects_dollar_impulse_and_asset_divergence_without_forcing_entry(self):
-        now = 10_000
+        now = align_bot.time.time()
         etat = {"macro": {
             "dxy": [(now - 3600, 100.0), (now, 100.30)],
             "eurusd": [(now - 3600, 1.1000), (now, 1.0960)]
         }}
         bars = [{"c": 100.0} for _ in range(5)]
         bars[-1]["c"] = 101.0
-        result = align_bot.macro_confluence(etat, "GOLD", {"b15": bars})
+        result = align_bot.macro_confluence(etat, "GOLD", {"b15": bars}, maintenant=now)
         self.assertIn("FORTE HAUSSE", result["dollar_direction"])
         self.assertIn("COHÉRENT", result["controle_dxy_eurusd"])
         self.assertIn("DIVERGENCE HAUSSIÈRE", result["divergence_actif_dollar"])
         self.assertIn("ne jamais inverser LONG/SHORT", result["regle"])
+
+    def test_dxy_rejects_quotes_older_than_fifteen_minutes(self):
+        now = align_bot.time.time()
+        state = {"macro": {"dxy": [(now - 7200, 100.0), (now - 3600, 100.5)]}}
+        self.assertIsNone(align_bot.dxy_info(state, maintenant=now))
+
+    def test_eurusd_is_not_compared_when_its_quote_is_not_synchronized(self):
+        now = align_bot.time.time()
+        state = {"macro": {
+            "dxy": [(now - 3600, 100.0), (now, 100.4)],
+            "eurusd": [(now - 7200, 1.1000), (now - 3600, 1.0950)]
+        }}
+        bars = [{"c": 100.0} for _ in range(5)]
+        result = align_bot.macro_confluence(state, "BTC", {"b15": bars}, maintenant=now)
+        self.assertEqual(result["controle_dxy_eurusd"], "INDISPONIBLE")
+        self.assertIsNone(result["eurusd_variation_1h_pct"])
 
     def test_us10y_is_included_as_official_daily_data_for_ai_context(self):
         today = align_bot.datetime.datetime.now(align_bot.PARIS).date()
