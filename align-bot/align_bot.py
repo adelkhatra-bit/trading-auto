@@ -1742,6 +1742,8 @@ def donnees_ia(m, r, cle):
     return {"marché": m, "prix": round(r["m1"][-1]["c"], 2),
             "sens 1m/5m/15m/1h/4h/Daily": [r["dirs"][i] for i in (0, 2, 4, 7, 9, 10)],
             "RSI 5m/15m/1h/4h": [round(r["rsis"][i]) for i in (2, 4, 7, 9)],
+            "profil_strategie": profil_strategie(r),
+            "lecture_multi_unites": {"M5": r["dirs"][2], "M15": r["dirs"][4], "H1": r["dirs"][7], "H4": r["dirs"][9]},
             "position Daily (0 bas, 1 haut)": round(r["posD"], 2), "position Weekly": round(r["posW"], 2),
             "verdict du bot": titre + " / " + raison.replace("\n", " "),
             "zone d'entrée": [round(o["za"], 2), round(o["zb"], 2)] if o.get("za") else None,
@@ -1752,9 +1754,9 @@ def donnees_ia(m, r, cle):
 def avis_ia(etat, m, r, cle, anglais=False):
     r["macro_data"] = macro_confluence(etat, m, r)
     consigne = (
-        "Explain the current market structure and what must happen before an entry. Explicitly assess DXY, EUR/USD and the supplied macro divergences. Reply in clear, natural English, maximum 3 short lines."
+        "You MUST assess H4, H1, M15 and M5. Separate higher-timeframe bias, M15 pullback/setup and M5 timing. Classify SCALPING, INTRADAY, SWING or WAIT. Counter-trend M15/M5 setups are scalp-only, never swing. Directional alignment is not an entry trigger: require a confirmed candle close and respect the internal verdict. State indicative holding horizon and missing conditions. Assess DXY, EUR/USD and macro divergences. Clear English, maximum 4 short lines."
         if anglais else
-        "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer. Vérifie explicitement le DXY, EUR/USD et les divergences macro fournies. Réponds en français clair, 3 lignes courtes maximum."
+        "Analyse obligatoirement H4, H1, M15 et M5. Distingue le biais H4/H1, le retracement et la préparation M15, puis le timing M5. Classe SCALPING, INTRADAY, SWING ou ATTENTE selon les données. Un setup M15/M5 contre H1/H4 reste un scalp contre-tendance, jamais un swing. L'alignement directionnel n'est pas un déclencheur : exige une clôture confirmée et respecte le verdict interne. Précise l'horizon indicatif et les conditions manquantes. Vérifie DXY, EUR/USD et les divergences macro. Français clair, 4 lignes maximum."
     )
     langue_cache = "en" if anglais else "fr"
     t = ia(etat, consigne, donnees_ia(m, r, cle),
@@ -1767,6 +1769,11 @@ def avis_ia(etat, m, r, cle, anglais=False):
     if anglais:
         return "🧠 ALIGN internal analysis\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
     return "🧠 L'avis ALIGN (analyse interne)\n" + "\n".join(strategie_mtf(r)[-2:]) + f"\n{titre}"
+
+def url_tradingview(m, timeframe):
+    """Ouvre le bon instrument et la bonne unité ; ne pilote pas le graphique déjà ouvert."""
+    symbole = "KRAKEN:XBTUSD" if m == "BTC" else "FOREXCOM:XAUUSD"
+    return "https://www.tradingview.com/chart/?symbol=" + urllib.parse.quote(symbole, safe="") + "&interval=" + str(timeframe)
 
 def bouton_auto(m):
     return json.dumps({"inline_keyboard": [[{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
@@ -1786,7 +1793,11 @@ def markup_analyse(etat, m, r):
          {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
         [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
+        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
+        [{"text": "📈 TradingView 5 min", "url": url_tradingview(m, 5)},
+         {"text": "📈 TradingView 15 min", "url": url_tradingview(m, 15)}],
+        [{"text": "📈 TradingView 1 h", "url": url_tradingview(m, 60)},
+         {"text": "📈 TradingView 4 h", "url": url_tradingview(m, 240)}]
     ]
     if cle.get("trade"):
         lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
@@ -1801,6 +1812,10 @@ def markup_position(m):
         [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
         [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
+        [{"text": "📈 TradingView 5 min", "url": url_tradingview(m, 5)},
+         {"text": "📈 TradingView 15 min", "url": url_tradingview(m, 15)}],
+        [{"text": "📈 TradingView 1 h", "url": url_tradingview(m, 60)},
+         {"text": "📈 TradingView 4 h", "url": url_tradingview(m, 240)}],
         [{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]
     ]})
 
@@ -1856,6 +1871,9 @@ def texte_timeframes(m, r):
         f"⏱ TOUTES LES UNITÉS — {m}",
         "━━━━━━━━━━━━━━━━━━━━",
         "Lecture technique : direction + RSI",
+        f"Profil proposé : {profil_strategie(r)['mode']} — {profil_strategie(r)['horizon']}",
+        f"Préparation M15 : {'alignée' if r['dirs'][4] == profil_strategie(r)['direction'] and profil_strategie(r)['direction'] else 'en attente / retracement'}",
+        f"Timing M5 : {'direction alignée ; déclencheur clôturé à vérifier' if profil_strategie(r)['m5_aligne'] else 'attendre la confirmation dans le sens du setup'}",
     ]
     for nom, direction, valeur in zip(noms, directions, r["rsis"]):
         lignes.append(f"{nom} : {direction} • RSI {valeur:.0f}")
@@ -1863,9 +1881,11 @@ def texte_timeframes(m, r):
         "━━━━━━━━━━━━━━━━━━━━",
         "🧭 COMMENT ALIGN PREND SA DÉCISION",
         "🏔 4 h : tendance principale",
-        "🔁 1 h : confirmation obligatoire de la 4 h",
-        "👀 15 min : contexte et zone de repli",
-        "🎯 5 min : déclencheur après clôture confirmée",
+        "🔁 1 h : confirme ou contredit le biais de fond H4",
+        "👀 15 min : préparation, retracement, cassure et retest",
+        "🎯 5 min : timing ; clôture, rejet ou retest confirmé obligatoire",
+        "⚖️ SCALPING : M15 + M5 • INTRADAY : H1 + M15 + M5 • SWING : H4 + H1 + M15",
+        "⚠️ Un setup contre H4/H1 reste un scalp contre-tendance, jamais un swing",
         "📍 1 min : suivi du prix et de la position",
         "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.",
         "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d'entrée."
