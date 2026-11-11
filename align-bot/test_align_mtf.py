@@ -765,7 +765,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             if method == "sendMessage":
                 return {"ok": True, "result": {"message_id": 99}}
             raise AssertionError(method)
-        with patch.object(align_bot, "telegram", side_effect=telegram_side_effect), \\
+        with patch.object(align_bot, "telegram", side_effect=telegram_side_effect), \
              patch.object(align_bot.time, "time", return_value=100):
             ok = align_bot._editer_chrono_ou_recreer("123", chrono, "timer restored")
         self.assertTrue(ok)
@@ -782,7 +782,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_timeout_chronometer_message_uses_real_line_breaks(self):
         from unittest.mock import patch
         state = {"chrono": {"GOLD": {"123": {"mid": 10, "t0": 1, "maj": 1}}}, "GOLD": {}}
-        with patch.object(align_bot.time, "time", return_value=align_bot.CHRONO_MAX + 2), \\
+        with patch.object(align_bot.time, "time", return_value=align_bot.CHRONO_MAX + 2), \
              patch.object(align_bot, "_editer_chrono_ou_recreer") as edit:
             align_bot.maj_chronos(state, "GOLD", {})
         text = edit.call_args.args[2]
