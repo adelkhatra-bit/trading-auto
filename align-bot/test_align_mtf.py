@@ -2060,7 +2060,7 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         kwargs = send.call_args.kwargs
         keyboard = __import__("json").loads(kwargs["reply_markup"])
         callbacks = [button["callback_data"] for row in keyboard["inline_keyboard"] for button in row]
-        self.assertEqual(callbacks, ["markets:BTC", "markets:GOLD", "markets:NASDAQ", "markets:ALL"])
+        self.assertEqual(callbacks, ["markets:BTC", "markets:GOLD", "markets:NASDAQ", "markets:ALL", "markets:OK"])
 
     def test_market_selection_callback_persists_without_changing_other_users(self):
         from unittest.mock import patch
@@ -2092,9 +2092,10 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
             self.assertIn("MY MARKETS", kwargs["text"])
             keyboard = __import__("json").loads(kwargs["reply_markup"])
             labels = [button["text"] for row in keyboard["inline_keyboard"] for button in row]
-            self.assertIn("Everything", labels[-1])
+            self.assertIn("Everything", labels[-2])
+            self.assertIn("Confirm & follow", labels[-1])
             self.assertIn("GOLD", labels[1])
-            self.assertEqual(len(labels), 4)
+            self.assertEqual(len(labels), 5)
         finally:
             align_bot.LANG_EN.clear()
             align_bot.LANG_EN.update(old)
@@ -2661,8 +2662,17 @@ class TestTelegramMarketButtonsJourney(unittest.TestCase):
             sent = self._run(state, f"markets:{mk}", 10 + i)
             self.assertEqual(align_bot.marches_choisis(state, "501"), attendu)
             kb = json.loads(sent[-1]["reply_markup"])["inline_keyboard"]
-            coches = [b["text"] for r in kb[:-1] for b in r if b["text"].startswith("✅")]
+            coches = [b["text"] for r in kb[:-2] for b in r if b["text"].startswith("✅")]
             self.assertEqual(len(coches), len(attendu))
+
+    def test_markets_confirm_button_saves_and_follows(self):
+        state = {"marches_par_chat": {"501": ["GOLD", "NASDAQ"]}}
+        sent = self._run(state, "markets:OK", 30)
+        self.assertEqual(align_bot.marches_choisis(state, "501"), {"GOLD", "NASDAQ"})
+        self.assertIn("501", [str(x) for x in state["auto"]["GOLD"]])
+        self.assertIn("501", [str(x) for x in state["auto"]["NASDAQ"]])
+        self.assertNotIn("501", [str(x) for x in state["auto"].get("BTC", [])])
+        self.assertTrue(any("MARCHÉS VALIDÉS" in k.get("text", "") for k in sent))
 
     def test_both_label_translated_in_english(self):
         self.assertEqual(align_bot.traduire("🥇 + 🟠 Les deux"), "🥇 + 🟠 Both")

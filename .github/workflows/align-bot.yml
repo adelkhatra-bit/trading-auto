@@ -159,7 +159,9 @@ jobs:
           base = os.environ.get("ALIGN_TV_API_URL", "").strip().rstrip("/")
           token = os.environ.get("ALIGN_TV_READ_TOKEN", "").strip()
           if not base or not token:
-              raise SystemExit("ÉCHEC: secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents — bridge TradingView non raccordé.")
+              print("::warning title=Bridge TradingView non raccordé::Secrets ALIGN_TV_API_URL / ALIGN_TV_READ_TOKEN absents. Telegram n'est PAS relié à l'indicateur : le bot tourne sur Kraken/Yahoo (bridge optionnel).")
+              print("BRIDGE_STATUS=NOT_CONNECTED reason=secrets_absents fallback=Kraken/Yahoo")
+              raise SystemExit(0)
           for symbol in ("BTCUSD", "XAUUSD"):
               url = base + "/bridge/robot-v12/mtf?symbol=" + urllib.parse.quote(symbol)
               req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "User-Agent": "ALIGN-bridge-preflight"})
