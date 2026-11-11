@@ -49,11 +49,55 @@ jobs:
           sparse-checkout: align-bot
 
       - name: Récupérer la mémoire du robot
+        id: restore_state
         uses: actions/cache/restore@v4
         with:
           path: align-bot/state.json
           key: align-etat-${{ github.run_id }}
           restore-keys: align-etat-
+
+      - name: Contrôler la mémoire restaurée sans afficher d'identifiants
+        working-directory: align-bot
+        env:
+          CACHE_MATCHED_KEY: ${{ steps.restore_state.outputs.cache-matched-key }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          path = "state.json"
+          report = {
+              "cache_matched_key": os.environ.get("CACHE_MATCHED_KEY", "") or "NONE",
+              "state_file_present": os.path.isfile(path),
+          }
+          if os.path.isfile(path):
+              try:
+                  with open(path, encoding="utf-8") as f:
+                      state = json.load(f)
+                  report["state_json_valid"] = isinstance(state, dict)
+                  if isinstance(state, dict):
+                      report["schema_version"] = state.get("schema_version", state.get("version", "unknown"))
+                      report["subscriber_count"] = len(state.get("chats", []))
+                      report["prospect_count"] = len(state.get("prospects", []))
+                      report["telegram_offset_present"] = state.get("offset") is not None
+                      report["btc_open_trade"] = bool((state.get("BTC") or {}).get("trade"))
+                      report["gold_open_trade"] = bool((state.get("GOLD") or {}).get("trade"))
+                      report["btc_auto_follow_count"] = len((state.get("auto") or {}).get("BTC", []))
+                      report["gold_auto_follow_count"] = len((state.get("auto") or {}).get("GOLD", []))
+              except Exception as exc:
+                  report["state_json_valid"] = False
+                  report["parse_error"] = type(exc).__name__
+          with open("state-audit.txt", "w", encoding="utf-8") as f:
+              for key, value in report.items():
+                  f.write(f"{key}={value}\\n")
+          for key, value in report.items():
+              print(f"ALIGN_STATE_AUDIT {key}={value}")
+          PY
+
+      - name: Publier le contrôle mémoire (sans données personnelles)
+        uses: actions/upload-artifact@v4
+        with:
+          name: align-state-audit-${{ github.run_id }}
+          path: align-bot/state-audit.txt
+          retention-days: 1
 
       - name: Vérifier la connexion à Telegram sans envoyer de message
         working-directory: align-bot
