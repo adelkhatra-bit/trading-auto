@@ -1559,6 +1559,7 @@ def texte_apercu(m, r, cle):
 
 DERNIERS = {}               # dernière analyse de chaque marché (pour le chrono)
 CHRONO_MAX = 4 * 3600        # délai max d'attente d'une position réservée
+CHRONO_REFRESH_SEC = 5       # édition du compte à rebours toutes les 5 s pour limiter les rafales Telegram
 
 def prochaine_cloture(ts, interval_sec=300):
     """Retourne la prochaine clôture strictement future (horodatage UTC)."""
@@ -1620,9 +1621,7 @@ def maj_chronos(etat, m, r):
                 telegram("editMessageText", chat_id=cid, message_id=c["mid"],
                          text=f"⌛ {ICONE.get(m, '')} {m} : 4 h sans entrée\n😎 La position n'est pas venue : pas de mauvaise entrée\n🎯 Réappuie sur le bouton pour la prochaine")
                 continue
-            seconde = int(now)
-            if c.get("derniere_seconde") != seconde:
-                c["derniere_seconde"] = seconde
+            if now - c.get("maj", 0) >= CHRONO_REFRESH_SEC:
                 c["maj"] = now
                 telegram("editMessageText", chat_id=cid, message_id=c["mid"],
                          text=chrono_txt(m, r, cle, c["t0"]))
@@ -2235,7 +2234,7 @@ def traiter(etat, chats, updates):
                     pass
                 regler_bot(etat, qui, choix == "boton")
                 continue
-            if choix == "auto":
+            if choix == "auto" and mk in MARCHES:
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Noté")
                 except Exception:
@@ -2265,6 +2264,14 @@ def traiter(etat, chats, updates):
                 elif choix == "retirer" and mk in off:
                     off.remove(mk); chats.discard(mk)
                     _envoi_sur(qui, text=f"⛔ Accès retiré à {etat.get('noms', {}).get(mk, mk)}")
+                continue
+            # Ne jamais interpréter un callback inconnu comme une sortie manuelle.
+            # Seuls les boutons explicites in:<marché> et out:<marché> peuvent modifier une position.
+            if choix not in ("in", "out") or mk not in MARCHES:
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="Action inconnue ou expirée")
+                except Exception:
+                    pass
                 continue
             bienvenue = etat.get("bienvenue", {}).get(qui) == mk and etat.get(mk, {}).get("trade")
             if not bienvenue and not autorise(etat, qui, cb["from"]["id"]):
