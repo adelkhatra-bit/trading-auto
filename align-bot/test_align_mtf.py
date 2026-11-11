@@ -1913,6 +1913,27 @@ class TestTradingViewReportRegression(unittest.TestCase):
         self.assertIn("Profil SWING", message)
 
 
+class TestOneTapMarketAnalysis(unittest.TestCase):
+    def test_analysis_button_asks_market_and_gold_choice_returns_only_gold_request(self):
+        from unittest.mock import patch
+        update = {"update_id": 99601, "callback_query": {
+            "id": "choose-gold", "data": "analysechoice:GOLD",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "telegram"):
+            demandes = align_bot.traiter({}, set(), [update])
+        self.assertEqual(demandes, [("101", "GOLD")])
+
+    def test_both_market_choice_returns_exactly_btc_and_gold(self):
+        from unittest.mock import patch
+        update = {"update_id": 99602, "callback_query": {
+            "id": "choose-both", "data": "analysechoice:BOTH",
+            "message": {"chat": {"id": 101, "type": "private"}}, "from": {"id": 101}
+        }}
+        with patch.object(align_bot, "telegram"):
+            demandes = align_bot.traiter({}, set(), [update])
+        self.assertEqual(set(demandes), {("101", "BTC"), ("101", "GOLD")})
+
 class TestFollowPositionMarketChoice(unittest.TestCase):
     def test_follow_button_opens_explicit_btc_gold_or_both_menu(self):
         import json
