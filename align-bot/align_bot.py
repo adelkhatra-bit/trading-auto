@@ -1679,8 +1679,9 @@ def avis_ia(etat, m, r, cle, anglais=False):
         if anglais else
         "Explique ce que fait le marché maintenant et ce qu'on attend pour entrer. Vérifie explicitement le DXY, EUR/USD et les divergences macro fournies. Réponds en français clair, 3 lignes courtes maximum."
     )
+    langue_cache = "en" if anglais else "fr"
     t = ia(etat, consigne, donnees_ia(m, r, cle),
-           cle_cache=f"analyse_{m}_{int(time.time() // 600)}")
+           cle_cache=f"analyse_{m}_{langue_cache}_{int(time.time() // 600)}")
     if t:
         titre = "🧠 ALIGN AI opinion" if anglais else "🧠 L'avis de l'IA ALIGN"
         return f"{titre}\n{t}"
