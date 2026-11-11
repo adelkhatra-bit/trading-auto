@@ -1411,6 +1411,26 @@ TRAD.update({
     "↩️ 1 h en opposition à la tendance de fond": "↩️ 1h opposes the higher-timeframe trend",
     "⏳ Pas de swing : surveiller uniquement une configuration courte M15/M5.": "⏳ No swing: monitor only a short-term M15/M5 setup.",
     "⏳ confirmation H1 manquante": "⏳ H1 confirmation missing",
+    "Profil proposé : ": "Suggested profile: ",
+    "Préparation M15 : ": "M15 setup: ",
+    "Timing M5 : ": "M5 timing: ",
+    "alignée": "aligned",
+    "en attente / retracement": "waiting / pullback",
+    "direction alignée ; déclencheur clôturé à vérifier": "direction aligned; confirm the candle-close trigger",
+    "attendre la confirmation dans le sens du setup": "wait for confirmation in the setup direction",
+    "🔁 1 h : confirme ou contredit le biais de fond H4": "🔁 1h: confirms or contradicts the H4 bias",
+    "👀 15 min : préparation, retracement, cassure et retest": "👀 15m: setup, pullback, breakout and retest",
+    "🎯 5 min : timing ; clôture, rejet ou retest confirmé obligatoire": "🎯 5m: timing; confirmed close, rejection or retest required",
+    "⚖️ SCALPING : M15 + M5 • INTRADAY : H1 + M15 + M5 • SWING : H4 + H1 + M15": "⚖️ SCALPING: M15 + M5 • INTRADAY: H1 + M15 + M5 • SWING: H4 + H1 + M15",
+    "⚠️ Un setup contre H4/H1 reste un scalp contre-tendance, jamais un swing": "⚠️ A setup against H4/H1 remains counter-trend scalping, never a swing",
+    "📍 1 min : suivi du prix et de la position": "📍 1m: price and position monitoring",
+    "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.": "ℹ️ 2m, 10m, 30m, 45m, 2h and Daily: additional context and confirmation.",
+    "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d’entrée.": "⚠️ A bullish or bearish timeframe alone never authorizes an entry.",
+    "🧭 Fond H4 • confirmation H1 • préparation M15 • timing M5": "🧭 H4 bias • H1 confirmation • M15 setup • M5 timing",
+    "M15 = préparation, M5 = timing après clôture confirmée": "M15 = setup, M5 = timing after confirmed close",
+    "Biais H4/H1 validé": "H4/H1 bias confirmed",
+    "Le 15 min retrace : attendre le retour du M5 dans le sens du biais": "15m is pulling back: wait for M5 to turn back with the bias",
+    "Biais de fond H4/H1 validé": "H4/H1 higher-timeframe bias confirmed"
     "📈 TradingView 5 min": "📈 TradingView 5 min",
     "📈 TradingView 15 min": "📈 TradingView 15 min",
     "📈 TradingView 1 h": "📈 TradingView 1 h",
@@ -3705,8 +3725,8 @@ def fmt_trade(m, tr, p=None):
                 "⛔ Ne pas anticiper la clôture de confirmation. Le SL reste obligatoire.\n")
     return (f"{tete}\n"
             + resume +
-            f"🧭 Tendance 4H • confirmation 1H • déclencheur 5M clôturé\n"
-            f"⏱ Vue d'entrée : 5 minutes (15M = contexte)\n\n"
+            f"🧭 Fond H4 • confirmation H1 • préparation M15 • timing M5\n"
+            f"⏱ Vue d'entrée : 5 minutes (15M = préparation, M5 = timing après clôture confirmée)\n\n"
             f"🕯 EN BOUGIES (marche sur toutes les plateformes) :\n"
             f"1️⃣ 👀 Mets-toi en vue 5 minutes pour l'entrée\n"
             + (f"2️⃣ 🛑 SL : un tout petit peu {meche_sl(tr)} (structure 5 min)\n"
