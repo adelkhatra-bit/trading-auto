@@ -1048,6 +1048,31 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual(state["ia_dernier_statut"], "ALL_EXTERNAL_PROVIDERS_FAILED")
         self.assertTrue(state.get("ia_err"))
 
+    def test_verified_external_ai_provider_is_named_in_telegram_commentary(self):
+        from unittest.mock import patch
+        state = {"ia_dernier_fournisseur": "Gemini", "ia_dernier_modele": "gemini-flash-latest",
+                 "ia_dernier_statut": "CONNECTED"}
+        r = {"macro_data": {"disponible": False}}
+        with patch.object(align_bot, "macro_confluence", return_value={"disponible": False}), \
+             patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}), \
+             patch.object(align_bot, "ia", return_value="Gold is neutral; wait for a confirmed close."):
+            message = align_bot.avis_ia(state, "GOLD", r, {})
+        self.assertIn("Gemini", message)
+        self.assertIn("gemini-flash-latest", message)
+        self.assertIn("Gold is neutral", message)
+
+    def test_ai_daily_limit_is_explicitly_marked_as_internal_fallback(self):
+        from unittest.mock import patch
+        jour = align_bot.datetime.datetime.now(align_bot.PARIS).strftime("%Y-%m-%d")
+        state = {"ia_jour": {jour: align_bot.IA_MAX_JOUR}}
+        with patch.object(align_bot, "_appel_ia") as call:
+            answer = align_bot.ia(state, "Explain", {"market": "GOLD"})
+        self.assertEqual(answer, "")
+        self.assertEqual(state["ia_dernier_fournisseur"], "INTERNAL_FALLBACK")
+        self.assertEqual(state["ia_dernier_statut"], "DAILY_LIMIT_INTERNAL_FALLBACK")
+        call.assert_not_called()
+
+
 
     def test_all_analysis_inline_buttons_route_without_silent_failure(self):
         from unittest.mock import patch
