@@ -3103,7 +3103,7 @@ def entrer_inscrits(etat, m, tr, chats=()):
         if vue_gratuite(etat, cid):
             etat.setdefault("bienvenue", {}).setdefault(cid, m)
         stats_bot(etat, cid)["auto"] += 1
-        _envoi_sur(cid, reply_markup=markup_position(m), text=(
+        _envoi_sur(cid, reply_markup=markup_position(m), text=humaniser(etat, cid,
             f"🤖 {ICONE.get(m, '')} {m} : POSITION SUIVIE AUTOMATIQUEMENT\n{SENS[tr['d']]}\n"
             "👀 Mets-toi en vue 15 minutes\n"
             f"🛑 SL un peu {meche_sl(tr)}\n"
@@ -3720,6 +3720,7 @@ def traiter(etat, chats, updates):
                 continue
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb_chat["id"])
+            retenir_prenom(etat, qui, cb.get("from"))
             if choix == "analysechoice" and mk in ("BTC", "GOLD", "BOTH"):
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📊 Analyse en cours")
@@ -4039,6 +4040,7 @@ def traiter(etat, chats, updates):
         cid = str(msg.get("chat", {}).get("id", ""))
         if not cid:
             continue
+        retenir_prenom(etat, cid, msg.get("from"))
         if msg.get("chat", {}).get("type") != "private":
             continue
         tx = msg.get("text", "")
@@ -4803,6 +4805,27 @@ def point_entree(r, d, p):
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque, src=src,
                 za=za, zb=zb, f50=z50, f618=z618, f786=z786, sl_h=bougie_protegee(r["b15"][-3:], d, sl), sl_ut="15 min")
 
+def retenir_prenom(etat, cid, frm):
+    """Le coach parle à la personne par son prénom Telegram (comme un humain)."""
+    p = ((frm or {}).get("first_name") or "").strip().split(" ")[0][:20]
+    if p and cid:
+        etat.setdefault("prenoms", {})[str(cid)] = p
+
+def humaniser(etat, cid, texte):
+    """« 🔒 METS-TOI À BE — BTC » → « 🔒 Adel, METS-TOI À BE — BTC » + une phrase humaine courte à la fin."""
+    p = etat.get("prenoms", {}).get(str(cid))
+    if not p or not isinstance(texte, str) or not texte:
+        return texte
+    tete, _, reste = texte.partition("\n")
+    m_ = re.match(r"^([^\w]*)(.*)$", tete)
+    tete = f"{m_.group(1)}{p}, {m_.group(2)}" if m_ and m_.group(2) else f"{p}, {tete}"
+    haut = texte.upper()
+    fin = ("😌 Tu es protégé maintenant, profite" if " BE" in haut or "BREAK" in haut else
+           "💪 Bien joué, on garde la tête froide" if "TP" in haut and ("TOUCH" in haut or "ATTEINT" in haut) else
+           "🤝 Ça fait partie du jeu, on repart ensemble" if "STOP" in haut or "SL TOUCH" in haut else
+           "🤝 Je reste avec toi jusqu'au bout")
+    return tete + ("\n" + reste if reste else "") + "\n" + fin
+
 def coach(etat, m, r, cle):
     """Agent individuel : messages courts envoyés aux abonnés effectivement inscrits sur la position."""
     tr = cle.get("trade")
@@ -4862,7 +4885,7 @@ def coach(etat, m, r, cle):
                         + ("🔒 Mets ton SL à BE (prix d'entrée)" if prog > 0.2 else "✂️ Le trade n'avance pas\n✂️ Je coupe avant la news"))
     for c in dedans:
         for t in msgs:
-            _envoi_sur(c, text=t, reply_markup=markup_position(m))
+            _envoi_sur(c, text=humaniser(etat, c, t), reply_markup=markup_position(m))
         gerer_stop(etat, m, r, tr, c)
 
 def gerer_stop(etat, m, r, tr, c):
@@ -4911,7 +4934,7 @@ def gerer_stop(etat, m, r, tr, c):
                      "🙅 Jamais pile sur la mèche : elle peut être retouchée\n"
                      + ("💰 Ton gain est protégé" if d * (nouveau - e) > 0 else "🛡 Ta perte possible est réduite")
                      + f"\n📍 Repère prix   ≈ {px(nouveau)}")
-        _envoi_sur(c, reply_markup=markup_position(m), text=texte)
+        _envoi_sur(c, reply_markup=markup_position(m), text=humaniser(etat, c, texte))
         return
     # Le marché respire : petit retour vers l'entrée, on ne bouge rien
     r5 = r["r5"][-1]
@@ -4919,7 +4942,7 @@ def gerer_stop(etat, m, r, tr, c):
     tps = pos.setdefault("cool_t", 0)
     if excès and time.time() - tps >= 45 * 60:
         pos["cool_t"] = time.time()
-        _envoi_sur(c, reply_markup=markup_position(m), text=(
+        _envoi_sur(c, reply_markup=markup_position(m), text=humaniser(etat, c, 
             f"😎 {ICONE.get(m, '')} {m} : reste cool\n🌬 Le marché respire\n"
             "🕯 Il peut revenir un peu, c'est normal\n"
             "🛑 Ne touche pas ton SL\n🎯 Cap sur le TP"))
