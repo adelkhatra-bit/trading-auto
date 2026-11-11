@@ -13,16 +13,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: "18"
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Lint check (only when a lint script is defined)
         run: |
@@ -32,9 +32,13 @@ jobs:
             echo "No lint script defined — skipped"
           fi
 
-      - name: Start backend for smoke tests
+      - name: Start backend in isolated safe mode for smoke tests
+        env:
+          PORT: "4400"
+          SAFE_MODE: "1"
+          BROKER_MODE: "paper"
         run: |
-          PORT=4400 npm start > /tmp/trading-auto-server.log 2>&1 &
+          npm start > /tmp/trading-auto-server.log 2>&1 &
           echo $! > /tmp/trading-auto-server.pid
           for i in $(seq 1 30); do
             if curl --silent --fail http://127.0.0.1:4400/health > /tmp/trading-auto-health.json; then
@@ -49,11 +53,9 @@ jobs:
       - name: Run backend smoke tests
         run: BASE_URL=http://127.0.0.1:4400 bash tests/integration/backend-smoke.test.sh
 
-      - name: Health check
-        run: |
-          echo "Integration tests completed successfully"
-        continue-on-error: true
-
-      - name: Report test results
+      - name: Stop backend
         if: always()
-        run: echo "CI Pipeline Completed"
+        run: |
+          if [ -f /tmp/trading-auto-server.pid ]; then
+            kill "$(cat /tmp/trading-auto-server.pid)" 2>/dev/null || true
+          fi
