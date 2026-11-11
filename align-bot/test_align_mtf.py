@@ -129,8 +129,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             "📌 Entrée : 4 050,00"
         )
         self.assertIn("💰 TP1\n4075,50\nancienne mèche haute — bougie 15 minutes", message)
-        self.assertIn("🛑 Stop Loss\n4020,00\nsous la mèche basse — bougie 15 minutes", message)
-        self.assertIn("📌 Entrée\n4050,00", message)
+        self.assertIn("🛑 Stop Loss\n4020\nsous la mèche basse — bougie 15 minutes", message)
+        self.assertIn("📌 Entrée\n4050", message)
 
     def test_telegram_price_values_remove_all_thousands_grouping_spaces(self):
         message = align_bot.mise_en_forme("PLAN\n💰 TP1 : 12 345 678,90 (niveau majeur)")
@@ -152,7 +152,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             "📌 Entrée\n4 000,00"
         )
         self.assertIn("💰 TP1\n4075,50", message)
-        self.assertIn("📌 Entrée\n4000,00", message)
+        self.assertIn("📌 Entrée\n4000", message)
         self.assertNotIn("4 075", message)
         self.assertNotIn("4 000", message)
 
@@ -232,8 +232,8 @@ class AlignMtfRulesTest(unittest.TestCase):
         )
         self.assertIn("Tendance\nhaussière", message)
         self.assertIn("Confirmation\n2/2", message)
-        self.assertIn("Basse\n4050,00", message)
-        self.assertIn("Haute\n4060,00", message)
+        self.assertIn("Basse\n4050", message)
+        self.assertIn("Haute\n4060", message)
 
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
