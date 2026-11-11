@@ -1295,7 +1295,7 @@ def verdict(r, cle):
 TRAD = {
 # Boutons
 "🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis", "💠 Analyse Nasdaq": "💠 Nasdaq Analysis", "📡 Choisir mes marchés": "📡 Choose my markets", "📡 Mes marchés cochés": "📡 My ticked markets", "📊 Faire une analyse": "📊 Run an analysis",
-"📡 Mes marchés": "📡 My markets",
+"📡 Mes marchés": "📡 My markets", "🔔 Son pièce": "🔔 Coin sound", "🔔 Son envoyé": "🔔 Sound sent",
 "📍 Suivre cette position": "📍 Follow this position", "📍 Ma position • SL / TP": "📍 My position • SL / TP", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
  "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
 "🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "🏷 Type :": "🏷 Type:", "position de plusieurs jours": "multi-day position", "position dans la journée": "intraday position", "position courte, quelques minutes à 1-2 h": "short position, a few minutes to 1-2 h", "validation clôture": "confirmation close", "SL derrière la zone": "SL behind the zone", "💎 TU ES DÉJÀ VIP": "💎 YOU ARE ALREADY VIP", "✅ Toutes les positions, les niveaux et le coach sont actifs pour toi": "✅ All positions, levels and the coach are active for you", "📲 Le canal ALIGN VIP 💎 est accessible avec le bouton ci-dessous": "📲 Open the ALIGN VIP 💎 channel with the button below", "📲 Ouvrir le canal ALIGN VIP 💎": "📲 Open ALIGN VIP 💎 channel", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
@@ -3174,6 +3174,30 @@ def en_position(etat, cid):
     return [m for m in MARCHES if isinstance(((etat.get(m) or {}).get("trade") or {}).get("qui", {}).get(str(cid)), dict)
             and not etat[m]["trade"]["qui"][str(cid)].get("fini")]
 
+SON_PIECE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "son_piece.mp3")
+
+def envoyer_son_piece(cid):
+    """Envoie le son « pièce » (créé pour ALIGN, libre de droits). Le bot ne peut pas imposer une sonnerie :
+    la personne l'enregistre elle-même comme son de notification de ce chat."""
+    anglais = str(cid) in LANG_EN
+    legende = ("🔔 ALIGN coin sound\n👆 Long-press this sound → Save for notifications\n⚙️ Then pick it in this chat's notification settings"
+               if anglais else
+               "🔔 Son pièce ALIGN\n👆 Appuie longuement sur ce son → Enregistrer pour les notifications\n⚙️ Puis choisis-le dans les réglages de ce chat")
+    with open(SON_PIECE, "rb") as f:
+        audio = f.read()
+    borne = "----align" + hashlib.md5(audio).hexdigest()[:16]
+    champs = {"chat_id": str(cid), "caption": legende, "title": "ALIGN pièce", "performer": "ALIGN"}
+    corps = b""
+    for k, v in champs.items():
+        corps += f'--{borne}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+    corps += (f'--{borne}\r\nContent-Disposition: form-data; name="audio"; filename="align_piece.mp3"\r\n'
+              f'Content-Type: audio/mpeg\r\n\r\n').encode() + audio + f"\r\n--{borne}--\r\n".encode()
+    _telegram_verifie_cooldown(cid)
+    req = urllib.request.Request(f"https://api.telegram.org/bot{TOKEN}/sendAudio", data=corps,
+                                 headers={"Content-Type": f"multipart/form-data; boundary={borne}"})
+    with urllib.request.urlopen(req, timeout=30) as rep_:
+        return json.loads(rep_.read().decode())
+
 def menu_bot_gratuit(etat, cid):
     on = bot_on(etat, cid)
     dedans = en_position(etat, cid)
@@ -3188,7 +3212,8 @@ def menu_bot_gratuit(etat, cid):
     _envoi_sur(cid, text="\n".join(lignes), reply_markup=json.dumps({"inline_keyboard": [
         [{"text": "⏸ Non, plus de positions", "callback_data": "botoff:x"} if on else
          {"text": "✅ Oui, je veux des positions", "callback_data": "boton:x"}],
-        [{"text": "📡 Choisir mes marchés", "callback_data": "marketsmenu:x"}]]
+        [{"text": "📡 Choisir mes marchés", "callback_data": "marketsmenu:x"}],
+        [{"text": "🔔 Son pièce", "callback_data": "son:piece"}]]
         + ([[{"text": "💎 Revenir en vue VIP (propriétaire)", "callback_data": "vuegratuit:off"}]] if str(cid) in {str(x) for x in proprio(etat)} else [])}))
 
 def menu_bot(etat, cid):
@@ -3202,7 +3227,8 @@ def menu_bot(etat, cid):
                              if on else "⏸ Il n'entre plus pour toi\n🔔 Tu reçois quand même les positions\n")
                           + f"━━━━━━━━━━━━\n🤖 Positions prises par ton bot   {st['auto']}\n⏸ Arrêts manuels   {st['arrets']}"),
                reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"} if on
-                                                            else {"text": "▶️ Relancer mon bot", "callback_data": "boton:x"}]]
+                                                            else {"text": "▶️ Relancer mon bot", "callback_data": "boton:x"}],
+                                                           [{"text": "🔔 Son pièce", "callback_data": "son:piece"}]]
                                        + ([[{"text": "👁 Tester la version gratuite", "callback_data": "vuegratuit:on"}]] if str(cid) in {str(x) for x in proprio(etat)} else [])}))
 
 def regler_bot(etat, cid, on):
@@ -3511,7 +3537,8 @@ def battement_coeur(etat, m, r, cle, now=None):
         txt = texte_battement(m, r, cle, anglais)
         if not txt:
             continue
-        res = _envoi_sur(cid, text=txt)
+        # Gratuit : battement discret (sans son). VIP : notification normale.
+        res = _envoi_sur(cid, text=txt, **({} if intervalle == HB_INTERVALLE_VIP else {"disable_notification": "true"}))
         if isinstance(res, dict) and res.get("ok") is not False:
             suivi["hb_t"] = now
             suivi["hb_bar"] = int(b5[-1]["t"])
@@ -3983,6 +4010,16 @@ def traiter(etat, chats, updates):
                 except Exception:
                     pass
                 menu_bot(etat, qui)
+                continue
+            if choix == "son":
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔔 Son envoyé")
+                except Exception:
+                    pass
+                try:
+                    envoyer_son_piece(qui)
+                except Exception as ex:
+                    print("son pièce", ex)
                 continue
             if choix == "marketsmenu":
                 try:
