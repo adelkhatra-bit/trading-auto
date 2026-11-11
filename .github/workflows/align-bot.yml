@@ -3,7 +3,11 @@ name: ALIGN MTF BOT (signaux BTC + Gold Telegram)
 on:
   push:
     branches: [main]
-    paths: ["align-bot/**", ".github/workflows/align-bot.yml", ".github/workflows/align-bot-validation.yml"]
+    paths:
+      - "align-bot/**"
+      - "!align-bot/test_*.py"
+      - ".github/workflows/align-bot.yml"
+      - ".github/workflows/align-bot-validation.yml"
   schedule:
     - cron: "0 */6 * * *"
   workflow_dispatch:
