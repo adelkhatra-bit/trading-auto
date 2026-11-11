@@ -1732,10 +1732,12 @@ def inscrire_auto(etat, cid, m):
     cle = etat.get(m, {})
     o = cle.get("ordre")
     d = (o or {}).get("d") or cle.get("aligne") or (r or {}).get("confirme") or 0
+    decision = raison_attente(r, cle) if r else "J'attends les premières bougies complètes pour établir le contexte."
+    direction = SENS[d] if d in SENS else "⚪ NEUTRE — aucun sens confirmé"
     lignes = [
         f"🎯 SUIVI ACTIVÉ — {ICONE.get(m, '')} {m}",
-        f"🧭 Direction actuelle : {SENS[d] if d in SENS else '⚪ NEUTRE — aucun sens confirmé'}",
-        f"⏳ Décision actuelle : {raison_attente(r, cle) if r else 'J'attends les premières bougies complètes pour établir le contexte.'}"
+        f"🧭 Direction actuelle : {direction}",
+        f"⏳ Décision actuelle : {decision}"
     ]
     if o:
         bas, haut = sorted((o.get("za", o["e"]), o.get("zb", o["e"])))
