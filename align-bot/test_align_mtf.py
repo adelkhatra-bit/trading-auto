@@ -1773,7 +1773,8 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
 
     def test_market_selection_callback_persists_without_changing_other_users(self):
         from unittest.mock import patch
-        state = {"marches_par_chat": {"202": "GOLD"}}
+        state = {"marches_par_chat": {"202": "GOLD"}, "auto": {"BTC": ["101"]},
+                 "veille_cloture": {"BTC": {"101": {"multi": True}}}}
         update = {"update_id": 1, "callback_query": {
             "id": "callback-1", "from": {"id": 101},
             "message": {"chat": {"id": 101, "type": "private"}},
@@ -1784,6 +1785,8 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
             align_bot.traiter(state, {"101", "202"}, [update])
         self.assertEqual(align_bot.marche_selection(state, "101"), "BTC")
         self.assertEqual(align_bot.marche_selection(state, "202"), "GOLD")
+        self.assertNotIn("101", state["auto"]["BTC"])
+        self.assertNotIn("101", state["veille_cloture"]["BTC"])
         self.assertIn("reply_markup", send.call_args.kwargs)
 
 
