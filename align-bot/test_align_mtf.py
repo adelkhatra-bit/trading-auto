@@ -1771,3 +1771,27 @@ class TestTelegramCompactKeyboards(unittest.TestCase):
         self.assertIn("details:BTC", callbacks)
         self.assertIn("levels:BTC", callbacks)
         self.assertIn("timeframes:BTC", callbacks)
+
+
+class TestTradingViewReportRegression(unittest.TestCase):
+    def test_fresh_indicator_plan_renders_without_unbound_report_variable(self):
+        from unittest.mock import patch
+        r = {
+            "dirs": [1] * 11, "rsis": [55.0] * 11,
+            "m1": [candle(1, c=100.0)], "confirme": 1,
+            "posD": 0.5, "posW": 0.5, "niv_cles": [], "asie": None,
+            "macro": [], "fvg": [], "atr": 1.0, "distrib": False,
+            "accum": False, "b5": [candle(i) for i in range(22)],
+        }
+        plan = {"available": True, "timeframe": "H4", "entry": 100.0,
+                "sl": 98.0, "tp": 104.0, "confirmed": True}
+        with patch.object(align_bot, "plan_indicateur", return_value=plan), \
+             patch.object(align_bot, "zone_txt", return_value="milieu"), \
+             patch.object(align_bot, "strategie_mtf", return_value=["Profil SWING", "Horizon : plusieurs séances"]), \
+             patch.object(align_bot, "verdict", return_value=("ATTENTE", "Attendre la clôture.")), \
+             patch.object(align_bot, "ligne_cassure", return_value="Déclencheur"), \
+             patch.object(align_bot, "prochaine", return_value="Attendre"):
+            message = align_bot.texte_etat("GOLD", r, {})
+        self.assertIn("Unité sélectionnée : H4", message)
+        self.assertIn("Entrée indicateur", message)
+        self.assertIn("Profil SWING", message)
