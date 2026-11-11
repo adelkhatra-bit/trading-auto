@@ -3869,15 +3869,20 @@ def variation_une_heure(historique):
     return (valeur - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
 
 
-def dxy_info(etat):
+def dxy_info(etat, maintenant=None):
     h = (etat.get("macro") or {}).get("dxy") or []
     if not h:
+        return None
+    maintenant = time.time() if maintenant is None else maintenant
+    dernier_ts, dernier_prix = h[-1]
+    # Une cotation de plus de 15 minutes ou horodatée dans le futur est rejetée.
+    if maintenant - dernier_ts > 15 * 60 or dernier_ts > maintenant + 60:
         return None
     variation = variation_une_heure(h)
     if variation is None:
         return None
     ch, mn = variation
-    return h[-1][1], ch, mn
+    return dernier_prix, ch, mn
 
 def us10_info(etat):
     """Dernier rendement US Treasury 10 ans publié, avec date et fraîcheur contrôlées."""
@@ -3909,17 +3914,23 @@ def us10_info(etat):
         return {"disponible": False, "statut": "FORMAT US10Y INVALIDE"}
 
 
-def macro_confluence(etat, m, r=None):
+def macro_confluence(etat, m, r=None, maintenant=None):
     """Biais DXY, contrôle EUR/USD, US10Y officiel et divergences avec l'actif."""
     mc = etat.get("macro") or {}
-    di = dxy_info(etat)
+    di = dxy_info(etat, maintenant=maintenant)
     taux = us10_info(etat)
     if not di:
         return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES", "us10y": taux}
     dxy, variation, age_min = di
     hist_eur = mc.get("eurusd") or []
     eur_change = None
-    eur_variation = variation_une_heure(hist_eur)
+    # EUR/USD et DXY doivent avoir des cotations récentes et synchronisées.
+    hist_dxy = mc.get("dxy") or []
+    eur_synchrone = bool(hist_eur and hist_dxy and
+                         abs(hist_eur[-1][0] - hist_dxy[-1][0]) <= 8 * 60 and
+                         maintenant - hist_eur[-1][0] <= 15 * 60 if maintenant is not None
+                         else hist_eur and hist_dxy and abs(hist_eur[-1][0] - hist_dxy[-1][0]) <= 8 * 60)
+    eur_variation = variation_une_heure(hist_eur) if eur_synchrone else None
     if eur_variation is not None:
         eur_change = eur_variation[0]
     if variation >= 0.25:
