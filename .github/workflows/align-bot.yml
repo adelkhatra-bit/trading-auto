@@ -16,8 +16,9 @@ permissions:
 
 concurrency:
   group: align-bot
-  # Un seul worker à la fois : les pushes de code ne démarrent pas et n'interrompent pas le suivi Telegram.
-  cancel-in-progress: false
+  # Un seul worker : un déploiement arrête l'ancienne version avant de démarrer la nouvelle.
+  # Le bot sauvegarde son état pendant le polling et l'étape cache s'exécute aussi à l'annulation.
+  cancel-in-progress: true
 
 jobs:
   validate:
