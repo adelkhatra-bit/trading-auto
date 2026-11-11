@@ -2375,9 +2375,15 @@ def traiter(etat, chats, updates):
                 except Exception:
                     pass
                 r_resume = DERNIERS.get(mk)
-                if r_resume:
-                    _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {})),
-                               reply_markup=markup_analyse(etat, mk, r_resume))
+                if r_resume is None:
+                    try:
+                        r_resume = analyse_marche(etat, MARCHES[mk])
+                    except Exception as ex:
+                        print("retour analyse", mk, ex)
+                        _envoi_sur(qui, text="⚠️ L'analyse n'est pas disponible pour le moment. Réessaie avec le bouton Analyse.")
+                        continue
+                _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {})),
+                           reply_markup=markup_analyse(etat, mk, r_resume))
                 continue
             if choix in ("jok", "jno") and qui in proprio(etat):
                 decider_entree(etat, cb, choix == "jok", mk)
@@ -2388,11 +2394,17 @@ def traiter(etat, chats, updates):
                 except Exception:
                     pass
                 if choix == "tvoffre":
-                    etat.setdefault("indic_offert", []).append(mk)
+                    offerts = etat.setdefault("indic_offert", [])
+                    if mk not in offerts:
+                        offerts.append(mk)
                     _envoi_sur(mk, text="🎁 L'indicateur t'est offert !\n👉 Appuie sur 🧩 Indicateur TradingView", reply_markup=CLAVIER)
                     _envoi_sur(qui, text="✅ Indicateur offert. J'attends son pseudo TradingView.")
                 else:
-                    etat.setdefault("indic", {}).setdefault(mk, {})["ok"] = True
+                    info = etat.setdefault("indic", {}).setdefault(mk, {})
+                    if not info.get("tv"):
+                        _envoi_sur(qui, text="⚠️ Aucun pseudo TradingView enregistré pour cet utilisateur.")
+                        continue
+                    info["ok"] = True
                     _envoi_sur(mk, reply_markup=CLAVIER, text=(
                         "✅ Accès indicateur ouvert !\n📍 TradingView → Indicateurs → Sur invitation\n🧩 ALIGN MTF PRO\n"
                         + (f"🔗 {LIEN_INDICATEUR}\n" if LIEN_INDICATEUR else "") + "⏱ Mets-toi en vue 15 minutes"))
@@ -2425,14 +2437,20 @@ def traiter(etat, chats, updates):
                 except Exception:
                     pass
                 off = etat.setdefault("offerts", [])
-                if choix == "offrir" and mk not in off:
+                if choix == "offrir":
+                    if mk in off:
+                        _envoi_sur(qui, text=f"ℹ️ {etat.get('noms', {}).get(mk, mk)} possède déjà l'accès offert.")
+                        continue
                     off.append(mk); chats.add(mk)
                     if mk in etat.get("prospects", []):
                         etat["prospects"].remove(mk)
                     _envoi_sur(mk, text="🎁 Accès VIP offert !\n✅ Tu reçois maintenant toutes mes positions\n⬇️ Utilise les boutons en bas\n\n" + AVERTISSEMENT, reply_markup=CLAVIER)
                     _envoi_sur(qui, text=f"✅ Accès VIP offert à {etat.get('noms', {}).get(mk, mk)}",
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "⛔ Retirer l'accès", "callback_data": f"retirer:{mk}"}]]}))
-                elif choix == "retirer" and mk in off:
+                elif choix == "retirer":
+                    if mk not in off:
+                        _envoi_sur(qui, text=f"ℹ️ {etat.get('noms', {}).get(mk, mk)} n'a pas d'accès offert actif.")
+                        continue
                     off.remove(mk); chats.discard(mk)
                     _envoi_sur(qui, text=f"⛔ Accès retiré à {etat.get('noms', {}).get(mk, mk)}")
                 continue
