@@ -2068,20 +2068,13 @@ def bouton_rappel(m):
     ]})
 
 def markup_analyse(etat, m, r):
-    """Clavier progressif : décision, explication, analyse complète et niveaux."""
+    """Clavier volontairement minimal : l'analyse complète est déjà envoyée dans le message."""
     cle = etat.get(m, {})
-    lignes = [
-        [{"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
-         {"text": "📊 Analyse complète", "callback_data": f"details:{m}"}],
-        [{"text": "🎯 Niveaux / prix", "callback_data": f"levels:{m}"},
-         {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
-    ]
     if cle.get("trade"):
-        lignes.append([{"text": "🟢 Je suis rentré", "callback_data": f"in:{m}"},
-                       {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}])
+        lignes = [[{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"}],
+                  [{"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"}]]
     else:
-        lignes.append([{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}])
+        lignes = [[{"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]
     return json.dumps({"inline_keyboard": lignes})
 
 
