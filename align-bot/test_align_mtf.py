@@ -129,6 +129,80 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("12 345 678,90", "12 345 678,90")  # input uses grouped digits
         self.assertIn("💰 TP1\\n12345678,90\\nniveau majeur", message)
 
+    def test_previous_analysis_button_is_market_specific(self):
+        import json
+        keyboard = json.loads(align_bot.bouton_rappel("GOLD"))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        labels = [button["text"] for row in keyboard for button in row]
+        self.assertIn("previous:GOLD", callbacks)
+        self.assertIn("📌 Revoir l'analyse GOLD", labels)
+
+    def test_requested_analysis_arms_the_next_relevant_closed_candle(self):
+        state = {}
+        r = {"confirme": 0, "dirs": [0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+             "b1h": [candle(3600)]}
+        align_bot.armer_cloture(state, "123", "GOLD", r, {})
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["tf"], "1h")
+        self.assertEqual(state["veille_cloture"]["GOLD"]["123"]["dernier_t"], 3600)
+
+    def test_closed_candle_notifier_sends_once_per_new_candle(self):
+        from unittest.mock import patch
+        state = {"veille_cloture": {"BTC": {"123": {"tf": "5m", "dernier_t": 300, "restants": 1}}}}
+        r = {"b5": [candle(300), candle(600, o=100, h=103, l=99, c=102)],
+             "confirme": 0, "dirs": [0] * 11, "rsis": [50] * 11}
+        with patch.object(align_bot, "verdict", return_value=("ATTENDRE", "pas de confirmation")), \
+             patch.object(align_bot, "alignement", return_value=(0, 0)), \
+             patch.object(align_bot, "prochaine", return_value="Attendre"), \
+             patch.object(align_bot, "_envoi_sur") as send:
+            align_bot.notifier_clotures(state, "BTC", r, {})
+            align_bot.notifier_clotures(state, "BTC", r, {})
+        self.assertEqual(send.call_count, 1)
+        self.assertIn("CLÔTURE CONFIRMÉE", send.call_args.kwargs["text"])
+        self.assertNotIn("123", state["veille_cloture"]["BTC"])
+
+    def test_chronometer_edits_again_on_the_next_second(self):
+        from unittest.mock import patch
+        state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1}}}, "GOLD": {}}
+        with patch.object(align_bot.time, "time", side_effect=[100.1, 101.1]), \
+             patch.object(align_bot, "chrono_txt", side_effect=["tick-100", "tick-101"]), \
+             patch.object(align_bot, "telegram") as send:
+            align_bot.maj_chronos(state, "GOLD", {})
+            align_bot.maj_chronos(state, "GOLD", {})
+        self.assertEqual(send.call_count, 2)
+        self.assertEqual(send.call_args_list[0].kwargs["text"], "tick-100")
+        self.assertEqual(send.call_args_list[1].kwargs["text"], "tick-101")
+
+    def test_analysis_keyboard_exposes_details_levels_and_explicit_position_action(self):
+        import json
+        keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
+        labels = [button["text"] for row in keyboard for button in row]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        self.assertIn("ℹ️ Comprendre l'analyse", labels)
+        self.assertIn("📊 Voir les niveaux", labels)
+        self.assertIn("🎯 Suivre la prochaine position", labels)
+        self.assertIn("details:GOLD", callbacks)
+        self.assertIn("levels:GOLD", callbacks)
+        self.assertIn("auto:GOLD", callbacks)
+
+    def test_active_trade_keyboard_has_manual_entry_and_exit_controls(self):
+        import json
+        keyboard = json.loads(align_bot.markup_analyse({"GOLD": {"trade": {"e": 1}}}, "GOLD", {}))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        self.assertIn("in:GOLD", callbacks)
+        self.assertIn("out:GOLD", callbacks)
+        self.assertNotIn("auto:GOLD", callbacks)
+
+    def test_telegram_formatter_splits_compound_information(self):
+        message = align_bot.mise_en_forme(
+            "ALIGN • GOLD\n"
+            "Tendance : haussière • Confirmation : 2/2\n"
+            "FVG 15m : haussière | Basse 4 050,00 | Haute 4 060,00"
+        )
+        self.assertIn("Tendance\nhaussière", message)
+        self.assertIn("Confirmation\n2/2", message)
+        self.assertIn("Basse\n4 050,00", message)
+        self.assertIn("Haute\n4 060,00", message)
+
     def test_telegram_analysis_layout_is_clear_for_btc_and_gold(self):
         from unittest.mock import patch
         r = {
@@ -151,10 +225,10 @@ class AlignMtfRulesTest(unittest.TestCase):
                 message = align_bot.texte_etat(market, r, {})
                 self.assertIn(f"ALIGN • {market}", message)
                 self.assertIn("📊 INDICATEURS PAR UNITÉ DE TEMPS", message)
-                self.assertIn("🕒 1m ⬆️", message)
-                self.assertIn("📈 RSI : 1m 55", message)
+                self.assertIn("UNITÉ 1m\n⬆️", message)
+                self.assertIn("RSI 1m\n55", message)
                 self.assertIn("🧭 CONFIRMATION DE TENDANCE", message)
-                self.assertIn("Alignement 1h + 4h", message)
+                self.assertIn("ALIGNEMENT 1H + 4H\n2/2", message)
                 self.assertIn("🧭 PLAN MULTI-TIMEFRAME", message)
                 self.assertIn("🏔 Tendance 4 h", message)
                 self.assertIn("🚦 DÉCISION ALIGN", message)
