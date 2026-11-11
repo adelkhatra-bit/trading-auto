@@ -2236,12 +2236,12 @@ def noter(etat, cid, m, pos, sortie, motif):
     resultat = "GAIN" if pts > 0 else "PERTE" if pts < 0 else "ÉGALITÉ"
     titre = f"🏁 CLÔTURE CONFIRMÉE — {nature} — {m}"
     _envoi_sur(cid, reply_markup=markup_cloture(m), text=(
-        f"{titre}\\n"
-        f"{'✅' if pts > 0 else '❌' if pts < 0 else '➖'} Résultat : {resultat}\\n"
-        f"📌 Entrée : {px(pos['e'])}\\n"
-        f"🚪 Sortie confirmée : {px(sortie)}\\n"
-        f"📊 Performance : {pts:+,.2f} pts • {pct:+.2f} %\\n".replace(",", " ")
-        + f"🧾 Motif : {motif}\\n"
+        f"{titre}\n"
+        f"{'✅' if pts > 0 else '❌' if pts < 0 else '➖'} Résultat : {resultat}\n"
+        f"📌 Entrée : {px(pos['e'])}\n"
+        f"🚪 Sortie confirmée : {px(sortie)}\n"
+        f"📊 Performance : {pts:+,.2f} pts • {pct:+.2f} %\n".replace(",", " ")
+        + f"🧾 Motif : {motif}\n"
         + ("🎉 Objectif positif enregistré." if pts > 0 else "🛡 Risque clôturé. Le prochain signal sera traité séparément." if pts < 0 else "Position clôturée à l’équilibre.")))
 
 def texte_bilan(etat):
