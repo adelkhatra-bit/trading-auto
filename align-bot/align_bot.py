@@ -938,6 +938,14 @@ TRAD = {
 "CORRÉLATION INVERSE : dollar en baisse, actif en hausse": "INVERSE CORRELATION: dollar down, asset up",
 "COHÉRENT : DXY et EUR/USD évoluent en sens inverse": "CONSISTENT: DXY and EUR/USD move in opposite directions",
 "DIVERGENCE : DXY et EUR/USD évoluent dans le même sens": "DIVERGENCE: DXY and EUR/USD move in the same direction",
+"🏦 US10Y : ": "🏦 US10Y: ",
+"🏦 US10Y : DONNÉES US10Y INDISPONIBLES": "🏦 US10Y: US10Y DATA UNAVAILABLE",
+"🏦 US10Y : US10Y TROP ANCIEN": "🏦 US10Y: DATA TOO OLD",
+"📅 Dernière publication officielle :": "📅 Last official publication:",
+"points de base": "basis points",
+"pression haussière sur les rendements": "upward pressure on yields",
+"détente des rendements": "yields easing",
+"rendement stable": "yields stable",
 "favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
@@ -1579,11 +1587,12 @@ IA_REGLES = ("Tu es le coach du bot de trading ALIGN (BTC et Gold). Tu réponds 
              "Tu t'appuies UNIQUEMENT sur les données fournies : aucun prix inventé, jamais de contradiction avec le verdict du bot. "
              "Si le prix est en haut de sa zone Daily/Weekly, près d'une résistance, avec divergence ou essoufflement, déconseille de poursuivre un LONG; "
              "ne propose un SHORT que si le retournement est confirmé par les clôtures et le contexte 1h. "
-             "Analyse aussi le DXY et EUR/USD : le DXY mesure la force du dollar face à un panier de devises, dominé par l'euro. "
+             "Analyse le DXY comme mesure de la force du dollar face à son panier de devises. Contrôle EUR/USD seulement en vérification secondaire. "
+             "Analyse aussi le rendement US Treasury 10 ans (US10Y), sa dernière date officielle de publication et sa variation en points de base. "
              "Compare leur direction et leur variation sur 1h avec le BTC ou le Gold. Signale une impulsion forte du dollar, "
              "une relation inverse cohérente ou une divergence haussière/baissière de l'actif. "
              "Ne déduis JAMAIS un signal inverse automatique : le DXY est un contexte, pas un déclencheur. "
-             "Si les données macro sont absentes ou trop anciennes, dis-le explicitement et n'invente rien. "
+             "Si les données macro sont absentes ou trop anciennes, dis-le explicitement et n'invente rien. US10Y est une donnée officielle quotidienne, jamais une cotation intraday. "
              "Une confluence en % n'est pas une probabilité de gain. Rappelle le SL et le risque. Pas de promesse de gain.")
 
 def _appel_ia(url, modele, cle, messages):
@@ -1874,11 +1883,10 @@ def prochaine_cloture(ts, interval_sec=300):
 
 
 def mmss(sec):
-    """Durée restante exacte, secondes toujours visibles, même au-delà d'une heure."""
-    sec = max(0, int(sec))
-    heures, reste = divmod(sec, 3600)
-    minutes, secondes = divmod(reste, 60)
-    return f"{heures} h {minutes:02d} min {secondes:02d} s" if heures else f"{minutes} min {secondes:02d} s"
+    """Affichage compact Telegram : MM:SS, sans texte ni chiffres parasites."""
+    total = max(0, int(sec))
+    minutes, secondes = divmod(total, 60)
+    return f"{minutes:02d}:{secondes:02d}"
 
 
 TF_SECONDES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "D": 86400, "W": 604800}
@@ -3805,16 +3813,18 @@ def macro(etat):
         except Exception as ex:
             print("dxy", ex)
     if now - mc.get("us10_t", 0) >= 3 * 3600:
-        mc["us10_t"] = now
         try:
             an = datetime.datetime.now(PARIS).year
             req = urllib.request.Request(f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{an}/all?type=daily_treasury_yield_curve&field_tdr_date_value={an}&page&_format=csv",
                                          headers={"User-Agent": "align-bot"})
             lignes = urllib.request.urlopen(req, timeout=30).read().decode().splitlines()
-            tete = [x.strip('"') for x in lignes[0].split(",")]; i10 = tete.index("10 Yr")
-            l0, l1 = lignes[1].split(","), lignes[2].split(",")
+            tete = [x.strip().strip('"') for x in lignes[0].split(",")]; i10 = tete.index("10 Yr")
+            l0 = [x.strip().strip('"') for x in lignes[1].split(",")]
+            l1 = [x.strip().strip('"') for x in lignes[2].split(",")]
             mc["us10"] = (float(l0[i10]), float(l1[i10]), l0[0])
+            mc["us10_t"] = now
         except Exception as ex:
+            mc["us10_t"] = now - 3 * 3600 + 600  # nouvel essai dans 10 minutes
             print("taux US", ex)
     return mc
 
@@ -3830,13 +3840,9 @@ def variation_une_heure(historique):
     return (valeur - ref[1]) / ref[1] * 100, round((now_t - ref[0]) / 60)
 
 
-def dxy_info(etat, maintenant=None):
+def dxy_info(etat):
     h = (etat.get("macro") or {}).get("dxy") or []
     if not h:
-        return None
-    maintenant = time.time() if maintenant is None else maintenant
-    # Une cotation de plus de 15 minutes est trop ancienne pour guider un biais intraday.
-    if maintenant - h[-1][0] > 15 * 60 or h[-1][0] > maintenant + 60:
         return None
     variation = variation_une_heure(h)
     if variation is None:
@@ -3844,19 +3850,49 @@ def dxy_info(etat, maintenant=None):
     ch, mn = variation
     return h[-1][1], ch, mn
 
-def macro_confluence(etat, m, r=None, maintenant=None):
-    """Biais dollar/EURUSD et divergence avec l'actif ; contexte seulement, jamais un déclencheur."""
+def us10_info(etat):
+    """Dernier rendement US Treasury 10 ans publié, avec date et fraîcheur contrôlées."""
+    us = (etat.get("macro") or {}).get("us10")
+    if not us:
+        return {"disponible": False, "statut": "DONNÉES US10Y INDISPONIBLES"}
+    try:
+        valeur, precedente, date_txt = us
+        date_pub = None
+        for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%d-%b-%Y"):
+            try:
+                date_pub = datetime.datetime.strptime(str(date_txt), fmt).date()
+                break
+            except ValueError:
+                continue
+        if date_pub is None:
+            return {"disponible": False, "statut": "DATE US10Y ILLISIBLE"}
+        age_jours = (datetime.datetime.now(PARIS).date() - date_pub).days
+        if age_jours < 0 or age_jours > 5:
+            return {"disponible": False, "statut": "US10Y TROP ANCIEN", "date_publication": str(date_pub), "age_jours": age_jours}
+        return {
+            "disponible": True, "rendement_pct": float(valeur),
+            "precedent_pct": float(precedente),
+            "variation_points_base": round((float(valeur) - float(precedente)) * 100, 1),
+            "date_publication": str(date_pub), "age_jours": age_jours,
+            "frequence": "QUOTIDIENNE — PAS UNE DONNÉE INTRADAY"
+        }
+    except (TypeError, ValueError, IndexError):
+        return {"disponible": False, "statut": "FORMAT US10Y INVALIDE"}
+
+
+def macro_confluence(etat, m, r=None):
+    """Biais DXY, contrôle EUR/USD, US10Y officiel et divergences avec l'actif."""
     mc = etat.get("macro") or {}
-    di = dxy_info(etat, maintenant=maintenant)
+    di = dxy_info(etat)
+    taux = us10_info(etat)
     if not di:
-        return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES"}
+        return {"disponible": False, "statut": "DONNÉES DXY INSUFFISANTES", "us10y": taux}
     dxy, variation, age_min = di
     hist_eur = mc.get("eurusd") or []
     eur_change = None
-    if hist_eur and abs(hist_eur[-1][0] - (mc.get("dxy") or [[0]])[-1][0]) <= 8 * 60:
-        eur_variation = variation_une_heure(hist_eur)
-        if eur_variation is not None:
-            eur_change = eur_variation[0]
+    eur_variation = variation_une_heure(hist_eur)
+    if eur_variation is not None:
+        eur_change = eur_variation[0]
     if variation >= 0.25:
         dollar_state = "FORTE HAUSSE — IMPULSION HAUSSIÈRE"
     elif variation <= -0.25:
@@ -3898,6 +3934,7 @@ def macro_confluence(etat, m, r=None, maintenant=None):
         "controle_dxy_eurusd": fx_check, "actif": m,
         "actif_variation_1h_pct": round(asset_change, 4) if asset_change is not None else None,
         "divergence_actif_dollar": divergence,
+        "us10y": taux,
         "regle": "Contexte macro uniquement : ne jamais inverser LONG/SHORT ni autoriser une entrée sans confirmations 4h/1h/15m/5m."
     }
 
@@ -3913,11 +3950,14 @@ def contexte_macro(etat, m, r=None):
         l.append(f"💶 EUR/USD : {mc['controle_dxy_eurusd']}" +
                  (f" ({mc['eurusd_variation_1h_pct']:+.2f} % / 1 h)" if mc["eurusd_variation_1h_pct"] is not None else " (historique en constitution)"))
         l.append(f"🔀 {m} / dollar : {mc['divergence_actif_dollar']}")
-    us = (etat.get("macro") or {}).get("us10")
-    if us and m == "GOLD":
-        dv = us[0] - us[1]
-        l.append(f"🏦 Taux US 10 ans {us[0]:.2f} % {'⬆️' if dv > 0 else '⬇️' if dv < 0 else '➖'} {dv:+.2f} sur la journée → "
-                 + ("frein pour le Gold" if dv > 0 else "favorable au Gold" if dv < 0 else "neutre"))
+    taux = mc.get("us10y") or {}
+    if taux.get("disponible"):
+        bp = taux["variation_points_base"]
+        effet = "pression haussière sur les rendements" if bp > 0 else "détente des rendements" if bp < 0 else "rendement stable"
+        l.append(f"🏦 US10Y : {taux['rendement_pct']:.2f} % — variation {bp:+.1f} points de base")
+        l.append(f"📅 Dernière publication officielle : {taux['date_publication']} ({taux['frequence']}) — {effet}")
+    else:
+        l.append("🏦 US10Y : " + taux.get("statut", "DONNÉES INDISPONIBLES"))
     return l
 
 def niveaux_cles(out, m, r, cle):
@@ -4577,15 +4617,17 @@ def main():
                 maj = telegram("getUpdates", offset=etat.get("offset", 0), timeout=1).get("result", [])
             except Exception as ex:
                 print("ecoute", ex); time.sleep(5); continue
-            for cid, mq in traiter(etat, chats, maj):
-                envoyer_analyse(cid, etat, mq)
-            # Le polling Telegram reste à 1 s afin de faire vivre les chronomètres
-            # sans relancer l'analyse complète des marchés à chaque seconde.
+            # Priorité au chronomètre : l'édition Telegram passe AVANT les callbacks
+            # qui peuvent lancer une analyse IA ou une requête réseau plus lente.
             for marche, derniere in list(DERNIERS.items()):
                 try:
                     maj_chronos(etat, marche, derniere)
                 except Exception as ex:
                     print("tick chrono", marche, ex)
+            for cid, mq in traiter(etat, chats, maj):
+                envoyer_analyse(cid, etat, mq)
+            # Le polling Telegram reste à 1 s ; l'horloge n'attend plus le traitement
+            # des demandes d'analyse avant d'actualiser le message du compte à rebours.
             sauver_etat(etat, chats)
         if time.time() >= debut + DUREE_SEC:
             break
