@@ -593,14 +593,14 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual([b.get("callback_data") for b in fr_buttons], [b.get("callback_data") for b in en_buttons])
         self.assertEqual([align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons], [b["text"] for b in en_buttons])
         self.assertEqual([b["text"] for b in en_buttons], [
-            "❓ Why this decision?", "📊 Full analysis", "🎯 Levels / prices",
+            "❓ Why this decision?", "🧠 Learn more", "🎯 Levels / prices",
             "⏱ All timeframes", "🗂 Message history", "🔔 Follow the next position"
         ])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):
         labels = [
             "🎯 Suivre la prochaine position", "❓ Pourquoi cette décision ?",
-            "📊 Analyse complète", "🎯 Niveaux / prix", "⏱ Toutes les unités",
+            "📊 Analyse complète", "🧠 En savoir plus", "🎯 Niveaux / prix", "⏱ Toutes les unités",
             "🗂 Historique des messages", "🟢 Je suis rentré",
             "🔔 Suivre la prochaine position", "📍 Ma position • SL / TP",
             "🗂 Historique", "🔔 Suivre le prochain setup",
@@ -852,7 +852,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
         labels = [button["text"] for row in keyboard for button in row]
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
-        self.assertTrue({"❓ Pourquoi cette décision ?", "📊 Analyse complète", "🎯 Niveaux / prix",
+        self.assertTrue({"❓ Pourquoi cette décision ?", "🧠 En savoir plus", "🎯 Niveaux / prix",
                          "⏱ Toutes les unités", "🗂 Historique des messages",
                          "🔔 Suivre la prochaine position"}.issubset(set(labels)))
         self.assertTrue({"why:GOLD", "details:GOLD", "levels:GOLD", "timeframes:GOLD",
@@ -1668,7 +1668,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertTrue({"why:BTC", "details:BTC", "levels:BTC", "timeframes:BTC",
                          "history:BTC", "auto:BTC"}.issubset(set(callbacks)))
         self.assertIn("❓ Pourquoi cette décision ?", labels)
-        self.assertIn("📊 Analyse complète", labels)
+        self.assertIn("🧠 En savoir plus", labels)
 
     def test_why_callback_returns_short_explanation_and_more_detail_buttons(self):
         from unittest.mock import patch
