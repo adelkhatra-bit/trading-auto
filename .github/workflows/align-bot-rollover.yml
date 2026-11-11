@@ -1,0 +1,86 @@
+name: ALIGN worker rollover
+
+on:
+  workflow_run:
+    workflows: ["ALIGN MTF validation"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  retire_previous_worker:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Retire older production workers after validation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          CURRENT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ["REPOSITORY"]
+          current_sha = os.environ["CURRENT_SHA"]
+          token = os.environ["GH_TOKEN"]
+          if not repo or not current_sha or not token:
+              raise SystemExit("Rollover preflight failed: repository, validated SHA, or token missing.")
+
+          base = f"https://api.github.com/repos/{repo}"
+          headers = {
+              "Authorization": "Bearer " + token,
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "ALIGN-worker-rollover"
+          }
+
+          def request(path, method="GET"):
+              req = urllib.request.Request(base + path, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=20) as response:
+                  raw = response.read()
+              return json.loads(raw.decode("utf-8")) if raw else {}
+
+          def older_active_runs():
+              data = request("/actions/workflows/align-bot.yml/runs?branch=main&per_page=100")
+              runs = data.get("workflow_runs", [])
+              active = {"queued", "in_progress", "waiting", "pending", "requested"}
+              return [
+                  run for run in runs
+                  if run.get("name") == "ALIGN MTF BOT (signaux BTC + Gold Telegram)"
+                  and run.get("head_sha") != current_sha
+                  and run.get("status") in active
+              ]
+
+          old_runs = older_active_runs()
+          for run in old_runs:
+              run_id = run["id"]
+              try:
+                  request(f"/actions/runs/{run_id}/cancel", method="POST")
+                  print(f"ROLLING_OVER old_run={run_id} old_sha={run.get('head_sha', '')[:12]}")
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (404, 409):
+                      raise
+                  print(f"ROLL_OVER_RACE old_run={run_id} http={exc.code}")
+
+          deadline = time.time() + 120
+          while time.time() < deadline:
+              remaining = older_active_runs()
+              if not remaining:
+                  print("ALIGN_OLD_WORKERS_STOPPED validated_sha=" + current_sha[:12])
+                  break
+              time.sleep(3)
+          else:
+              ids = ",".join(str(run["id"]) for run in remaining)
+              raise SystemExit("Rollover refused to proceed; older workers are still active: " + ids)
+          PY
