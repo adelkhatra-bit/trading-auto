@@ -2120,12 +2120,16 @@ def texte_cloture(m, tf, bougie, r, cle):
     d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
     couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
     titre, raison = verdict(r, cle)
+    # La bougie est clôturée techniquement ; le titre indique séparément si le signal autorise réellement l'entrée.
+    signal_confirme = titre.startswith("🟢 TU PEUX ENTRER")
+    statut_signal = "SIGNAL CONFIRMÉ" if signal_confirme else "SIGNAL NON CONFIRMÉ"
+    titre_cloture = f"🕯 CLÔTURE {tf} — {statut_signal}"
     maj, n_ok = alignement(r)
-    confirmation = f"{n_ok}/2 — {'confirmée' if r.get('confirme') else 'pas confirmée'} (4 h + 1 h)"
+    confirmation = f"{n_ok}/2 — {'alignement confirmé' if r.get('confirme') else 'alignement non confirmé'} (4 h + 1 h)"
     tendance_4h = 'LONG' if r.get('dirs', [0]*10)[9] == 1 else 'SHORT' if r.get('dirs', [0]*10)[9] == -1 else 'NEUTRE'
     tendance_1h = 'LONG' if r.get('dirs', [0]*10)[7] == 1 else 'SHORT' if r.get('dirs', [0]*10)[7] == -1 else 'NEUTRE'
     lignes = [
-        "🕯 CLÔTURE CONFIRMÉE",
+        titre_cloture,
         f"{tf} — {ICONE.get(m, '📊')} {m}",
         f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
         "",
