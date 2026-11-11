@@ -5056,6 +5056,21 @@ def agent(m, r, cle, ferme):
     return out
 
 # ───────── Programme ─────────
+def recevoir_updates_telegram(etat, chats, demandes):
+    """Vide rapidement la file Telegram entre les étapes d'analyse, sans attendre la fin du tour BTC + Gold."""
+    if not TOKEN:
+        return 0
+    try:
+        updates = telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", [])
+    except Exception as ex:
+        print("ecoute Telegram", ex)
+        return 0
+    if not updates:
+        return 0
+    demandes.extend(traiter(etat, chats, updates))
+    return len(updates)
+
+
 def un_tour(etat, chats):
     """Un tour complet : messages reçus, analyse BTC + Gold, envois, jauges, sauvegarde."""
     LANG_EN.clear(); LANG_EN.update(etat.get("en", []))
@@ -5063,8 +5078,9 @@ def un_tour(etat, chats):
     if TOKEN:
         installer_menu(etat)
     demandes = []
+    demandes_servies = set()
     if TOKEN:
-        demandes = traiter(etat, chats, telegram("getUpdates", offset=etat.get("offset", 0), timeout=0).get("result", []))
+        recevoir_updates_telegram(etat, chats, demandes)
         if etat.get("clavier") != 9:
             # Le nouveau clavier sera joint au prochain vrai message du bot.
             # Aucun message vide, promotionnel ou de démarrage n'est envoyé.
@@ -5112,9 +5128,12 @@ def un_tour(etat, chats):
         macro(etat)
     except Exception as ex:
         print("macro", ex)
+    recevoir_updates_telegram(etat, chats, demandes)
     for nom_marche, pair in MARCHES.items():
+        recevoir_updates_telegram(etat, chats, demandes)
         try:
             r = analyser(pair)
+            recevoir_updates_telegram(etat, chats, demandes)
             r["tv_indicator_mtf"] = fetch_tv_mtf(pair)
             fusionne_lectures_tradingview(r)
         except Exception as ex:
@@ -5138,6 +5157,7 @@ def un_tour(etat, chats):
             r["macro_data"] = {"disponible": False, "statut": "DONNÉES MACRO INDISPONIBLES"}
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
         envois += agent(nom_marche, r, cle, ferme)
+        recevoir_updates_telegram(etat, chats, demandes)
         if TOKEN and cle.get("trade") and not cle["trade"].get("auto_fait"):
             cle["trade"]["auto_fait"] = True
             trx = cle["trade"]
@@ -5183,9 +5203,10 @@ def un_tour(etat, chats):
                 envois.append(txt)
             cle[cle_p] = bool(oui)
         cle["vu"] = r["t"]
-        for cid, mq in demandes:
-            if mq in (None, nom_marche):
+        for index, (cid, mq) in enumerate(demandes):
+            if mq in (None, nom_marche) and (index, nom_marche) not in demandes_servies:
                 envoyer_analyse_a(etat, cid, nom_marche, r, cle)
+                demandes_servies.add((index, nom_marche))
         print(texte_etat(nom_marche, r), "\n")
 
     try:
@@ -5239,6 +5260,14 @@ def un_tour(etat, chats):
                     maj_chronos(etat, nom_marche, derniers[nom_marche])
                 except Exception as ex:
                     print("chronos", ex)
+    # Dernière relève : une demande reçue pendant le calcul du second marché ne reste pas en attente.
+    recevoir_updates_telegram(etat, chats, demandes)
+    for index, (cid, mq) in enumerate(demandes):
+        marches_a_traiter = tuple(MARCHES) if mq is None else (mq,)
+        for marche in marches_a_traiter:
+            if marche in DERNIERS and (index, marche) not in demandes_servies:
+                envoyer_analyse_a(etat, cid, marche, DERNIERS[marche], etat.get(marche, {}))
+                demandes_servies.add((index, marche))
     journal_vider_sortants(etat)
     print(f"{len(envois)} signal(s) envoyé(s) à {len(chats)} téléphone(s)")
     sauver_etat(etat, chats)
