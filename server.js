@@ -139,7 +139,7 @@ function getLivePrice(symbol) {
 // Authenticated read API for the ALIGN Telegram worker.
 app.get('/bridge/robot-v12/mtf', (req, res) => {
   const expected = String(process.env.ALIGN_TV_READ_TOKEN || '');
-  const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '')
+  const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     || String(req.headers['x-align-token'] || '');
   if (!expected || supplied.length !== expected.length || supplied !== expected) {
     return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
