@@ -2734,3 +2734,12 @@ class TestPlanFollowsProfile(unittest.TestCase):
         self.assertEqual(f("SCALP contre-tendance"), (("15m",), ("15m", "1h")))
         self.assertEqual(f("SNIPER"), (("15m",), ("15m", "1h")))
         self.assertEqual(f("SIGNAL FAIBLE"), (("1h", "4h"), ("1h", "4h", "Daily")))
+
+
+class TestStopNotTooTight(unittest.TestCase):
+    def test_minimum_risk_covers_btc_wick_of_11_november(self):
+        # SHORT BTC 11/11 : entrée 73911, ATR 15 min ≈ 105, mèche max 74044 puis baisse à 73535
+        a, e = 105.0, 73911.2
+        mini = max(align_bot.SL_RISQUE_MIN_ATR * a, e * align_bot.SL_RISQUE_MIN_PCT)
+        self.assertGreater(e + mini, 74044)          # le nouveau SL survit à la mèche
+        self.assertGreater(e - 1.5 * mini, 73535)  # TP1 à 1,5 R reste atteignable (plus bas 73535)
