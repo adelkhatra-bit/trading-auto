@@ -2724,3 +2724,13 @@ class TestProfileMatchesIndicator(unittest.TestCase):
         self.assertEqual(f([0, 0, 1, 0, 1, 0, 0, -1, 0, 0, 0], 1), "SCALP contre-tendance")
         self.assertEqual(f([1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], 1), "SNIPER")
         self.assertEqual(f([1] * 11, 0), "")
+
+
+class TestPlanFollowsProfile(unittest.TestCase):
+    def test_levels_by_profile_match_indicator(self):
+        f = align_bot.niveaux_profil
+        self.assertEqual(f("SWING"), (("4h",), ("4h", "Daily")))
+        self.assertEqual(f("INTRADAY (retracement 15 min)"), (("1h",), ("1h", "4h")))
+        self.assertEqual(f("SCALP contre-tendance"), (("15m",), ("15m", "1h")))
+        self.assertEqual(f("SNIPER"), (("15m",), ("15m", "1h")))
+        self.assertEqual(f("SIGNAL FAIBLE"), (("1h", "4h"), ("1h", "4h", "Daily")))

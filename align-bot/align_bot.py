@@ -473,8 +473,11 @@ def analyser(pair):
     zoneBas = zBas0 and not (zHaut0 and rC < 50); zoneHaut = zHaut0 and not zoneBas
 
     grosses = [(v, n) for v, n in zip(niv, noms) if v is not None and n != "15m"]
+    tous_niv = [(v, n) for v, n in zip(niv, noms) if v is not None]
     def plan(d):
-        cote = [v for v, n in grosses if n in ("1h", "4h") and d * (cl - v) > a * 0.3]
+        # Comme l'indicateur v7 : le plan suit le profil (SWING 4h, INTRADAY 1h, SCALP/SNIPER 15 min)
+        ut_sl, ut_tp = niveaux_profil(profil_indicateur(dirs, d))
+        cote = [v for v, n in tous_niv if n in ut_sl and d * (cl - v) > a * 0.3]
         sb = (max(cote) if d == 1 else min(cote)) if cote else (bas1[0] if d == 1 and bas1 else hau1[0] if d == -1 and hau1 else cl - d * 1.5 * a)
         swing = min(x["l"] for x in b[-10:]) - a * 0.2 if d == 1 else max(x["h"] for x in b[-10:]) + a * 0.2
         sl = min(sb - a * 0.3, swing) if d == 1 else max(sb + a * 0.3, swing)
@@ -485,9 +488,10 @@ def analyser(pair):
         if abs(e - sl) < mini:
             sl = e - d * mini
         risque = abs(e - sl)
-        cibles = sorted([(v, n) for v, n in grosses if d * (v - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
+        cibles_niv = [(v, n) for v, n in tous_niv if n in ut_tp]
+        cibles = sorted([(v, n) for v, n in cibles_niv if d * (v - e) >= risque * GAIN_MIN], key=lambda z: d * z[0])
         t1 = cibles[0] if cibles else (e + d * risque * GAIN_MIN, f"projection {GAIN_MIN} x le risque")
-        loin = [z for z in grosses if d * (z[0] - e) >= abs(t1[0] - e) + a]
+        loin = [z for z in cibles_niv if d * (z[0] - e) >= abs(t1[0] - e) + a]
         loin.sort(key=lambda z: d * z[0])
         t2 = loin[0] if loin else (e + d * risque * (GAIN_MIN + 2), "projection")
         return dict(e=e, sl=sl, tp1=t1[0], n1=t1[1], tp2=t2[0], n2=t2[1], rr=abs(t1[0] - e) / risque, marche=e == cl)
@@ -816,6 +820,17 @@ def profil_indicateur(dirs, d):
     if pf1 and pf5:
         return "SNIPER"
     return "SIGNAL FAIBLE"
+
+
+def niveaux_profil(profil):
+    """Unités utilisées pour le SL et les TP selon le profil (identique à l'indicateur v7)."""
+    if profil == "SWING":
+        return ("4h",), ("4h", "Daily")
+    if profil.startswith("INTRADAY"):
+        return ("1h",), ("1h", "4h")
+    if profil.startswith("SCALP") or profil == "SNIPER":
+        return ("15m",), ("15m", "1h")
+    return ("1h", "4h"), ("1h", "4h", "Daily")
 
 
 def lecture_unite_active(r):
