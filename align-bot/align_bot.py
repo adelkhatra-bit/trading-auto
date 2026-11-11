@@ -503,11 +503,11 @@ def texte_historique(etat, cid, limite=15, offset=0):
         except Exception:
             date = "Date inconnue"
         sens = "📤 ALIGN" if x.get("direction") == "sortant" else "📥 TOI"
-        lignes.append(f"\\n{date} • {sens}\\n{str(x.get('text') or x.get('type') or 'Message')[:900]}")
+        lignes.append(f"\n{date} • {sens}\n{str(x.get('text') or x.get('type') or 'Message')[:900]}")
     lignes += ["━━━━━━━━━━━━━━━━━━━━",
                f"ℹ️ Conservation : {JOURNAL_MAX} derniers échanges au maximum, tous chats confondus.",
                "Les messages antérieurs à l'activation ne sont pas récupérables par le Bot API Telegram."]
-    return "\\n".join(lignes)
+    return "\n".join(lignes)
 
 def alignement(r):
     """Le 1h confirme la tendance 4h ; le 15m n'est pas un filtre."""
