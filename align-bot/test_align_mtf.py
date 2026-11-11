@@ -340,8 +340,34 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertIn("CLÔTURE 5m / SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
+        self.assertTrue(send.call_args.kwargs["text"].startswith("⏸ PAS D'ENTRÉE POUR LE MOMENT — ATTENDS"))
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
+
+    def test_candle_alert_puts_clear_no_entry_verdict_before_market_details(self):
+        from unittest.mock import patch
+        r = {
+            "m1": [candle(600, c=4031.11)],
+            "dirs": [0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0],
+            "rsis": [50] * 11,
+            "confirme": 0,
+            "b5": [candle(300, o=4029.73, h=4032, l=4028, c=4031.11)],
+        }
+        with patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "Le 1h ne confirme pas la tendance 4h")):
+            with patch.object(align_bot, "raison_attente", return_value="La 1 h doit confirmer la 4 h"):
+                with patch.object(align_bot, "prochaine", return_value="Pas encore de sens"):
+                    msg = align_bot.texte_cloture("GOLD", "5m", candle(300, o=4029.73, h=4032, l=4028, c=4031.11), r, {})
+        self.assertTrue(msg.startswith("🚫 N'ENTRE PAS"))
+        self.assertLess(msg.index("🚫 N'ENTRE PAS"), msg.index("🕯 CLÔTURE 5m"))
+        self.assertIn("POURQUOI", msg)
+        self.assertIn("CE QUE TU DOIS FAIRE", msg)
+
+    def test_candle_close_countdown_uses_next_real_candle_boundary(self):
+        from unittest.mock import patch
+        r = {"b5": [candle(600)]}
+        with patch.object(align_bot.time, "time", return_value=899.0):
+            self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m"), 900)
+        with patch.object(align_bot.time, "time", return_value=900.0):
+            self.assertEqual(align_bot.prochaine_cloture_bougie(r, "5m"), 1200)
 
     def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
         from unittest.mock import patch
@@ -1146,7 +1172,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "heure", return_value="03:00"),
         ):
             message = align_bot.texte_cloture("BTC", "5m", b, r, {})
-        self.assertEqual(message.splitlines()[0], "🕯 CLÔTURE 5m / SIGNAL CONFIRMÉ")
+        self.assertEqual(message.splitlines()[0], "🟢 SIGNAL D'ENTRÉE VALIDÉ — VÉRIFIE LES NIVEAUX")
 
 if __name__ == "__main__":
     unittest.main()
