@@ -895,6 +895,8 @@ def alerte_repli(out, m, r, cle, d, p):
             and r["t"] - cle.get("retrace_t", 0) >= 1800:
         cle["retrace_vu"] = True; cle["retrace_t"] = r["t"]
         zv = point_entree(r, d, p)
+        if zv is None:
+            return
         src = zv["src"].split(" + ")[0]
         out.append((f"↩️ {ICONE.get(m, '')} {m} : ÇA RETRACE {'⬇️' if d == 1 else '⬆️'}\n"
                     f"📉 Repli attendu : de ≈ {px(extreme)} vers ≈ {px(zv['za'])} – {px(zv['zb'])}\n" if d == 1 else
