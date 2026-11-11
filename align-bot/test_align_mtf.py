@@ -124,6 +124,26 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("🛑 Stop Loss\n4 020,00\nsous la mèche basse — bougie 15 minutes", message)
         self.assertIn("📌 Entrée\n4 050,00", message)
 
+    def test_previous_analysis_button_is_market_specific(self):
+        import json
+        keyboard = json.loads(align_bot.bouton_rappel("GOLD"))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        labels = [button["text"] for row in keyboard for button in row]
+        self.assertIn("previous:GOLD", callbacks)
+        self.assertIn("📌 Revoir l'analyse GOLD", labels)
+
+    def test_chronometer_edits_again_on_the_next_second(self):
+        from unittest.mock import patch
+        state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1}}}, "GOLD": {}}
+        with patch.object(align_bot.time, "time", side_effect=[100.1, 101.1]), \
+             patch.object(align_bot, "chrono_txt", side_effect=lambda m, r, cle, t0: f"tick-{int(align_bot.time.time())}"), \
+             patch.object(align_bot, "telegram") as send:
+            align_bot.maj_chronos(state, "GOLD", {})
+            align_bot.maj_chronos(state, "GOLD", {})
+        self.assertEqual(send.call_count, 2)
+        self.assertEqual(send.call_args_list[0].kwargs["text"], "tick-100")
+        self.assertEqual(send.call_args_list[1].kwargs["text"], "tick-101")
+
     def test_analysis_keyboard_exposes_details_levels_and_explicit_position_action(self):
         import json
         keyboard = json.loads(align_bot.markup_analyse({}, "GOLD", {}))["inline_keyboard"]
