@@ -3102,6 +3102,42 @@ def notifier_clotures(etat, m, r, cle):
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
 
+def carte_avis_courte(m, r, cle, anglais=False):
+    """Avis court pour mobile : voyants des unités (code couleur de l'indicateur), sens, quoi faire.
+    Le détail complet de l'IA reste derrière le bouton « En savoir plus »."""
+    cle = cle or {}
+    icone = lambda d: "🟩" if d == 1 else "🟥" if d == -1 else "⬜"
+    dirs = r.get("dirs") or []
+    def u(i, nom):
+        return f"{nom}{icone(dirs[i])}" if i < len(dirs) else ""
+    ligne1 = " ".join(x for x in (u(0, "1m"), u(1, "3m"), u(2, "5m"), u(4, "15m")) if x)
+    ligne2 = " ".join(x for x in (u(7, "1h"), u(9, "4h"), u(10, "D")) if x)
+    titre, raison = verdict(r, cle)
+    prof = profil_strategie(r)
+    sens = prof.get("direction") or 0
+    raison = re.sub(r"\s+", " ", str(raison or "")).strip()
+    if len(raison) > 110:
+        raison = raison[:110].rsplit(" ", 1)[0].rstrip(",;: ") + "…"
+    if anglais:
+        return "\n".join([f"🧠 ALIGN OPINION — {ICONE.get(m, '')} {m}",
+                          f"⚡ Short units : {ligne1}", f"🏔 Big units : {ligne2}",
+                          f"🧭 Direction : {'🟩 LONG ⬆️' if sens == 1 else '🟥 SHORT ⬇️' if sens == -1 else '⬜ none'}",
+                          f"🏷 Type : {prof.get('mode', '—')}",
+                          f"🚦 {traduire(titre)}"] + ([f"➡️ {traduire(raison)}"] if raison else []) +
+                         ["👇 More details: « 🧠 Learn more » button"])
+    return "\n".join([f"🧠 L'AVIS ALIGN — {ICONE.get(m, '')} {m}",
+                      f"⚡ Petites unités : {ligne1}", f"🏔 Grandes unités : {ligne2}",
+                      f"🧭 Sens : {'🟩 LONG ⬆️' if sens == 1 else '🟥 SHORT ⬇️' if sens == -1 else '⬜ aucun'}",
+                      f"🏷 Type : {prof.get('mode', '—')}",
+                      f"🚦 {titre}"] + ([f"➡️ {raison}"] if raison else []) +
+                     ["👇 Le détail complet : bouton « 🧠 En savoir plus »"])
+
+
+def markup_avis(m, anglais=False):
+    return json.dumps({"inline_keyboard": [[{"text": "🧠 Learn more" if anglais else "🧠 En savoir plus", "callback_data": f"details:{m}"}],
+                                           [{"text": "⏱ All timeframes" if anglais else "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}]]})
+
+
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
     vu = etat.setdefault("vu_analyse", {}).setdefault(m, {})
@@ -3115,9 +3151,8 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
              f"🕒 Analyse de référence : {heure(der['t'])}",
              "📌 Le bouton ci-dessous réaffiche cette analyse ici, même si d'autres marchés ont parlé depuis."] + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
         # Même traitement pour BTC et GOLD : une analyse répétée conserve aussi son avis IA.
-        avis = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
-        if avis:
-            _envoi_sur(cid, text=avis, reply_markup=CLAVIER)
+        en = str(cid) in LANG_EN
+        _envoi_sur(cid, text=carte_avis_courte(m, r, cle, anglais=en), reply_markup=markup_avis(m, en))
         return
     armer_cloture(etat, cid, m, r, cle)
     # Toutes les analyses passent par le même garde-fou 429 que les autres messages.
@@ -3133,9 +3168,9 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     except (KeyError, TypeError):
         pass
     # L'avis IA reste envoyé séparément ; aucune information existante n'est supprimée.
-    a_ = avis_ia(etat, m, r, cle, anglais=str(cid) in LANG_EN)
-    if a_:
-        _envoi_sur(cid, text=a_, reply_markup=CLAVIER)
+    # Avis court (voyants des unités) ; l'avis IA complet est derrière « En savoir plus ».
+    en = str(cid) in LANG_EN
+    _envoi_sur(cid, text=carte_avis_courte(m, r, cle, anglais=en), reply_markup=markup_avis(m, en))
 
 def envoyer_analyse(cid, etat=None, mq=None):
     for nom_marche, pair in MARCHES.items():
