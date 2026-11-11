@@ -2190,3 +2190,20 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
         self.assertEqual(rows[0]["v"], 42.5)
         self.assertEqual(rows[0]["trades"], 8)
         self.assertEqual(rows[0]["volume_source"], "Kraken PAXG")
+
+
+    def test_volume_summary_excludes_unclosed_current_candle(self):
+        bars = [
+            {"t": 0, "v": 100.0, "volume_source": "Kraken BTC"},
+            {"t": 300, "v": 900.0, "volume_source": "Kraken BTC"},
+        ]
+        result = align_bot.resume_volume(bars, "Kraken BTC", timeframe_sec=300, now_ts=500)
+        self.assertTrue(result["disponible"])
+        self.assertEqual(result["derniere_bougie"], 100.0)
+        self.assertEqual(result["nb_bougies"], 1)
+
+    def test_volume_summary_reports_unavailable_if_only_candle_is_still_open(self):
+        bars = [{"t": 300, "v": 900.0, "volume_source": "Kraken BTC"}]
+        result = align_bot.resume_volume(bars, "Kraken BTC", timeframe_sec=300, now_ts=500)
+        self.assertFalse(result["disponible"])
+        self.assertIn("indisponible", result["interpretation"])
