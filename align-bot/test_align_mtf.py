@@ -825,10 +825,10 @@ class AlignMtfRulesTest(unittest.TestCase):
                 align_bot.tick_chronos({"BTC": {}, "GOLD": {}})
         self.assertEqual([call.args[1] for call in update.call_args_list], ["BTC", "GOLD"])
 
-    def test_chronometer_refreshes_every_five_seconds_without_spamming(self):
+    def test_chronometer_refreshes_every_thirty_seconds_without_spamming(self):
         from unittest.mock import patch
         state = {"chrono": {"GOLD": {"123": {"mid": 9, "t0": 1, "maj": 100.0}}}, "GOLD": {}}
-        with patch.object(align_bot.time, "time", side_effect=[100.1, 104.9, 105.1]), \
+        with patch.object(align_bot.time, "time", side_effect=[100.1, 129.9, 130.1]), \
              patch.object(align_bot, "chrono_txt", return_value="tick-105") as render, \
              patch.object(align_bot, "telegram") as send:
             align_bot.maj_chronos(state, "GOLD", {})
@@ -2549,3 +2549,34 @@ class TestTelegramMarketButtonsJourney(unittest.TestCase):
 
     def test_both_label_translated_in_english(self):
         self.assertEqual(align_bot.traduire("🥇 + 🟠 Les deux"), "🥇 + 🟠 Both")
+
+
+class TestTelegramFloodProtection(unittest.TestCase):
+    """Telegram bloque un chat des heures si le bot édite trop souvent : on protège la cause racine."""
+
+    def test_cooldown_survives_worker_restart(self):
+        import time as _t
+        align_bot.TELEGRAM_RETRY_UNTIL.clear()
+        fin = _t.time() + 3600
+        align_bot.restaurer_cooldowns_telegram({"telegram_retry_until": {"42": fin, "7": _t.time() - 5}})
+        self.assertIn("42", align_bot.TELEGRAM_RETRY_UNTIL)
+        self.assertNotIn("7", align_bot.TELEGRAM_RETRY_UNTIL)
+        from unittest.mock import patch
+        with patch.object(align_bot, "http_json") as net:
+            with self.assertRaises(RuntimeError):
+                align_bot.telegram("sendMessage", chat_id="42", text="x")
+            net.assert_not_called()
+        align_bot.TELEGRAM_RETRY_UNTIL.clear()
+
+    def test_gauge_is_edited_at_most_once_per_minute(self):
+        from unittest.mock import patch
+        cle = {"jauge": {"1": 5}, "jauge_txt": {"1": "old"}, "jauge_t": {"1": 1000.0}}
+        with patch.object(align_bot, "jauge", side_effect=["p1", "p2", "p3"]), \
+             patch.object(align_bot, "marche_autorise", return_value=True), \
+             patch.object(align_bot.time, "time", side_effect=[1010.0, 1059.0, 1061.0, 1061.0]), \
+             patch.object(align_bot, "telegram") as tg:
+            for _ in range(3):
+                align_bot.maj_jauge({}, "GOLD", {}, cle, {"1"})
+        edits = [c for c in tg.call_args_list if c.args[0] == "editMessageText"]
+        self.assertEqual(len(edits), 1)
+        self.assertEqual(edits[0].kwargs["text"], "p3")
