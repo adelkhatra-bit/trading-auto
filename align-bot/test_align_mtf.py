@@ -348,6 +348,17 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("Gold is neutral", message)
         self.assertIn("English", call.call_args.args[1])
 
+    def test_ai_response_cache_is_separated_by_subscriber_language(self):
+        from unittest.mock import patch
+        for english, expected in ((False, "_fr_"), (True, "_en_")):
+            with (
+                patch.object(align_bot, "macro_confluence", return_value={"disponible": False}),
+                patch.object(align_bot, "donnees_ia", return_value={"market": "GOLD"}),
+                patch.object(align_bot, "ia", return_value="A clear market view.") as call,
+            ):
+                align_bot.avis_ia({}, "GOLD", {}, {}, anglais=english)
+            self.assertIn(expected, call.call_args.kwargs["cle_cache"])
+
     def test_english_and_french_main_keyboards_keep_identical_button_actions(self):
         import json
         french = json.loads(align_bot.CLAVIER)
