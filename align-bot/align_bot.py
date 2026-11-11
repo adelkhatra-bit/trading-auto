@@ -503,7 +503,7 @@ def texte_historique(etat, cid, limite=15):
         lignes.append(f"\n{date} • {sens}\n{str(x.get('text') or x.get('type') or 'Message')[:900]}")
     lignes += ["━━━━━━━━━━━━━━━━━━━━",
                "ℹ️ Historique enregistré à partir de l'activation de cette fonction. Telegram ne permet pas au bot de relire rétroactivement tous les anciens messages."]
-    return "\\n".join(lignes)
+    return "\n".join(lignes)
 
 def alignement(r):
     """Le 1h confirme la tendance 4h ; le 15m n'est pas un filtre."""
@@ -1614,7 +1614,7 @@ def texte_timeframes(m, r):
         "ℹ️ 2, 10, 30 et 45 min + 2 h et Daily : confirmations et contexte complémentaires.",
         "⚠️ Une unité haussière ou baissière ne constitue jamais, seule, une autorisation d'entrée."
     ]
-    return "\\n".join(lignes)
+    return "\n".join(lignes)
 
 
 def texte_pourquoi(m, r, cle):
