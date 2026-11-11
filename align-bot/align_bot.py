@@ -2891,7 +2891,7 @@ COMMANDES = {"/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse 
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
-    if etat.get("menu") == 4:
+    if etat.get("menu") == 5:
         return
     fr = [("analyse", "📊 Analyse"), ("suivre", "🔔 Suivre")]
     en = [("analyse", "📊 Analysis"), ("suivre", "🔔 Follow")]
@@ -2908,7 +2908,15 @@ def installer_menu(etat):
                                                   "🔒 Les autres : tu sais qu'elles arrivent, sans le sens\n📰 News et discours Fed gratuits\n\n"
                                                   "💎 ALIGN VIP 49,90 € / mois : toutes les positions, le sens, les niveaux, le coach (BE, TP)\n\n"
                                                   "ℹ️ Mes positions perso, pas un conseil. Le trading comporte un risque de perte."))
-        etat["menu"] = 4
+        # Une seule migration du clavier persistant des conversations déjà connues.
+        for cid in sorted(set(str(x) for x in etat.get("chats", [])) |
+                          set(str(x) for x in etat.get("prospects", []))):
+            if cid and cid != str(etat.get("canal", "")):
+                try:
+                    _envoi_sur(cid, text="📌 Menu ALIGN simplifié : Analyse ou Suivre.", reply_markup=CLAVIER)
+                except Exception as ex:
+                    print("menu clavier", cid, ex)
+        etat["menu"] = 5
     except Exception as ex:
         print("menu", ex)
 
@@ -3450,7 +3458,7 @@ def traiter(etat, chats, updates):
         if "mon bot" in txt or "mon_bot" in txt:
             menu_bot(etat, cid)
             continue
-        if txt.strip() in ("analyse", "📊 analyse", "analysis", "📊 analysis", "faire une analyse", "run an analysis"):
+        if txt.strip() in ("analyse", "📊 analyse", "analysis", "📊 analysis", "faire une analyse", "run an analysis", "/analyse"):
             en = cid in LANG_EN
             _envoi_sur(cid, text=("📊 WHAT DO YOU WANT TO ANALYSE?" if en else "📊 QUE VEUX-TU ANALYSER ?"),
                        reply_markup=json.dumps({"inline_keyboard": [
@@ -3458,7 +3466,7 @@ def traiter(etat, chats, updates):
                            [{"text": "🟠 BTC", "callback_data": "analysechoice:BTC"}],
                            [{"text": "🥇 + 🟠 BOTH" if en else "🥇 + 🟠 LES DEUX", "callback_data": "analysechoice:BOTH"}]
                        ]}))
-        elif txt.strip() in ("suivre", "🔔 suivre", "follow", "🔔 follow", "mes marches", "my markets") or txt.startswith("/marches"):
+        elif txt.strip() in ("suivre", "🔔 suivre", "follow", "🔔 follow", "mes marches", "my markets", "/suivre") or txt.startswith("/marches"):
             menu_suivi(etat, cid)
         elif "analyse" in txt or "etat" in txt:
             demandes.append((cid, marche_demande(txt)))
