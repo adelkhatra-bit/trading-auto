@@ -878,6 +878,12 @@ TRAD = {
 "🟢 SUIVI DE LA POSITION EN COURS": "🟢 OPEN POSITION MONITORING",
 "🟡 POSITION À VENIR — ordre en attente, aucune position ouverte": "🟡 UPCOMING POSITION — pending order, no position open",
 
+"🕯 BOUGIE ": "🕯 CANDLE ",
+" CLÔTURÉE — ": " CLOSED — ",
+"🕒 Heure de clôture de la bougie :": "🕒 Candle close time:",
+"⏳ PROCHAINE CLÔTURE ": "⏳ NEXT CANDLE CLOSE ",
+"⏱ Temps restant :": "⏱ Time remaining:",
+"🕒 Heure prévue :": "🕒 Scheduled time:",
 "🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
 "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
 "🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
@@ -1952,7 +1958,9 @@ def chrono_txt(m, r, cle, t0):
             f"🛑 Stop calculé : {px(o['sl'])} — {meche_sl(o)}"
         ]
     l += [
-        f"🕯 PROCHAINE CLÔTURE {tf} : {mmss(restant)} (à {heure(cible)}:{datetime.datetime.fromtimestamp(cible, PARIS).strftime('%S')})",
+        f"⏳ PROCHAINE CLÔTURE {tf}",
+        f"⏱ Temps restant : {mmss(restant)}",
+        f"🕒 Heure prévue : {datetime.datetime.fromtimestamp(cible, PARIS).strftime('%H:%M:%S')} (heure de Paris)",
         f"⌛ Fin du suivi si aucun setup avant {heure(t0 + CHRONO_MAX)} — aucune entrée forcée",
         f"🔄 Actualisé à {datetime.datetime.fromtimestamp(now, PARIS).strftime('%H:%M:%S')}"
     ]
@@ -2209,8 +2217,8 @@ def texte_cloture(m, tf, bougie, r, cle):
         statut,
         decision,
         "━━━━━━━━━━━━━━━━━━━━",
-        f"🕯 CLÔTURE {tf} — {ICONE.get(m, '📊')} {m}",
-        f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
+        f"🕯 BOUGIE {tf} CLÔTURÉE — {ICONE.get(m, '📊')} {m}",
+        f"🕒 Heure de clôture de la bougie : {heure(bougie['t'] + duree)}",
         "",
         "📊 RÉSULTAT DE LA BOUGIE",
         f"Bougie {couleur}",
