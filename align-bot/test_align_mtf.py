@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import unittest
@@ -2492,3 +2493,59 @@ class TelegramIndependentPollerFastPathTest(unittest.TestCase):
         align_bot._demander_arret(signal.SIGTERM, None)
         self.assertTrue(align_bot.SHUTDOWN_REQUESTED.is_set())
         self.assertTrue(align_bot.TELEGRAM_POLL_STOP.is_set())
+
+
+class TestTelegramMarketButtonsJourney(unittest.TestCase):
+    """Parcours utilisateur réel : choix BTC / GOLD / les deux, sans fuite entre marchés."""
+
+    def _cb(self, uid, data, n):
+        return {"update_id": 777000 + n, "callback_query": {
+            "id": f"cb{n}", "data": data,
+            "message": {"chat": {"id": uid, "type": "private"}}, "from": {"id": uid}}}
+
+    def _run(self, state, data, n):
+        from unittest.mock import patch
+        sent = []
+        with patch.object(align_bot, "autorise", return_value=True), \
+             patch.object(align_bot, "_envoi_sur", side_effect=lambda cid, **k: sent.append(k)), \
+             patch.object(align_bot, "telegram"):
+            align_bot.traiter(state, set(), [self._cb(501, data, n)])
+        return sent
+
+    def test_gold_only_never_receives_btc_and_both_receives_both(self):
+        state = {}
+        self._run(state, "followmarket:GOLD", 1)
+        self.assertEqual(state["marches_par_chat"]["501"], "GOLD")
+        self.assertEqual(align_bot.destinataires_message(state, {"501"}, "🟠 BTC • LONG"), [])
+        self.assertIn("501", align_bot.destinataires_message(state, {"501"}, "🥇 GOLD • SHORT"))
+        self._run(state, "followmarket:BTC", 2)
+        self.assertEqual(align_bot.destinataires_message(state, {"501"}, "🥇 GOLD • SHORT"), [])
+        self.assertIn("501", align_bot.destinataires_message(state, {"501"}, "🟠 BTC • LONG"))
+        self._run(state, "followmarket:BOTH", 3)
+        for t in ("🟠 BTC • LONG", "🥇 GOLD • SHORT"):
+            self.assertIn("501", align_bot.destinataires_message(state, {"501"}, t))
+
+    def test_follow_next_btc_keeps_gold_when_both_selected(self):
+        state = {}
+        self._run(state, "followmarket:BOTH", 4)
+        self._run(state, "auto:BTC", 5)
+        self.assertEqual(state["marches_par_chat"]["501"], "BOTH")
+        self.assertIn("501", align_bot.destinataires_message(state, {"501"}, "🥇 GOLD • SHORT"))
+
+    def test_follow_confirmation_has_real_line_breaks(self):
+        sent = self._run({}, "auto:GOLD", 6)
+        texts = [k.get("text", "") for k in sent]
+        self.assertTrue(texts)
+        self.assertFalse(any("\\n" in t for t in texts))
+
+    def test_markets_menu_callbacks_all_handled(self):
+        for i, mk in enumerate(("BTC", "GOLD", "BOTH")):
+            state = {}
+            sent = self._run(state, f"markets:{mk}", 10 + i)
+            self.assertEqual(state["marches_par_chat"]["501"], mk)
+            kb = json.loads(sent[-1]["reply_markup"])["inline_keyboard"]
+            coches = [b["text"] for r in kb for b in r if b["text"].startswith("✅")]
+            self.assertEqual(len(coches), 1)
+
+    def test_both_label_translated_in_english(self):
+        self.assertEqual(align_bot.traduire("🥇 + 🟠 Les deux"), "🥇 + 🟠 Both")
