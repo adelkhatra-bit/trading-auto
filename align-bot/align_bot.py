@@ -1594,7 +1594,8 @@ def markup_position(m):
     return json.dumps({"inline_keyboard": [
         [{"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
          {"text": "⏱ Toutes les unités", "callback_data": f"timeframes:{m}"}],
-        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}]
+        [{"text": "🗂 Historique des messages", "callback_data": f"history:{m}"}],
+        [{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]
     ]})
 
 
@@ -2021,7 +2022,7 @@ def entrer_inscrits(etat, m, tr, chats=()):
             f"🛑 SL un peu {meche_sl(tr)}\n"
             f"📍 Repère prix : entrée ≈ {px(tr['e'])} • SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n"
             "🛑 Mets ton SL TOUT DE SUITE\n🎯 Coach activé jusqu'au TP\n📈 Résultat compté dans Mes résultats"),
-            reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"}]]}))
+            )
 
 def signature_analyse(m, r, cle):
     """Ce qui compte pour l'utilisateur : verdict, sens, zone. Si rien de tout ça n'a changé, inutile de tout renvoyer."""
