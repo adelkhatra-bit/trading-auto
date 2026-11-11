@@ -587,7 +587,7 @@ class AlignMtfRulesTest(unittest.TestCase):
     def test_all_analysis_inline_buttons_route_without_silent_failure(self):
         from unittest.mock import patch
         r = {"m1": [candle(1, c=100.0)], "dirs": [0] * 11, "confirme": 0}
-        for action in ("details", "levels", "resume", "previous"):
+        for action in ("why", "details", "levels", "resume", "previous"):
             update = {"update_id": 9100, "callback_query": {
                 "id": "cb-" + action, "data": action + ":GOLD",
                 "message": {"chat": {"id": 123}}, "from": {"id": 123}
@@ -597,6 +597,7 @@ class AlignMtfRulesTest(unittest.TestCase):
                 patch.dict(align_bot.DERNIERS, {"GOLD": r}),
                 patch.object(align_bot, "texte_apercu", return_value="analysis-card"),
                 patch.object(align_bot, "texte_etat", return_value="analysis-details"),
+                patch.object(align_bot, "texte_pourquoi", return_value="analysis-why"),
                 patch.object(align_bot, "_envoi_sur") as send,
                 patch.object(align_bot, "telegram", return_value={"ok": True}),
             ):
@@ -788,6 +789,55 @@ class AlignMtfRulesTest(unittest.TestCase):
         text = edit.call_args.args[2]
         self.assertIn("\n", text)
         self.assertNotIn("\\n", text)
+
+    def test_compact_analysis_puts_entry_permission_first_and_separates_bias(self):
+        from unittest.mock import patch
+        r = {"dirs": [0] * 11, "confirme": -1, "m1": [candle(1, c=73665.2)]}
+        r["dirs"][7] = -1
+        r["dirs"][9] = -1
+        with patch.object(align_bot, "verdict", return_value=(
+            "🔴🔴 N'ENTRE PAS",
+            "Le prix est dans une zone Daily/Weekly extrême. Attendre un meilleur prix."
+        )):
+            message = align_bot.texte_apercu("BTC", r, {})
+        self.assertLess(message.index("⛔ NE PAS ENTRER"), message.index("Biais à surveiller"))
+        self.assertIn("Biais à surveiller : SHORT", message)
+        self.assertIn("Le biais n'est pas une autorisation d'entrée", message)
+        self.assertIn("Attendre un nouveau message explicite", message)
+        self.assertNotIn("Prochaine entrée SHORT", message)
+
+    def test_compact_analysis_buttons_expose_why_full_analysis_and_levels(self):
+        import json
+        keyboard = json.loads(align_bot.markup_analyse({}, "BTC", {}))["inline_keyboard"]
+        callbacks = [button["callback_data"] for row in keyboard for button in row]
+        labels = [button["text"] for row in keyboard for button in row]
+        self.assertIn("why:BTC", callbacks)
+        self.assertIn("details:BTC", callbacks)
+        self.assertIn("levels:BTC", callbacks)
+        self.assertIn("Pourquoi cette décision ?", " ".join(labels))
+        self.assertIn("Analyse complète", " ".join(labels))
+        self.assertIn("Niveaux / prix", " ".join(labels))
+
+    def test_why_callback_returns_short_explanation_and_more_detail_buttons(self):
+        from unittest.mock import patch
+        update = {"update_id": 9200, "callback_query": {
+            "id": "cb-why", "data": "why:BTC",
+            "message": {"chat": {"id": 123}}, "from": {"id": 123}
+        }}
+        r = {"dirs": [0] * 11, "confirme": -1, "m1": [candle(1, c=73665.2)]}
+        r["dirs"][7] = r["dirs"][9] = -1
+        with (
+            patch.object(align_bot, "autorise", return_value=True),
+            patch.dict(align_bot.DERNIERS, {"BTC": r}),
+            patch.object(align_bot, "verdict", return_value=("🔴🔴 N'ENTRE PAS", "Zone Daily/Weekly extrême.")),
+            patch.object(align_bot, "_envoi_sur") as send,
+            patch.object(align_bot, "telegram"),
+        ):
+            align_bot.traiter({}, set(), [update])
+        self.assertIn("NE PAS ENTRER", send.call_args.kwargs["text"])
+        self.assertIn("Direction à surveiller : SHORT", send.call_args.kwargs["text"])
+        self.assertIn("Zone Daily/Weekly extrême", send.call_args.kwargs["text"])
+        self.assertIn("details:BTC", send.call_args.kwargs["reply_markup"])
 
 if __name__ == "__main__":
     unittest.main()
