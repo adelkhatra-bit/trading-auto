@@ -191,7 +191,7 @@ jobs:
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
           DUREE_SEC: "21000"
           PAUSE_SEC: "5"
-        run: python3 align_bot.py
+        run: exec python3 align_bot.py
 
       - name: Sauver la mémoire du robot
         if: always()
