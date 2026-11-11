@@ -2185,8 +2185,8 @@ def texte_cloture(m, tf, bougie, r, cle):
     _, n_ok = alignement(r)
     confirmation = f"{n_ok}/2 — alignement confirmé" if n_ok == 2 else f"{n_ok}/2 — alignement non confirmé"
     lignes = [
-        decision,
         statut,
+        decision,
         "━━━━━━━━━━━━━━━━━━━━",
         f"🕯 CLÔTURE {tf} — {ICONE.get(m, '📊')} {m}",
         f"🕒 Bougie clôturée à {heure(bougie['t'] + duree)}",
@@ -2211,6 +2211,17 @@ def texte_cloture(m, tf, bougie, r, cle):
         "",
         "➡️ CE QUE TU DOIS FAIRE",
         details,
+    ]
+    ordre = cle.get("ordre")
+    if ordre and not cle.get("trade"):
+        bas, haut = sorted((ordre.get("za", ordre["e"]), ordre.get("zb", ordre["e"])))
+        lignes += [
+            "",
+            "🟡 POSITION À VENIR — ordre en attente, aucune position ouverte",
+            f"📍 Zone surveillée : {px(bas)} à {px(haut)}",
+            f"🛑 Stop prévu : {px(ordre['sl'])} — {meche_sl(ordre)}",
+        ]
+    lignes += [
         "",
         "➡️ PROCHAINE ÉTAPE",
         prochaine(r, cle),
