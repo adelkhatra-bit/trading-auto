@@ -16,7 +16,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 12
     steps:
       - name: Retire older production workers after validation
         env:
@@ -73,13 +73,25 @@ jobs:
                       raise
                   print(f"ROLL_OVER_RACE old_run={run_id} http={exc.code}")
 
-          deadline = time.time() + 120
+          deadline = time.time() + 600
+          next_retry = time.time() + 30
           while time.time() < deadline:
               remaining = older_active_runs()
               if not remaining:
                   print("ALIGN_OLD_WORKERS_STOPPED validated_sha=" + current_sha[:12])
                   break
-              time.sleep(3)
+              # A second cancellation request is harmless (409 means already cancelling)
+              # and helps if the runner has not acknowledged the first request yet.
+              if time.time() >= next_retry:
+                  for run in remaining:
+                      try:
+                          request(f"/actions/runs/{run['id']}/cancel", method="POST")
+                          print(f"ROLLING_OVER_RETRY old_run={run['id']}")
+                      except urllib.error.HTTPError as exc:
+                          if exc.code not in (404, 409):
+                              raise
+                  next_retry = time.time() + 30
+              time.sleep(5)
           else:
               ids = ",".join(str(run["id"]) for run in remaining)
               raise SystemExit("Rollover refused to proceed; older workers are still active: " + ids)
