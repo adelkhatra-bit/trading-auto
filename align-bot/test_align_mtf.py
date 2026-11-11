@@ -2711,3 +2711,16 @@ class TestGuaranteedShutdown(unittest.TestCase):
             align_bot._demander_arret(15, None)
         self.assertEqual(th.call_count, 1)
         align_bot.SHUTDOWN_REQUESTED.clear(); align_bot.TELEGRAM_POLL_STOP.clear()
+
+
+class TestProfileMatchesIndicator(unittest.TestCase):
+    def test_same_profiles_as_tradingview_bar(self):
+        f = align_bot.profil_indicateur
+        # capture d'écran GOLD : 1 neutre, 5/15/1h baisse, 4h neutre, D baisse → INTRADAY
+        self.assertEqual(f([0, 0, -1, -1, -1, -1, -1, -1, -1, 0, -1], -1), "INTRADAY")
+        self.assertEqual(f([-1] * 11, -1), "SWING")
+        self.assertEqual(f([0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0], 1), "SWING")
+        self.assertEqual(f([0, 0, 0, 0, -1, 0, 0, 1, 0, 1, 0], 1), "INTRADAY (retracement 15 min)")
+        self.assertEqual(f([0, 0, 1, 0, 1, 0, 0, -1, 0, 0, 0], 1), "SCALP contre-tendance")
+        self.assertEqual(f([1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], 1), "SNIPER")
+        self.assertEqual(f([1] * 11, 0), "")
