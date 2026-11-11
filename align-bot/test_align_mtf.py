@@ -841,6 +841,35 @@ class AlignMtfRulesTest(unittest.TestCase):
         r = {"dirs": dirs, "confirme": 1}
         self.assertEqual(align_bot.timeframe_attendu(r, {}), "15m")
 
+    def test_http_json_preserves_telegram_error_description(self):
+        import io
+        import urllib.error
+        from unittest.mock import patch
+        body = io.BytesIO(b'{"ok":false,"description":"Bad Request: message is not modified"}')
+        error = urllib.error.HTTPError("https://api.telegram.org/test", 400, "Bad Request", {}, body)
+        with patch.object(align_bot.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, "message is not modified"):
+                align_bot.http_json("https://api.telegram.org/test")
+
+    def test_chronometer_recreates_deleted_message_from_telegram_http_body(self):
+        import io
+        import json
+        import urllib.error
+        from unittest.mock import patch
+        chrono = {"mid": 10, "t0": 1, "maj": 1}
+        deleted = urllib.error.HTTPError(
+            "https://api.telegram.org/test", 400, "Bad Request", {},
+            io.BytesIO(b'{"ok":false,"description":"Bad Request: message to edit not found"}')
+        )
+        replacement = io.BytesIO(json.dumps({"ok": True, "result": {"message_id": 99}}).encode())
+        with patch.object(align_bot, "TOKEN", "test-token"), \
+             patch.object(align_bot.urllib.request, "urlopen", side_effect=[deleted, replacement]), \
+             patch.object(align_bot.time, "time", return_value=100):
+            ok = align_bot._editer_chrono_ou_recreer("123", chrono, "timer restored")
+        self.assertTrue(ok)
+        self.assertEqual(chrono["mid"], 99)
+        self.assertEqual(chrono["maj"], 100)
+
     def test_chronometer_recreates_deleted_telegram_message(self):
         from unittest.mock import patch
         chrono = {"mid": 10, "t0": 1, "maj": 1}
