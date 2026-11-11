@@ -56,6 +56,14 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertFalse(align_bot.etire(r, 1))
 
 
+    def test_market_selection_defaults_to_gold_and_allows_btc_or_both(self):
+        self.assertEqual(align_bot.marche_demande("Analyse"), "GOLD")
+        self.assertEqual(align_bot.marche_demande("Je veux prendre la prochaine position"), "GOLD")
+        self.assertEqual(align_bot.marche_demande("Analyse Gold"), "GOLD")
+        self.assertEqual(align_bot.marche_demande("Analyse BTC"), "BTC")
+        self.assertIsNone(align_bot.marche_demande("Analyse BTC et Gold"))
+        self.assertIsNone(align_bot.marche_demande("Analyse Bitcoin + XAUUSD"))
+
     def test_next_candle_close_is_always_in_the_future(self):
         self.assertEqual(align_bot.prochaine_cloture(601, 300), 900)
         self.assertEqual(align_bot.prochaine_cloture(899, 300), 900)
