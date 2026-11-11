@@ -1733,5 +1733,24 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         self.assertIn("reply_markup", send.call_args.kwargs)
 
 
+    def test_market_selection_menu_is_localized_for_english_users(self):
+        from unittest.mock import patch
+        old = set(align_bot.LANG_EN)
+        try:
+            align_bot.LANG_EN.add("101")
+            with patch.object(align_bot, "_envoi_sur") as send:
+                align_bot.menu_marches({}, "101")
+            kwargs = send.call_args.kwargs
+            self.assertIn("CHOOSE THE MARKETS", kwargs["text"])
+            keyboard = __import__("json").loads(kwargs["reply_markup"])
+            labels = [button["text"] for row in keyboard["inline_keyboard"] for button in row]
+            self.assertIn("BTC only", labels[0])
+            self.assertIn("GOLD only", labels[1])
+            self.assertEqual(len(labels), 3)
+        finally:
+            align_bot.LANG_EN.clear()
+            align_bot.LANG_EN.update(old)
+
+
 if __name__ == "__main__":
     unittest.main()
