@@ -2174,3 +2174,19 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
             rows = align_bot._kraken("XBTUSD", 1)
         self.assertEqual(rows[-1]["v"], 12.75)
         self.assertEqual(rows[-1]["trades"], 9)
+
+
+    def test_gold_paxg_recalibration_preserves_proxy_volume_and_provenance(self):
+        from unittest.mock import patch
+        import time
+        source = [dict(candle(0), v=42.5, trades=8, volume_source="Kraken PAXG")]
+        cache = {
+            ("paxg", 5): (time.time(), source),
+            "paxg_dernier": 1999.0,
+        }
+        with patch.dict(align_bot._CACHE, cache, clear=True), \
+             patch.object(align_bot, "or_spot", return_value=2000.0):
+            rows = align_bot.paxg_or(5)
+        self.assertEqual(rows[0]["v"], 42.5)
+        self.assertEqual(rows[0]["trades"], 8)
+        self.assertEqual(rows[0]["volume_source"], "Kraken PAXG")
