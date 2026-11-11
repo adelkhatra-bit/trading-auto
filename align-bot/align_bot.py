@@ -2180,7 +2180,7 @@ def markup_analyse(etat, m, r, cid=None):
     tr = cle.get("trade") or {}
     pos = (tr.get("qui") or {}).get(str(cid)) if cid is not None else None
     lignes = []
-    if tr and isinstance(pos, dict) and not pos.get("fini"):
+    if tr and (cid is None or (isinstance(pos, dict) and not pos.get("fini"))):
         lignes.append([
             {"text": "📍 Ma position • SL / TP", "callback_data": f"position:{m}"},
             {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"},
