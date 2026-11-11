@@ -2547,80 +2547,70 @@ def synchroniser_veille_auto(etat, m, r):
 
 
 def texte_cloture(m, tf, bougie, r, cle):
-    """Décision opérationnelle en première ligne, puis compte rendu complet de clôture."""
+    """Alerte courte : marché/prix d'abord ; détails et historique restent dans les boutons."""
     cle = cle or {}
     duree = TF_SECONDES[tf]
-    d = 1 if bougie["c"] > bougie["o"] else -1 if bougie["c"] < bougie["o"] else 0
-    couleur = "haussière" if d == 1 else "baissière" if d == -1 else "neutre"
-    titre, details = verdict(r, cle)
+    prix = (r.get("m1") or [bougie])[-1].get("c", bougie["c"])
+    titre, _ = verdict(r, cle)
     titre = str(titre).upper()
-    if cle.get("trade"):
-        decision = "🟢 POSITION DÉJÀ OUVERTE : NE RAJOUTE PAS UNE ENTRÉE"
-        statut = "🟢 SUIVI DE LA POSITION EN COURS"
-    elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTEND" in titre or "PATIENCE" in titre:
-        decision = "🚫 N'ENTRE PAS : ATTENDS LE PROCHAIN SIGNAL"
-        statut = "🔴 SIGNAL NON CONFIRMÉ"
-    elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
-        decision = "🟢 SIGNAL D'ENTRÉE VALIDÉ : VÉRIFIE LES NIVEAUX"
-        statut = "🟢 SIGNAL CONFIRMÉ"
-    else:
-        decision = "⏸ PAS D'ENTRÉE POUR LE MOMENT : ATTENDS"
-        statut = "🟠 SIGNAL EN ATTENTE"
     dirs = r.get("dirs", [0] * 11)
-    d4h, d1h = dirs[9], dirs[7]
+    d4h = dirs[9] if len(dirs) > 9 else 0
+    d1h = dirs[7] if len(dirs) > 7 else 0
     sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
     _, n_ok = alignement(r)
-    confirmation = f"{n_ok}/2 — alignement confirmé" if n_ok == 2 else f"{n_ok}/2 — alignement non confirmé"
+    if cle.get("trade"):
+        statut = "🟢 POSITION EN COURS"
+    elif "N'ENTRE PAS" in titre or "TROP TARD" in titre or "ATTEND" in titre or "PATIENCE" in titre:
+        statut = "🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ"
+    elif "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
+        statut = "🟢 SIGNAL VALIDÉ — VÉRIFIE LES NIVEAUX"
+    else:
+        statut = "🟡 EN ATTENTE — PAS D'ENTRÉE"
+    bougie_sens = "HAUSSE" if bougie["c"] > bougie["o"] else "BAISSE" if bougie["c"] < bougie["o"] else "NEUTRE"
     lignes = [
+        f"{ICONE.get(m, '📊')} {m}  ·  {px(prix)}",
         statut,
-        decision,
-        "━━━━━━━━━━━━━━━━━━━━",
-        f"🕯 BOUGIE {tf} CLÔTURÉE — {ICONE.get(m, '📊')} {m}",
-        f"🕒 Heure de clôture de la bougie : {heure(bougie['t'] + duree)}",
-        "",
-        "📊 RÉSULTAT DE LA BOUGIE",
-        f"Bougie {couleur}",
-        f"Ouverture : {px(bougie['o'])}",
-        f"Clôture : {px(bougie['c'])}",
-        "",
-        "🧭 TENDANCE MULTI-UNITÉS",
-        f"4 h : {sens(d4h)}",
-        f"Confirmation 1 h : {sens(d1h)}",
-        "",
-        "✅ ALIGNEMENT",
-        confirmation,
-        "",
-        "🚦 DÉCISION ALIGN",
-        titre,
-        "",
-        "⏳ POURQUOI",
-        raison_attente(r, cle),
-        "",
-        "➡️ CE QUE TU DOIS FAIRE",
-        details,
+        f"🕯 {tf} clôturée {heure(bougie['t'] + duree)} · {bougie_sens} · O {px(bougie['o'])} → C {px(bougie['c'])}",
+        f"H4 {sens(d4h)}  ·  H1 {sens(d1h)}  ·  ALIGN {n_ok}/2",
     ]
+    profil = profil_strategie(r) if len(dirs) > 9 else {"mode": "ATTENTE", "direction": 0}
+    if profil.get("mode") not in ("ATTENTE", None):
+        lignes.append(f"🎯 {profil['mode']} {sens(profil.get('direction', 0))}")
+    tr = cle.get("trade")
     ordre = cle.get("ordre")
-    if ordre and not cle.get("trade"):
+    if tr:
+        lignes.append(f"📍 Entrée {px(tr['e'])} · SL {px(tr['sl'])} · TP1 {px(tr['tp1'])} · TP2 {px(tr['tp2'])}")
+        lignes.append("👀 Suivi actif : SL / BE / TP")
+    elif ordre:
         bas, haut = sorted((ordre.get("za", ordre["e"]), ordre.get("zb", ordre["e"])))
-        lignes += [
-            "",
-            "🟡 POSITION À VENIR — ordre en attente, aucune position ouverte",
-            f"📍 Zone surveillée : {px(bas)} à {px(haut)}",
-            f"🛑 Stop prévu : {px(ordre['sl'])} — {meche_sl(ordre)}",
-        ]
-    lignes += [
-        "",
-        "➡️ PROCHAINE ÉTAPE",
-        prochaine(r, cle),
-        "",
-        "ℹ️ À RETENIR",
-        "Une clôture seule ne déclenche pas une entrée.",
-        "Aucun ordre n'est envoyé à ton broker.",
-        MINI_AVERT,
-        "👍 Like si tu participes"
-    ]
+        lignes.append(f"🟡 Zone {px(bas)}–{px(haut)} · SL {px(ordre['sl'])} · TP1 {px(ordre['tp1'])} · TP2 {px(ordre['tp2'])}")
+    else:
+        attente = "4h" if not d4h else "1h" if d1h != d4h else "15m" if not r.get("confirme") else "5m"
+        lignes.append(f"⏳ Prochaine validation : clôture {attente}")
+    if not tr:
+        lignes.append("🚫 Aucun ordre envoyé au broker.")
     return "\n".join(lignes)
 
+
+def texte_clotures_multi(m, clotures, r, cle):
+    """Regroupe les clôtures multi-UT simultanées dans une seule notification."""
+    if len(clotures) == 1:
+        tf, bougie = clotures[0]
+        return texte_cloture(m, tf, bougie, r, cle)
+    prix = (r.get("m1") or [{}])[-1].get("c")
+    dirs = r.get("dirs", [0] * 11)
+    sens = lambda x: "LONG" if x == 1 else "SHORT" if x == -1 else "NEUTRE"
+    _, n_ok = alignement(r)
+    lignes = [f"{ICONE.get(m, '📊')} {m}  ·  {px(prix) if prix is not None else 'prix indisponible'}",
+              "🕯 CLÔTURES MULTI-UT : " + " · ".join(f"{tf} {heure(b['t'] + TF_SECONDES[tf])}" for tf, b in clotures),
+              f"H4 {sens(dirs[9])} · H1 {sens(dirs[7])} · ALIGN {n_ok}/2"]
+    statut = "🟢 POSITION EN COURS" if (cle or {}).get("trade") else "🔴 PAS D'ENTRÉE" if not (cle or {}).get("trade") and not (cle or {}).get("ordre") and not (r.get("confirme")) else "🟡 SETUP EN ATTENTE"
+    lignes.append(statut)
+    tf_attendu = timeframe_attendu(r, cle or {})
+    lignes.append(f"⏳ Prochaine validation : clôture {tf_attendu}")
+    if not (cle or {}).get("trade"):
+        lignes.append("🚫 Aucun ordre envoyé au broker.")
+    return "\n".join(lignes)
 
 def notifier_clotures(etat, m, r, cle):
     """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
@@ -2634,6 +2624,7 @@ def notifier_clotures(etat, m, r, cle):
                 etat["veille_cloture"][m].pop(cid, None)
                 continue
             derniers = suivi.setdefault("derniers_t", {})
+            clotures = []
             for tf in ("5m", "15m", "1h", "4h"):
                 bars = r.get(champs[tf], []) or []
                 if not bars:
@@ -2641,10 +2632,12 @@ def notifier_clotures(etat, m, r, cle):
                 nouveaux = [b for b in bars if int(b["t"]) > int(derniers.get(tf, 0))]
                 if not nouveaux:
                     continue
-                # Si plusieurs tours ont été manqués, on envoie le dernier bilan connu, sans rafale rétroactive.
+                # Un seul bilan par cycle et par utilisateur, même si plusieurs UT ferment ensemble.
                 bougie = nouveaux[-1]
                 derniers[tf] = int(bougie["t"])
-                _envoi_sur(cid, text=texte_cloture(m, tf, bougie, r, cle),
+                clotures.append((tf, bougie))
+            if clotures:
+                _envoi_sur(cid, text=texte_clotures_multi(m, clotures, r, cle),
                            reply_markup=markup_analyse(etat, m, r))
             continue
         tf = suivi.get("tf")
