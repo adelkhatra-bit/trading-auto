@@ -969,6 +969,28 @@ def plan_cassure(r, d):
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
                 src="cassure 5 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=bougie_protegee(b[-3:], d, sl), sl_ut="5 min")
 
+def stop_structure_15m(r, d, entry):
+    """SL derrière la structure M15, pas derrière une seule mèche M5.
+    Si la structure exige un risque supérieur au plafond, on refuse l'entrée au lieu de resserrer artificiellement le stop.
+    """
+    bars = (r.get("b15") or [])[-3:]
+    atr15 = float(r.get("atr") or 0)
+    if len(bars) < 3 or atr15 <= 0 or d not in (-1, 1):
+        return None
+    extreme = min(x["l"] for x in bars) if d == 1 else max(x["h"] for x in bars)
+    sl = extreme - d * 0.25 * atr15
+    distance = d * (entry - sl)
+    minimum = max(0.8 * atr15, entry * 0.0008)
+    if distance <= 0:
+        return None
+    if distance < minimum:
+        sl = entry - d * minimum
+        distance = minimum
+    if distance > RISQUE_MAX * atr15:
+        return None
+    return sl
+
+
 def ligne_cassure(r, d):
     L = niveau_cassure(r, d)
     return (f"🅱️ Ou CASSURE : si une bougie 5 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(L)}\n"
@@ -4906,12 +4928,14 @@ def agent(m, r, cle, ferme):
                            f"👀 Vue 5 / 15 min : une bougie qui pique dans la zone puis clôture {'en remontant' if d == 1 else 'en redescendant'}")
             if bj:
                 cle.pop("attente_rejet", None); cle.pop("touche_t", None); cle.pop("traverse", None)
-                sl_m = (bj["l"] - 0.2 * a_) if d == 1 else (bj["h"] + 0.2 * a_)   # SL derrière la mèche 5m
-                # SL derrière la mèche ET derrière le bas de la zone (le marché respire dans la zone), jamais plus de 1,5 ATR
-                sl_m = min(sl_m, o["sl"], p - 1.0 * a_) if d == 1 else max(sl_m, o["sl"], p + 1.0 * a_)
-                sl_m = max(sl_m, p - RISQUE_MAX * a_) if d == 1 else min(sl_m, p + RISQUE_MAX * a_)
+                # Le déclencheur reste M5, mais le stop protège la structure M15 pour éviter les sorties sur le bruit d'une seule bougie.
+                sl_m = stop_structure_15m(r, d, p)
+                if sl_m is None:
+                    cle["prep"] = False; cle.pop("ordre", None); cle["attente_rsi"] = False
+                    out.append(f"⛔ {ICONE.get(m, '')} {m} : entrée annulée\nLa structure 15 min exige un risque trop grand ou les données sont insuffisantes.\nJe ne resserre pas artificiellement le SL : j'attends un nouveau setup.")
+                    return out
                 o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True,
-                         sl_h=heure(bj["t"]), sl_ut="5 min" if r["b5"] and bj is r["b5"][-1] else "15 min")
+                         sl_h=bougie_protegee(r["b15"][-3:], d, sl_m), sl_ut="15 min")
                 tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=a_)
                 tr["profil"] = profil_trade(m, tr, r)
                 non, n_, w_ = memoire_refuse(tr["profil"])
