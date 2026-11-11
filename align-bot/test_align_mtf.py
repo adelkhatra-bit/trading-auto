@@ -362,7 +362,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertLess(msg.index("🔴 SIGNAL NON CONFIRMÉ"), msg.index("🕯 CLÔTURE 5m"))
         self.assertIn("N'ENTRE PAS", msg)
         self.assertIn("POURQUOI", msg)
-        self.assertIn("PROCHAINE ACTION", msg)
+        self.assertIn("CE QUE TU DOIS FAIRE", msg)
 
     def test_upcoming_position_is_distinguished_from_open_trade(self):
         from unittest.mock import patch
@@ -1177,7 +1177,7 @@ class AlignMtfRulesTest(unittest.TestCase):
             raw = align_bot.texte_cloture("BTC", "5m", b, r, {})
         translated = align_bot.traduire(raw)
         self.assertEqual(translated.splitlines()[0], "🔴 SIGNAL NOT CONFIRMED")
-        self.assertEqual(translated.splitlines()[1], "🚫 DO NOT ENTER: WAIT FOR THE NEXT SIGNAL")
+        self.assertEqual(translated.splitlines()[1], "🚫 DON'T ENTER: WAIT FOR THE NEXT SIGNAL")
         for expected in ("CANDLE RESULT", "Open:", "Close:", "MULTI-TIMEFRAME TREND",
                          "ALIGN DECISION", "WHY", "NEXT STEP", "IMPORTANT",
                          "A candle close alone does not trigger an entry.",
