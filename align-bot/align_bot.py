@@ -2298,7 +2298,9 @@ def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal
 
 def carte_suivi(m, titre, lignes, action, r=None, genre="signal"):
     """Carte compressée du suivi de position (TP, stop, BE…) : même charte que la carte signal. Rien n'est supprimé (niveaux, raison), les formules en moins."""
-    return "\n".join([f"📍 {m} - {titre}", ""] + list(lignes) + ["", f"🤖 Agent Auto-Trade : %%AGENT:{genre}%%", f"🛡️ Action : {action}", "", statut_sys(DERNIER_ETAT, r or {})])
+    fete = any(k in titre for k in ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"))
+    tete = [f"🎉🥳 {m} - {titre} 🎯💰", "🎊🎊🎊🎊🎊"] if fete else [f"📍 {m} - {titre}"]   # un TP se fête
+    return "\n".join(tete + [""] + list(lignes) + ["", f"🤖 Agent Auto-Trade : %%AGENT:{genre}%%", f"🛡️ Action : {action}", "", statut_sys(DERNIER_ETAT, r or {})])
 
 def agent_pour(etat, cid, marche, genre):
     """Statut « Agent Auto-Trade » PAR COMPTE (réglage « Mon bot ») : OFF · Attente · ON. Chaîne commune : « Actif »."""
@@ -6908,6 +6910,9 @@ def meche_suspecte(out, m, r, cle):
     en_cours = [x for x in r["m1"] if x["t"] >= debut]
     pa = cle.get("pre_manip")
     # À la clôture : la bougie suspecte n'a PAS été confirmée comme manipulation → on le dit
+    if pa and pa["t15"] < debut - 1800:
+        cle.pop("pre_manip", None)                 # pré-alerte périmée (ex. mémoire restaurée après un redémarrage) : on ne la ressort jamais
+        pa = None
     if pa and pa["t15"] < debut and cle.get("manip_t") != pa["t15"]:
         cle.pop("pre_manip", None)
         out.append(f"❌ {ICONE.get(m, '')} {m} : pas de manipulation confirmée\n🕯 La bougie 15 min de {heure(pa['t15'])} n'a pas clôturé en revenant\n"
