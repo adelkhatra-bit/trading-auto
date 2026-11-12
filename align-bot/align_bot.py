@@ -2153,7 +2153,10 @@ TRAD.update({
     # carte d'entrée (ordre du graphique, règle mèche 5 min) : même format propre en anglais
     "📊 Contexte": "📊 Context", "🔹 Niveaux :": "🔹 Levels:", "🔹 News : Aucune": "🔹 News: None", "🔹 News :": "🔹 News:",
     "🔹 DXY : n/d": "🔹 DXY: n/a", "🔹 DXY :": "🔹 DXY:", "(mèche 5 min)": "(5 min wick)", "(vue 5 min)": "(5 min chart)",
-    "(vue 15 min)": "(15 min chart)", "🕯 Prix encore près de l'entrée du bot": "🕯 Price still close to the bot's entry", "🛑 SL :": "🛑 SL:", "💰 TP1 :": "💰 TP1:", "🏁 TP2 :": "🏁 TP2:", "⚖️ R:R :": "⚖️ R:R:",
+    "(vue 15 min)": "(15 min chart)", "⚠️ Prix en zone extrême Daily/Weekly :": "⚠️ Price in extreme Daily/Weekly zone:",
+    "⛔ Je ne poursuis pas le SHORT : risque de rebond": "⛔ I don't chase the SHORT: bounce risk", "⛔ Je ne poursuis pas le LONG : risque de repli": "⛔ I don't chase the LONG: pullback risk",
+    "⏳ J'attends : repli ou retournement confirmé en 1h + clôture 5m, ou meilleur prix": "⏳ Waiting for: pullback or reversal confirmed on 1h + 5m close, or a better price",
+    "4h + 1h alignées": "4h + 1h aligned", " - EN ATTENTE": " - WAITING", "🕯 Prix encore près de l'entrée du bot": "🕯 Price still close to the bot's entry", "🛑 SL :": "🛑 SL:", "💰 TP1 :": "💰 TP1:", "🏁 TP2 :": "🏁 TP2:", "⚖️ R:R :": "⚖️ R:R:",
 })
 _CLES = sorted(TRAD, key=len, reverse=True)
 
@@ -7263,10 +7266,13 @@ def texte_zone_extreme(m, r, d):
     """Message unique « zone extrême Daily/Weekly » : reprend TOUTES les informations des deux anciens messages (alignement 4h + 1h, zones Daily et Weekly,
     refus de suivre la tendance, risque, ce que j'attends) pour ne pas dire deux fois la même chose."""
     sens = "LONG" if d == 1 else "SHORT"
-    return (f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n"
-            f"🧭 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS le prix est déjà au bout de sa zone.\n"
-            f"⛔ Je ne poursuis pas le {sens} ici : risque de {'repli' if d == 1 else 'rebond'}.\n"
-            f"⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m, ou un meilleur prix.")
+    # Carte courte (une info par ligne) : rien n'est supprimé, les phrases en moins
+    return (f"📍 {ICONE.get(m, '')} {m} - EN ATTENTE\n"
+            f"⚠️ Prix en zone extrême Daily/Weekly : {zone_txt(r['posD'])} / {zone_txt(r['posW'])}\n"
+            f"🧭 4h + 1h alignées {'▲' if d == 1 else '▼'}\n"
+            f"⛔ Je ne poursuis pas le {sens} : risque de {'repli' if d == 1 else 'rebond'}\n"
+            f"⏳ J'attends : repli ou retournement confirmé en 1h + clôture 5m, ou meilleur prix\n"
+            f"🛡️ Action : NE PAS RENTRER")
 
 def alerte_extreme_due(cle, d, t):
     """Alerte « zone extrême Daily/Weekly » : UNE seule fois par situation. La situation est identifiée par le sens bloqué seul
