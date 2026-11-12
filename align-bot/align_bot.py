@@ -5415,6 +5415,14 @@ SENS_COURT = {1: "LONG ⬆️", -1: "SHORT ⬇️"}
 def _radar_n_ut(r, d):
     return r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
 
+def _radar_pret(p, derniers):
+    """« Prépare-toi » seulement si le prix est proche (rang ≤ 1) ET que l'alignement a atteint le seuil (8/11) : sinon c'est juste « proche »."""
+    return 0 <= p["rang"] <= RADAR_ALERTE_RANG and _radar_n_ut((derniers or {}).get(p["m"]) or {}, p.get("d")) >= MIN_ALIGN
+
+def _radar_ordre(props, derniers):
+    """Marchés prêts (proches + alignés) d'abord, puis l'ordre de proximité habituel."""
+    return sorted(props, key=lambda p: 0 if _radar_pret(p, derniers) else 1)
+
 def texte_radar(props, derniers, vip=True, anglais=False, now=None):
     """Texte du RADAR, construit uniquement à partir des vraies données (classer_marches + plan figé de l'indicateur).
     Gratuit : marché favori, sens et état — jamais l'entrée, le SL ni le TP (réservés aux VIP)."""
@@ -5422,12 +5430,14 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None):
         return None
     now = time.time() if now is None else now
     ic = lambda p: ICONE.get(p["m"], "")
+    props = _radar_ordre(props, derniers)
     actifs = [p for p in props if 0 <= p["rang"] <= 3]
     en_pos = [p for p in props if p["rang"] == -1]
     t = actifs[0] if actifs else None
     l = []
     if t:
-        etat_t = ("get ready" if anglais else "prépare-toi") if t["rang"] <= RADAR_ALERTE_RANG else \
+        etat_t = ("get ready" if anglais else "prépare-toi") if _radar_pret(t, derniers) else \
+                 ("close, alignment not reached yet" if anglais else "proche, alignement pas encore atteint") if t["rang"] <= RADAR_ALERTE_RANG else \
                  ("approaching" if anglais else "en approche") if t["rang"] == 2 else ("least far, nothing close" if anglais else "le moins loin, rien de proche")
         l.append(f"🎯 FOCUS : {ic(t)} {t['m']} — {etat_t}")
         r = (derniers or {}).get(t["m"]) or {}
@@ -5509,10 +5519,11 @@ def radar_tick(etat, chats, derniers, now=None):
             if not txt:
                 continue
             mem = mem_all.setdefault(cid, {})
-            actifs = [p for p in props if 0 <= p["rang"] <= 3]
+            actifs = [p for p in _radar_ordre(props, derniers) if 0 <= p["rang"] <= 3]
             focus = actifs[0]["m"] if actifs else ""
-            rang = actifs[0]["rang"] if actifs else 9
-            alerte = (bool(focus) and rang <= RADAR_ALERTE_RANG and now - float(mem.get("t_alerte", 0)) >= RADAR_ALERTE_MIN_SEC
+            pret = bool(actifs) and _radar_pret(actifs[0], derniers)
+            rang = (actifs[0]["rang"] if pret else max(actifs[0]["rang"], RADAR_ALERTE_RANG + 1)) if actifs else 9
+            alerte = (bool(focus) and pret and now - float(mem.get("t_alerte", 0)) >= RADAR_ALERTE_MIN_SEC
                       and (mem.get("focus") != focus or int(mem.get("rang", 9)) > RADAR_ALERTE_RANG))
             change_tete = mem.get("mid") and focus != mem.get("focus", "") and now - float(mem.get("t", 0)) >= RADAR_REFRESH_SEC
             if alerte or change_tete or not mem.get("mid"):

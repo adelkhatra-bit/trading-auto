@@ -44,6 +44,24 @@ class TexteRadarTest(unittest.TestCase):
         self.assertTrue(t.startswith("📡 RADAR ALIGN — aucune entrée proche"))
 
 
+class AlignementRequisTest(unittest.TestCase):
+    def test_proche_mais_pas_aligne_n_est_pas_prepare_toi(self):
+        d = {"NASDAQ": {"bull": 6}, "GOLD": {"bear": 9}}
+        p = [dict(m="NASDAQ", prix=1.0, atr_n=0.9, classe="proche", rang=1, d=1, za=1, zb=2, dist=0.5, action="x", au_dessus=True),
+             dict(m="GOLD", prix=1.0, atr_n=2.8, classe="en_approche", rang=2, d=-1, za=1, zb=2, dist=3, action="y", au_dessus=False)]
+        t = ab.texte_radar(p, d, vip=True, now=time.time())
+        self.assertNotIn("prépare-toi", t)
+        self.assertIn("NASDAQ — proche, alignement pas encore atteint", t)
+        d["NASDAQ"]["bull"] = 8
+        self.assertIn("NASDAQ — prépare-toi", ab.texte_radar(p, d, vip=True, now=time.time()))
+
+    def test_marche_pret_passe_devant(self):
+        d = {"NASDAQ": {"bull": 6}, "GOLD": {"bear": 10}}
+        p = [dict(m="NASDAQ", prix=1.0, atr_n=0.2, classe="dans_zone", rang=0, d=1, za=1, zb=2, dist=0, action="x", au_dessus=True),
+             dict(m="GOLD", prix=1.0, atr_n=1.2, classe="proche", rang=1, d=-1, za=1, zb=2, dist=1, action="y", au_dessus=False)]
+        self.assertTrue(ab.texte_radar(p, d, vip=True, now=time.time()).startswith("🎯 FOCUS : 🥇 GOLD — prépare-toi"))
+
+
 class RadarTickTest(unittest.TestCase):
     def setUp(self):
         self.appels = []
