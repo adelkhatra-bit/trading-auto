@@ -13,6 +13,9 @@ on:
       heures:
         description: "Fenêtre rejouée, en heures"
         default: "8"
+      detail:
+        description: "Plage UTC HH:MM-HH:MM détaillée (une ligne par 3 min)"
+        default: "21:30-23:30"
 
 permissions:
   contents: read
@@ -37,4 +40,5 @@ jobs:
           PAIR: ${{ inputs.pair }}
           MARCHE: ${{ inputs.marche }}
           HEURES: ${{ inputs.heures }}
-        run: python3 replay_sniper.py --pair "$PAIR" --marche "$MARCHE" --heures "$HEURES"
+          DETAIL: ${{ inputs.detail }}
+        run: python3 replay_sniper.py --pair "$PAIR" --marche "$MARCHE" --heures "$HEURES" --detail "$DETAIL"
