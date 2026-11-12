@@ -114,3 +114,34 @@ class OrdreAnnulePerdu(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BattementSansOscillation(unittest.TestCase):
+    base = (-1, 8, "DAY", "CONFIRMÉ", -1, 3990.0, 4.0)
+
+    def test_oscillation_est_faible_donc_limitee_a_une_info_par_30_min(self):
+        for n in (9, 7 + 2, 10):                                    # 8 -> 9 / 10 : même côté du seuil, moins de 3 UT
+            self.assertEqual(ab.hb_evolution(self.base, (-1, n, "DAY", "CONFIRMÉ", -1, 3990.0, 4.0)), 1, n)
+        self.assertEqual(ab.hb_evolution(self.base, self.base), 0)
+        self.assertEqual(ab.hb_evolution(self.base, (-1, 8, "DAY", "CONFIRMÉ", -1, 3992.0, 4.0)), 1)   # zone d'un demi-ATR
+
+    def test_vraies_evolutions_sont_fortes_donc_toujours_envoyees(self):
+        b = self.base
+        for nouveau in ((1,) + b[1:], b[:2] + ("SWING",) + b[3:], b[:3] + ("EN ATTENTE",) + b[4:], b[:4] + (1,) + b[5:],
+                        (-1, 7) + b[2:], (-1, 11) + b[2:], b[:5] + (3995.0, 4.0), b[:5] + (None, 4.0)):
+            self.assertEqual(ab.hb_evolution(b, nouveau), 2, nouveau)
+
+    def test_premier_battement_et_ancien_format_d_etat(self):
+        self.assertEqual(ab.hb_evolution(None, self.base), 2)
+        self.assertEqual(ab.hb_evolution([-1, 8, "DAY", "CONFIRMÉ", -1, 12], self.base), 2)
+
+    def test_serie_reelle_de_l_audit(self):
+        """L'oscillation de l'audit (UT 8/9, zone d'un demi-ATR) : 120 minutes = 4 infos au plus (une par 30 min), pas 24 (une par 5 min)."""
+        envoyes, dernier, t_dernier = 0, None, -10_000
+        for k in range(0, 120):
+            n = 8 + (k % 3 == 0)
+            sig = (-1, n, "DAY", "CONFIRMÉ", -1, 3990.0 + (2.0 if k % 2 else 0.0), 4.0)
+            niveau = ab.hb_evolution(dernier, sig)
+            if niveau == 2 or (niveau == 1 and (k - t_dernier) * 60 >= ab.HB_INTERVALLE_FAIBLE):
+                envoyes += 1; dernier = sig; t_dernier = k
+        self.assertLessEqual(envoyes, 5)
