@@ -6428,21 +6428,13 @@ def doublon_message(etat, texte, t=None, enregistrer=True):
 EXTREME_REARMEMENT_S = 3 * 3600      # l'alerte « zone extrême » ne se réarme qu'après 3 h sans situation extrême
 
 def texte_zone_extreme(m, r, d):
-    """Message unique « zone extrême Daily/Weekly » (utilisé partout où l'on refuse de suivre la tendance, pour ne pas dire deux fois la même chose)."""
+    """Message unique « zone extrême Daily/Weekly » : reprend TOUTES les informations des deux anciens messages (alignement 4h + 1h, zones Daily et Weekly,
+    refus de suivre la tendance, risque, ce que j'attends) pour ne pas dire deux fois la même chose."""
+    sens = "LONG" if d == 1 else "SHORT"
     return (f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n"
-            f"⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')} : risque de {'repli' if d == 1 else 'rebond'}.\n"
-            f"⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
-
-def alerte_extreme_due(cle, d, t):
-    """Alerte « zone extrême Daily/Weekly » : UNE seule fois par situation. La situation est identifiée par le sens bloqué seul
-    (le libellé de zone oscille autour des seuils et ne doit pas relancer le message). Elle se réarme si le sens change
-    ou si la situation a disparu pendant plus de EXTREME_REARMEMENT_S."""
-    vu, sig = cle.get("extreme_vu_t", 0), cle.get("extreme_sig")
-    cle["extreme_vu_t"] = t
-    if sig == str(d) and t - vu <= EXTREME_REARMEMENT_S:
-        return False
-    cle["extreme_sig"] = str(d); cle["extreme_warn_t"] = t
-    return True
+            f"🧭 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS le prix est déjà au bout de sa zone.\n"
+            f"⛔ Je ne poursuis pas le {sens} ici : risque de {'repli' if d == 1 else 'rebond'}.\n"
+            f"⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m, ou un meilleur prix.")
 
 def agent(m, r, cle, ferme):
     """Agent : tendance 4h + confirmation 1h → déclenchement sur bougie 5m clôturée."""
@@ -6475,8 +6467,8 @@ def agent(m, r, cle, ferme):
         return out
     if not tr:
         if not d:
-            # Seulement si un ordre avait été annoncé (sinon « ordre annulé » ne veut rien dire), et pas plus d'une fois par heure (oscillation 1h/4h)
-            if cle.get("aligne") and (cle.get("ordre") or cle.get("prep")) and r["t"] - cle.get("perdue_t", 0) >= 3600:
+            # Message conservé dans tous les cas où il partait avant ; seule l'oscillation 1h/4h est limitée (une fois par heure)
+            if cle.get("aligne") and r["t"] - cle.get("perdue_t", 0) >= 3600:
                 cle["perdue_t"] = r["t"]
                 out.append(f"⚪ {m} : confirmation 1h / tendance 4h perdue. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)

@@ -1,0 +1,30 @@
+name: ALIGN audit des messages envoyés (manuel)
+
+# Lit le journal des messages réellement envoyés par le bot (dernier état sauvegardé). Lecture seule : rien n'est envoyé, rien n'est écrit.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: align-bot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: align-bot
+      - name: Restaurer le dernier état du bot (lecture seule)
+        uses: actions/cache/restore@v4
+        with:
+          path: align-bot/state.json
+          key: audit-lecture-seule-${{ github.run_id }}
+          restore-keys: align-etat-
+      - name: Audit des messages
+        run: |
+          test -f state.json || { echo "AUDIT aucun état restauré"; exit 0; }
+          python3 audit_messages.py

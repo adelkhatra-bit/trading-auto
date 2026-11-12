@@ -84,7 +84,9 @@ class UneSeuleVoixZoneExtreme(unittest.TestCase):
     def test_meme_texte_pour_les_deux_chemins(self):
         r = {"posD": 0.05, "posW": 0.1}
         self.assertEqual(ab.texte_zone_extreme("GOLD", r, -1), ab.texte_zone_extreme("GOLD", r, -1))
-        self.assertIn("tout en BAS", ab.texte_zone_extreme("GOLD", r, -1))
+        txt = ab.texte_zone_extreme("GOLD", r, -1)
+        for morceau in ("tout en BAS", "4h + 1h alignées ▼", "Je ne poursuis pas le SHORT", "rebond", "retournement confirmé en 1h + clôture 5m", "meilleur prix"):
+            self.assertIn(morceau, txt)                                              # aucune information des deux anciens messages perdue
 
     def test_chemin_entree_et_chemin_global_partagent_la_meme_anti_repetition(self):
         cle = {}
@@ -99,8 +101,8 @@ class OrdreAnnulePerdu(unittest.TestCase):
         with patch.object(ab, "manipulation"), patch.object(ab, "meche_suspecte"), patch.object(ab, "niveaux_cles"):
             return [x for x in ab.agent("GOLD", r, cle, "") if "perdue" in (x if isinstance(x, str) else x[0])]
 
-    def test_pas_de_message_si_aucun_ordre_annonce(self):
-        self.assertEqual(self.tour({"aligne": -1}, T0, 0), [])
+    def test_message_conserve_meme_sans_ordre_annonce(self):
+        self.assertEqual(len(self.tour({"aligne": -1}, T0, 0)), 1)                  # rien n'a été retiré : le message part comme avant
 
     def test_un_seul_message_malgre_l_oscillation(self):
         cle, n = {"aligne": -1, "ordre": {"e": 1}}, 0
