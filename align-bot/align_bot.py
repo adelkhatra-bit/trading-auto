@@ -762,25 +762,21 @@ def _rejet(bars, d, niveau, a):
     return None
 
 def entree_sniper(r):
-    return _sniper(r)[0]
-
-def _sniper(r):
-    """(proposition ou None, raison du refus) : la raison sert au diagnostic du rejeu, jamais à Telegram."""
     d = r.get("dirPlan") or 0
     dirs, a3, a15, a5, zp = r.get("dirs") or [], r.get("atr3"), r.get("atr"), r.get("atr5") or r.get("atr"), r.get("zone_pine")
     m1, b3 = r.get("m1") or [], r.get("b3") or []
     b5, b15 = (r.get("b5") or [])[:-1], (r.get("b15") or [])[:-1]          # la dernière bougie M5 / M15 est en formation
     if d not in (1, -1) or len(dirs) < 11 or not a3 or not a15 or not zp or len(m1) < 40 or len(b3) < 12 or len(b5) < 8 or len(b15) < 5:
-        return None, f"DONNEES/PLAN absents (dirPlan={d}, zone={'oui' if zp else 'non'}, b3={len(b3)}, b5={len(b5)}, b15={len(b15)})"
+        return None
     if (r["bull"] if d == 1 else r["bear"]) < MIN_ALIGN or r.get("sens") != d or dirs[9] == -d or dirs[7] == -d:
-        return None, f"CONTEXTE_HTF refusé (UT alignées {(r['bull'] if d == 1 else r['bear'])}/11, sens={r.get('sens')}, 4h={dirs[9]}, 1h={dirs[7]})"
+        return None                                         # contexte HTF non aligné, sens flou ou contre la 4 h / 1 h
     prix = m1[-1]["c"]
     if not (zp["za"] - 0.5 * a15 <= prix <= zp["zb"] + 0.5 * a15):
-        return None, f"HORS_ZONE : prix {prix:.2f} hors zone du plan {zp['za']:.2f}–{zp['zb']:.2f}"
+        return None                                         # le prix n'est pas (encore) dans la zone d'entrée du plan
     m1c = m1[:-1]
     a1 = atr(m1c, 14)[-1] if len(m1c) >= 16 else None
     if not a1:
-        return None, "ATR_M1 indisponible"
+        return None
     uts = [("M1", m1c, a1), ("M3", b3, a3), ("M5", b5, a5), ("M15", b15, a15)]
     niv, structure = [], niveaux_structure_ut(dict(r, m1=m1))
     for nom, bars, a in uts:
@@ -798,11 +794,11 @@ def _sniper(r):
             choisi = (nom, L, a)
             break
     if not choisi:
-        return None, "CASCADE : aucun dernier plus haut/bas valide sur M1/M3/M5/M15 (cascade)"
+        return None
     ut, L, a_ut = choisi
     rej = {nom: _rejet(bars, d, L, a) for nom, _, bars, a in niv if nom in ("M1", "M3", "M5")}
     if rej["M1"] is None or rej["M3"] is None:
-        return None, f"REJET : pas de rejet confirmé sous {L:.2f} ({ut}) : M1={'oui' if rej['M1'] else 'non'} M3={'oui' if rej['M3'] else 'non'}"
+        return None                                         # rejet confirmé exigé sur M1 ET M3
     e = rej["M1"]["c"]
     meche = max([y["h"] if d == -1 else -y["l"] for y in m1c[-12:] + list(b3[-4:]) if abs((y["h"] if d == -1 else y["l"]) - L) <= 3 * a3] + [L if d == -1 else -L])
     meche = meche if d == -1 else -meche
@@ -812,7 +808,7 @@ def _sniper(r):
         sl = e - d * mini
     risque = abs(e - sl)
     if (prix - sl) * d <= 0:
-        return None, "SL_FRANCHI"
+        return None                                         # SL déjà franchi
     plan = r.get("plan") or {}
     tp_plan = plan.get("tp1") if plan.get("d", d) == d and plan.get("tp1") is not None and d * (plan["tp1"] - e) > 0 else None
     cibles = sorted([(v, n) for v, n in (r.get("niveaux") or []) if n in ("15m", "1h", "4h", "Daily") and d * (v - e) >= risque * GAIN_MIN and (tp_plan is None or d * (tp_plan - v) >= 0)],
@@ -820,9 +816,9 @@ def _sniper(r):
     tp1, n1 = cibles[0] if cibles else (e + d * risque * GAIN_MIN, f"projection {GAIN_MIN} x le risque")      # TP1 intermédiaire réaliste
     tp_final = tp_plan if tp_plan is not None else (cibles[1][0] if len(cibles) > 1 else e + d * risque * (GAIN_MIN + 2))
     za, zb = sorted((e, L))
-    return (dict(d=d, ut=ut, e=e, za=za, zb=zb, sl=sl, tp1=tp1, n1=n1, tp2=tp_final, n2=("plan " + (r.get("strat") or "")).strip() if tp_plan is not None else "projection",
+    return dict(d=d, ut=ut, e=e, za=za, zb=zb, sl=sl, tp1=tp1, n1=n1, tp2=tp_final, n2=("plan " + (r.get("strat") or "")).strip() if tp_plan is not None else "projection",
                 rr=abs(tp1 - e) / risque, rr_plan=abs(tp_final - e) / risque, niveau=L, src="dernier " + ("plus haut " if d == -1 else "plus bas ") + ut, meche=meche,
-                rejets=[n for n, x in rej.items() if x is not None], marche=True, t=m1[-1]["t"]), "")
+                rejets=[n for n, x in rej.items() if x is not None], marche=True, t=m1[-1]["t"])
 
 def simuler_sniper(sn, m1_futur, duree_min=240):
     """Que serait-il arrivé ? Entrée « au rejet » (marché) rempli à l'ouverture de la bougie suivante ; sinon ordre limite touché ; SL prioritaire si SL et TP1 dans la même bougie."""
@@ -1572,7 +1568,7 @@ TRAD = {
 "🕒 Heure de clôture de la bougie :": "🕒 Candle close time:",
 "⏳ PROCHAINE CLÔTURE ": "⏳ NEXT CANDLE CLOSE ",
 "⏱ Temps restant :": "⏱ Time remaining:",
-"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "↩ RETOURNEMENT EN PRÉPARATION": "↩ REVERSAL BUILDING", "petites unités ont tourné contre le": "small timeframes turned against the", "🔒 Sécurise : stop à BE": "🔒 Secure: stop at BE", "si tu es en gain": "if you are in profit", "✅ Retournement confirmé si le 15 min ET la 1 h clôturent vers le": "✅ Reversal confirmed if the 15m AND the 1h close towards", "🙅 Aucune entrée en sens inverse avant cette confirmation": "🙅 No entry the other way before this confirmation", "⚡ Petites unités": "⚡ Small timeframes", "🏔 Grandes unités": "🏔 Big timeframes", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT": "⏳ 4h is neutral: no LONG or SHORT direction", "⏳ Le 1h ne confirme pas la tendance 4h": "⏳ 1h does not confirm the 4h trend", "🔔 Je te préviens dès que c'est validé": "🔔 I'll tell you as soon as it's validated", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi en cours depuis": "Tracking for", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
+"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "↩ RETOURNEMENT EN PRÉPARATION": "↩ REVERSAL BUILDING", "petites unités ont tourné contre le": "small timeframes turned against the", "🔒 Sécurise : stop à BE": "🔒 Secure: stop at BE", "si tu es en gain": "if you are in profit", "✅ Retournement confirmé si le 15 min ET la 1 h clôturent vers le": "✅ Reversal confirmed if the 15m AND the 1h close towards", "🙅 Aucune entrée en sens inverse avant cette confirmation": "🙅 No entry the other way before this confirmation", "⚡ Petites unités": "⚡ Small timeframes", "🏔 Grandes unités": "🏔 Big timeframes", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT": "⏳ 4h is neutral: no LONG or SHORT direction", "⏳ Le 1h ne confirme pas la tendance 4h": "⏳ 1h does not confirm the 4h trend", "🔔 Je te préviens dès que c'est validé": "🔔 I'll tell you as soon as it's validated", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
 "🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
 "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
 "🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
@@ -1581,8 +1577,6 @@ TRAD = {
 "🚫 N'ENTRE PAS. Attends une confirmation complète avant toute entrée.": "🚫 DO NOT ENTER. Wait for full confirmation before entering.",
 "🟡 POSITION À VENIR — ordre en attente, aucune position ouverte": "🟡 UPCOMING SETUP — pending order, no position is open",
 "📍 Zone surveillée :": "📍 Monitored zone:",
-"🔁 Zone de retournement visée :": "🔁 Targeted reversal zone:", " attendu": " expected", "📍 Le prix est dans la zone : j'attends le rejet et la clôture": "📍 Price is inside the zone: waiting for the rejection and the close",
-"🔁 Zone de retournement : pas encore définie (le plan n'est pas fixé)": "🔁 Reversal zone: not defined yet (the plan is not fixed)", "📏 Prix à": "📏 Price is", "de la zone (elle est au-dessus)": "from the zone (it is above)", "de la zone (elle est en dessous)": "from the zone (it is below)",
 "🛑 Stop prévu :": "🛑 Planned stop:",
 "🕯 Bougie ": "🕯 Candle ",
 " clôturée — ": " closed — ",
@@ -1638,7 +1632,7 @@ TRAD = {
 "pression haussière sur les rendements": "upward pressure on yields",
 "détente des rendements": "yields easing",
 "rendement stable": "yields stable",
-"favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier et de la semaine dernière": "yesterday's and last week's high", "plus bas d'hier et de la semaine dernière": "yesterday's and last week's low", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position de LONGUE DURÉE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 Long-DURATION position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 LONG position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -2186,19 +2180,11 @@ def mise_en_forme(t):
             continue
         niveau = re.match(
             r"^(?P<label>.*?\b(?:TP\s*[12]|SL|STOP(?: LOSS)?|ENTR[ÉE]E?|ENTRY|SORTIE|EXIT|OBJECTIF(?: FINAL)?|TARGET|BREAK EVEN|BE)\b[^:：]*?)"
-            r"\s*(?::|：|≈|=)\s*(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?"
-            r"(?:\s*[–—→]\s*(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)?)"           # plage « A – B » : les deux bornes restent ensemble
+            r"\s*(?::|：|≈|=)\s*(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)"
             r"(?:\s*(?P<detail>.*))?$", l, re.IGNORECASE)
-        # Un détail qui continue la phrase (« 5 minutes (… », « 0,12 % du prix », « 1:2.1 ») n'est pas un détail entre parenthèses :
-        # reformater couperait la ligne et déséquilibrerait les parenthèses. Seuls « (… », « — … », « , … » sont des détails.
-        if niveau:
-            reste = (niveau.group("detail") or "").strip()
-            if reste and not reste.startswith(("(", "—", "–", "-", ",", ";", "•", "→", "[")):
-                niveau = None
         if niveau and len(niveau.group("label").strip()) <= 48:
             label = niveau.group("label").strip().rstrip(" :：≈=")
-            bornes = re.split(r"\s*([–—→])\s*", niveau.group("value"))
-            value = (" → ".join(_compacte_prix(b) for b in bornes[0::2]) if len(bornes) == 3 else _compacte_prix(niveau.group("value")))   # toujours « A → B » : lisible, jamais confondu avec une parenthèse
+            value = _compacte_prix(niveau.group("value"))
             detail = (niveau.group("detail") or "").strip()
             plage = re.match(r"^[—–-]\s*([+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?)\s*(.*)$", detail)
             if plage:                    # « zone 3981,48 – 4012,15 » : la 2e borne reste une borne, pas un détail entre parenthèses
@@ -2781,29 +2767,12 @@ MOMENTS_IA = (
      "Grosse turbulence ou news. Explique simplement ce qui se passe, le risque, et quoi faire (patience, SL, BE)."),
 )
 
-REGLE_SENS_IA = (" Ne prédis JAMAIS un sens à venir (ni haussier, ni baissier, ni LONG, ni SHORT) : décris seulement ce qui vient de se passer "
-                 "et ce qu'il faut surveiller. Le sens vient uniquement de l'indicateur.")
-_IA_BAISSIER = re.compile(r"baissi(?:er|ère)|\bvente\s+à\s+venir|va\s+(?:baisser|chuter|plonger|s'effondrer)|chute\s+à\s+venir", re.I)
-_IA_HAUSSIER = re.compile(r"haussi(?:er|ère)|va\s+(?:monter|grimper)|hausse\s+à\s+venir", re.I)
-
-def sens_ia_contradictoire(texte, sens):
-    """Vrai si l'IA annonce un sens (haussier / baissier / LONG / SHORT) CONTRAIRE à celui de l'indicateur (et n'annonce pas aussi le bon).
-    Les descriptions du passé (« forte baisse », « rebond ») ne sont pas des annonces de sens et ne déclenchent rien."""
-    if sens not in (1, -1):
-        return False
-    t = str(texte or "")
-    bear = bool(_IA_BAISSIER.search(t) or re.search(r"\bSHORT\b", t))
-    bull = bool(_IA_HAUSSIER.search(t) or re.search(r"\bLONG\b", t))
-    return (bear and not bull) if sens == 1 else (bull and not bear)
-
 def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
     """La vraie IA revient aux moments clés : préparation de l'entrée, TP touché, turbulence / news (1 fois par moment)."""
     out = []
     vus = etat.setdefault("ia_moments", {})
     for t in nouveaux or []:
         texte = t[0] if isinstance(t, tuple) else t
-        if doublon_message(etat, str(texte), enregistrer=False):      # message principal supprimé (doublon) : pas de commentaire IA orphelin
-            continue
         tete = str(texte).split("\n")[0].upper()
         for nom, cles, delai, consigne in MOMENTS_IA:
             if not any(k in tete for k in cles):
@@ -2813,13 +2782,10 @@ def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
                 break
             vus[k] = time.time()
             try:
-                avis = ia(etat, consigne + REGLE_SENS_IA + " " + IA_TON_JEUNE, dict(donnees_ia(m, r, cle), evenement=str(texte)[:600]),
+                avis = ia(etat, consigne + " " + IA_TON_JEUNE, dict(donnees_ia(m, r, cle), evenement=str(texte)[:600]),
                           cle_cache=f"moment:{k}", duree=delai, premium=True)
             except Exception as ex:
                 print("ia moment", ex); avis = ""
-            if avis and sens_ia_contradictoire(avis, r.get("sens")):
-                print(f"IA_SENS_CONTRADICTOIRE {m} : commentaire IA non envoyé (annonce un sens contraire à l'indicateur)")
-                avis = ""
             if avis:
                 out.append(f"🧠 L'IA ALIGN EN DIRECT — {ICONE.get(m, '')} {m}\n{compacter_ia(avis)}")
             break
@@ -3284,29 +3250,7 @@ def objectifs_marche(r, d):
     return l
 
 
-def zone_retournement_visee(r, cle):
-    """Où le bot pense que le prix va se retourner : zone d'entrée du plan (ordre surveillé, sinon zone de l'indicateur), sens attendu, distance au prix.
-    Reprend les chiffres de l'ancienne ligne « Zone surveillée ». Jamais inventée : « pas encore définie » si le plan n'est pas fixé."""
-    prix = r["m1"][-1]["c"]
-    o = (cle or {}).get("ordre")
-    zp = r.get("zone_pine") if r.get("dirPlan") else None
-    if o:
-        za, zb = min(o.get("za", o["e"]), o.get("zb", o["e"])), max(o.get("za", o["e"]), o.get("zb", o["e"]))
-        d = o.get("d") or r.get("dirPlan") or r.get("confirme") or 0
-    elif zp:
-        za, zb, d = min(zp["za"], zp["zb"]), max(zp["za"], zp["zb"]), r.get("dirPlan") or 0
-    else:
-        return ["🔁 Zone de retournement : pas encore définie (le plan n'est pas fixé)"]
-    sens = f" — {SENS[d]} attendu" if d in (1, -1) else ""
-    l = [f"🔁 Zone de retournement visée : ≈ {px(za)} → {px(zb)}{sens}"]
-    if za <= prix <= zb:
-        l.append("📍 Le prix est dans la zone : j'attends le rejet et la clôture")
-    else:
-        dist = min(abs(prix - za), abs(prix - zb))
-        l.append(f"📏 Prix à {px(dist)} de la zone ({'elle est au-dessus' if prix < za else 'elle est en dessous'})")
-    return l
-
-def texte_apercu(m, r, cle, vip=True):
+def texte_apercu(m, r, cle):
     """Carte d'abordage : autorisation d'entrée en premier, détails derrière les boutons."""
     cle = cle or {}
     maj, n_ok = alignement(r)
@@ -3351,12 +3295,13 @@ def texte_apercu(m, r, cle, vip=True):
         "➡️ À faire : " + ("gérer la position ouverte et suivre les alertes de sortie." if tr else
                          "Attendre un nouveau message explicite « ENTRÉE AUTORISÉE »."),
     ]
-    if not tr:
-        lignes += zone_retournement_visee(r, cle)
-    jour_ = news_du_jour(DERNIER_ETAT) if (DERNIER_ETAT and vip) else []      # news : VIP uniquement (règle gratuit/VIP)
+    if cle.get("ordre") and not tr:
+        o = cle["ordre"]
+        lignes += [f"🟨 Zone surveillée : {px(min(o.get('za', o['e']), o.get('zb', o['e'])))} → {px(max(o.get('za', o['e']), o.get('zb', o['e'])))}"]
+    jour_ = news_du_jour(DERNIER_ETAT) if DERNIER_ETAT else []
     if jour_:
         lignes += [""] + jour_
-    elif r.get("news") and vip:
+    elif r.get("news"):
         lignes += [news_courte(r["news"])]
     lignes += ["", "👇 Détails : boutons ci-dessous", "ℹ️ Aucun ordre n'est envoyé automatiquement à ton broker."]
     return "\n".join(lignes)
@@ -3376,13 +3321,6 @@ def prochaine_cloture(ts, interval_sec=300):
         raise ValueError("interval_sec doit être positif")
     return (int(ts) // interval_sec + 1) * interval_sec
 
-
-def duree_humaine(sec):
-    """9 min 30 s · 1 h 05 : jamais confondu avec une heure de l'horloge (ancien « depuis 09:30 »)."""
-    sec = max(0, int(sec))
-    h, reste = divmod(sec, 3600)
-    mi, se = divmod(reste, 60)
-    return f"{h} h {mi:02d}" if h else f"{mi} min {se:02d} s" if mi else f"{se} s"
 
 def mmss(sec):
     """Affichage compact Telegram : MM:SS, sans texte ni chiffres parasites."""
@@ -3474,7 +3412,7 @@ def chrono_txt(m, r, cle, t0):
     if tr:
         return "\n".join([
             f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
-            f"🎯 Suivi en cours depuis {duree_humaine(now - t0)}",
+            f"🎯 Suivi démarré depuis {mmss(now - t0)}",
             f"🟢 POSITION OUVERTE — {SENS[tr['d']]}",
             statut_txt(1, tr).strip(),
             "🎯 Le coach surveille le SL, le passage à BE et les TP."
@@ -3496,7 +3434,7 @@ def chrono_txt(m, r, cle, t0):
         direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — validation complète en attente"
     l = [
         f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
-        f"🎯 Suivi en cours depuis {duree_humaine(now - t0)}",
+        f"🎯 Suivi démarré depuis {mmss(now - t0)}",
         f"🧭 DIRECTION : {direction}",
         f"⏳ POURQUOI J'ATTENDS : {raison_attente(r, cle)}",
     ]
@@ -3868,9 +3806,8 @@ def texte_cloture(m, tf, bougie, r, cle):
     lignes = [
         f"{ICONE.get(m, '📊')} {m}  ·  {px(prix)}",
         statut,
-    ] + [
         f"🕯 {tf} clôturée {heure(bougie['t'] + duree)} · {bougie_sens} · O {px(bougie['o'])} → C {px(bougie['c'])}",
-        f"H4 {sens(d4h)}  ·  H1 {sens(d1h)}  ·  ALIGN {n_ok}/2 (4h + 1h d'accord)" if n_ok == 2 else f"H4 {sens(d4h)}  ·  H1 {sens(d1h)}  ·  ALIGN {n_ok}/2 (4h + 1h)",
+        f"H4 {sens(d4h)}  ·  H1 {sens(d1h)}  ·  ALIGN {n_ok}/2",
     ]
     profil = profil_strategie(r) if len(dirs) > 9 else {"mode": "ATTENTE", "direction": 0}
     if profil.get("mode") not in ("ATTENTE", None):
@@ -3963,6 +3900,8 @@ def notifier_clotures(etat, m, r, cle):
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
 
+HB_INTERVALLE_VIP = 900        # 15 min minimum entre deux infos « j attends » : moins de messages pour rien (entrées, TP, SL : toujours immédiats)
+HB_INTERVALLE_GRATUIT = 1800   # gratuit : discret et espacé (30 min)
 
 def prochaine_ouverture_cme(ts):
     """Prochaine réouverture CME/CFD (Gold, Nasdaq), cherchée par pas de 5 min avec la même règle que cme_ouvert."""
@@ -3973,6 +3912,13 @@ def prochaine_ouverture_cme(ts):
             return t
     return None
 
+def heure_reprise(ts, anglais=False):
+    d = datetime.datetime.fromtimestamp(ts, PARIS)
+    jours_fr = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+    jours_en = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    jour = (jours_en if anglais else jours_fr)[d.weekday()]
+    auj = datetime.datetime.now(PARIS).date()
+    return d.strftime("%H:%M") if d.date() == auj else f"{jour} {d.strftime('%H:%M')}"
 
 def etat_marche_hb(m, r, now):
     """(« ferme » | « perime » | « ouvert »), réouverture. Uniquement à partir des vraies horloges et des vraies bougies."""
@@ -3983,6 +3929,10 @@ def etat_marche_hb(m, r, now):
         return "perime", None
     return "ouvert", None
 
+HB_VARIANTES_FR = ("🟡 {ic} {m} : je surveille, pas d'entrée pour l'instant", "👀 {ic} {m} : rien de validé, je garde l'œil dessus",
+                   "⏳ {ic} {m} : toujours en attente d'une confirmation", "🧐 {ic} {m} : le marché n'a pas encore validé d'entrée")
+HB_VARIANTES_EN = ("🟡 {ic} {m}: watching, no entry for now", "👀 {ic} {m}: nothing confirmed yet, keeping an eye on it",
+                   "⏳ {ic} {m}: still waiting for a confirmation", "🧐 {ic} {m}: the market has not confirmed an entry yet")
 HB_UNITE_VALIDATION = {"SWING": "1h", "DAY": "5 min", "SCALPING": "1 min"}        # unité de validation de l'indicateur (15 min sans stratégie)
 
 def hb_etat_surveille(r):
@@ -3997,10 +3947,104 @@ def hb_etat_surveille(r):
     sens = r.get("sens", 0)
     pct = r.get("pctH", 50)
     return dict(d=d, strat=strat, etat=etat_s, n=n, zp=zp, a=a, prix=prix, sens=sens, pct=pct if sens >= 0 else 100 - pct,
-                sig=(d, n, strat, etat_s, sens, round(float(zp["zmil"]), 4) if zp else None, round(a, 4)))
+                sig=(d, n, strat, etat_s, sens, round(zp["zmil"] / (0.5 * a)) if zp else None))
 
+def texte_battement(m, r, cle, anglais=False, vip=True, variante=0):
+    """Message de veille : CE QUI EST SURVEILLÉ (jamais inventé). Gratuit : sobre, sans sens ni niveaux (réservés aux VIP)."""
+    if len(r.get("b5") or []) < 21 and "bull" not in r:
+        return None
+    e = hb_etat_surveille(r)
+    ic = ICONE.get(m, "📊")
+    tete = (HB_VARIANTES_EN if anglais else HB_VARIANTES_FR)[variante % 4].format(ic=ic, m=m)
+    n, seuil = e["n"], MIN_ALIGN
+    if not vip:                                     # gratuit : le biais reste visible (demande d'Adel), jamais les niveaux
+        biais = {1: ("bullish", "haussier"), -1: ("bearish", "baissier"), 0: ("undecided", "indécis")}[e["sens"]]
+        return "\n".join([tete, (f"🧭 Bias: {biais[0]}" if anglais else f"🧭 Biais : {biais[1]}"),
+                          (f"📊 Aligned timeframes: {n}/11 (need {seuil})" if anglais else f"📊 UT alignées : {n}/11 (il en faut {seuil})"),
+                          ("🔒 Levels: VIP" if anglais else "🔒 Niveaux : VIP")])
+    lignes = [tete]
+    sens_txt = {1: "LONG ⬆️", -1: "SHORT ⬇️", 0: "INDÉCIS" if not anglais else "UNDECIDED"}[e["sens"]]
+    lignes.append((f"🧭 Likely direction: {sens_txt}" if anglais else f"🧭 Sens probable : {sens_txt}") + (f" ({e['pct']} %)" if e["sens"] else ""))
+    atteint = n >= seuil
+    lignes.append((f"📊 Aligned timeframes: {n}/11 " + (f"(threshold {seuil} reached)" if atteint else f"(need {seuil})")) if anglais else
+                  (f"📊 UT alignées : {n}/11 " + (f"(seuil {seuil} atteint)" if atteint else f"(il en faut {seuil})")))
+    zp, prix, d = e["zp"], e["prix"], e["d"]
+    if zp and prix:
+        dedans = zp["za"] <= prix <= zp["zb"]
+        dist = 0 if dedans else min(abs(prix - zp["za"]), abs(prix - zp["zb"]))
+        if anglais:
+            lignes.append(f"📍 Entry zone: {px(zp['za'])} – {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)"))
+        else:
+            lignes.append(f"📍 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})"))
+        unite = HB_UNITE_VALIDATION.get(e["strat"], "15 min")
+        if anglais:
+            lignes.append(f"🕯 Waiting for a {unite} close {'below' if d == -1 else 'above'} {px(zp['zmil'])}")
+        else:
+            lignes.append(f"🕯 J'attends une clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(zp['zmil'])}")
+    profil = {"SWING": "SWING", "DAY": "INTRADAY" if not anglais else "DAY", "SCALPING": "SCALP"}.get(e["strat"], "")
+    if profil:
+        etat_t = {"CONFIRMÉ": "confirmed" if anglais else "confirmé", "EN ATTENTE": "pending" if anglais else "en attente"}.get(e["etat"], "")
+        lignes.append((f"🎯 Target profile: {profil} ({etat_t})" if anglais else f"🎯 Profil visé : {profil} ({etat_t})"))
+    else:
+        lignes.append("🎯 Target profile: none yet" if anglais else "🎯 Profil visé : aucun pour l'instant")
+    return "\n".join(lignes)
 
+def _forme(texte):
+    """Forme d'un message sans chiffres : deux messages à la même forme sont « quasi identiques »."""
+    return re.sub(r"[\d.,]+", "#", str(texte))
 
+def battement_coeur(etat, m, r, cle, now=None):
+    """Veille : une info seulement à une VRAIE évolution (sens, UT alignées, stratégie, zone), au plus à une clôture M5, avec
+    5 min minimum (VIP) ou 30 min (gratuit). Mémoire dédiée dans etat['hb_mem'] : indépendante de la vie des suivis, sauvegardée avec l'état."""
+    now = now or time.time()
+    if cle.get("trade"):
+        return                                    # position ouverte : le coach parle déjà
+    titre = str(verdict(r, cle)[0]).upper()
+    if "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
+        return                                    # signal validé : l'alerte d'entrée s'en charge
+    statut, reprise = etat_marche_hb(m, r, now)
+    b5 = r.get("b5") or []
+    memoire = etat.setdefault("hb_mem", {}).setdefault(m, {})
+    for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
+        if not suivi.get("multi") or not marche_autorise(etat, cid, m):
+            continue
+        cid = str(cid)
+        anglais = cid in LANG_EN
+        mem = memoire.setdefault(cid, {})
+        if statut == "ferme":
+            if mem.get("ferme_dit") != reprise:
+                quand = heure_reprise(reprise, anglais) if reprise else "?"
+                txt = (f"⏸ {m}: market closed, back at {quand} (Paris time)" if anglais
+                       else f"⏸ {m} : marché fermé, reprise à {quand} (heure de Paris)")
+                res = _envoi_sur(cid, text=txt)
+                if isinstance(res, dict) and res.get("ok") is not False:
+                    mem["ferme_dit"] = reprise; mem["t"] = now
+            continue
+        mem.pop("ferme_dit", None)
+        if statut == "perime":
+            if not mem.get("perime_dit"):
+                res = _envoi_sur(cid, text=(f"⚠️ {m}: data not up to date, I can't judge right now" if anglais
+                                            else f"⚠️ {m} : données pas à jour, je ne peux pas juger pour l'instant"))
+                if isinstance(res, dict) and res.get("ok") is not False:
+                    mem["perime_dit"] = True; mem["t"] = now
+            continue
+        mem.pop("perime_dit", None)
+        if not b5 or int(b5[-1]["t"]) <= int(mem.get("bar", 0)):
+            continue                              # pas de nouvelle clôture M5
+        vip = bool(autorise(etat, cid, cid))
+        if now - float(mem.get("t", 0)) < (HB_INTERVALLE_VIP if vip else HB_INTERVALLE_GRATUIT):
+            continue                              # délai minimal non écoulé (mémoire du dernier envoi)
+        sig = list(hb_etat_surveille(r)["sig"])
+        mem["bar"] = int(b5[-1]["t"])
+        if mem.get("sig") == sig:
+            continue                              # rien n'a changé : on n'envoie rien
+        txt = texte_battement(m, r, cle, anglais, vip=vip, variante=int(mem.get("i", 0)))
+        if not txt or _forme(txt) == mem.get("forme"):
+            continue                              # jamais deux messages quasi identiques de suite
+        # Gratuit : discret (sans son). VIP : notification normale.
+        res = _envoi_sur(cid, text=txt, **({} if vip else {"disable_notification": "true"}))
+        if isinstance(res, dict) and res.get("ok") is not False:
+            mem.update(t=now, sig=sig, forme=_forme(txt), i=int(mem.get("i", 0)) + 1)
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
@@ -4018,7 +4062,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     armer_cloture(etat, cid, m, r, cle)
     # Toutes les analyses passent par le même garde-fou 429 que les autres messages.
     # Une analyse refusée par Telegram n'est pas marquée comme livrée et pourra être retentée.
-    res = _envoi_sur(cid, text=texte_apercu(m, r, cle, vip=bool(autorise(etat, str(cid), str(cid)))),
+    res = _envoi_sur(cid, text=texte_apercu(m, r, cle),
                      reply_markup=markup_analyse(etat, m, r, cid))
     if not isinstance(res, dict) or res.get("ok") is not True:
         print(f"ANALYSE_NON_LIVREE market={m} chat={cid} reason=telegram_send_not_confirmed")
@@ -4213,7 +4257,7 @@ def changer_langue(etat, cid, anglais, membre_ok):
 COMMANDES = {"/faire_analyse": "📊 Faire une analyse", "/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
              "/resultats": "📈 Mes résultats", "/gain": "📸 Partager mon gain", "/vip": "💎 Devenir VIP",
              "/english": "🌐 English", "/francais": "🌐 Français", "/rentre": "✅ Je suis rentré", "/sorti": "🚪 Je suis sorti",
-             "/indicateur": "🧩 Indicateur TradingView", "/focus": "🎯 Où me concentrer ?"}
+             "/indicateur": "🧩 Indicateur TradingView"}
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
@@ -4581,14 +4625,14 @@ def traiter(etat, chats, updates):
                         print("rappel analyse", qui, mk, ex)
                         r_ref = DERNIERS.get(mk)
                         if r_ref:
-                            _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {}), vip=bool(autorise(etat, qui, qui))),
+                            _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
                                       reply_markup=markup_analyse(etat, mk, r_ref, qui))
                         else:
                             _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est plus disponible. Relance l'analyse du marché.")
                 else:
                     r_ref = DERNIERS.get(mk)
                     if r_ref:
-                        res = _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {}), vip=bool(autorise(etat, qui, qui))),
+                        res = _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
                                          reply_markup=markup_analyse(etat, mk, r_ref, qui))
                         if res and res.get("ok"):
                             etat.setdefault("vu_analyse", {}).setdefault(mk, {}).setdefault(qui, {})["mid"] = res["result"]["message_id"]
@@ -4670,7 +4714,7 @@ def traiter(etat, chats, updates):
                         print("retour analyse", mk, ex)
                         _envoi_sur(qui, text="⚠️ L'analyse n'est pas disponible pour le moment. Réessaie avec le bouton Analyse.")
                         continue
-                _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {}), vip=bool(autorise(etat, qui, qui))),
+                _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {})),
                            reply_markup=markup_analyse(etat, mk, r_resume, qui))
                 continue
             if choix in ("jok", "jno") and qui in proprio(etat):
@@ -4857,15 +4901,6 @@ def traiter(etat, chats, updates):
             continue
         if "mes marches" in txt or "my markets" in txt or txt.startswith("/marches"):
             menu_marches(etat, cid)
-            continue
-        if txt.startswith("/statut") and str(cid) in {str(x) for x in proprio(etat)}:
-            _envoi_sur(cid, text=texte_statut(etat, DERNIERS))
-            continue
-        if "me concentrer" in txt or "where to focus" in txt or txt.startswith("/focus") or txt.strip() == "focus":
-            props = classer_marches(DERNIERS, etat, marches_choisis(etat, cid))
-            msg = texte_radar(props, DERNIERS, bool(autorise(etat, cid, cid)), cid in LANG_EN) if len(props) >= 1 else None   # même logique que le RADAR (aucun doublon)
-            _envoi_sur(cid, text=msg or ("🎯 Aucun de tes marchés n'a de plan exploitable pour l'instant : je te préviens dès que l'un se rapproche."
-                                         if cid not in LANG_EN else "🎯 None of your markets has a usable plan right now: I will warn you as soon as one gets close."))
             continue
         if "mon bot" in txt or "mon_bot" in txt:
             menu_bot(etat, cid)
@@ -5146,397 +5181,19 @@ def diffuser_alerte(etat, chats, fr, en):
     for cid in destinataires_message(etat, chats, "\n".join(fr)):
         _envoi_sur(cid, text="\n".join(en if str(cid) in LANG_EN else fr))
 
-def _liste_marches(noms, anglais=False):
-    """« GOLD » · « GOLD et NASDAQ » · « NASDAQ, GOLD et BTC » (anglais : and)."""
-    et = " and " if anglais else " et "
-    return noms[0] if len(noms) == 1 else ", ".join(noms[:-1]) + et + noms[-1]
-
-def adapter_marches_session(lignes, mk, choisis, anglais=False):
-    """Remplace la liste de marchés d'une session (« GOLD et BTC ») par les marchés de la personne ; None si aucun n'est concerné."""
-    if not mk or not choisis:
-        return lignes
-    cites = [m for m in re.findall(r"BTC|GOLD|NASDAQ", mk)]
-    a_garder = [m for m in cites if m in choisis]
-    if not a_garder:
-        return None
-    nouveau = _liste_marches(a_garder, anglais)
-    return [l.replace(mk, nouveau) for l in lignes]
-
-# ───────── Coach de concentration : sur quel marché se concentrer ? ─────────
-FOCUS_NOMS = {"dans_zone": "dans la zone d'entrée", "proche": "proche de la zone", "en_approche": "en approche", "loin": "loin de la zone",
-              "bloque": "bloqué (zone extrême Daily/Weekly)", "sans_plan": "pas de plan fixé", "ferme": "marché fermé", "position": "déjà en position"}
-
-def proximite_marche(m, r, cle, now=None):
-    """Distance à l'entrée d'un marché, en ATR 15 min. rang : 0 dans la zone • 1 proche (≤ 1,5 ATR) • 2 en approche (≤ 4) • 3 loin
-    • 4 bloqué par le Daily/Weekly • 5 pas de plan • 6 marché fermé • -1 déjà en position. Rien n'est inventé : zone du plan ou ordre surveillé."""
-    now = time.time() if now is None else now
-    cle = cle or {}
-    prix = r["m1"][-1]["c"]
-    base = dict(m=m, prix=prix, atr_n=99.0)
-    if cle.get("trade"):
-        return dict(base, classe="position", rang=-1, d=cle["trade"].get("d"))
-    if m != "BTC" and not cme_ouvert(int(now)):
-        return dict(base, classe="ferme", rang=6)
-    o, d = cle.get("ordre"), r.get("dirPlan") or 0
-    zp = r.get("zone_pine") if d else None
-    if o:
-        za, zb = min(o.get("za", o["e"]), o.get("zb", o["e"])), max(o.get("za", o["e"]), o.get("zb", o["e"]))
-        d = o.get("d") or d
-    elif zp:
-        za, zb = min(zp["za"], zp["zb"]), max(zp["za"], zp["zb"])
-    else:
-        return dict(base, classe="sans_plan", rang=5)
-    if d not in (1, -1):
-        return dict(base, classe="sans_plan", rang=5)
-    if bloque_dw(r, d, prix):
-        return dict(base, classe="bloque", rang=4, d=d, za=za, zb=zb)
-    a = float(r.get("atr") or 0)
-    dist = 0.0 if za <= prix <= zb else min(abs(prix - za), abs(prix - zb))
-    atr_n = dist / a if a > 0 else 99.0
-    classe, rang = (("dans_zone", 0) if dist == 0 else ("proche", 1) if atr_n <= 1.5 else ("en_approche", 2) if atr_n <= 4 else ("loin", 3))
-    unite = HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
-    mil = (zp or {}).get("zmil")
-    action = (f"clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(mil)}" if mil else f"rejet + clôture {unite} dans la zone")
-    return dict(base, classe=classe, rang=rang, d=d, za=za, zb=zb, dist=dist, atr_n=atr_n, action=action, au_dessus=prix < za)
-
-def classer_marches(derniers, etat, choisis, now=None):
-    """Marchés suivis par la personne, du plus proche d'une entrée au plus loin."""
-    props = [proximite_marche(m, r, etat.get(m, {}), now) for m, r in (derniers or {}).items() if m in choisis and r.get("m1")]
-    return sorted(props, key=lambda p: (p["rang"] if p["rang"] >= 0 else 9, p["atr_n"]))
-
-
-# ───────── RADAR ALIGN : UN seul message par personne, mis à jour sur place ─────────
-# Remplace la veille « je surveille » marché par marché et le message « OÙ TE CONCENTRER » : le marché le plus proche
-# d'une entrée en tête (niveaux du plan de l'indicateur), les autres en une ligne. Nouveau message (avec son) seulement
-# quand un marché devient « prépare-toi » ; sinon le message existant est édité (sans notification).
-RADAR_REFRESH_SEC = 120       # au plus une édition toutes les 2 min par personne (Telegram : pas de 429)
-RADAR_ALERTE_MIN_SEC = 900    # au plus une alerte « prépare-toi » (avec son) toutes les 15 min par personne
-RADAR_ALERTE_RANG = 1         # rang ≤ 1 (dans la zone ou à ≤ 1,5 ATR) : « prépare-toi » → nouveau message avec son
-SENS_COURT = {1: "LONG ⬆️", -1: "SHORT ⬇️"}
-
-def _radar_n_ut(r, d):
-    return r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
-
-def _radar_pret(p, derniers):
-    """« Prépare-toi » seulement si le prix est proche (rang ≤ 1) ET que l'alignement a atteint le seuil (8/11) : sinon c'est juste « proche »."""
-    return 0 <= p["rang"] <= RADAR_ALERTE_RANG and _radar_n_ut((derniers or {}).get(p["m"]) or {}, p.get("d")) >= MIN_ALIGN
-
-def _radar_ordre(props, derniers):
-    """Marchés prêts (proches + alignés) d'abord, puis l'ordre de proximité habituel."""
-    return sorted(props, key=lambda p: 0 if _radar_pret(p, derniers) else 1)
-
-def radar_entree_sl(r, d, za, zb):
-    """Entrée et SL proposés par le RADAR (demande d'Adel, 12/11) : l'entrée ET le SL visent le MÊME dernier plus haut (vente) / plus bas (achat),
-    jamais l'entrée en bas de zone avec le SL derrière un autre sommet lointain. Ordre : entrée sniper validée → dernier plus haut M5 dans la zone
-    → dernier plus haut M15 dans la zone → sinon plan de l'indicateur. SL = un tout petit peu derrière ce niveau (marge sniper)."""
-    sn = r.get("sniper")
-    if isinstance(sn, dict) and sn.get("d") == d:
-        return dict(e=sn["e"], sl=sn["sl"], tp1=sn["tp1"], src=sn.get("src", "sniper"))
-    prix = (r.get("m1") or [{}])[-1].get("c")
-    a15 = float(r.get("atr") or 0)
-    a3 = float(r.get("atr3") or r.get("atr5") or a15 or 0)
-    plan = r.get("plan_fige") or {}
-    if d not in (1, -1):
-        return None
-    for nom, bars in ((("M5", (r.get("b5") or [])[:-1]), ("M15", (r.get("b15") or [])[:-1])) if prix is not None and a15 > 0 else ()):
-        if len(bars) < 12:
-            continue
-        piv = niveaux_ut(bars)[0 if d == -1 else 1]
-        if not piv:
-            continue
-        L, i = piv
-        if any((y["c"] - L) * (-d) > 0 for y in bars[i + 1:]):
-            continue                                   # clôture au-delà : niveau cassé, plus valable
-        if (L - prix) * (-d) < 0 or not (za - 0.5 * a15 <= L <= zb + 0.5 * a15):
-            continue                                   # pas devant le prix, ou hors de la zone d'entrée
-        sl = L - d * SNIPER_MARGE_ATR3 * a3
-        mini = max(a3, L * SL_RISQUE_MIN_PCT)
-        if abs(L - sl) < mini:
-            sl = L - d * mini
-        tp1 = plan.get("tp1") if plan.get("d") == d and plan.get("tp1") is not None and d * (plan["tp1"] - L) >= GAIN_MIN * abs(L - sl) else L + d * GAIN_MIN * abs(L - sl)
-        return dict(e=L, sl=sl, tp1=tp1, src=("dernier plus haut " if d == -1 else "dernier plus bas ") + nom)
-    if plan.get("d") == d and plan.get("sl") is not None:
-        return dict(e=plan["e"], sl=plan["sl"], tp1=plan["tp1"], src="plan de l'indicateur")
-    return None
-
-def texte_radar(props, derniers, vip=True, anglais=False, now=None, intro=None):
-    """Texte du RADAR, construit uniquement à partir des vraies données (classer_marches + plan figé de l'indicateur).
-    Gratuit : marché favori, sens et état — jamais l'entrée, le SL ni le TP (réservés aux VIP)."""
-    if not props:
-        return None
-    now = time.time() if now is None else now
-    ic = lambda p: ICONE.get(p["m"], "")
-    props = _radar_ordre(props, derniers)
-    actifs = [p for p in props if 0 <= p["rang"] <= 3]
-    en_pos = [p for p in props if p["rang"] == -1]
-    t = actifs[0] if actifs else None
-    l = []
-    if t:
-        etat_t = ("get ready" if anglais else "prépare-toi") if _radar_pret(t, derniers) else \
-                 ("close, alignment not reached yet" if anglais else "proche, alignement pas encore atteint") if t["rang"] <= RADAR_ALERTE_RANG else \
-                 ("approaching" if anglais else "en approche") if t["rang"] == 2 else ("least far, nothing close" if anglais else "le moins loin, rien de proche")
-        l.append(f"🎯 FOCUS : {ic(t)} {t['m']} — {etat_t}")
-        if intro and vip:
-            l += [x for x in str(intro).split("\n") if x.strip()][:3]      # phrases de l'IA (jamais les mêmes), niveaux toujours calculés par le bot
-        r = (derniers or {}).get(t["m"]) or {}
-        d = t.get("d")
-        prof = {"SWING": "SWING", "DAY": "INTRADAY", "SCALPING": "SCALP"}.get(r.get("strat") or "", "")
-        l.append(("📉 " if d == -1 else "📈 ") + (f"Direction : {SENS_COURT.get(d, '?')}" if anglais else f"Sens : {SENS_COURT.get(d, '?')}") + (f" · {prof}" if prof else ""))
-        if vip:
-            l.append((f"📍 Entry zone : {px(t['za'])} → {px(t['zb'])}" if anglais else f"📍 Zone d'entrée : {px(t['za'])} → {px(t['zb'])}"))
-            es = radar_entree_sl(r, d, t["za"], t["zb"])
-            if es:
-                l.append((f"🎯 Entry : {px(es['e'])}" if anglais else f"🎯 Entrée : {px(es['e'])}") + f" ({es['src']})")
-                l.append(f"🛑 SL : {px(es['sl'])} " + ("(just behind)" if anglais else "(juste derrière)") + f" · {px(abs(es['e'] - es['sl']))} pts")
-                l.append(f"🏁 TP1 : {px(es['tp1'])}")
-            if t["rang"] == 0:
-                l.append("🟨 Price is IN the zone" if anglais else "🟨 Le prix est DANS la zone")
-            else:
-                l.append((f"📏 Price {px(t['dist'])} away (≈ {t['atr_n']:.1f} ATR 15 min)" if anglais else
-                          f"📏 Prix à {px(t['dist'])} de la zone (≈ {t['atr_n']:.1f} ATR 15 min)".replace(".", ",")))
-            l.append(("⏳ Waiting for: " if anglais else "⏳ J'attends : ") + t["action"])
-        else:
-            l.append("🔒 Entry, SL, TP : VIP" if anglais else "🔒 Entrée, SL, TP : VIP")
-        n = _radar_n_ut(r, d)
-        l.append((f"🧭 Aligned timeframes : {n}/11" if anglais else f"🧭 UT alignées : {n}/11") + (" ✅" if n >= MIN_ALIGN else f" ({'need' if anglais else 'il en faut'} {MIN_ALIGN})"))
-    else:
-        l.append("📡 RADAR ALIGN — " + ("no entry close" if anglais else "aucune entrée proche"))
-    autres = [p for p in props if p is not t]
-    if autres:
-        l.append("━━━━━━━━━━━━━━━")
-        for k, p in enumerate(autres, start=2 if t else 1):
-            sens = SENS_COURT.get(p.get("d"), "")
-            etat_p = FOCUS_NOMS.get(p["classe"], p["classe"])
-            suite = f" (≈ {p['atr_n']:.1f} ATR)".replace(".", ",") if 0 <= p["rang"] <= 3 and p["atr_n"] < 90 else ""
-            l.append(f"{k}️⃣ {ic(p)} {p['m']} : " + (f"{sens} · " if sens and p["rang"] not in (5, 6) else "") + etat_p + suite)
-    if en_pos:
-        l.append("📍 " + ("In a trade: follow the coach" if anglais else "En position : suis les alertes du coach"))
-    l.append(("🔔 New message only when it's time to get ready" if anglais else "🔔 Nouveau message seulement quand il faut se préparer"))
-    l.append(f"🔄 {'Updated' if anglais else 'Mis à jour'} {datetime.datetime.fromtimestamp(now, PARIS).strftime('%H:%M')}")
-    return "\n".join(l)
-
-def _radar_fond(txt):
-    """Contenu du radar sans l'heure ni les distances (qui bougent à chaque tick) : on n'édite que si le fond change."""
-    lignes = [x for x in str(txt).split("\n") if not x.startswith("🔄")]
-    return re.sub(r"[\d.,]+", "#", "\n".join(x for x in lignes if not x.startswith("📏")))
-
-def destinataires_radar(etat, chats):
-    """Personnes qui suivent au moins un marché (« Valider et suivre ») + VIP qui ont coché au moins 2 marchés. Jamais la chaîne."""
-    canal = str(etat.get("canal") or "")
-    out = set()
-    for m, suivis in (etat.get("veille_cloture") or {}).items():
-        for cid, s in (suivis or {}).items():
-            if isinstance(s, dict) and s.get("multi"):
-                out.add(str(cid))
-    for cid in {str(c) for c in chats}:
-        try:
-            if autorise(etat, cid, cid) and len(marches_choisis(etat, cid)) >= 2:
-                out.add(cid)
-        except Exception:
-            pass
-    return sorted(out - {canal})
-
-def _radar_supprimer(cid, mid):
-    if not mid:
-        return
-    try:
-        telegram("deleteMessage", chat_id=cid, message_id=mid)
-    except Exception:
-        pass                                      # déjà supprimé ou trop ancien : sans gravité
-
-IA_RADAR = os.environ.get("IA_RADAR", "1") == "1"   # coupe-circuit : 0 = RADAR sans IA
-RADAR_IA_CACHE_SEC = 900      # une seule rédaction IA par marché et par niveau visé (partagée entre abonnés) : coût minimal
-
-def intro_ia_radar(etat, m, r, cle, p, es):
-    """L'IA rédige l'annonce « prépare-toi » (3 lignes, formulation toujours différente) UNIQUEMENT au moment où un marché devient prêt.
-    Les chiffres viennent du bot (ia() refuse tout prix absent des données) ; sens contraire à l'indicateur = commentaire jeté."""
-    try:
-        unite = HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
-        data = dict(donnees_ia(m, r, cle), radar={
-            "sens": "LONG" if p.get("d") == 1 else "SHORT", "entrée visée": round(es["e"], 2) if es else None,
-            "SL": round(es["sl"], 2) if es else None, "TP1": round(es["tp1"], 2) if es else None,
-            "niveau": (es or {}).get("src"), "unité à regarder": unite, "ce que j'attends": p.get("action")})
-        cle_c = f"radar:{m}:{round((es or {}).get('e') or p.get('za') or 0, 1)}"
-        avis = ia(etat, "Un marché approche de son point d'entrée. Écris EXACTEMENT 3 lignes courtes, chacune commence par un emoji, 12 mots max : "
-                        "1) dis de se préparer sur ce marché, 2) le niveau visé (entrée) et le sens, 3) l'unité de temps à regarder et ce qu'on attend. "
-                        "Utilise uniquement les chiffres fournis, n'invente aucun niveau, varie la formulation à chaque fois. "
-                        "Le sens est UNIQUEMENT celui fourni dans radar.sens (il vient de l'indicateur) : ne le change jamais. " + IA_TON_JEUNE,
-                  data, cle_cache=cle_c, duree=RADAR_IA_CACHE_SEC, premium=True)
-    except Exception as ex:
-        print("ia radar", m, type(ex).__name__, ex)
-        return None
-    if not avis or sens_ia_contradictoire(avis, p.get("d")):
-        return None
-    return compacter_ia(avis)
-
-def radar_tick(etat, chats, derniers, now=None):
-    """Un RADAR par personne : édité sur place ; nouveau message (son) seulement quand un marché devient « prépare-toi »
-    ou quand le marché en tête change (l'ancien radar est alors supprimé : jamais deux radars dans la conversation)."""
-    now = time.time() if now is None else now
-    mem_all = etat.setdefault("radar_mem", {})
-    for cid in destinataires_radar(etat, chats):
-        try:
-            anglais = cid in LANG_EN
-            vip = bool(autorise(etat, cid, cid))
-            props = classer_marches(derniers, etat, marches_choisis(etat, cid), now)
-            mem = mem_all.setdefault(cid, {})
-            actifs = [p for p in _radar_ordre(props, derniers) if 0 <= p["rang"] <= 3]
-            focus = actifs[0]["m"] if actifs else ""
-            pret = bool(actifs) and _radar_pret(actifs[0], derniers)
-            rang = (actifs[0]["rang"] if pret else max(actifs[0]["rang"], RADAR_ALERTE_RANG + 1)) if actifs else 9
-            alerte = (bool(focus) and pret and now - float(mem.get("t_alerte", 0)) >= RADAR_ALERTE_MIN_SEC
-                      and (mem.get("focus") != focus or int(mem.get("rang", 9)) > RADAR_ALERTE_RANG))
-            if not (pret and mem.get("ia_focus") == focus):
-                mem.pop("ia", None); mem.pop("ia_focus", None)          # plus prêt ou autre marché : les phrases IA ne valent plus
-            if alerte and vip and not anglais and IA_RADAR:
-                t0 = actifs[0]; r0 = (derniers or {}).get(focus) or {}
-                intro = intro_ia_radar(etat, focus, r0, etat.get(focus, {}), t0, radar_entree_sl(r0, t0.get("d"), t0["za"], t0["zb"]))
-                if intro:
-                    mem.update(ia=intro, ia_focus=focus)
-            txt = texte_radar(props, derniers, vip, anglais, now, intro=mem.get("ia"))
-            if not txt:
-                continue
-            change_tete = mem.get("mid") and focus != mem.get("focus", "") and now - float(mem.get("t", 0)) >= RADAR_REFRESH_SEC
-            if alerte or change_tete or not mem.get("mid"):
-                res = _envoi_sur(cid, text=txt, **({} if alerte else {"disable_notification": "true"}))
-                if isinstance(res, dict) and res.get("ok"):
-                    _radar_supprimer(cid, mem.get("mid"))
-                    mem.update(mid=res["result"]["message_id"], t=now, fond=_radar_fond(txt), focus=focus, rang=rang)
-                    if alerte:
-                        mem["t_alerte"] = now
-                continue
-            mem["rang"] = rang
-            if now - float(mem.get("t", 0)) < RADAR_REFRESH_SEC or _radar_fond(txt) == mem.get("fond"):
-                continue                          # rien de nouveau sur le fond, ou édition trop récente
-            try:
-                telegram("editMessageText", chat_id=cid, message_id=mem["mid"], text=txt)
-                mem.update(t=now, fond=_radar_fond(txt))
-            except Exception as ex:
-                e = str(ex).lower()
-                if "not modified" in e:
-                    mem.update(t=now, fond=_radar_fond(txt))
-                elif any(x in e for x in ("not found", "can't be edited", "message_id_invalid")):
-                    mem.pop("mid", None)          # recréé au prochain tick
-                else:
-                    raise
-        except Exception as ex:
-            print("radar", cid, type(ex).__name__, ex)
-
-# ───────── /statut : tout est-il opérationnel ? (lu sur l'état réel du worker, jamais supposé) ─────────
-def prochaine_session(now):
-    """(nom, heure) de la prochaine ouverture de session de marché (Tokyo, Londres, Wall Street, Gold CME)."""
-    meilleur = None
-    for code, nom_fr, nom_en, zone, ouv, fer, j_ouv, j_fer, mk_fr, mk_en in SESSIONS:
-        if not ouv:
-            continue
-        tz = ZoneInfo(zone)
-        auj = datetime.datetime.fromtimestamp(now, tz).date()
-        for k in range(0, 8):
-            jour = auj + datetime.timedelta(days=k)
-            if jour.weekday() not in j_ouv:
-                continue
-            t = datetime.datetime(jour.year, jour.month, jour.day, ouv[0], ouv[1], tzinfo=tz).timestamp()
-            if t > now:
-                if meilleur is None or t < meilleur[1]:
-                    meilleur = (nom_fr, t)
-                break
-    return meilleur
-
-def controles_statut(etat, derniers, now=None):
-    """Liste de (état, texte) : état = « ok » · « attention » · « veille » (normal, p. ex. marché fermé). Chaque ligne vient d'une donnée réelle."""
-    now = time.time() if now is None else now
-    out = [("ok", "📡 Telegram : connecté (je te réponds)")]
-    for m in MARCHES:
-        r = (derniers or {}).get(m)
-        ic = ICONE.get(m, "")
-        if not r or not r.get("m1"):
-            out.append(("attention", f"{ic} {m} : pas encore d'analyse (premier tour en cours ou données indisponibles)"))
-            continue
-        age = now - float(r["m1"][-1]["t"])
-        if m != "BTC" and not cme_ouvert(int(now)):
-            out.append(("veille", f"{ic} {m} : marché fermé (normal)"))
-            continue
-        if age > 600:
-            out.append(("attention", f"{ic} {m} : données en retard de {int(age // 60)} min"))
-            continue
-        d = r.get("dirPlan") or 0
-        n = r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
-        plan = f"plan {'LONG' if d == 1 else 'SHORT'}" if d else "pas de plan fixé"
-        out.append(("ok", f"{ic} {m} : analyse de l'indicateur à jour ({n}/11 UT, {plan}, données de {int(age)} s)"))
-    ia_st, ia_f = etat.get("ia_dernier_statut"), etat.get("ia_dernier_fournisseur")
-    if ia_st == "CONNECTED" and ia_f:
-        out.append(("ok", f"🧠 IA : connectée ({ia_f})"))
-    elif ia_st:
-        out.append(("attention", f"🧠 IA externe indisponible ({ia_st.lower().replace('_', ' ')}) : le moteur interne ALIGN continue, sans avis IA"))
-    else:
-        out.append(("veille", "🧠 IA : pas encore sollicitée depuis le démarrage"))
-    futurs = [e for e in etat.get("cal", {}).get("ev", []) if e["t"] >= now - 15 * 60]
-    if futurs:
-        out.append(("ok", "📅 News / annonces : calendrier chargé. " + prochaine_news(etat)))
-    else:
-        out.append(("attention", "📅 News / annonces : aucune annonce dans le calendrier (vide ou non chargé)"))
-    sess = prochaine_session(now)
-    if sess:
-        out.append(("ok", f"⏰ Ouvertures de marché : prochaine = {sess[0]}, {quand_txt(sess[1])}"))
-    sv = etat.get("sauve_t")
-    if sv and now - sv < 1800:
-        out.append(("ok", f"💾 Mémoire : sauvegardée il y a {int((now - sv) // 60)} min"))
-    else:
-        out.append(("attention", "💾 Mémoire : aucune sauvegarde récente"))
-    return out
-
-def texte_statut(etat, derniers, now=None):
-    now = time.time() if now is None else now
-    ctl = controles_statut(etat, derniers, now)
-    ico = {"ok": "✅", "attention": "⚠️", "veille": "💤"}
-    pb = [t for e, t in ctl if e == "attention"]
-    l = ["🩺 STATUT ALIGN", ("✅ Tout est opérationnel" if not pb else f"⚠️ {len(pb)} point(s) à surveiller")]
-    l += [f"{ico[e]} {t}" for e, t in ctl]
-    sha = os.environ.get("GITHUB_SHA", "")[:7]
-    l.append(f"🔧 Version {sha or 'inconnue'} • en route depuis {int((now - DEMARRE_T) // 60)} min")
-    return "\n".join(l)
-
-def diffuser_evenements(etat, chats, evts):
-    """evts = [(marches, lignes_fr, lignes_en[, (mk_fr, mk_en)])] : marches = {"GOLD"} pour un évènement de marché, {"*"} pour une session (global).
-    Chaque évènement est routé selon SON marché ; chaque personne reçoit un seul message regroupé, limité à ses marchés cochés
-    (liste de marchés d'une session et ligne « comprimé » réduites à ses marchés ; session sans aucun de ses marchés : non envoyée)."""
-    evts = [tuple(e) + (None,) * (4 - len(e)) for e in evts]
-    dest_evt = []
-    for marches, fr, en, _mk in evts:
-        t = Msg("\n".join(fr)); t.marches = frozenset(marches)
-        dest_evt.append(set(destinataires_message(etat, chats, t)))
-    canal = str(etat.get("canal") or "")
-    for cid in sorted(set().union(*dest_evt) if dest_evt else set()):
-        choix = etat.get("marches_par_chat", {}).get(str(cid))
-        choisis = marches_choisis(etat, cid) if (choix is not None and cid != canal) else None
-        anglais = str(cid) in LANG_EN
-        blocs = []
-        for (marches, fr, en, mk), dests in zip(evts, dest_evt):
-            if cid not in dests:
-                continue
-            lignes = en if anglais else fr
-            if choisis:
-                lignes = ajuster_squeeze(lignes, choisis)
-                if mk:
-                    lignes = adapter_marches_session(lignes, mk[1] if anglais else mk[0], choisis, anglais)
-            if lignes:
-                blocs.append(lignes)
-        if blocs:
-            _envoi_sur(cid, text="\n".join(regrouper_alertes(blocs)))
-
 def alertes_courtes(etat, chats, derniers, now=None):
     """Appelé à chaque tour : sessions + évènements Pine du moment. Gratuit : préavis 15 min des grandes ouvertures seulement."""
     now = now or time.time()
-    evts, libres = [], []
+    vip_fr, vip_en, libres = [], [], []
     for ev in evenements_sessions(etat, now, derniers):
-        evts.append(({"*"}, texte_session(etat, ev), texte_session(etat, ev, True), ev["mk"]))
+        vip_fr.append(texte_session(etat, ev)); vip_en.append(texte_session(etat, ev, True))
         if (ev["code"], ev["evt"]) in SESSIONS_GRATUIT and ev["palier"] == 15:
             libres.append(ev)
     for m, r in derniers.items():
         for ev in sorted(evenements_pine(etat, m, r, etat.get(m, {}), now), key=lambda x: _PINE_PRIO[x["kind"]]):
-            evts.append(({m}, texte_pine(etat, ev), texte_pine(etat, ev, True)))
-    if evts and TOKEN:
-        diffuser_evenements(etat, chats, evts)
+            vip_fr.append(texte_pine(etat, ev)); vip_en.append(texte_pine(etat, ev, True))
+    if vip_fr and TOKEN:
+        diffuser_alerte(etat, chats, regrouper_alertes(vip_fr), regrouper_alertes(vip_en))
     if libres and TOKEN:
         for cid in destinataires_gratuits(etat):
             fr, en = [texte_session(etat, ev) for ev in libres], [texte_session(etat, ev, True) for ev in libres]
@@ -5946,67 +5603,27 @@ def marches_du_message(texte):
         ens.add("NASDAQ")
     return ens
 
-class Msg(str):
-    """Texte de message tagué avec le(s) marché(s) CONNUS à la création : le routage ne devine plus le marché en lisant le texte."""
-    marches = frozenset()
-
-def taguer(x, marche):
-    """Tague un message (ou un couple message + clavier) avec son marché."""
-    def un(t):
-        m = Msg(t); m.marches = frozenset(getattr(t, "marches", ())) | {marche}
-        return m
-    return (un(x[0]),) + tuple(x[1:]) if isinstance(x, tuple) else un(x)
-
-def marches_message(texte):
-    """Marchés d'un message : le tag posé à la création d'abord, sinon l'en-tête."""
-    tag = set(getattr(texte, "marches", ()) or ())
-    return (tag - {"*"}) if tag else marches_du_message(texte)           # tag {"*"} = message global (sessions) : aucun marché imposé
-
-def filtrer_texte_par_marches(texte, choisis):
-    """Version du message pour UNE personne : None si le message ne concerne aucun de ses marchés ; sinon le texte sans les lignes qui ne parlent
-    que de marchés qu'elle n'a pas cochés (ex. « réaction à la news » BTC + GOLD + NASDAQ → seulement ses marchés). Sans choix : tout."""
-    if not choisis or set(choisis) >= set(MARCHES):
-        return texte
-    choisis = set(choisis)
-    ens = marches_message(texte)
-    if ens and not (ens & choisis):
-        return None
-    gardees = []
-    for l in str(texte).split("\n"):
-        lm = marches_du_message(l)
-        if lm and not (lm & choisis):
-            continue
-        gardees.append(l)
-    return "\n".join(gardees)
-
-def ajuster_squeeze(lignes, choisis):
-    """Ligne « ⚡ BTC, GOLD comprimé : explosion possible » : ne garde que les marchés cochés (ligne supprimée s'il n'en reste aucun)."""
-    out = []
-    for l in lignes:
-        if l.startswith("⚡ ") and ("comprimé : explosion possible" in l or "squeezed: breakout possible" in l):
-            tete = l[2:].split(" comprimé")[0].split(" squeezed")[0]
-            noms = [x for x in tete.split(", ") if not choisis or x in choisis]
-            if not noms:
-                continue
-            l = "⚡ " + ", ".join(noms) + l[2 + len(tete):]
-        out.append(l)
-    return out
-
 def marche_du_message(texte):
     """Compatibilité : un marché, « BOTH » si plusieurs, None si aucun."""
     ens = marches_du_message(texte)
     return None if not ens else (next(iter(ens)) if len(ens) == 1 else "BOTH")
 
 def destinataires_message(etat, chats, texte):
-    # Le flux complet (news, analyses, toutes les positions) part dans la chaîne VIP (commune : tous les marchés).
-    # Chaque personne ne reçoit EN PRIVÉ que les marchés qu'elle a cochés (filtrage ligne par ligne au moment de l'envoi, voir filtrer_texte_par_marches).
-    ens = marches_message(texte)
+    # Le flux complet (news, analyses, toutes les positions) part UNIQUEMENT dans la chaîne VIP :
+    # plus de double notification chaîne + conversation privée. Le gratuit a son propre flux (envoyer_prospects).
+    ens = marches_du_message(texte)
     if etat.get("canal"):
+        # Chaîne VIP = tout. En plus, chaque VIP reçoit EN PRIVÉ les alertes des marchés qu'il a cochés
+        # (uniquement s'il a fait un choix dans 📡 Mes marchés : sinon rien en double).
         prives = [str(c) for c in chats if not vue_gratuite(etat, c) and str(c) != str(etat["canal"])
                   and etat.get("marches_par_chat", {}).get(str(c)) is not None and ens
                   and ens & marches_choisis(etat, c)]
         return sorted(set([str(etat["canal"])] + prives))
-    cibles = [str(c) for c in chats if not ens or bool(ens & marches_choisis(etat, c))]
+    cibles = [str(c) for c in chats if not ens or (len(ens) > 1 and ens <= marches_choisis(etat, c)) or
+              (len(ens) == 1 and marche_autorise(etat, c, next(iter(ens))))]
+    # La chaîne VIP reste commune et reçoit les deux marchés, sans préférence individuelle.
+    if etat.get("canal"):
+        cibles.append(str(etat["canal"]))
     return sorted(set(cibles))
 
 def destinataires(etat, chats):
@@ -6303,12 +5920,7 @@ def duree_txt(tr):
     f = lambda mn: f"≈ {round(mn / 60)} h" if mn >= 90 else f"≈ {round(mn)} min"
     long_ = t2 >= 8 * 60 or "Daily" in str(tr.get("n2", ""))
     return (f"⏱ Durée estimée : TP1 {f(t1)} • TP2 {f(t2)}\n"
-            + ("📅 Position de LONGUE DURÉE : elle peut durer plus d'une journée, garde ton SL en place la nuit\n" if long_ else ""))
-
-def resume_ordre(tr):
-    """Une ligne, tout en haut du message d'entrée : sens, entrée, SL, TP1, TP2 (l'essentiel avant le détail)."""
-    l = f"{SENS[tr['d']]} • Entrée {px(tr['e'])} • SL {px(tr['sl'])} • TP1 {px(tr['tp1'])}"
-    return l + (f" • TP2 {px(tr['tp2'])}" if tr.get("tp2") else "")
+            + ("📅 Position LONGUE : elle peut durer plus d'une journée, garde ton SL en place la nuit\n" if long_ else ""))
 
 def fmt_trade(m, tr, p=None):
     """Carte visuelle pour débutant : couleurs + échelle des prix dessinée de haut en bas."""
@@ -6327,12 +5939,12 @@ def fmt_trade(m, tr, p=None):
     echelle = "\n".join(f"{ic} {px(v)}  {nom}" for v, ic, nom in sorted(pts, key=lambda z: -z[0]))
     pct = lambda v: f"{(v - tr['e']) / tr['e'] * 100:+.2f} %".replace(".", ",")
     meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
+    # Niveaux dans l'ordre du GRAPHIQUE (du plus haut au plus bas) : SHORT = SL, entrée, TP1, TP2 ; LONG = TP2, TP1, entrée, SL
+    niv_plan = [(f"🛑 Stop Loss : {px(tr['sl'])}", tr["sl"]), (f"🟨 Entrée : {px(tr['e'])}", tr["e"]),
+                (f"💰 TP1 : {px(tr['tp1'])}", tr["tp1"]), (f"🏁 TP2 : {px(tr['tp2'])}", tr["tp2"])]
     resume = (f"📌 PLAN D'EXÉCUTION — {'🟩 LONG' if d == 1 else '🟥 SHORT'}\n"
-              f"🟨 Entrée : {px(tr['e'])}\n"
-              f"🛑 Stop Loss : {px(tr['sl'])}\n"
-              f"💰 TP1 : {px(tr['tp1'])}\n"
-              f"🏁 TP2 : {px(tr['tp2'])}\n"
-              f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n"
+              + "".join(l + "\n" for l, _ in sorted(niv_plan, key=lambda z: -z[1]))
+              + f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n"
               + (f"🏷 Type : {tr['strat']} — {DUREE_STRATEGIE[tr['strat']]}\n🧭 {CALE_STRATEGIE[tr['strat']]}\n" if tr.get("strat") in DUREE_STRATEGIE else ""))
     decision = (f"\n━━━━━━━━━━━━\n📍 RÉCAPITULATIF — {m}\n"
                 f"{'🟩 LONG ⬆️' if d == 1 else '🟥 SHORT ⬇️'}\n"
@@ -6833,32 +6445,16 @@ def niveaux_cles(out, m, r, cle):
     h_ = datetime.datetime.now(PARIS).hour
     if r.get("asie") and 8 <= h_ < 14:
         niv += [(r["asie"][0], "plus haut du range Asie"), (r["asie"][1], "plus bas du range Asie")]
-    fus = []                                   # niveaux confondus (ex. plus bas d'hier = plus bas de la semaine) : UN seul message
     for v, nom in niv:
-        if v is None:
-            continue
-        pareil = next((f for f in fus if ("haut" in f[1][0]) == ("haut" in nom) and abs(f[0] - v) <= 0.05 * a), None)
-        if pareil:
-            pareil[1].append(nom)
-        else:
-            fus.append([v, [nom]])
-    niv = [(v, noms[0], noms) for v, noms in fus]
-    for v, nom, noms in niv:
-        if len(noms) > 1:
-            nom_aff = " et ".join([noms[0]] + [n.replace("plus haut ", "").replace("plus bas ", "") for n in noms[1:]])
-        else:
-            nom_aff = nom
         haut = "haut" in nom
         casse = (x15["c"] > v + 0.05 * a and prev <= v) if haut else (x15["c"] < v - 0.05 * a and prev >= v)
-        if casse and not any(f"c{n}{jour}" in vu for n in noms):
-            for n in noms:
-                vu[f"c{n}{jour}"] = 1
-            out.append(f"💥 CASSURE — {ICONE.get(m, '')} {m}\n🕯 La bougie 15 min de {heure(x15['t'])} a CLÔTURÉ {'au-dessus du' if haut else 'sous le'} {nom_aff} ≈ {px(v)}\n"
+        if casse and f"c{nom}{jour}" not in vu:
+            vu[f"c{nom}{jour}"] = 1
+            out.append(f"💥 CASSURE — {ICONE.get(m, '')} {m}\n🕯 La bougie 15 min de {heure(x15['t'])} a CLÔTURÉ {'au-dessus du' if haut else 'sous le'} {nom} ≈ {px(v)}\n"
                        f"{'⬆️ Le mouvement peut continuer vers le haut' if haut else '⬇️ Le mouvement peut continuer vers le bas'}\n👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer")
-        elif abs(p - v) <= 0.3 * a and not any(f"a{n}{jour}" in vu or f"c{n}{jour}" in vu for n in noms):
-            for n in noms:
-                vu[f"a{n}{jour}"] = 1
-            out.append(f"🧲 NIVEAU CLÉ — {ICONE.get(m, '')} {m}\n📍 Le prix approche le {nom_aff} ≈ {px(v)}\n🕯 Vue 15 min : ça peut rebondir OU casser\n⏳ J'attends la clôture de la bougie 15 min")
+        elif abs(p - v) <= 0.3 * a and f"a{nom}{jour}" not in vu and f"c{nom}{jour}" not in vu:
+            vu[f"a{nom}{jour}"] = 1
+            out.append(f"🧲 NIVEAU CLÉ — {ICONE.get(m, '')} {m}\n📍 Le prix approche le {nom} ≈ {px(v)}\n🕯 Vue 15 min : ça peut rebondir OU casser\n⏳ J'attends la clôture de la bougie 15 min")
 
 def manipulation(out, m, r, cle):
     """MANIPULATION (chasse aux stops) vue 15 min : une grosse bougie pique AU-DELÀ du dernier plus bas / plus haut
@@ -6921,68 +6517,6 @@ def manip_txt(cle, d, r):
     mp = cle.get("manip")
     return "🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens\n" if mp and mp["d"] == d and r["t"] - mp["t"] <= 10800 else ""
 
-ANTI_REPETITION_S = 3 * 3600           # même message (mêmes informations) : une seule fois pendant 3 h
-# Messages jamais filtrés : exécution du trade (entrée, TP, stop, BE), news/annonces, fermeture, IA, dollar. Ils portent une information
-# d'évènement unique : les supprimer serait dangereux.
-ANTI_REPETITION_EXEMPTS = ("J'ENTRE MAINTENANT", "TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL", "STOP TOUCHÉ", "SORTIE AU STOP", "METS-TOI À BE",
-                           "sorti à BE", "OBJECTIFS REMIS", "ENTRÉE ENCORE POSSIBLE", "TROP TARD POUR ENTRER", "NEWS", "News passée", "FERMETURE",
-                           "FERMÉ", "Annonces importantes", "Aucune annonce", "L'IA ALIGN", "leçon de l'IA", "DOLLAR")
-
-_NOMBRE_RE = re.compile(r"(?<![\w.])\d{1,3}(?: \d{3})+(?:\.\d+)?(?!\d)|(?<![\w.])\d+(?:\.\d+)?")
-
-def _forme_message(texte):
-    """(modèle, nombres) : le modèle est le texte sans ses chiffres (heures comprises) ; les nombres servent à juger si l'information a changé."""
-    t = re.sub(r"\b\d{1,2}[:h]\d{2}\b", "HH:MM", texte)
-    nombres = [float(x.replace(" ", "")) for x in _NOMBRE_RE.findall(t)]
-    modele = re.sub(r"\s+", " ", _NOMBRE_RE.sub("#", t)).strip()
-    return modele, nombres
-
-def _memes_nombres(a, b):
-    """Mêmes informations : même nombre de valeurs, chacune à moins de 0,05 % (prix) ou 2 unités (petites valeurs : RSI, scores, compteurs)."""
-    if len(a) != len(b):
-        return False
-    return all(abs(x - y) <= (0.0005 * max(abs(x), abs(y)) if max(abs(x), abs(y)) >= 1000 else 2.0) for x, y in zip(a, b))
-
-def doublon_message(etat, texte, t=None, enregistrer=True):
-    """Filet commun d'anti-répétition (une seule boucle d'envoi). True = même message, mêmes informations, déjà envoyé il y a moins de ANTI_REPETITION_S.
-    Un message dont les chiffres ont vraiment changé (nouvelle zone, nouveau prix) passe toujours : c'est une information nouvelle."""
-    if any(k in texte for k in ANTI_REPETITION_EXEMPTS):
-        return False
-    t = time.time() if t is None else t
-    mem = etat.setdefault("anti_rep", {})
-    for k in [k for k, v in mem.items() if t - v["t"] > 2 * ANTI_REPETITION_S]:
-        mem.pop(k, None)
-    modele, nombres = _forme_message(texte)
-    cle = hashlib.sha1(modele.encode()).hexdigest()[:16]
-    vu = mem.get(cle)
-    if vu and t - vu["t"] <= ANTI_REPETITION_S and _memes_nombres(vu["n"], nombres):
-        return True
-    if enregistrer:
-        mem[cle] = {"t": t, "n": nombres}
-    return False
-
-EXTREME_REARMEMENT_S = 3 * 3600      # l'alerte « zone extrême » ne se réarme qu'après 3 h sans situation extrême
-
-def texte_zone_extreme(m, r, d):
-    """Message unique « zone extrême Daily/Weekly » : reprend TOUTES les informations des deux anciens messages (alignement 4h + 1h, zones Daily et Weekly,
-    refus de suivre la tendance, risque, ce que j'attends) pour ne pas dire deux fois la même chose."""
-    sens = "LONG" if d == 1 else "SHORT"
-    return (f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n"
-            f"🧭 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS le prix est déjà au bout de sa zone.\n"
-            f"⛔ Je ne poursuis pas le {sens} ici : risque de {'repli' if d == 1 else 'rebond'}.\n"
-            f"⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m, ou un meilleur prix.")
-
-def alerte_extreme_due(cle, d, t):
-    """Alerte « zone extrême Daily/Weekly » : UNE seule fois par situation. La situation est identifiée par le sens bloqué seul
-    (le libellé de zone oscille autour des seuils et ne doit pas relancer le message). Elle se réarme si le sens change
-    ou si la situation a disparu pendant plus de EXTREME_REARMEMENT_S."""
-    vu, sig = cle.get("extreme_vu_t", 0), cle.get("extreme_sig")
-    cle["extreme_vu_t"] = t
-    if sig == str(d) and t - vu <= EXTREME_REARMEMENT_S:
-        return False
-    cle["extreme_sig"] = str(d); cle["extreme_warn_t"] = t
-    return True
-
 def agent(m, r, cle, ferme):
     """Agent : tendance 4h + confirmation 1h → déclenchement sur bougie 5m clôturée."""
     out = []
@@ -7014,9 +6548,7 @@ def agent(m, r, cle, ferme):
         return out
     if not tr:
         if not d:
-            # Message conservé dans tous les cas où il partait avant ; seule l'oscillation 1h/4h est limitée (une fois par heure)
-            if cle.get("aligne") and r["t"] - cle.get("perdue_t", 0) >= 3600:
-                cle["perdue_t"] = r["t"]
+            if cle.get("aligne"):
                 out.append(f"⚪ {m} : confirmation 1h / tendance 4h perdue. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
@@ -7025,8 +6557,11 @@ def agent(m, r, cle, ferme):
         if bloque_dw(r, d, p):
             cle["prep"] = False
             cle.pop("ordre", None)
-            if alerte_extreme_due(cle, d, r["t"]):
-                out.append(texte_zone_extreme(m, r, d))
+            sig_ext = f"{d}:{zone_txt(r['posW'])}"
+            # Une seule alerte par situation : on ne répète que si le sens / la zone Weekly change, ou après 2 h
+            if sig_ext != cle.get("extreme_sig") or r["t"] - cle.get("extreme_warn_t", 0) >= 7200:
+                cle["extreme_warn_t"] = r["t"]; cle["extreme_sig"] = sig_ext
+                out.append(f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')}.\n⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
             cle["aligne"] = d
             return out
         # ── Entrée sur CASSURE confirmée (clôture 5 min au-delà du niveau) ──
@@ -7042,7 +6577,7 @@ def agent(m, r, cle, ferme):
                 out.append(f"🧠 {ICONE.get(m, '')} {m} : cassure vue, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
                 return out
             cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle["parti"] = False; cle.pop("ordre", None)
-            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n👉 {resume_ordre(tr)}\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}"
+            out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}   💥 CASSURE CONFIRMÉE\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}"
                         f"🕯 La bougie 5 min a CLÔTURÉ {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(pc['niveau'])}\n"
                         f"🛑 SL un peu {'SOUS' if d == 1 else 'AU-DESSUS de'} la mèche de cette bougie\n\n"
                         f"{fmt_trade(m, tr, p)}{ferme}\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", boutons(m)))
@@ -7094,8 +6629,8 @@ def agent(m, r, cle, ferme):
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
-                if alerte_extreme_due(cle, d, r["t"]):          # même message et même anti-répétition que « zone extrême » (plus de double discours)
-                    out.append(texte_zone_extreme(m, r, d))
+                out.append(f"🧭 {m} : 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
+                           f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
             else:
                 cle["ordre"] = o
                 out.append((f"🔔 JE PRÉPARE UNE POSITION — {ICONE.get(m, '')} {m}\n{SENS[d]}   {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n{qualite(o)}"
@@ -7229,7 +6764,7 @@ def agent(m, r, cle, ferme):
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
                 pct_conf = round(100 * score / len(checks))
-                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n👉 {resume_ordre(tr)}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confluence : {pct_conf}% ({score}/{len(checks)} critères, pas une probabilité de gain)\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", boutons(m)))
+                out.append((f"🟢🟢🟢 J'ENTRE MAINTENANT — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(tr)}{manip_txt(cle, d, r)}{avis_memoire(tr['profil'])}🎯 Confluence : {pct_conf}% ({score}/{len(checks)} critères, pas une probabilité de gain)\n{liste}\n\n{fmt_trade(m, tr, p)}{ferme}\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
@@ -7589,10 +7124,10 @@ def un_tour(etat, chats):
             print("macro analyse", nom_marche, ex)
             r["macro_data"] = {"disponible": False, "statut": "DONNÉES MACRO INDISPONIBLES"}
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
-        nouveaux = [taguer(x, nom_marche) for x in agent(nom_marche, r, cle, ferme)]
+        nouveaux = agent(nom_marche, r, cle, ferme)
         envois += nouveaux
         if TOKEN:
-            envois += [taguer(x, nom_marche) for x in commentaires_ia_temps_reel(etat, nom_marche, r, cle, nouveaux)]
+            envois += commentaires_ia_temps_reel(etat, nom_marche, r, cle, nouveaux)
         recevoir_updates_telegram(etat, chats, demandes)
         if SHUTDOWN_REQUESTED.is_set():
             return
@@ -7603,7 +7138,7 @@ def un_tour(etat, chats):
                     dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
                                                                     "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}), premium=True)
             if t_:
-                envois.append(taguer(f"🧠 L'IA ALIGN sur cette entrée — {ICONE.get(nom_marche, '')} {nom_marche}\n{compacter_ia(t_)}", nom_marche))
+                envois.append(f"🧠 L'IA ALIGN sur cette entrée — {ICONE.get(nom_marche, '')} {nom_marche}\n{compacter_ia(t_)}")
             entrer_inscrits(etat, nom_marche, cle["trade"], chats)
         if TOKEN:
             coach(etat, nom_marche, r, cle)
@@ -7629,11 +7164,14 @@ def un_tour(etat, chats):
                 t_ = ia(etat, "La position est terminée. Tire UNE leçon simple et utile pour la prochaine fois (pourquoi TP ou pourquoi SL). FORMAT : 4 lignes courtes maximum, une info par ligne, chaque ligne commence par un emoji, 12 mots maximum par ligne, aucun paragraphe ni conclusion.",
                         {"marché": nom_marche, "résultat %": round(gain, 2), "motif": motif, "profil": pr, "bilan de ce type": f"{w_}/{n_}"})
                 if t_:
-                    envois.append(taguer(f"🧠 La leçon de l'IA ALIGN\n{compacter_ia(t_)}", nom_marche))
+                    envois.append(f"🧠 La leçon de l'IA ALIGN\n{compacter_ia(t_)}")
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         synchroniser_veille_auto(etat, nom_marche, r)
         notifier_clotures(etat, nom_marche, r, cle)
-        # Veille « je surveille » marché par marché remplacée par le RADAR unique (radar_tick, après la boucle des marchés).
+        try:
+            battement_coeur(etat, nom_marche, r, cle)
+        except Exception as ex:
+            print("battement cœur", nom_marche, ex)
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
                                  f"📍 Prix {zone_txt(r['posD'])} Daily\n🙅 Prudence sur les 🟩 LONG\n👀 Un 🟥 SHORT ⬇️ peut se préparer"),
@@ -7648,18 +7186,13 @@ def un_tour(etat, chats):
             if mq in (None, nom_marche) and (index, nom_marche) not in demandes_servies:
                 envoyer_analyse_a(etat, cid, nom_marche, r, cle)
                 demandes_servies.add((index, nom_marche))
-        print(texte_etat(nom_marche, r, vip=False), "\n")      # journal du run PUBLIC (dépôt public) : jamais les niveaux VIP
+        print(texte_etat(nom_marche, r), "\n")
 
     try:
         if TOKEN:
             alertes_courtes(etat, chats, derniers)
     except Exception as ex:
         print("alertes courtes", type(ex).__name__, ex)
-    try:
-        if TOKEN:
-            radar_tick(etat, chats, derniers)      # remplace « OÙ TE CONCENTRER » + la veille : UN message édité sur place
-    except Exception as ex:
-        print("radar", type(ex).__name__, ex)
     try:
         publier_live(etat, derniers)
     except Exception as ex:
@@ -7692,25 +7225,16 @@ def un_tour(etat, chats):
     if TOKEN:
         for t in envois:
             texte, clavier = (t if isinstance(t, tuple) else (t, None))
-            if doublon_message(etat, texte):
-                print("anti-répétition : message identique ignoré —", texte.splitlines()[0][:80])
-                continue
             for cid in destinataires_message(etat, chats, texte):
-                if cid != str(etat.get("canal") or "") and etat.get("marches_par_chat", {}).get(str(cid)) is not None:
-                    texte_cid = filtrer_texte_par_marches(texte, marches_choisis(etat, cid))
-                    if not texte_cid:
-                        continue                                        # ne concerne aucun de ses marchés
-                else:
-                    texte_cid = texte
                 try:
                     if cid == etat.get("canal"):
                         # Chaîne VIP : pas de clavier possible dans une chaîne → boutons sous le message (ils ouvrent le bot)
                         txt = texte.replace("\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", "")
                         telegram("sendMessage", chat_id=cid, text=txt, reply_markup=boutons_canal(etat, texte))
                     elif clavier:
-                        telegram("sendMessage", chat_id=cid, text=texte_cid, reply_markup=clavier)
+                        telegram("sendMessage", chat_id=cid, text=texte, reply_markup=clavier)
                     else:
-                        telegram("sendMessage", chat_id=cid, text=texte_cid)
+                        telegram("sendMessage", chat_id=cid, text=texte)
                 except Exception as ex:
                     print("envoi", cid, ex)
                     if "403" in str(ex) and cid not in proprio(etat):
@@ -7794,12 +7318,9 @@ def _sauver_etat_sous_verrou(etat, chats=None):
         os.fsync(f.fileno())
     os.replace(temporaire, ETAT_FICHIER)
 
-DEMARRE_T = time.time()          # heure de démarrage du worker (commande /statut)
-
 def sauver_etat(etat, chats=None):
     """Empêche le worker du chronomètre de modifier l'état pendant l'écriture atomique."""
     with CHRONO_LOCK:
-        etat["sauve_t"] = int(time.time())          # lu par /statut : la mémoire est-elle bien écrite ?
         return _sauver_etat_sous_verrou(etat, chats)
 
 
