@@ -62,6 +62,29 @@ class AlignementRequisTest(unittest.TestCase):
         self.assertTrue(ab.texte_radar(p, d, vip=True, now=time.time()).startswith("🎯 FOCUS : 🥇 GOLD — prépare-toi"))
 
 
+class EntreeEtSlMemeSommetTest(unittest.TestCase):
+    def test_vente_entree_et_sl_sur_le_meme_dernier_plus_haut(self):
+        """Cas réel GOLD 12/11 ~16:55 : avant, zone 3899 → 3960 mais SL 3976 (77 pts). Maintenant entrée ET SL sur le dernier plus haut M5."""
+        b5 = [{"t": i * 300, "o": 3878, "h": (3870 + i * 0.3) if i < 15 else (3890 - i * 0.3), "l": 3870 - i * 0.1, "c": 3878} for i in range(30)]
+        b5[15] = dict(b5[15], h=3905.8)                 # dernier plus haut M5 (pivot 5-5), dans la zone, au-dessus du prix
+        r = {"m1": [{"c": 3867.0}], "atr": 11.0, "atr3": 4.0, "b5": b5, "b15": [],
+             "plan_fige": {"d": -1, "e": 3960.75, "sl": 3976.56, "tp1": 3887.0}}
+        es = ab.radar_entree_sl(r, -1, 3899.59, 3960.75)
+        self.assertAlmostEqual(es["e"], 3905.8)
+        self.assertGreater(es["sl"], es["e"])
+        self.assertLess(es["sl"] - es["e"], 10)           # SL juste derrière ce sommet, plus 77 points
+        self.assertIn("dernier plus haut M5", es["src"])
+
+    def test_sommet_casse_ignore_et_repli_sur_le_plan(self):
+        b5 = [{"t": i * 300, "o": 3878, "h": (3870 + i * 0.3) if i < 15 else (3890 - i * 0.3), "l": 3870 - i * 0.1, "c": 3878} for i in range(30)]
+        b5[15] = dict(b5[15], h=3905.8)
+        b5[25] = dict(b5[25], h=3920, c=3910)           # clôture au-dessus du sommet : niveau cassé
+        r = {"m1": [{"c": 3867.0}], "atr": 11.0, "atr3": 4.0, "b5": b5, "b15": [],
+             "plan_fige": {"d": -1, "e": 3960.75, "sl": 3976.56, "tp1": 3887.0}}
+        es = ab.radar_entree_sl(r, -1, 3899.59, 3960.75)
+        self.assertNotEqual(es["e"], 3905.8)
+
+
 class RadarTickTest(unittest.TestCase):
     def setUp(self):
         self.appels = []

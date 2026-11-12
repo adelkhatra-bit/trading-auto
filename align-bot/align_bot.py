@@ -5423,6 +5423,40 @@ def _radar_ordre(props, derniers):
     """Marchés prêts (proches + alignés) d'abord, puis l'ordre de proximité habituel."""
     return sorted(props, key=lambda p: 0 if _radar_pret(p, derniers) else 1)
 
+def radar_entree_sl(r, d, za, zb):
+    """Entrée et SL proposés par le RADAR (demande d'Adel, 12/11) : l'entrée ET le SL visent le MÊME dernier plus haut (vente) / plus bas (achat),
+    jamais l'entrée en bas de zone avec le SL derrière un autre sommet lointain. Ordre : entrée sniper validée → dernier plus haut M5 dans la zone
+    → dernier plus haut M15 dans la zone → sinon plan de l'indicateur. SL = un tout petit peu derrière ce niveau (marge sniper)."""
+    sn = r.get("sniper")
+    if isinstance(sn, dict) and sn.get("d") == d:
+        return dict(e=sn["e"], sl=sn["sl"], tp1=sn["tp1"], src=sn.get("src", "sniper"))
+    prix = (r.get("m1") or [{}])[-1].get("c")
+    a15 = float(r.get("atr") or 0)
+    a3 = float(r.get("atr3") or r.get("atr5") or a15 or 0)
+    plan = r.get("plan_fige") or {}
+    if d not in (1, -1):
+        return None
+    for nom, bars in ((("M5", (r.get("b5") or [])[:-1]), ("M15", (r.get("b15") or [])[:-1])) if prix is not None and a15 > 0 else ()):
+        if len(bars) < 12:
+            continue
+        piv = niveaux_ut(bars)[0 if d == -1 else 1]
+        if not piv:
+            continue
+        L, i = piv
+        if any((y["c"] - L) * (-d) > 0 for y in bars[i + 1:]):
+            continue                                   # clôture au-delà : niveau cassé, plus valable
+        if (L - prix) * (-d) < 0 or not (za - 0.5 * a15 <= L <= zb + 0.5 * a15):
+            continue                                   # pas devant le prix, ou hors de la zone d'entrée
+        sl = L - d * SNIPER_MARGE_ATR3 * a3
+        mini = max(a3, L * SL_RISQUE_MIN_PCT)
+        if abs(L - sl) < mini:
+            sl = L - d * mini
+        tp1 = plan.get("tp1") if plan.get("d") == d and plan.get("tp1") is not None and d * (plan["tp1"] - L) >= GAIN_MIN * abs(L - sl) else L + d * GAIN_MIN * abs(L - sl)
+        return dict(e=L, sl=sl, tp1=tp1, src=("dernier plus haut " if d == -1 else "dernier plus bas ") + nom)
+    if plan.get("d") == d and plan.get("sl") is not None:
+        return dict(e=plan["e"], sl=plan["sl"], tp1=plan["tp1"], src="plan de l'indicateur")
+    return None
+
 def texte_radar(props, derniers, vip=True, anglais=False, now=None):
     """Texte du RADAR, construit uniquement à partir des vraies données (classer_marches + plan figé de l'indicateur).
     Gratuit : marché favori, sens et état — jamais l'entrée, le SL ni le TP (réservés aux VIP)."""
@@ -5445,11 +5479,12 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None):
         prof = {"SWING": "SWING", "DAY": "INTRADAY", "SCALPING": "SCALP"}.get(r.get("strat") or "", "")
         l.append(("📉 " if d == -1 else "📈 ") + (f"Direction : {SENS_COURT.get(d, '?')}" if anglais else f"Sens : {SENS_COURT.get(d, '?')}") + (f" · {prof}" if prof else ""))
         if vip:
-            plan = r.get("plan_fige") or {}
             l.append((f"📍 Entry zone : {px(t['za'])} → {px(t['zb'])}" if anglais else f"📍 Zone d'entrée : {px(t['za'])} → {px(t['zb'])}"))
-            if plan.get("d") == d and plan.get("sl") is not None and plan.get("tp1") is not None:
-                l.append(f"🛑 SL : {px(plan['sl'])}")
-                l.append(f"🏁 TP1 : {px(plan['tp1'])}")
+            es = radar_entree_sl(r, d, t["za"], t["zb"])
+            if es:
+                l.append((f"🎯 Entry : {px(es['e'])}" if anglais else f"🎯 Entrée : {px(es['e'])}") + f" ({es['src']})")
+                l.append(f"🛑 SL : {px(es['sl'])} " + ("(just behind)" if anglais else "(juste derrière)") + f" · {px(abs(es['e'] - es['sl']))} pts")
+                l.append(f"🏁 TP1 : {px(es['tp1'])}")
             if t["rang"] == 0:
                 l.append("🟨 Price is IN the zone" if anglais else "🟨 Le prix est DANS la zone")
             else:
