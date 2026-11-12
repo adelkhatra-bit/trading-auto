@@ -2483,9 +2483,9 @@ def menu_canal_vip(etat):
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 _GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 IA_FOURNISSEURS = [
-    # 1) Gemini (niveau gratuit, API native). « Gemini 2.5 » = modèle gratuit avec recherche Google gratuite (500/jour) : seul à faire du grounding.
+    # 1) Gemini (niveau gratuit, API native). « Gemini 3.8 » = modèle recommandé par Google (gemini-2.5-flash est refusé aux nouveaux comptes, 404 constaté) : essayé en premier pour la recherche Google ; si le grounding gratuit est refusé, repli silencieux sur la chaîne.
     ("Gemini", GEMINI_BASE, os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash", _GEMINI_KEY, True),
-    ("Gemini 2.5", GEMINI_BASE, "gemini-2.5-flash", _GEMINI_KEY, True),
+    ("Gemini 3.8", GEMINI_BASE, "gemini-3.8-flash", _GEMINI_KEY, True),
     # 2) Groq (plan gratuit, ~8K tokens/min : prompts courts + intervalle minimal)
     ("Groq", "https://api.groq.com/openai/v1/chat/completions", os.environ.get("GROQ_MODEL") or "openai/gpt-oss-120b", os.environ.get("GROQ_API_KEY", ""), True),
     # 3) IA sans clé
@@ -2499,7 +2499,7 @@ IA_FOURNISSEURS = [
     ("Anthropic", "https://api.anthropic.com/v1/messages", os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5", os.environ.get("ANTHROPIC_API_KEY", ""), True),
 ]
 # Limites gratuites : appels par jour et intervalle minimal entre deux appels (secondes)
-IA_PLAFOND_JOUR = {"Gemini": int(os.environ.get("GEMINI_MAX_JOUR") or "250"), "Gemini 2.5": int(os.environ.get("GEMINI_MAX_JOUR") or "250"),
+IA_PLAFOND_JOUR = {"Gemini": int(os.environ.get("GEMINI_MAX_JOUR") or "250"), "Gemini 3.8": int(os.environ.get("GEMINI_MAX_JOUR") or "250"),
                    "Groq": int(os.environ.get("GROQ_MAX_JOUR") or "500")}
 IA_INTERVALLE_MIN = {"Groq": 20}
 IA_RESUME_CAR = {"Groq": 3500, "Anthropic": 2500}         # entrée courte : Groq (8K tokens/min), Claude (coût)
@@ -2643,8 +2643,8 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False, recher
     par_jour = etat.setdefault("ia_fournisseur_jour", {})
     claude_t = etat.setdefault("ia_claude_t", {})
     ordre = list(IA_FOURNISSEURS)
-    if recherche:                                       # la recherche Google gratuite n'existe que sur Gemini 2.5 : on l'essaie d'abord
-        ordre.sort(key=lambda f: 0 if f[0] == "Gemini 2.5" else 1)
+    if recherche:                                       # la recherche Google gratuite n'existe que sur Gemini 3.8 : on l'essaie d'abord
+        ordre.sort(key=lambda f: 0 if f[0] == "Gemini 3.8" else 1)
     for nom, url, modele, cle, besoin_cle in ordre:
         if besoin_cle and not cle:
             continue
@@ -2660,7 +2660,7 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False, recher
             continue                                    # IA en panne récemment : on passe à la suivante
         if maintenant - etat.setdefault("ia_dernier_appel", {}).get(nom, 0) < IA_INTERVALLE_MIN.get(nom, 0):
             continue                                    # limite par minute du plan gratuit
-        avec_recherche = bool(recherche and nom == "Gemini 2.5" and compteur.get(jour + "_recherche", 0) < GEMINI_RECHERCHE_MAX_JOUR)
+        avec_recherche = bool(recherche and nom == "Gemini 3.8" and compteur.get(jour + "_recherche", 0) < GEMINI_RECHERCHE_MAX_JOUR)
         limite = IA_RESUME_CAR.get(nom)
         contexte = resumer_donnees(donnees, limite) if limite else json.dumps(donnees, ensure_ascii=False)
         messages = [{"role": "system", "content": IA_REGLES},
