@@ -5259,7 +5259,7 @@ def radar_entree_sl(r, d, za, zb):
         return dict(e=plan["e"], sl=plan["sl"], tp1=plan["tp1"], src="plan de l'indicateur")
     return None
 
-def texte_radar(props, derniers, vip=True, anglais=False, now=None):
+def texte_radar(props, derniers, vip=True, anglais=False, now=None, intro=None):
     """Texte du RADAR, construit uniquement à partir des vraies données (classer_marches + plan figé de l'indicateur).
     Gratuit : marché favori, sens et état — jamais l'entrée, le SL ni le TP (réservés aux VIP)."""
     if not props:
@@ -5276,6 +5276,8 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None):
                  ("close, alignment not reached yet" if anglais else "proche, alignement pas encore atteint") if t["rang"] <= RADAR_ALERTE_RANG else \
                  ("approaching" if anglais else "en approche") if t["rang"] == 2 else ("least far, nothing close" if anglais else "le moins loin, rien de proche")
         l.append(f"🎯 FOCUS : {ic(t)} {t['m']} — {etat_t}")
+        if intro and vip:
+            l += [x for x in str(intro).split("\n") if x.strip()][:3]      # phrases de l'IA (jamais les mêmes), niveaux toujours calculés par le bot
         r = (derniers or {}).get(t["m"]) or {}
         d = t.get("d")
         prof = {"SWING": "SWING", "DAY": "INTRADAY", "SCALPING": "SCALP"}.get(r.get("strat") or "", "")
@@ -5342,6 +5344,31 @@ def _radar_supprimer(cid, mid):
     except Exception:
         pass                                      # déjà supprimé ou trop ancien : sans gravité
 
+IA_RADAR = os.environ.get("IA_RADAR", "1") == "1"   # coupe-circuit : 0 = RADAR sans IA
+RADAR_IA_CACHE_SEC = 900      # une seule rédaction IA par marché et par niveau visé (partagée entre abonnés) : coût minimal
+
+def intro_ia_radar(etat, m, r, cle, p, es):
+    """L'IA rédige l'annonce « prépare-toi » (3 lignes, formulation toujours différente) UNIQUEMENT au moment où un marché devient prêt.
+    Les chiffres viennent du bot (ia() refuse tout prix absent des données) ; sens contraire à l'indicateur = commentaire jeté."""
+    try:
+        unite = HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
+        data = dict(donnees_ia(m, r, cle), radar={
+            "sens": "LONG" if p.get("d") == 1 else "SHORT", "entrée visée": round(es["e"], 2) if es else None,
+            "SL": round(es["sl"], 2) if es else None, "TP1": round(es["tp1"], 2) if es else None,
+            "niveau": (es or {}).get("src"), "unité à regarder": unite, "ce que j'attends": p.get("action")})
+        cle_c = f"radar:{m}:{round((es or {}).get('e') or p.get('za') or 0, 1)}"
+        avis = ia(etat, "Un marché approche de son point d'entrée. Écris EXACTEMENT 3 lignes courtes, chacune commence par un emoji, 12 mots max : "
+                        "1) dis de se préparer sur ce marché, 2) le niveau visé (entrée) et le sens, 3) l'unité de temps à regarder et ce qu'on attend. "
+                        "Utilise uniquement les chiffres fournis, n'invente aucun niveau, varie la formulation à chaque fois. "
+                        "Le sens est UNIQUEMENT celui fourni dans radar.sens (il vient de l'indicateur) : ne le change jamais. " + IA_TON_JEUNE,
+                  data, cle_cache=cle_c, duree=RADAR_IA_CACHE_SEC, premium=True)
+    except Exception as ex:
+        print("ia radar", m, type(ex).__name__, ex)
+        return None
+    if not avis or sens_ia_contradictoire(avis, p.get("d")):
+        return None
+    return compacter_ia(avis)
+
 def radar_tick(etat, chats, derniers, now=None):
     """Un RADAR par personne : édité sur place ; nouveau message (son) seulement quand un marché devient « prépare-toi »
     ou quand le marché en tête change (l'ancien radar est alors supprimé : jamais deux radars dans la conversation)."""
@@ -5352,9 +5379,6 @@ def radar_tick(etat, chats, derniers, now=None):
             anglais = cid in LANG_EN
             vip = bool(autorise(etat, cid, cid))
             props = classer_marches(derniers, etat, marches_choisis(etat, cid), now)
-            txt = texte_radar(props, derniers, vip, anglais, now)
-            if not txt:
-                continue
             mem = mem_all.setdefault(cid, {})
             actifs = [p for p in _radar_ordre(props, derniers) if 0 <= p["rang"] <= 3]
             focus = actifs[0]["m"] if actifs else ""
@@ -5362,6 +5386,16 @@ def radar_tick(etat, chats, derniers, now=None):
             rang = (actifs[0]["rang"] if pret else max(actifs[0]["rang"], RADAR_ALERTE_RANG + 1)) if actifs else 9
             alerte = (bool(focus) and pret and now - float(mem.get("t_alerte", 0)) >= RADAR_ALERTE_MIN_SEC
                       and (mem.get("focus") != focus or int(mem.get("rang", 9)) > RADAR_ALERTE_RANG))
+            if not (pret and mem.get("ia_focus") == focus):
+                mem.pop("ia", None); mem.pop("ia_focus", None)          # plus prêt ou autre marché : les phrases IA ne valent plus
+            if alerte and vip and not anglais and IA_RADAR:
+                t0 = actifs[0]; r0 = (derniers or {}).get(focus) or {}
+                intro = intro_ia_radar(etat, focus, r0, etat.get(focus, {}), t0, radar_entree_sl(r0, t0.get("d"), t0["za"], t0["zb"]))
+                if intro:
+                    mem.update(ia=intro, ia_focus=focus)
+            txt = texte_radar(props, derniers, vip, anglais, now, intro=mem.get("ia"))
+            if not txt:
+                continue
             change_tete = mem.get("mid") and focus != mem.get("focus", "") and now - float(mem.get("t", 0)) >= RADAR_REFRESH_SEC
             if alerte or change_tete or not mem.get("mid"):
                 res = _envoi_sur(cid, text=txt, **({} if alerte else {"disable_notification": "true"}))
