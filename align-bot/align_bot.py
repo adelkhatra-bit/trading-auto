@@ -761,21 +761,25 @@ def _rejet(bars, d, niveau, a):
     return None
 
 def entree_sniper(r):
+    return _sniper(r)[0]
+
+def _sniper(r):
+    """(proposition ou None, raison du refus) : la raison sert au diagnostic du rejeu, jamais à Telegram."""
     d = r.get("dirPlan") or 0
     dirs, a3, a15, a5, zp = r.get("dirs") or [], r.get("atr3"), r.get("atr"), r.get("atr5") or r.get("atr"), r.get("zone_pine")
     m1, b3 = r.get("m1") or [], r.get("b3") or []
     b5, b15 = (r.get("b5") or [])[:-1], (r.get("b15") or [])[:-1]          # la dernière bougie M5 / M15 est en formation
     if d not in (1, -1) or len(dirs) < 11 or not a3 or not a15 or not zp or len(m1) < 40 or len(b3) < 12 or len(b5) < 8 or len(b15) < 5:
-        return None
+        return None, f"DONNEES/PLAN absents (dirPlan={d}, zone={'oui' if zp else 'non'}, b3={len(b3)}, b5={len(b5)}, b15={len(b15)})"
     if (r["bull"] if d == 1 else r["bear"]) < MIN_ALIGN or r.get("sens") != d or dirs[9] == -d or dirs[7] == -d:
-        return None                                         # contexte HTF non aligné, sens flou ou contre la 4 h / 1 h
+        return None, f"CONTEXTE_HTF refusé (UT alignées {(r['bull'] if d == 1 else r['bear'])}/11, sens={r.get('sens')}, 4h={dirs[9]}, 1h={dirs[7]})"
     prix = m1[-1]["c"]
     if not (zp["za"] - 0.5 * a15 <= prix <= zp["zb"] + 0.5 * a15):
-        return None                                         # le prix n'est pas (encore) dans la zone d'entrée du plan
+        return None, f"HORS_ZONE : prix {prix:.2f} hors zone du plan {zp['za']:.2f}–{zp['zb']:.2f}"
     m1c = m1[:-1]
     a1 = atr(m1c, 14)[-1] if len(m1c) >= 16 else None
     if not a1:
-        return None
+        return None, "ATR_M1 indisponible"
     uts = [("M1", m1c, a1), ("M3", b3, a3), ("M5", b5, a5), ("M15", b15, a15)]
     niv, structure = [], niveaux_structure_ut(dict(r, m1=m1))
     for nom, bars, a in uts:
@@ -793,11 +797,11 @@ def entree_sniper(r):
             choisi = (nom, L, a)
             break
     if not choisi:
-        return None
+        return None, "CASCADE : aucun dernier plus haut/bas valide sur M1/M3/M5/M15 (cascade)"
     ut, L, a_ut = choisi
     rej = {nom: _rejet(bars, d, L, a) for nom, _, bars, a in niv if nom in ("M1", "M3", "M5")}
     if rej["M1"] is None or rej["M3"] is None:
-        return None                                         # rejet confirmé exigé sur M1 ET M3
+        return None, f"REJET : pas de rejet confirmé sous {L:.2f} ({ut}) : M1={'oui' if rej['M1'] else 'non'} M3={'oui' if rej['M3'] else 'non'}"
     e = rej["M1"]["c"]
     meche = max([y["h"] if d == -1 else -y["l"] for y in m1c[-12:] + list(b3[-4:]) if abs((y["h"] if d == -1 else y["l"]) - L) <= 3 * a3] + [L if d == -1 else -L])
     meche = meche if d == -1 else -meche
@@ -807,7 +811,7 @@ def entree_sniper(r):
         sl = e - d * mini
     risque = abs(e - sl)
     if (prix - sl) * d <= 0:
-        return None                                         # SL déjà franchi
+        return None, "SL_FRANCHI"
     plan = r.get("plan") or {}
     tp_plan = plan.get("tp1") if plan.get("d", d) == d and plan.get("tp1") is not None and d * (plan["tp1"] - e) > 0 else None
     cibles = sorted([(v, n) for v, n in (r.get("niveaux") or []) if n in ("15m", "1h", "4h", "Daily") and d * (v - e) >= risque * GAIN_MIN and (tp_plan is None or d * (tp_plan - v) >= 0)],
@@ -815,9 +819,9 @@ def entree_sniper(r):
     tp1, n1 = cibles[0] if cibles else (e + d * risque * GAIN_MIN, f"projection {GAIN_MIN} x le risque")      # TP1 intermédiaire réaliste
     tp_final = tp_plan if tp_plan is not None else (cibles[1][0] if len(cibles) > 1 else e + d * risque * (GAIN_MIN + 2))
     za, zb = sorted((e, L))
-    return dict(d=d, ut=ut, e=e, za=za, zb=zb, sl=sl, tp1=tp1, n1=n1, tp2=tp_final, n2=("plan " + (r.get("strat") or "")).strip() if tp_plan is not None else "projection",
+    return (dict(d=d, ut=ut, e=e, za=za, zb=zb, sl=sl, tp1=tp1, n1=n1, tp2=tp_final, n2=("plan " + (r.get("strat") or "")).strip() if tp_plan is not None else "projection",
                 rr=abs(tp1 - e) / risque, rr_plan=abs(tp_final - e) / risque, niveau=L, src="dernier " + ("plus haut " if d == -1 else "plus bas ") + ut, meche=meche,
-                rejets=[n for n, x in rej.items() if x is not None], marche=True, t=m1[-1]["t"])
+                rejets=[n for n, x in rej.items() if x is not None], marche=True, t=m1[-1]["t"]), "")
 
 def simuler_sniper(sn, m1_futur, duree_min=240):
     """Que serait-il arrivé ? Entrée « au rejet » (marché) rempli à l'ouverture de la bougie suivante ; sinon ordre limite touché ; SL prioritaire si SL et TP1 dans la même bougie."""
@@ -2753,6 +2757,8 @@ def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
     vus = etat.setdefault("ia_moments", {})
     for t in nouveaux or []:
         texte = t[0] if isinstance(t, tuple) else t
+        if doublon_message(etat, str(texte), enregistrer=False):      # message principal supprimé (doublon) : pas de commentaire IA orphelin
+            continue
         tete = str(texte).split("\n")[0].upper()
         for nom, cles, delai, consigne in MOMENTS_IA:
             if not any(k in tete for k in cles):
@@ -6379,6 +6385,68 @@ def manip_txt(cle, d, r):
     mp = cle.get("manip")
     return "🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens\n" if mp and mp["d"] == d and r["t"] - mp["t"] <= 10800 else ""
 
+ANTI_REPETITION_S = 3 * 3600           # même message (mêmes informations) : une seule fois pendant 3 h
+# Messages jamais filtrés : exécution du trade (entrée, TP, stop, BE), news/annonces, fermeture, IA, dollar. Ils portent une information
+# d'évènement unique : les supprimer serait dangereux.
+ANTI_REPETITION_EXEMPTS = ("J'ENTRE MAINTENANT", "TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL", "STOP TOUCHÉ", "SORTIE AU STOP", "METS-TOI À BE",
+                           "sorti à BE", "OBJECTIFS REMIS", "ENTRÉE ENCORE POSSIBLE", "TROP TARD POUR ENTRER", "NEWS", "News passée", "FERMETURE",
+                           "FERMÉ", "Annonces importantes", "Aucune annonce", "L'IA ALIGN", "leçon de l'IA", "DOLLAR")
+
+_NOMBRE_RE = re.compile(r"(?<![\w.])\d{1,3}(?: \d{3})+(?:\.\d+)?(?!\d)|(?<![\w.])\d+(?:\.\d+)?")
+
+def _forme_message(texte):
+    """(modèle, nombres) : le modèle est le texte sans ses chiffres (heures comprises) ; les nombres servent à juger si l'information a changé."""
+    t = re.sub(r"\b\d{1,2}[:h]\d{2}\b", "HH:MM", texte)
+    nombres = [float(x.replace(" ", "")) for x in _NOMBRE_RE.findall(t)]
+    modele = re.sub(r"\s+", " ", _NOMBRE_RE.sub("#", t)).strip()
+    return modele, nombres
+
+def _memes_nombres(a, b):
+    """Mêmes informations : même nombre de valeurs, chacune à moins de 0,05 % (prix) ou 2 unités (petites valeurs : RSI, scores, compteurs)."""
+    if len(a) != len(b):
+        return False
+    return all(abs(x - y) <= (0.0005 * max(abs(x), abs(y)) if max(abs(x), abs(y)) >= 1000 else 2.0) for x, y in zip(a, b))
+
+def doublon_message(etat, texte, t=None, enregistrer=True):
+    """Filet commun d'anti-répétition (une seule boucle d'envoi). True = même message, mêmes informations, déjà envoyé il y a moins de ANTI_REPETITION_S.
+    Un message dont les chiffres ont vraiment changé (nouvelle zone, nouveau prix) passe toujours : c'est une information nouvelle."""
+    if any(k in texte for k in ANTI_REPETITION_EXEMPTS):
+        return False
+    t = time.time() if t is None else t
+    mem = etat.setdefault("anti_rep", {})
+    for k in [k for k, v in mem.items() if t - v["t"] > 2 * ANTI_REPETITION_S]:
+        mem.pop(k, None)
+    modele, nombres = _forme_message(texte)
+    cle = hashlib.sha1(modele.encode()).hexdigest()[:16]
+    vu = mem.get(cle)
+    if vu and t - vu["t"] <= ANTI_REPETITION_S and _memes_nombres(vu["n"], nombres):
+        return True
+    if enregistrer:
+        mem[cle] = {"t": t, "n": nombres}
+    return False
+
+EXTREME_REARMEMENT_S = 3 * 3600      # l'alerte « zone extrême » ne se réarme qu'après 3 h sans situation extrême
+
+def texte_zone_extreme(m, r, d):
+    """Message unique « zone extrême Daily/Weekly » : reprend TOUTES les informations des deux anciens messages (alignement 4h + 1h, zones Daily et Weekly,
+    refus de suivre la tendance, risque, ce que j'attends) pour ne pas dire deux fois la même chose."""
+    sens = "LONG" if d == 1 else "SHORT"
+    return (f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n"
+            f"🧭 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS le prix est déjà au bout de sa zone.\n"
+            f"⛔ Je ne poursuis pas le {sens} ici : risque de {'repli' if d == 1 else 'rebond'}.\n"
+            f"⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m, ou un meilleur prix.")
+
+def alerte_extreme_due(cle, d, t):
+    """Alerte « zone extrême Daily/Weekly » : UNE seule fois par situation. La situation est identifiée par le sens bloqué seul
+    (le libellé de zone oscille autour des seuils et ne doit pas relancer le message). Elle se réarme si le sens change
+    ou si la situation a disparu pendant plus de EXTREME_REARMEMENT_S."""
+    vu, sig = cle.get("extreme_vu_t", 0), cle.get("extreme_sig")
+    cle["extreme_vu_t"] = t
+    if sig == str(d) and t - vu <= EXTREME_REARMEMENT_S:
+        return False
+    cle["extreme_sig"] = str(d); cle["extreme_warn_t"] = t
+    return True
+
 def agent(m, r, cle, ferme):
     """Agent : tendance 4h + confirmation 1h → déclenchement sur bougie 5m clôturée."""
     out = []
@@ -6410,7 +6478,9 @@ def agent(m, r, cle, ferme):
         return out
     if not tr:
         if not d:
-            if cle.get("aligne"):
+            # Message conservé dans tous les cas où il partait avant ; seule l'oscillation 1h/4h est limitée (une fois par heure)
+            if cle.get("aligne") and r["t"] - cle.get("perdue_t", 0) >= 3600:
+                cle["perdue_t"] = r["t"]
                 out.append(f"⚪ {m} : confirmation 1h / tendance 4h perdue. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
@@ -6419,11 +6489,8 @@ def agent(m, r, cle, ferme):
         if bloque_dw(r, d, p):
             cle["prep"] = False
             cle.pop("ordre", None)
-            sig_ext = f"{d}:{zone_txt(r['posW'])}"
-            # Une seule alerte par situation : on ne répète que si le sens / la zone Weekly change, ou après 2 h
-            if sig_ext != cle.get("extreme_sig") or r["t"] - cle.get("extreme_warn_t", 0) >= 7200:
-                cle["extreme_warn_t"] = r["t"]; cle["extreme_sig"] = sig_ext
-                out.append(f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')}.\n⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
+            if alerte_extreme_due(cle, d, r["t"]):
+                out.append(texte_zone_extreme(m, r, d))
             cle["aligne"] = d
             return out
         # ── Entrée sur CASSURE confirmée (clôture 5 min au-delà du niveau) ──
@@ -6491,8 +6558,8 @@ def agent(m, r, cle, ferme):
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
-                out.append(f"🧭 {m} : 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
-                           f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
+                if alerte_extreme_due(cle, d, r["t"]):          # même message et même anti-répétition que « zone extrême » (plus de double discours)
+                    out.append(texte_zone_extreme(m, r, d))
             else:
                 cle["ordre"] = o
                 out.append((f"🔔 JE PRÉPARE UNE POSITION — {ICONE.get(m, '')} {m}\n{SENS[d]}   {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n{qualite(o)}"
@@ -7087,6 +7154,9 @@ def un_tour(etat, chats):
     if TOKEN:
         for t in envois:
             texte, clavier = (t if isinstance(t, tuple) else (t, None))
+            if doublon_message(etat, texte):
+                print("anti-répétition : message identique ignoré —", texte.splitlines()[0][:80])
+                continue
             for cid in destinataires_message(etat, chats, texte):
                 try:
                     if cid == etat.get("canal"):

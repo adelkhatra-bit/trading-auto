@@ -14,6 +14,7 @@ p = argparse.ArgumentParser()
 p.add_argument("--pair", default="XAUUSD")
 p.add_argument("--marche", default="GOLD")
 p.add_argument("--heures", type=float, default=8)
+p.add_argument("--fenetre", action="store_true", help="imprime aussi les bougies M1/M3 (journal très long)")
 a = p.parse_args()
 S = dict(m1=ab.bougies(a.pair, 1), m5=ab.bougies(a.pair, 5), m15=ab.bougies(a.pair, 15), m30=ab.bougies(a.pair, 30), h1=ab.bougies(a.pair, 60),
          h4=ab.bougies(a.pair, 240), d1=ab.bougies(a.pair, 1440), w1=ab.bougies(a.pair, 10080))
@@ -22,7 +23,7 @@ debut = fin - int(a.heures * 3600)
 PARIS = ZoneInfo("Europe/Paris")
 hp = lambda t: datetime.datetime.fromtimestamp(t, PARIS).strftime("%d/%m %H:%M")
 print(f"REJEU_SNIPER {a.marche} source={a.pair} bougies M1={len(S['m1'])} fenêtre {hp(debut)} → {hp(fin)} (heure de Paris)")
-mem, vus, n_prop = {}, set(), 0
+mem, vus, n_prop, raisons, dernier_r = {}, set(), 0, {}, {}
 T = (debut // 180 + 1) * 180
 while T <= fin:
     St = {k: [x for x in v if x["t"] <= T] for k, v in S.items()}
@@ -31,7 +32,11 @@ while T <= fin:
     except Exception as ex:
         T += 180
         continue
-    sn = r.get("sniper")
+    sn, raison = ab._sniper(r)
+    if not sn:
+        cle_r = raison.split(" ")[0].split(":")[0]
+        raisons[cle_r] = raisons.get(cle_r, 0) + 1
+        dernier_r[cle_r] = f"{hp(T)} prix {r['m1'][-1]['c']:.2f} : {raison}"
     if sn:
         cle = (sn["d"], round(sn["niveau"] / max(sn["niveau"] * 0.0004, 1e-9)))
         if cle not in vus:
@@ -43,5 +48,8 @@ while T <= fin:
                   + f" | UT alignées {r['bear'] if sn['d'] == -1 else r['bull']}/11, stratégie {r.get('strat') or '-'}")
     T += 180
 print(f"REJEU_FIN propositions={n_prop}")
-print("M1_FENETRE=" + json.dumps([[x["t"], x["o"], x["h"], x["l"], x["c"]] for x in S["m1"] if x["t"] >= debut], separators=(",", ":")))
-print("M3_FENETRE=" + json.dumps([[x["t"], x["o"], x["h"], x["l"], x["c"]] for x in ab.regrouper(S["m1"], 3, 60) if x["t"] >= debut], separators=(",", ":")))
+for k, n in sorted(raisons.items(), key=lambda z: -z[1]):
+    print(f"RAISON {n:4d} x {k}   | exemple {dernier_r[k]}")
+if a.fenetre:
+    print("M1_FENETRE=" + json.dumps([[x["t"], x["o"], x["h"], x["l"], x["c"]] for x in S["m1"] if x["t"] >= debut], separators=(",", ":")))
+    print("M3_FENETRE=" + json.dumps([[x["t"], x["o"], x["h"], x["l"], x["c"]] for x in ab.regrouper(S["m1"], 3, 60) if x["t"] >= debut], separators=(",", ":")))
