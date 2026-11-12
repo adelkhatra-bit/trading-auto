@@ -3830,6 +3830,15 @@ def texte_cloture(m, tf, bougie, r, cle):
     return "\n".join(lignes)
 
 
+def signature_cloture(texte):
+    """Ce qui fait la DÉCISION d'une carte de clôture (sans le prix, la bougie ni le chrono) : sert à ne pas répéter la même carte."""
+    garde = []
+    for l in str(texte).splitlines()[1:]:
+        if l.startswith(("🕯", "⏳ Prochaine", "━")) or not l.strip():
+            continue
+        garde.append(l.strip())
+    return "|".join(garde)
+
 def notifier_clotures(etat, m, r, cle):
     """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
     champs = TF_CHAMPS
@@ -3850,8 +3859,16 @@ def notifier_clotures(etat, m, r, cle):
             nouveaux = [b for b in bars if int(b["t"]) > int(derniers.get(tf, 0))]
             if nouveaux:
                 bougie = nouveaux[-1]
-                resultat = _envoi_sur(cid, text=texte_cloture(m, tf, bougie, r, cle),
+                texte_cl = texte_cloture(m, tf, bougie, r, cle)
+                # Anti-bruit : même décision qu'à la dernière carte (statut, alignement, profil) et moins de 30 min → on ne renvoie pas
+                sig = signature_cloture(texte_cl)
+                if sig == suivi.get("sig_cl") and time.time() - float(suivi.get("sig_t", 0)) < 1800:
+                    derniers[tf] = int(bougie["t"])
+                    continue
+                resultat = _envoi_sur(cid, text=texte_cl,
                                      reply_markup=markup_analyse(etat, m, r, cid))
+                if resultat is not None and not (isinstance(resultat, dict) and resultat.get("ok") is False):
+                    suivi["sig_cl"], suivi["sig_t"] = sig, time.time()
                 # Ne consommer la clôture que si Telegram a accepté l'envoi : sinon réessayer au tour suivant.
                 if resultat is not None and not (isinstance(resultat, dict) and resultat.get("ok") is False):
                     derniers[tf] = int(bougie["t"])

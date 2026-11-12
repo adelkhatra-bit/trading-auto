@@ -96,5 +96,14 @@ class VisionEtFormatTest(unittest.TestCase):
         self.assertNotIn("Aucun plan", t)
 
 
+class AntiBruitClotureTest(unittest.TestCase):
+    def test_meme_decision_meme_signature(self):
+        a = "🥇 GOLD · 3994,98\n━━━\n🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ\n🕯 5m clôturée 02:10 · BAISSE\nH4 SHORT · H1 SHORT · ALIGN 2/2\n🎯 SWING SHORT\n⏳ Prochaine validation : clôture 5m dans 04:47"
+        b = "🥇 GOLD · 3998,06\n━━━\n🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ\n🕯 5m clôturée 02:15 · HAUSSE\nH4 SHORT · H1 SHORT · ALIGN 2/2\n🎯 SWING SHORT\n⏳ Prochaine validation : clôture 5m dans 04:19"
+        c = b.replace("🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ", "🟢 J'ENTRE MAINTENANT")
+        self.assertEqual(ab.signature_cloture(a), ab.signature_cloture(b))
+        self.assertNotEqual(ab.signature_cloture(a), ab.signature_cloture(c))
+
+
 if __name__ == "__main__":
     unittest.main()
