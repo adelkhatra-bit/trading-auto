@@ -2093,7 +2093,7 @@ class AlignAiChainTest(unittest.TestCase):
 
     def _chaine(self, **cles):
         return [("Gemini", align_bot.GEMINI_BASE, "gemini-3.6-flash", cles.get("gemini", ""), True),
-                ("Gemini 2.5", align_bot.GEMINI_BASE, "gemini-2.5-flash", cles.get("gemini", ""), True),
+                ("Gemini 3.8", align_bot.GEMINI_BASE, "gemini-3.8-flash", cles.get("gemini", ""), True),
                 ("Groq", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b", cles.get("groq", ""), True),
                 ("OVH Llama", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", "Meta", "", False),
                 ("Anthropic", "https://api.anthropic.com/v1/messages", "claude-haiku-5-5", cles.get("claude", ""), True)]
@@ -2105,7 +2105,7 @@ class AlignAiChainTest(unittest.TestCase):
         appels = []
         def faux(url, modele, cle, messages, recherche=False):
             nom = "Anthropic" if "anthropic" in url else "Gemini" if "googleapis" in url else "Groq" if "groq" in url else "OVH"
-            nom_cle = "Gemini 2.5" if nom == "Gemini" and "2.5" in modele else nom
+            nom_cle = "Gemini 3.8" if nom == "Gemini" and "3.8" in modele else nom
             appels.append((nom_cle, recherche, messages))
             if nom == "Anthropic" and credit:
                 raise urllib.error.HTTPError(url, 400, "x", {}, io.BytesIO(b'{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API"}}'))
@@ -2119,7 +2119,7 @@ class AlignAiChainTest(unittest.TestCase):
 
     def test_order_free_first_claude_last(self):
         self.assertEqual([p[0] for p in align_bot.IA_FOURNISSEURS],
-                         ["Gemini", "Gemini 2.5", "Groq", "OVH Llama", "OVH Mistral", "Pollinations", "LLM7", "OpenAI", "Anthropic"])
+                         ["Gemini", "Gemini 3.8", "Groq", "OVH Llama", "OVH Mistral", "Pollinations", "LLM7", "OpenAI", "Anthropic"])
         self.assertEqual(align_bot.ANTHROPIC_MAX_JOUR, 100)
         self.assertEqual(align_bot.ANTHROPIC_MAX_TOKENS, 300)
 
@@ -2128,28 +2128,28 @@ class AlignAiChainTest(unittest.TestCase):
         self.assertEqual([a[0] for a in appels], ["Gemini"]); self.assertIn("Gemini", txt)
 
     def test_fallback_gemini_then_groq_then_free_then_claude_last_resort(self):
-        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), premium=True)
-        self.assertEqual([a[0] for a in appels], ["Gemini", "Gemini 2.5", "Groq", "OVH", "Anthropic"]); self.assertIn("Anthropic", txt)
-        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 2.5", "Groq"))
+        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 3.8", "Groq", "OVH"), premium=True)
+        self.assertEqual([a[0] for a in appels], ["Gemini", "Gemini 3.8", "Groq", "OVH", "Anthropic"]); self.assertIn("Anthropic", txt)
+        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 3.8", "Groq"))
         self.assertIn("OVH", txt)
 
     def test_claude_never_called_outside_key_moments(self):
-        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), premium=False)
+        txt, appels = self._ia({}, echecs=("Gemini", "Gemini 3.8", "Groq", "OVH"), premium=False)
         self.assertEqual(txt, ""); self.assertNotIn("Anthropic", [a[0] for a in appels])
 
     def test_no_credit_is_silent_then_not_retried_for_hours(self):
         etat = {}
-        txt, appels = self._ia(etat, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), credit=True, premium=True, cle_cache="moment:GOLD:tp")
+        txt, appels = self._ia(etat, echecs=("Gemini", "Gemini 3.8", "Groq", "OVH"), credit=True, premium=True, cle_cache="moment:GOLD:tp")
         self.assertEqual(txt, ""); self.assertEqual(etat["ia_claude_credit"], "NO_CREDIT")
         self.assertGreaterEqual(etat["ia_pause"]["Anthropic"] - __import__("time").time(), 5 * 3600)
-        _, appels2 = self._ia(etat, echecs=("Gemini", "Gemini 2.5", "Groq", "OVH"), credit=True, premium=True, cle_cache="moment:GOLD:tp2")
+        _, appels2 = self._ia(etat, echecs=("Gemini", "Gemini 3.8", "Groq", "OVH"), credit=True, premium=True, cle_cache="moment:GOLD:tp2")
         self.assertNotIn("Anthropic", [a[0] for a in appels2])
         self.assertTrue(align_bot.erreur_sans_credit("HTTP 400 invalid_request_error Your credit balance is too low"))
 
     def test_claude_cap_per_day_and_10_minute_cache_per_moment(self):
         from unittest.mock import patch
         etat = {}
-        tout_echoue = ("Gemini", "Gemini 2.5", "Groq", "OVH")
+        tout_echoue = ("Gemini", "Gemini 3.8", "Groq", "OVH")
         with patch.object(align_bot, "ANTHROPIC_MAX_JOUR", 2):
             r = [self._ia(etat, echecs=tout_echoue, premium=True, cle_cache=f"moment:GOLD:{k}")[0] for k in ("a", "b", "c")]
         self.assertEqual([("Anthropic" in t) for t in r], [True, True, False])
@@ -2161,7 +2161,7 @@ class AlignAiChainTest(unittest.TestCase):
 
     def test_google_search_only_for_more_info_and_news(self):
         txt, appels = self._ia({}, premium=True, recherche=True, cle_cache="analyse_GOLD_fr_x")
-        self.assertEqual(appels[0][0], "Gemini 2.5"); self.assertTrue(appels[0][1])            # grounding gratuit : Gemini 2.5
+        self.assertEqual(appels[0][0], "Gemini 3.8"); self.assertTrue(appels[0][1])            # grounding gratuit : Gemini 3.8
         _, appels = self._ia({}, premium=True)
         self.assertFalse(any(a[1] for a in appels))                                          # moments clés : jamais de recherche
         import inspect
@@ -2176,9 +2176,9 @@ class AlignAiChainTest(unittest.TestCase):
             "groundingMetadata": {"groundingChunks": [{"web": {"uri": "https://x/y", "title": "reuters.com"}}, {"web": {"uri": "https://z/w", "title": "bloomberg.com"}}]}}]}).encode()
         msgs = [{"role": "system", "content": "REGLES"}, {"role": "user", "content": "DONNEES"}]
         with patch.object(align_bot.urllib.request, "urlopen", return_value=rep) as uo:
-            txt = align_bot._appel_ia(align_bot.GEMINI_BASE, "gemini-2.5-flash", self.GKEY, msgs, recherche=True)
+            txt = align_bot._appel_ia(align_bot.GEMINI_BASE, "gemini-3.8-flash", self.GKEY, msgs, recherche=True)
         req = uo.call_args.args[0]; corps = json.loads(req.data.decode())
-        self.assertTrue(req.full_url.endswith("/models/gemini-2.5-flash:generateContent")); self.assertNotIn(self.GKEY, req.full_url)
+        self.assertTrue(req.full_url.endswith("/models/gemini-3.8-flash:generateContent")); self.assertNotIn(self.GKEY, req.full_url)
         self.assertEqual(req.get_header("X-goog-api-key"), self.GKEY)
         self.assertEqual(corps["tools"], [{"google_search": {}}]); self.assertEqual(corps["systemInstruction"]["parts"][0]["text"], "REGLES")
         self.assertEqual(align_bot._SOURCES_IA, ["reuters.com", "bloomberg.com"]); self.assertIn("Contexte", txt)
@@ -2192,18 +2192,18 @@ class AlignAiChainTest(unittest.TestCase):
         from unittest.mock import patch
         gros = {"liste": list(range(500)), "texte": "x" * 5000, "niveau": 4012.5}
         etat = {}
-        _, appels = self._ia(etat, echecs=("Gemini", "Gemini 2.5"), donnees=gros, cle_cache="a")
+        _, appels = self._ia(etat, echecs=("Gemini", "Gemini 3.8"), donnees=gros, cle_cache="a")
         groq = next(a for a in appels if a[0] == "Groq")
         self.assertLessEqual(len(groq[2][1]["content"]), 3700)
         self.assertEqual(sum(1 for a in appels if a[0] == "Groq"), 1)
         with patch.object(align_bot.time, "time", return_value=__import__("time").time() + 5):
-            _, appels2 = self._ia(etat, echecs=("Gemini", "Gemini 2.5"), donnees=gros, cle_cache="b")
+            _, appels2 = self._ia(etat, echecs=("Gemini", "Gemini 3.8"), donnees=gros, cle_cache="b")
         self.assertNotIn("Groq", [a[0] for a in appels2])                                          # < 20 s : on passe à la suivante
 
     def test_free_daily_counters_stop_calls_at_limit(self):
         from unittest.mock import patch
         etat = {}
-        with patch.dict(align_bot.IA_PLAFOND_JOUR, {"Gemini": 1, "Gemini 2.5": 0}):
+        with patch.dict(align_bot.IA_PLAFOND_JOUR, {"Gemini": 1, "Gemini 3.8": 0}):
             _, a1 = self._ia(etat, cle_cache="a"); _, a2 = self._ia(etat, cle_cache="b")
         self.assertEqual(a1[0][0], "Gemini"); self.assertEqual(a2[0][0], "Groq")
 
