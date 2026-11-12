@@ -221,5 +221,15 @@ class RenduTelegram(unittest.TestCase):
         self.assertNotIn("\n\n\n", html); self.assertFalse(html.endswith("\n"))
 
 
+
+class SuiviPositionTests(unittest.TestCase):
+    def test_carte_suivi_compacte_et_garde_jetons(self):
+        t = ab.carte_suivi("GOLD", "TP1 TOUCHÉ", ["💰 TP1 : 1 ✅", "🔒 SL → BE : 2", "🏁 TP2 : 3"], "Sécuriser", {})
+        self.assertTrue(t.startswith("📍 GOLD - TP1 TOUCHÉ"))
+        for k in ("TP1", "BE", "TP2", "Action", "Agent Auto-Trade", "Sys:"):
+            self.assertIn(k, t)
+        self.assertNotIn("Ne coupe pas tout", t)
+
+
 if __name__ == "__main__":
     unittest.main()
