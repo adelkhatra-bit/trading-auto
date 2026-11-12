@@ -1571,6 +1571,8 @@ TRAD = {
 "🚫 N'ENTRE PAS. Attends une confirmation complète avant toute entrée.": "🚫 DO NOT ENTER. Wait for full confirmation before entering.",
 "🟡 POSITION À VENIR — ordre en attente, aucune position ouverte": "🟡 UPCOMING SETUP — pending order, no position is open",
 "📍 Zone surveillée :": "📍 Monitored zone:",
+"🔁 Zone de retournement visée :": "🔁 Targeted reversal zone:", " attendu": " expected", "📍 Le prix est dans la zone : j'attends le rejet et la clôture": "📍 Price is inside the zone: waiting for the rejection and the close",
+"🔁 Zone de retournement : pas encore définie (le plan n'est pas fixé)": "🔁 Reversal zone: not defined yet (the plan is not fixed)", "📏 Prix à": "📏 Price is", "de la zone (elle est au-dessus)": "from the zone (it is above)", "de la zone (elle est en dessous)": "from the zone (it is below)",
 "🛑 Stop prévu :": "🛑 Planned stop:",
 "🕯 Bougie ": "🕯 Candle ",
 " clôturée — ": " closed — ",
@@ -3201,6 +3203,28 @@ def objectifs_marche(r, d):
     return l
 
 
+def zone_retournement_visee(r, cle):
+    """Où le bot pense que le prix va se retourner : zone d'entrée du plan (ordre surveillé, sinon zone de l'indicateur), sens attendu, distance au prix.
+    Reprend les chiffres de l'ancienne ligne « Zone surveillée ». Jamais inventée : « pas encore définie » si le plan n'est pas fixé."""
+    prix = r["m1"][-1]["c"]
+    o = (cle or {}).get("ordre")
+    zp = r.get("zone_pine") if r.get("dirPlan") else None
+    if o:
+        za, zb = min(o.get("za", o["e"]), o.get("zb", o["e"])), max(o.get("za", o["e"]), o.get("zb", o["e"]))
+        d = o.get("d") or r.get("dirPlan") or r.get("confirme") or 0
+    elif zp:
+        za, zb, d = min(zp["za"], zp["zb"]), max(zp["za"], zp["zb"]), r.get("dirPlan") or 0
+    else:
+        return ["🔁 Zone de retournement : pas encore définie (le plan n'est pas fixé)"]
+    sens = f" — {SENS[d]} attendu" if d in (1, -1) else ""
+    l = [f"🔁 Zone de retournement visée : ≈ {px(za)} → {px(zb)}{sens}"]
+    if za <= prix <= zb:
+        l.append("📍 Le prix est dans la zone : j'attends le rejet et la clôture")
+    else:
+        dist = min(abs(prix - za), abs(prix - zb))
+        l.append(f"📏 Prix à {px(dist)} de la zone ({'elle est au-dessus' if prix < za else 'elle est en dessous'})")
+    return l
+
 def texte_apercu(m, r, cle):
     """Carte d'abordage : autorisation d'entrée en premier, détails derrière les boutons."""
     cle = cle or {}
@@ -3246,9 +3270,8 @@ def texte_apercu(m, r, cle):
         "➡️ À faire : " + ("gérer la position ouverte et suivre les alertes de sortie." if tr else
                          "Attendre un nouveau message explicite « ENTRÉE AUTORISÉE »."),
     ]
-    if cle.get("ordre") and not tr:
-        o = cle["ordre"]
-        lignes += [f"🟨 Zone surveillée : {px(min(o.get('za', o['e']), o.get('zb', o['e'])))} → {px(max(o.get('za', o['e']), o.get('zb', o['e'])))}"]
+    if not tr:
+        lignes += zone_retournement_visee(r, cle)
     jour_ = news_du_jour(DERNIER_ETAT) if DERNIER_ETAT else []
     if jour_:
         lignes += [""] + jour_
@@ -5144,19 +5167,41 @@ def diffuser_alerte(etat, chats, fr, en):
     for cid in destinataires_message(etat, chats, "\n".join(fr)):
         _envoi_sur(cid, text="\n".join(en if str(cid) in LANG_EN else fr))
 
+def diffuser_evenements(etat, chats, evts):
+    """evts = [(marches, lignes_fr, lignes_en)] : marches = {"GOLD"} pour un évènement de marché, {"*"} pour une session (global).
+    Chaque évènement est routé selon SON marché ; chaque personne reçoit un seul message regroupé, limité à ses marchés cochés."""
+    dest_evt = []
+    for marches, fr, en in evts:
+        t = Msg("\n".join(fr)); t.marches = frozenset(marches)
+        dest_evt.append(set(destinataires_message(etat, chats, t)))
+    canal = str(etat.get("canal") or "")
+    for cid in sorted(set().union(*dest_evt) if dest_evt else set()):
+        choix = etat.get("marches_par_chat", {}).get(str(cid))
+        choisis = marches_choisis(etat, cid) if (choix is not None and cid != canal) else None
+        blocs = []
+        for (marches, fr, en), dests in zip(evts, dest_evt):
+            if cid not in dests:
+                continue
+            lignes = en if str(cid) in LANG_EN else fr
+            bloc = ajuster_squeeze(lignes, choisis) if choisis else lignes
+            if bloc:
+                blocs.append(bloc)
+        if blocs:
+            _envoi_sur(cid, text="\n".join(regrouper_alertes(blocs)))
+
 def alertes_courtes(etat, chats, derniers, now=None):
     """Appelé à chaque tour : sessions + évènements Pine du moment. Gratuit : préavis 15 min des grandes ouvertures seulement."""
     now = now or time.time()
-    vip_fr, vip_en, libres = [], [], []
+    evts, libres = [], []
     for ev in evenements_sessions(etat, now, derniers):
-        vip_fr.append(texte_session(etat, ev)); vip_en.append(texte_session(etat, ev, True))
+        evts.append(({"*"}, texte_session(etat, ev), texte_session(etat, ev, True)))
         if (ev["code"], ev["evt"]) in SESSIONS_GRATUIT and ev["palier"] == 15:
             libres.append(ev)
     for m, r in derniers.items():
         for ev in sorted(evenements_pine(etat, m, r, etat.get(m, {}), now), key=lambda x: _PINE_PRIO[x["kind"]]):
-            vip_fr.append(texte_pine(etat, ev)); vip_en.append(texte_pine(etat, ev, True))
-    if vip_fr and TOKEN:
-        diffuser_alerte(etat, chats, regrouper_alertes(vip_fr), regrouper_alertes(vip_en))
+            evts.append(({m}, texte_pine(etat, ev), texte_pine(etat, ev, True)))
+    if evts and TOKEN:
+        diffuser_evenements(etat, chats, evts)
     if libres and TOKEN:
         for cid in destinataires_gratuits(etat):
             fr, en = [texte_session(etat, ev) for ev in libres], [texte_session(etat, ev, True) for ev in libres]
@@ -5501,27 +5546,67 @@ def marches_du_message(texte):
         ens.add("NASDAQ")
     return ens
 
+class Msg(str):
+    """Texte de message tagué avec le(s) marché(s) CONNUS à la création : le routage ne devine plus le marché en lisant le texte."""
+    marches = frozenset()
+
+def taguer(x, marche):
+    """Tague un message (ou un couple message + clavier) avec son marché."""
+    def un(t):
+        m = Msg(t); m.marches = frozenset(getattr(t, "marches", ())) | {marche}
+        return m
+    return (un(x[0]),) + tuple(x[1:]) if isinstance(x, tuple) else un(x)
+
+def marches_message(texte):
+    """Marchés d'un message : le tag posé à la création d'abord, sinon l'en-tête."""
+    tag = set(getattr(texte, "marches", ()) or ())
+    return (tag - {"*"}) if tag else marches_du_message(texte)           # tag {"*"} = message global (sessions) : aucun marché imposé
+
+def filtrer_texte_par_marches(texte, choisis):
+    """Version du message pour UNE personne : None si le message ne concerne aucun de ses marchés ; sinon le texte sans les lignes qui ne parlent
+    que de marchés qu'elle n'a pas cochés (ex. « réaction à la news » BTC + GOLD + NASDAQ → seulement ses marchés). Sans choix : tout."""
+    if not choisis or set(choisis) >= set(MARCHES):
+        return texte
+    choisis = set(choisis)
+    ens = marches_message(texte)
+    if ens and not (ens & choisis):
+        return None
+    gardees = []
+    for l in str(texte).split("\n"):
+        lm = marches_du_message(l)
+        if lm and not (lm & choisis):
+            continue
+        gardees.append(l)
+    return "\n".join(gardees)
+
+def ajuster_squeeze(lignes, choisis):
+    """Ligne « ⚡ BTC, GOLD comprimé : explosion possible » : ne garde que les marchés cochés (ligne supprimée s'il n'en reste aucun)."""
+    out = []
+    for l in lignes:
+        if l.startswith("⚡ ") and ("comprimé : explosion possible" in l or "squeezed: breakout possible" in l):
+            tete = l[2:].split(" comprimé")[0].split(" squeezed")[0]
+            noms = [x for x in tete.split(", ") if not choisis or x in choisis]
+            if not noms:
+                continue
+            l = "⚡ " + ", ".join(noms) + l[2 + len(tete):]
+        out.append(l)
+    return out
+
 def marche_du_message(texte):
     """Compatibilité : un marché, « BOTH » si plusieurs, None si aucun."""
     ens = marches_du_message(texte)
     return None if not ens else (next(iter(ens)) if len(ens) == 1 else "BOTH")
 
 def destinataires_message(etat, chats, texte):
-    # Le flux complet (news, analyses, toutes les positions) part UNIQUEMENT dans la chaîne VIP :
-    # plus de double notification chaîne + conversation privée. Le gratuit a son propre flux (envoyer_prospects).
-    ens = marches_du_message(texte)
+    # Le flux complet (news, analyses, toutes les positions) part dans la chaîne VIP (commune : tous les marchés).
+    # Chaque personne ne reçoit EN PRIVÉ que les marchés qu'elle a cochés (filtrage ligne par ligne au moment de l'envoi, voir filtrer_texte_par_marches).
+    ens = marches_message(texte)
     if etat.get("canal"):
-        # Chaîne VIP = tout. En plus, chaque VIP reçoit EN PRIVÉ les alertes des marchés qu'il a cochés
-        # (uniquement s'il a fait un choix dans 📡 Mes marchés : sinon rien en double).
         prives = [str(c) for c in chats if not vue_gratuite(etat, c) and str(c) != str(etat["canal"])
                   and etat.get("marches_par_chat", {}).get(str(c)) is not None and ens
                   and ens & marches_choisis(etat, c)]
         return sorted(set([str(etat["canal"])] + prives))
-    cibles = [str(c) for c in chats if not ens or (len(ens) > 1 and ens <= marches_choisis(etat, c)) or
-              (len(ens) == 1 and marche_autorise(etat, c, next(iter(ens))))]
-    # La chaîne VIP reste commune et reçoit les deux marchés, sans préférence individuelle.
-    if etat.get("canal"):
-        cibles.append(str(etat["canal"]))
+    cibles = [str(c) for c in chats if not ens or bool(ens & marches_choisis(etat, c))]
     return sorted(set(cibles))
 
 def destinataires(etat, chats):
@@ -7083,10 +7168,10 @@ def un_tour(etat, chats):
             print("macro analyse", nom_marche, ex)
             r["macro_data"] = {"disponible": False, "statut": "DONNÉES MACRO INDISPONIBLES"}
         ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
-        nouveaux = agent(nom_marche, r, cle, ferme)
+        nouveaux = [taguer(x, nom_marche) for x in agent(nom_marche, r, cle, ferme)]
         envois += nouveaux
         if TOKEN:
-            envois += commentaires_ia_temps_reel(etat, nom_marche, r, cle, nouveaux)
+            envois += [taguer(x, nom_marche) for x in commentaires_ia_temps_reel(etat, nom_marche, r, cle, nouveaux)]
         recevoir_updates_telegram(etat, chats, demandes)
         if SHUTDOWN_REQUESTED.is_set():
             return
@@ -7097,7 +7182,7 @@ def un_tour(etat, chats):
                     dict(donnees_ia(nom_marche, r, cle), position={"sens": "LONG" if trx["d"] == 1 else "SHORT", "entrée": round(trx["e"], 2),
                                                                     "SL": round(trx["sl"], 2), "TP1": round(trx["tp1"], 2), "type": trx.get("src")}), premium=True)
             if t_:
-                envois.append(f"🧠 L'IA ALIGN sur cette entrée — {ICONE.get(nom_marche, '')} {nom_marche}\n{compacter_ia(t_)}")
+                envois.append(taguer(f"🧠 L'IA ALIGN sur cette entrée — {ICONE.get(nom_marche, '')} {nom_marche}\n{compacter_ia(t_)}", nom_marche))
             entrer_inscrits(etat, nom_marche, cle["trade"], chats)
         if TOKEN:
             coach(etat, nom_marche, r, cle)
@@ -7123,7 +7208,7 @@ def un_tour(etat, chats):
                 t_ = ia(etat, "La position est terminée. Tire UNE leçon simple et utile pour la prochaine fois (pourquoi TP ou pourquoi SL). FORMAT : 4 lignes courtes maximum, une info par ligne, chaque ligne commence par un emoji, 12 mots maximum par ligne, aucun paragraphe ni conclusion.",
                         {"marché": nom_marche, "résultat %": round(gain, 2), "motif": motif, "profil": pr, "bilan de ce type": f"{w_}/{n_}"})
                 if t_:
-                    envois.append(f"🧠 La leçon de l'IA ALIGN\n{compacter_ia(t_)}")
+                    envois.append(taguer(f"🧠 La leçon de l'IA ALIGN\n{compacter_ia(t_)}", nom_marche))
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         synchroniser_veille_auto(etat, nom_marche, r)
         notifier_clotures(etat, nom_marche, r, cle)
@@ -7188,15 +7273,21 @@ def un_tour(etat, chats):
                 print("anti-répétition : message identique ignoré —", texte.splitlines()[0][:80])
                 continue
             for cid in destinataires_message(etat, chats, texte):
+                if cid != str(etat.get("canal") or "") and etat.get("marches_par_chat", {}).get(str(cid)) is not None:
+                    texte_cid = filtrer_texte_par_marches(texte, marches_choisis(etat, cid))
+                    if not texte_cid:
+                        continue                                        # ne concerne aucun de ses marchés
+                else:
+                    texte_cid = texte
                 try:
                     if cid == etat.get("canal"):
                         # Chaîne VIP : pas de clavier possible dans une chaîne → boutons sous le message (ils ouvrent le bot)
                         txt = texte.replace("\n\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.", "")
                         telegram("sendMessage", chat_id=cid, text=txt, reply_markup=boutons_canal(etat, texte))
                     elif clavier:
-                        telegram("sendMessage", chat_id=cid, text=texte, reply_markup=clavier)
+                        telegram("sendMessage", chat_id=cid, text=texte_cid, reply_markup=clavier)
                     else:
-                        telegram("sendMessage", chat_id=cid, text=texte)
+                        telegram("sendMessage", chat_id=cid, text=texte_cid)
                 except Exception as ex:
                     print("envoi", cid, ex)
                     if "403" in str(ex) and cid not in proprio(etat):
