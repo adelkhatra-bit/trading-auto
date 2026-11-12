@@ -293,3 +293,34 @@ class SensIaCoherent(unittest.TestCase):
 
     def test_consigne_interdit_la_prediction_de_sens(self):
         self.assertIn("JAMAIS un sens à venir", ab.REGLE_SENS_IA)
+
+
+class MessageEntreeLisible(unittest.TestCase):
+    """Rendu réel d'un message d'entrée (même formateur que Telegram) : l'essentiel d'abord, aucune ligne coupée."""
+    TR = dict(d=-1, e=3995.2, sl=3999.99, tp1=3985.0, tp2=3895.54, n1="15m", n2="plan SWING", rr=2.1, za=3995.2, zb=3997.2,
+              strat="SWING", src="Fibonacci + 15m", statut="entree", sl_h=1)
+
+    def rendu(self):
+        return ab.mise_en_forme(f"🟢🟢🟢 J'ENTRE MAINTENANT — 🥇 GOLD\\n👉 {ab.resume_ordre(self.TR)}\\n{ab.SENS[-1]}\\n\\n{ab.fmt_trade('GOLD', self.TR, 3994.0)}")
+
+    def test_essentiel_dans_les_premieres_lignes(self):
+        haut = "\\n".join(self.rendu().splitlines()[:8])
+        for k in ("J'ENTRE MAINTENANT", "SHORT", "Entrée 3995,20", "SL 3999,99", "TP1 3985", "TP2 3895,54"):
+            self.assertIn(k, haut)
+
+    def test_lignes_non_coupees_et_parentheses_equilibrees(self):
+        t = self.rendu()
+        self.assertIn("Ratio gain/risque TP1 : 1:2.1", t)                                     # plus « 1 (2.1) »
+        self.assertIn("Vue d'entrée : 5 minutes (15M = préparation, M5 = timing après clôture confirmée)", t)
+        self.assertIn("Distance entrée → SL : 0.12 % du prix (pas le % du capital risqué)", t)
+        for l in t.splitlines():
+            self.assertEqual(l.count("("), l.count(")"), l)
+
+    def test_position_longue_duree_ne_se_lit_pas_comme_un_long(self):
+        t = ab.mise_en_forme(ab.fmt_trade("GOLD", dict(self.TR, tp2=3000.0, n2="Daily"), 3994.0))
+        self.assertNotIn("Position LONGUE", t)
+        self.assertIn("LONGUE DURÉE", t)
+
+    def test_prix_et_niveaux_toujours_formates(self):
+        self.assertIn("Entrée : 4075,50 (ordre limite)", ab.mise_en_forme("t\\n🟨 Entrée : 4 075.50 (ordre limite)"))
+        self.assertIn("TP1 : 3985 (15m)", ab.mise_en_forme("t\\n💰 TP1 : 3985.00 (15m)"))
