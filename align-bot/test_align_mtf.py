@@ -1905,12 +1905,12 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
     def test_real_evolution_sends_once_and_respects_vip_delay(self):
         etat = self._state()
         envois = self._cycle(etat, self._r(bear=6), 0)
-        envois += self._cycle(etat, self._r(bear=7), 1)           # évolution trop tôt : retenue
-        envois += self._cycle(etat, self._r(bear=7), 4)
+        envois += self._cycle(etat, self._r(bear=8), 1)           # évolution forte (seuil 8 franchi) mais trop tôt : retenue
+        envois += self._cycle(etat, self._r(bear=8), 4)
         self.assertEqual(len(envois), 1)
-        envois += self._cycle(etat, self._r(bear=7), 5)           # délai de 5 min écoulé + nouvelle bougie M5 : un seul envoi
-        envois += self._cycle(etat, self._r(bear=7), 6)
-        envois += self._cycle(etat, self._r(bear=7), 10)
+        envois += self._cycle(etat, self._r(bear=8), 5)           # délai de 5 min écoulé + nouvelle bougie M5 : un seul envoi
+        envois += self._cycle(etat, self._r(bear=8), 6)
+        envois += self._cycle(etat, self._r(bear=8), 10)
         self.assertEqual([e[0] for e in envois], [0, 5])
         self.assertTrue(all(b[0] - a[0] >= 5 for a, b in zip(envois, envois[1:])))
         self.assertNotEqual(envois[0][2], envois[1][2])
@@ -1956,7 +1956,7 @@ class AlignHeartbeatAndGeminiTest(unittest.TestCase):
         etat = self._state()
         textes = []
         for k in range(10):
-            textes += [e[2] for e in self._cycle(etat, self._r(bear=3 + k % 8, pctH=40 - k), k * 5)]
+            textes += [e[2] for e in self._cycle(etat, self._r(bear=3 + k % 8, pctH=40 - k), k * 35)]       # petites évolutions : une info par 30 min au plus
         self.assertGreaterEqual(len(textes), 9)
         for a, b in zip(textes, textes[1:]):
             self.assertNotEqual(a, b)

@@ -3879,7 +3879,36 @@ def hb_etat_surveille(r):
     sens = r.get("sens", 0)
     pct = r.get("pctH", 50)
     return dict(d=d, strat=strat, etat=etat_s, n=n, zp=zp, a=a, prix=prix, sens=sens, pct=pct if sens >= 0 else 100 - pct,
-                sig=(d, n, strat, etat_s, sens, round(zp["zmil"] / (0.5 * a)) if zp else None))
+                sig=(d, n, strat, etat_s, sens, round(float(zp["zmil"]), 4) if zp else None, round(a, 4)))
+
+HB_ECART_UT = 3              # alignement qui bouge d'au moins 3 UT (ou seuil franchi) : évolution FORTE
+HB_ECART_ZONE_ATR = 1.0      # zone décalée d'au moins 1 ATR 15 min : évolution FORTE
+HB_ECART_ZONE_FAIBLE_ATR = 0.5
+HB_INTERVALLE_FAIBLE = 1800  # petite évolution (1-2 UT, zone d'un demi-ATR) : au plus une info toutes les 30 min
+
+def hb_evolution(ancien, nouveau):
+    """Niveau d'évolution depuis le dernier battement ENVOYÉ : 2 = forte (sens, stratégie, état, biais, seuil d'alignement franchi, alignement d'au moins
+    HB_ECART_UT, zone décalée d'au moins 1 ATR) → envoyée au délai habituel ; 1 = faible (1-2 UT, zone d'un demi-ATR) → au plus toutes les
+    HB_INTERVALLE_FAIBLE secondes (sinon l'oscillation 8 → 9 → 8 UT ressemble à des messages identiques) ; 0 = rien de nouveau."""
+    try:
+        if not ancien or len(ancien) != len(nouveau):
+            return 2
+        d0, n0, st0, et0, se0, z0, a0 = ancien
+        d1, n1, st1, et1, se1, z1, a1 = nouveau
+        if (d0, st0, et0, se0) != (d1, st1, et1, se1):
+            return 2
+        if (n0 >= MIN_ALIGN) != (n1 >= MIN_ALIGN) or abs(n1 - n0) >= HB_ECART_UT:
+            return 2
+        if (z0 is None) != (z1 is None):
+            return 2
+        ecart_zone = abs(z1 - z0) / max(float(a1 or 0), 1e-9) if z1 is not None else 0.0
+        if ecart_zone >= HB_ECART_ZONE_ATR:
+            return 2
+        if n1 != n0 or ecart_zone >= HB_ECART_ZONE_FAIBLE_ATR:
+            return 1
+        return 0
+    except Exception:
+        return 2
 
 def texte_battement(m, r, cle, anglais=False, vip=True, variante=0):
     """Message de veille : CE QUI EST SURVEILLÉ (jamais inventé). Gratuit : sobre, sans sens ni niveaux (réservés aux VIP)."""
@@ -3968,8 +3997,9 @@ def battement_coeur(etat, m, r, cle, now=None):
             continue                              # délai minimal non écoulé (mémoire du dernier envoi)
         sig = list(hb_etat_surveille(r)["sig"])
         mem["bar"] = int(b5[-1]["t"])
-        if mem.get("sig") == sig:
-            continue                              # rien n'a changé : on n'envoie rien
+        niveau = hb_evolution(mem.get("sig"), sig)
+        if niveau == 0 or (niveau == 1 and now - float(mem.get("t", 0)) < HB_INTERVALLE_FAIBLE):
+            continue                              # rien de nouveau, ou petite oscillation trop proche du dernier envoi
         txt = texte_battement(m, r, cle, anglais, vip=vip, variante=int(mem.get("i", 0)))
         if not txt or _forme(txt) == mem.get("forme"):
             continue                              # jamais deux messages quasi identiques de suite
