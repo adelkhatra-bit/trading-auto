@@ -2018,7 +2018,7 @@ class AlignAiChainTest(unittest.TestCase):
         import inspect
         src = inspect.getsource(align_bot)
         self.assertEqual(src.count("premium=True, recherche=True)"), 3)                       # En savoir plus + 2 news
-        self.assertEqual(src.count(", premium=True)"), 2)                                      # moments clés (prépare-toi, TP, turbulence) + entrée
+        self.assertEqual(src.count(", premium=True)"), 3)                                      # moments clés (prépare-toi, TP, turbulence) + entrée + annonce RADAR
 
     def test_gemini_native_request_grounding_and_sources(self):
         from unittest.mock import patch, MagicMock

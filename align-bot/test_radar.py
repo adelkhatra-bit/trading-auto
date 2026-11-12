@@ -85,6 +85,33 @@ class EntreeEtSlMemeSommetTest(unittest.TestCase):
         self.assertNotEqual(es["e"], 3905.8)
 
 
+class RadarIaTest(unittest.TestCase):
+    """L'IA rédige l'annonce « prépare-toi » (phrases variées) ; les niveaux restent ceux du bot ; jamais d'IA hors alerte."""
+    def test_ia_seulement_a_l_alerte_et_texte_garde_pendant_les_editions(self):
+        appels, envois = [], []
+        def faux_ia(etat, consigne, data, **kw):
+            appels.append(kw.get("cle_cache")); return "🔔 GOLD se réveille, prépare-toi\n🎯 Je vise 3905,80 en SHORT\n🕯 Regarde la 1h"
+        def tg(methode, **kw):
+            envois.append((methode, kw)); return {"ok": True, "result": {"message_id": len(envois)}}
+        props = props_test()
+        with mock.patch.object(ab, "ia", faux_ia), mock.patch.object(ab, "donnees_ia", lambda *a, **k: {}), \
+             mock.patch.object(ab, "telegram", tg), mock.patch.object(ab, "_envoi_sur", lambda cid, **kw: tg("sendMessage", chat_id=cid, **kw)), \
+             mock.patch.object(ab, "autorise", lambda *a: True), mock.patch.object(ab, "marches_choisis", lambda e, c: {"GOLD", "BTC", "NASDAQ"}), \
+             mock.patch.object(ab, "classer_marches", lambda d, e, c, n=None: props):
+            etat = {}
+            ab.radar_tick(etat, {"42"}, DERNIERS, now=1_000_000.0)            # GOLD prêt : alerte → 1 appel IA
+            self.assertEqual(len(appels), 1)
+            self.assertIn("GOLD se réveille", envois[0][1]["text"])
+            self.assertIn("Zone d'entrée", envois[0][1]["text"])               # les niveaux calculés restent affichés
+            props[0] = dict(props[0], atr_n=0.5, dist=2.0)
+            ab.radar_tick(etat, {"42"}, DERNIERS, now=1_000_000.0 + 300)      # simple édition : aucune nouvelle IA, phrases gardées
+            self.assertEqual(len(appels), 1)
+
+    def test_ia_qui_contredit_le_sens_est_jetee(self):
+        with mock.patch.object(ab, "ia", lambda *a, **k: "📈 Ça va monter, prends un LONG"), mock.patch.object(ab, "donnees_ia", lambda *a, **k: {}):
+            self.assertIsNone(ab.intro_ia_radar({}, "GOLD", {}, {}, props_test()[0], None))
+
+
 class RadarTickTest(unittest.TestCase):
     def setUp(self):
         self.appels = []
