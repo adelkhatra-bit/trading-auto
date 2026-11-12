@@ -15,7 +15,6 @@ p.add_argument("--pair", default="XAUUSD")
 p.add_argument("--marche", default="GOLD")
 p.add_argument("--heures", type=float, default=8)
 p.add_argument("--fenetre", action="store_true", help="imprime aussi les bougies M1/M3 (journal très long)")
-p.add_argument("--detail", default="", help="plage UTC HH:MM-HH:MM : une ligne DETAIL par pas de 3 minutes")
 a = p.parse_args()
 S = dict(m1=ab.bougies(a.pair, 1), m5=ab.bougies(a.pair, 5), m15=ab.bougies(a.pair, 15), m30=ab.bougies(a.pair, 30), h1=ab.bougies(a.pair, 60),
          h4=ab.bougies(a.pair, 240), d1=ab.bougies(a.pair, 1440), w1=ab.bougies(a.pair, 10080))
@@ -34,15 +33,6 @@ while T <= fin:
         T += 180
         continue
     sn, raison = ab._sniper(r)
-    if a.detail:
-        hu = datetime.datetime.fromtimestamp(T, datetime.timezone.utc).strftime("%H:%M")
-        d0, d1 = a.detail.split("-")
-        if d0 <= hu <= d1:
-            zp = r.get("zone_pine") or {}
-            seg = [x for x in S["m1"] if T - 180 < x["t"] <= T]
-            hmax = max((x["h"] for x in seg), default=0)
-            print(f"DETAIL {hu}UTC close {r['m1'][-1]['c']:.2f} haut3m {hmax:.2f} zone {zp.get('za', 0):.2f}–{zp.get('zb', 0):.2f} dirPlan {r.get('dirPlan')} "
-                  f"UT {r.get('bear')}/{r.get('bull')} atr15 {r.get('atr') or 0:.2f} | {(raison or 'PROPOSITION')[:60]}")
     if not sn:
         cle_r = raison.split(" ")[0].split(":")[0]
         raisons[cle_r] = raisons.get(cle_r, 0) + 1
