@@ -2176,6 +2176,10 @@ def mise_en_forme(t):
             label = niveau.group("label").strip().rstrip(" :：≈=")
             value = _compacte_prix(niveau.group("value"))
             detail = (niveau.group("detail") or "").strip()
+            plage = re.match(r"^[—–-]\s*([+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?)\s*(.*)$", detail)
+            if plage:                    # « zone 3981,48 – 4012,15 » : la 2e borne reste une borne, pas un détail entre parenthèses
+                value = f"{value} → {_compacte_prix(plage.group(1))}"
+                detail = plage.group(2).strip()
             detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             out.append(f"{label} : {value}" + (f" ({detail})" if detail and len(detail) <= 40 else ""))
             if detail and len(detail) > 40:
@@ -3056,6 +3060,41 @@ def texte_position(m, r, cle, cid):
         "ℹ️ ALIGN ne passe aucun ordre sur ton broker : toute modification se fait sur ta plateforme."
     ])
 
+
+UT_VISION = (("1m", 0), ("3m", 1), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("D", 10))
+
+def texte_vision(m, r, cle, anglais=False):
+    """Pas encore de plan confirmé : le bot donne quand même SA VISION (sens probable, UT alignées, zone, ce qu'il attend),
+    à partir des vraies données du dernier cycle. Jamais « aucune vision » quand les unités de temps sont calculées."""
+    r = r or {}
+    dirs = r.get("dirs") or []
+    if len(dirs) < 11:
+        return ("📊 ALIGN VISION\n⏳ Data still loading, try again in a minute." if anglais
+                else "📊 VISION ALIGN\n⏳ Données en cours de chargement, réessaie dans une minute.")
+    h = hb_etat_surveille(r)
+    sens = {1: "LONG ⬆️", -1: "SHORT ⬇️"}.get(h["d"] or r.get("sens") or 0, "neutre ➖" if not anglais else "neutral ➖")
+    ut = " ".join(f"{n}{'🟩' if dirs[i] == 1 else '🟥' if dirs[i] == -1 else '⬜'}" for n, i in UT_VISION)
+    lignes = [f"📊 {'ALIGN VISION' if anglais else 'VISION ALIGN'} — {ICONE.get(m, '')} {m}", "━━━━━━━━━━━━━━━",
+              (f"🧭 Likely direction: {sens} ({h['pct']} %)" if anglais else f"🧭 Sens probable : {sens} ({h['pct']} %)"),
+              (f"📊 Timeframes aligned: {h['n']}/11" if anglais else f"📊 UT alignées : {h['n']}/11") + f" (seuil {MIN_ALIGN})",
+              f"⏱ {ut}"]
+    if h["strat"]:
+        lignes.append(f"🎯 Profil : {h['strat']}")
+    zp = h["zp"]
+    if zp and h["prix"]:
+        bas, haut = sorted((zp["za"], zp["zb"]))
+        dedans = bas <= h["prix"] <= haut
+        dist = 0 if dedans else min(abs(h["prix"] - bas), abs(h["prix"] - haut))
+        lignes.append((f"📍 Entry zone: {px(bas)} → {px(haut)} " if anglais else f"📍 Zone d'entrée : {px(bas)} → {px(haut)} ")
+                      + (("(price in the zone)" if anglais else "(prix dans la zone)") if dedans
+                         else (f"(price {px(dist)} away)" if anglais else f"(prix à {px(dist)})")))
+    try:
+        lignes.append("⏳ " + raison_attente(r, cle))
+    except Exception:
+        pass
+    lignes.append("🔔 No confirmed entry yet: I'll alert you at the confirmation close" if anglais
+                  else "🔔 Pas encore d'entrée confirmée : je te préviens à la clôture de confirmation")
+    return "\n".join(lignes)
 
 def texte_timeframes(m, r):
     """Lecture pédagogique de toutes les unités réellement calculées par ALIGN."""
@@ -4624,8 +4663,7 @@ def traiter(etat, chats, updates):
                         txt_niveaux = ("🟨 ZONE DE PRÉPARATION\n" + statut_txt(0, cle_detail["ordre"]).strip()
                                        + "\n⏳ Aucun déclenchement confirmé : attendre la clôture prévue.")
                     else:
-                        txt_niveaux = ("📊 NIVEAUX ALIGN\n⏳ Aucun plan d'entrée confirmé pour le moment.\n"
-                                       "Le bot attend les confirmations de sa stratégie avant de publier des niveaux.")
+                        txt_niveaux = texte_vision(mk, r_detail, cle_detail, anglais=str(qui) in LANG_EN)
                     _envoi_sur(qui, text=txt_niveaux,
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "ℹ️ Comprendre l'analyse", "callback_data": f"details:{mk}"},
                                                                              {"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
@@ -5461,7 +5499,12 @@ def _ou_en_est(etat, m, anglais=False):
         if not h["d"]:
             return "no clear direction yet" if anglais else "pas encore de sens clair"
         profil = f" • {h['strat']}" if h["strat"] else ""
-        return (f"{h['n']}/11 timeframes aligned{profil}" if anglais else f"{h['n']}/11 UT alignées{profil}")
+        minutes = {"SWING": 60, "DAY": 5, "SCALPING": 1}.get(h["strat"], 15)     # unité de validation (comme l'indicateur)
+        reste = minutes * 60 - int(time.time()) % (minutes * 60)
+        unite = {60: "1h", 5: "5 min", 1: "1 min"}.get(minutes, "15 min")
+        quand = (f" • next {unite} close in {reste // 60:02d}:{reste % 60:02d}" if anglais
+                 else f" • prochaine clôture {unite} dans {reste // 60:02d}:{reste % 60:02d}")
+        return (f"{h['n']}/11 timeframes aligned{profil}" if anglais else f"{h['n']}/11 UT alignées{profil}") + quand
     except Exception as ex:
         print("où en est", m, ex)
         return ""

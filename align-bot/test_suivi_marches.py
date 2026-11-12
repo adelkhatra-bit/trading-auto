@@ -35,7 +35,7 @@ class SuiviMarchesTest(unittest.TestCase):
         with mock.patch.object(ab, "DERNIERS", {"GOLD": {"prix": 3975.2, "dirPlan": -1, "bear": 11, "strat": "SWING", "atr": 5}}), \
              mock.patch.object(ab, "strategie_alignement", lambda *a: (None, "OK")):
             t = ab.texte_suivi(self.e, "42")
-        self.assertIn("↳ 11/11 UT alignées • SWING", t)
+        self.assertIn("↳ 11/11 UT alignées • SWING • prochaine clôture 1h dans ", t)
 
     def test_trois_marches(self):
         ab.selectionner_marches_suivi(self.e, "42", "ALL")
@@ -76,6 +76,24 @@ class IaEnPositionTest(unittest.TestCase):
                 out = ab.commentaires_ia_temps_reel({"ia_moments": {}}, f"M{i}", {}, {}, [entete + "\nligne"])
                 self.assertTrue(out and "L'IA ALIGN EN DIRECT" in out[0], entete)
         self.assertEqual(len(appels), 3)
+
+
+class VisionEtFormatTest(unittest.TestCase):
+    def test_zone_garde_ses_deux_bornes(self):
+        t = ab.mise_en_forme("📍 Zone d'entrée : 3981,48 – 4012,15 (prix dans la zone)")
+        self.assertIn("3981,48 → 4012,15 (prix dans la zone)", t)
+
+    def test_niveaux_sans_plan_donne_la_vision(self):
+        r = {"dirs": [-1, -1, 1, -1, -1, -1, 0, -1, 1, -1, -1]}
+        h = {"d": -1, "pct": 81, "n": 7, "strat": "SWING", "zp": {"za": 3981.48, "zb": 4012.15}, "prix": 3989.5}
+        with mock.patch.object(ab, "hb_etat_surveille", lambda r: h), \
+             mock.patch.object(ab, "raison_attente", lambda r, c: "J'attends une clôture 1h sous 3996,81"):
+            t = ab.texte_vision("GOLD", r, {})
+        self.assertIn("Sens probable : SHORT", t)
+        self.assertIn("UT alignées : 7/11", t)
+        self.assertIn("1m🟥 3m🟥 5m🟩 15m🟥 1h🟥 4h🟥 D🟥", t)
+        self.assertIn("(prix dans la zone)", t)
+        self.assertNotIn("Aucun plan", t)
 
 
 if __name__ == "__main__":
