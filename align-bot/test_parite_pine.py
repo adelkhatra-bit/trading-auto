@@ -199,7 +199,7 @@ class PineRef:
         zHaut0 = surS and (rC < 42 or rsiOS >= 3) and momS > -1.0 and close > opn
         zoneBas = zBas0 and not (zHaut0 and rC < 50)
         zoneHaut = zHaut0 and not zoneBas
-        dirBrut = 1 if zoneHaut else -1 if zoneBas else 1 if longT >= 2 else -1 if longT <= -2 else 1 if retHaut else -1 if retBas else sens
+        dirBrut = 1 if longT >= 2 else -1 if longT <= -2 else 1 if zoneHaut else -1 if zoneBas else 1 if retHaut else -1 if retBas else sens   # ordre v24.1 (grosses UT avant zone), comme le bot
         dW = f_etat(S["w1"])[0] if len(S["w1"]) >= 50 else 0
         v.update(dirs=dirs, sqzs=sqzs, rsis=rsis, bull=bull, bear=bear, comp=comp, sens=sens, dirBrut=dirBrut, niveaux=niveaux,
                  atrC=atrC, atr15=atr15, close=close, hau1=hau1, bas1=bas1, dW=dW, rsiAchat=rsiAchat, rsiVente=rsiVente,
