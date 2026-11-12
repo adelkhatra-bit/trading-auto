@@ -612,7 +612,8 @@ def calculer_analyse(S, stable=None, comp_prev=None):
     explBas = sqzC1 == 1 and sqzC == 0 and mom < 0 and bear > bull
     sigHaut = ((fortHaut or explHaut) and longT >= 1) or (zoneHaut and longT >= 0)
     sigBas = ((fortBas or explBas) and longT <= -1) or (zoneBas and longT <= 0)
-    dirBrut = 1 if zoneHaut else -1 if zoneBas else 1 if longT >= 2 else -1 if longT <= -2 else 1 if retHaut else -1 if retBas else sens
+    # v24.1 (= indicateur) : la tendance des grosses UT passe AVANT une zone de retournement isolée
+    dirBrut = 1 if longT >= 2 else -1 if longT <= -2 else 1 if zoneHaut else -1 if zoneBas else 1 if retHaut else -1 if retBas else sens
     dirPlan = dirBrut if stable is None else stable
     strat_plan = strategie_alignement(dirs, dirPlan, etat_ut(w1)[0] if len(w1) >= 50 else 0)[0]
     nom = ("★ ACHAT FORT" if fortHaut else "EXPLOSION ▲" if explHaut else "ZONE DE REBOND ▲") if sigHaut else \
@@ -1301,8 +1302,17 @@ def bloque_dw(r, d, prix=None):
     else:
         posD = (prix - r["basD"]) / max(r["hautD"] - r["basD"], 1e-9)
         posW = (prix - r["basW"]) / max(r["hautW"] - r["basW"], 1e-9)
-    return (d == -1 and (posD <= 0.15 or (posW <= 0.15 and posD <= 0.35))) or \
-           (d == 1 and (posD >= 0.85 or (posW >= 0.85 and posD >= 0.65)))
+    extreme = (d == -1 and (posD <= 0.15 or (posW <= 0.15 and posD <= 0.35))) or \
+              (d == 1 and (posD >= 0.85 or (posW >= 0.85 and posD >= 0.65)))
+    if not extreme:
+        return False
+    # Jour de TENDANCE (Daily, 4 h, 1 h et 15 min dans le même sens, aucun voyant de retournement sur les petites UT) :
+    # le prix est forcément « en bas » (baisse) ou « en haut » (hausse) du Daily — ce n'est pas une raison de rater le mouvement.
+    dirs = r.get("dirs") or []
+    if len(dirs) >= 11 and dirs[10] == d and dirs[9] == d and dirs[7] == d and dirs[4] == d \
+            and sum(1 for x in dirs[:5] if x == -d) == 0:
+        return False
+    return True
 
 # ───────── Mémoire du bot : il apprend de ses TP et de ses SL ─────────
 MEMOIRE = []          # copie de etat["memoire"] (sauvegardé entre les lancements)
@@ -2190,6 +2200,10 @@ def mise_en_forme(t):
             bornes = re.split(r"\s*([–—→])\s*", niveau.group("value"))
             value = (f" {bornes[1]} ".join(_compacte_prix(b) for b in bornes[0::2]) if len(bornes) == 3 else _compacte_prix(niveau.group("value")))
             detail = (niveau.group("detail") or "").strip()
+            plage = re.match(r"^[—–-]\s*([+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?)\s*(.*)$", detail)
+            if plage:                    # « zone 3981,48 – 4012,15 » : la 2e borne reste une borne, pas un détail entre parenthèses
+                value = f"{value} → {_compacte_prix(plage.group(1))}"
+                detail = plage.group(2).strip()
             detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             out.append(f"{label} : {value}" + (f" ({detail})" if detail and len(detail) <= 40 else ""))
             if detail and len(detail) > 40:
@@ -2757,6 +2771,12 @@ MOMENTS_IA = (
      "Une position se prépare. Dis à l'abonné de se tenir prêt, ce que tu vois en bougies maintenant, et ce qui validera l'entrée."),
     ("tp", ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"), 3600,
      "Un objectif vient d'être touché. Félicite simplement, dis quoi faire maintenant (sécuriser, BE) et ce que le marché peut faire ensuite."),
+    ("sl", ("STOP TOUCHÉ", "SORTI À BE", "SORTIE AU STOP SÉCURISÉ"), 1800,
+     "La position vient de se fermer au stop (ou à BE). Dis-le clairement : on n'est plus en position. Explique simplement "
+     "ce que les bougies ont fait, rassure (risque maîtrisé), et dis ce qu'on surveille maintenant (retournement confirmé ou pas). Jamais de reproche."),
+    ("danger", ("RETOURNEMENT EN PRÉPARATION", "METS-TOI À BE"), 1800,
+     "On est en position et la situation change (retournement possible ou passage à BE). Analyse les bougies maintenant, "
+     "dis clairement si on reste en position, où est le SL et quoi faire tout de suite."),
     ("turbulence", ("MANIPULATION", "MOUVEMENT FORT", "RÉACTION À LA NEWS", "NEWS USA DANS", "MÈCHE SUSPECTE"), 1800,
      "Grosse turbulence ou news. Explique simplement ce qui se passe, le risque, et quoi faire (patience, SL, BE)."),
 )
@@ -3084,6 +3104,41 @@ def texte_position(m, r, cle, cid):
         "ℹ️ ALIGN ne passe aucun ordre sur ton broker : toute modification se fait sur ta plateforme."
     ])
 
+
+UT_VISION = (("1m", 0), ("3m", 1), ("5m", 2), ("15m", 4), ("1h", 7), ("4h", 9), ("D", 10))
+
+def texte_vision(m, r, cle, anglais=False):
+    """Pas encore de plan confirmé : le bot donne quand même SA VISION (sens probable, UT alignées, zone, ce qu'il attend),
+    à partir des vraies données du dernier cycle. Jamais « aucune vision » quand les unités de temps sont calculées."""
+    r = r or {}
+    dirs = r.get("dirs") or []
+    if len(dirs) < 11:
+        return ("📊 ALIGN VISION\n⏳ Data still loading, try again in a minute." if anglais
+                else "📊 VISION ALIGN\n⏳ Données en cours de chargement, réessaie dans une minute.")
+    h = hb_etat_surveille(r)
+    sens = {1: "LONG ⬆️", -1: "SHORT ⬇️"}.get(h["d"] or r.get("sens") or 0, "neutre ➖" if not anglais else "neutral ➖")
+    ut = " ".join(f"{n}{'🟩' if dirs[i] == 1 else '🟥' if dirs[i] == -1 else '⬜'}" for n, i in UT_VISION)
+    lignes = [f"📊 {'ALIGN VISION' if anglais else 'VISION ALIGN'} — {ICONE.get(m, '')} {m}", "━━━━━━━━━━━━━━━",
+              (f"🧭 Likely direction: {sens} ({h['pct']} %)" if anglais else f"🧭 Sens probable : {sens} ({h['pct']} %)"),
+              (f"📊 Timeframes aligned: {h['n']}/11" if anglais else f"📊 UT alignées : {h['n']}/11") + f" (seuil {MIN_ALIGN})",
+              f"⏱ {ut}"]
+    if h["strat"]:
+        lignes.append(f"🎯 Profil : {h['strat']}")
+    zp = h["zp"]
+    if zp and h["prix"]:
+        bas, haut = sorted((zp["za"], zp["zb"]))
+        dedans = bas <= h["prix"] <= haut
+        dist = 0 if dedans else min(abs(h["prix"] - bas), abs(h["prix"] - haut))
+        lignes.append((f"📍 Entry zone: {px(bas)} → {px(haut)} " if anglais else f"📍 Zone d'entrée : {px(bas)} → {px(haut)} ")
+                      + (("(price in the zone)" if anglais else "(prix dans la zone)") if dedans
+                         else (f"(price {px(dist)} away)" if anglais else f"(prix à {px(dist)})")))
+    try:
+        lignes.append("⏳ " + raison_attente(r, cle))
+    except Exception:
+        pass
+    lignes.append("🔔 No confirmed entry yet: I'll alert you at the confirmation close" if anglais
+                  else "🔔 Pas encore d'entrée confirmée : je te préviens à la clôture de confirmation")
+    return "\n".join(lignes)
 
 def texte_timeframes(m, r):
     """Lecture pédagogique de toutes les unités réellement calculées par ALIGN."""
@@ -3644,7 +3699,7 @@ def menu_bot_gratuit(etat, cid):
                ["⏸ Aucune position proposée", "🔒 Tu sais juste qu'une position VIP sort"])
     lignes += ["━━━━━━━━━━━━", "🎁 Position du jour : " + ("déjà utilisée (nouvelle demain)" if utilise else "disponible"),
                "📡 Marchés : " + " + ".join(NOMS_MARCHES[m] for m in MARCHES if m in marches_choisis(etat, cid))]
-    _envoi_sur(cid, text="\n".join(lignes), reply_markup=json.dumps({"inline_keyboard": [
+    _envoi_sur(cid, text="\n".join(lignes) + "\n\n" + texte_suivi(etat, cid), reply_markup=json.dumps({"inline_keyboard": [
         [{"text": "⏸ Non, plus de positions", "callback_data": "botoff:x"} if on else
          {"text": "✅ Oui, je veux des positions", "callback_data": "boton:x"}],
         [{"text": "📡 Choisir mes marchés", "callback_data": "marketsmenu:x"}],
@@ -3660,9 +3715,11 @@ def menu_bot(etat, cid):
     _envoi_sur(cid, text=(f"🤖 MON BOT   {'▶️ ON' if on else '⏸ OFF'}\n━━━━━━━━━━━━\n"
                           + ("✅ Il entre tout seul dans chaque position\n👀 Vue 15 min • SL un peu sous / au-dessus de la mèche\n🎯 Le coach te suit jusqu'au TP\n"
                              if on else "⏸ Il n'entre plus pour toi\n🔔 Tu reçois quand même les positions\n")
-                          + f"━━━━━━━━━━━━\n🤖 Positions prises par ton bot   {st['auto']}\n⏸ Arrêts manuels   {st['arrets']}"),
+                          + f"━━━━━━━━━━━━\n🤖 Positions prises par ton bot   {st['auto']}\n⏸ Arrêts manuels   {st['arrets']}"
+                          + "\n\n" + texte_suivi(etat, cid)),
                reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"} if on
                                                             else {"text": "▶️ Relancer mon bot", "callback_data": "boton:x"}],
+                                                           [{"text": "📡 Choisir mes marchés", "callback_data": "marketsmenu:x"}],
                                                            [{"text": "🔔 Son pièce", "callback_data": "son:piece"}]]
                                        + ([[{"text": "👁 Tester la version gratuite", "callback_data": "vuegratuit:on"}]] if str(cid) in {str(x) for x in proprio(etat)} else [])}))
 
@@ -3839,6 +3896,15 @@ def texte_cloture(m, tf, bougie, r, cle):
     return "\n".join(lignes)
 
 
+def signature_cloture(texte):
+    """Ce qui fait la DÉCISION d'une carte de clôture (sans le prix, la bougie ni le chrono) : sert à ne pas répéter la même carte."""
+    garde = []
+    for l in str(texte).splitlines()[1:]:
+        if l.startswith(("🕯", "⏳ Prochaine", "━")) or not l.strip():
+            continue
+        garde.append(l.strip())
+    return "|".join(garde)
+
 def notifier_clotures(etat, m, r, cle):
     """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
     champs = TF_CHAMPS
@@ -3859,8 +3925,16 @@ def notifier_clotures(etat, m, r, cle):
             nouveaux = [b for b in bars if int(b["t"]) > int(derniers.get(tf, 0))]
             if nouveaux:
                 bougie = nouveaux[-1]
-                resultat = _envoi_sur(cid, text=texte_cloture(m, tf, bougie, r, cle),
+                texte_cl = texte_cloture(m, tf, bougie, r, cle)
+                # Anti-bruit : même décision qu'à la dernière carte (statut, alignement, profil) et moins de 30 min → on ne renvoie pas
+                sig = signature_cloture(texte_cl)
+                if sig == suivi.get("sig_cl") and time.time() - float(suivi.get("sig_t", 0)) < 1800:
+                    derniers[tf] = int(bougie["t"])
+                    continue
+                resultat = _envoi_sur(cid, text=texte_cl,
                                      reply_markup=markup_analyse(etat, m, r, cid))
+                if resultat is not None and not (isinstance(resultat, dict) and resultat.get("ok") is False):
+                    suivi["sig_cl"], suivi["sig_t"] = sig, time.time()
                 # Ne consommer la clôture que si Telegram a accepté l'envoi : sinon réessayer au tour suivant.
                 if resultat is not None and not (isinstance(resultat, dict) and resultat.get("ok") is False):
                     derniers[tf] = int(bougie["t"])
@@ -4559,7 +4633,7 @@ def traiter(etat, chats, updates):
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Sélection enregistrée")
                 except Exception:
                     pass
-                menu_marches(etat, qui)
+                menu_marches(etat, qui, (cb.get("message") or {}).get("message_id"))
                 continue
             if choix == "followmarket" and (mk in MARCHES or mk == "BOTH"):
                 if not (autorise(etat, qui, cb.get("from", {}).get("id")) or qui not in etat.get("bienvenue", {})):
@@ -4702,8 +4776,7 @@ def traiter(etat, chats, updates):
                         txt_niveaux = ("🟨 ZONE DE PRÉPARATION\n" + statut_txt(0, cle_detail["ordre"]).strip()
                                        + "\n⏳ Aucun déclenchement confirmé : attendre la clôture prévue.")
                     else:
-                        txt_niveaux = ("📊 NIVEAUX ALIGN\n⏳ Aucun plan d'entrée confirmé pour le moment.\n"
-                                       "Le bot attend les confirmations de sa stratégie avant de publier des niveaux.")
+                        txt_niveaux = texte_vision(mk, r_detail, cle_detail, anglais=str(qui) in LANG_EN)
                     _envoi_sur(qui, text=txt_niveaux,
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "ℹ️ Comprendre l'analyse", "callback_data": f"details:{mk}"},
                                                                              {"text": "↩️ Retour à l'analyse", "callback_data": f"resume:{mk}"}]]}))
@@ -5725,8 +5798,7 @@ def valider_et_suivre_marches(etat, cid, user_id, message_id=None):
                 telegram("editMessageReplyMarkup", chat_id=cid, message_id=message_id, reply_markup=json.dumps({"inline_keyboard": []}))
             except Exception as ex:
                 print("fermeture menu marchés", ex)
-    _envoi_sur(cid, text=(f"✅ Tracking on: {noms}\n🔔 I'll alert you when an entry is confirmed." if anglais
-                          else f"✅ Suivi activé : {noms}\n🔔 Je t'alerterai lorsqu'un point d'entrée sera confirmé."))
+    _envoi_sur(cid, text=(f"✅ Tracking on: {noms}" if anglais else f"✅ Suivi activé : {noms}") + "\n\n" + texte_suivi(etat, cid))
     return True
 
 def basculer_marche(etat, cid, marche):
@@ -5756,19 +5828,85 @@ def marche_autorise(etat, cid, marche):
 
 NOMS_MARCHES = {"BTC": "🟠 BTC", "GOLD": "🥇 GOLD", "NASDAQ": "💠 NASDAQ"}
 
-def menu_marches(etat, cid):
-    """Cases à cocher : chaque personne choisit ses marchés (ex. GOLD + NASDAQ, rien du BTC)."""
+def _ou_en_est(etat, m, anglais=False):
+    """Une ligne « où ça en est » à partir des vraies données du dernier cycle (jamais inventée)."""
+    try:
+        tr = (etat.get(m) or {}).get("trade")
+        r = (DERNIERS or {}).get(m) or {}
+        prix = r.get("prix") or (r.get("m1") or [{}])[-1].get("c")
+        if isinstance(tr, dict) and tr.get("sl") is not None:
+            base = (f"price {px(prix)} • " if anglais else f"prix {px(prix)} • ") if prix else ""
+            return base + f"SL {px(tr['sl'])} • TP1 {px(tr['tp1'])}"
+        if not r:
+            return ""
+        h = hb_etat_surveille(r)
+        if not h["d"]:
+            return "no clear direction yet" if anglais else "pas encore de sens clair"
+        profil = f" • {h['strat']}" if h["strat"] else ""
+        minutes = {"SWING": 60, "DAY": 5, "SCALPING": 1}.get(h["strat"], 15)     # unité de validation (comme l'indicateur)
+        reste = minutes * 60 - int(time.time()) % (minutes * 60)
+        unite = {60: "1h", 5: "5 min", 1: "1 min"}.get(minutes, "15 min")
+        quand = (f" • next {unite} close in {reste // 60:02d}:{reste % 60:02d}" if anglais
+                 else f" • prochaine clôture {unite} dans {reste // 60:02d}:{reste % 60:02d}")
+        return (f"{h['n']}/11 timeframes aligned{profil}" if anglais else f"{h['n']}/11 UT alignées{profil}") + quand
+    except Exception as ex:
+        print("où en est", m, ex)
+        return ""
+
+def texte_suivi(etat, cid):
+    """Bloc « 📡 JE SURVEILLE POUR TOI » : marché par marché, ce que le bot suit pour cette personne.
+    Une seule source de vérité (marches_choisis / en_position / etat['auto']) réutilisée partout."""
+    cid = str(cid)
+    anglais = cid in LANG_EN
+    dedans = set(en_position(etat, cid))
+    choisis = marches_choisis(etat, cid)
+    lignes = ["📡 I'M WATCHING FOR YOU" if anglais else "📡 JE SURVEILLE POUR TOI", "━━━━━━━━━━━━━━━"]
+    for m in MARCHES:
+        if m in dedans:
+            etat_m = "🎯 in a position (followed to TP / SL)" if anglais else "🎯 en position (suivi jusqu'au TP / SL)"
+        elif m in choisis:
+            etat_m = "⏳ waiting for a confirmed entry" if anglais else "⏳ j'attends une entrée confirmée"
+        else:
+            etat_m = "⬜ not followed" if anglais else "⬜ non suivi"
+        lignes.append(f"{NOMS_MARCHES[m]} : {etat_m}")
+        if m in dedans or m in choisis:
+            detail = _ou_en_est(etat, m, anglais)
+            if detail:
+                lignes.append(f"   ↳ {detail}")
+    if not bot_on(etat, cid):
+        lignes.append("⏸ Your bot is paused: 🤖 My bot to restart" if anglais
+                      else "⏸ Ton bot est en pause : 🤖 Mon bot pour le relancer")
+    else:
+        lignes.append("🔔 I'll alert you as soon as an entry is confirmed" if anglais
+                      else "🔔 Je te préviens dès qu'une entrée est confirmée")
+    return "\n".join(lignes)
+
+def menu_marches(etat, cid, message_id=None):
+    """Cases à cocher : chaque personne choisit ses marchés (ex. GOLD + NASDAQ, rien du BTC).
+    Avec message_id, le même menu est mis à jour sur place (pas de nouveau message à chaque case)."""
     choisis = marches_choisis(etat, cid)
     anglais = str(cid) in LANG_EN
+    tout = set(MARCHES) <= set(choisis)
     lignes = [[{"text": ("✅ " if m in choisis else "⬜ ") + NOMS_MARCHES[m], "callback_data": f"markets:{m}"}] for m in MARCHES]
-    lignes.append([{"text": ("✅ Everything" if anglais else "✅ Tout recevoir"), "callback_data": "markets:ALL"}])
+    lignes.append([{"text": ("✅ " if tout else "⬜ ") + ("Everything" if anglais else "Tout recevoir"), "callback_data": "markets:ALL"}])
     lignes.append([{"text": ("✅ Confirm & follow" if anglais else "✅ Valider et suivre"), "callback_data": "markets:OK"}])
-    texte = ("📡 MY MARKETS\n━━━━━━━━━━━━━━━\n👆 Tap to tick / untick\n🔔 You only get alerts for ticked markets\n"
+    coches = " + ".join(NOMS_MARCHES[m] for m in MARCHES if m in choisis)
+    texte = ("📡 MY MARKETS\n━━━━━━━━━━━━━━━\n👆 Tap to tick / untick\n"
+             f"☑️ Ticked now: {coches}\n🔔 You only get alerts for ticked markets\n"
              "📍 Prices can differ by a few points from your broker: follow the candles (wicks)"
              if anglais else
-             "📡 MES MARCHÉS\n━━━━━━━━━━━━━━━\n👆 Touche pour cocher / décocher\n🔔 Tu reçois uniquement les marchés cochés\n"
+             "📡 MES MARCHÉS\n━━━━━━━━━━━━━━━\n👆 Touche pour cocher / décocher\n"
+             f"☑️ Cochés en ce moment : {coches}\n🔔 Tu reçois uniquement les marchés cochés\n"
              "📍 Le prix peut différer de quelques points selon ton broker : suis les bougies (mèches)")
-    _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
+    clavier = json.dumps({"inline_keyboard": lignes})
+    if message_id:
+        try:
+            return telegram("editMessageText", chat_id=cid, message_id=message_id, text=texte, reply_markup=clavier)
+        except Exception as ex:
+            if "not modified" in str(ex).lower():
+                return None
+            print("menu marchés (édition)", ex)
+    return _envoi_sur(cid, text=texte, reply_markup=clavier)
 
 def marches_du_message(texte):
     """Marchés cités dans l'en-tête d'une notification."""

@@ -231,11 +231,13 @@ class PropositionPineV25(unittest.TestCase):
         modifs = [l[1:] for l in diff if l[:1] in "+-" and not l.startswith(("+++", "---"))]
         self.assertGreater(len(modifs), 20)
         for l in modifs:
+            if "al135" in l or l.strip().startswith(("lE   :=", "eE   :=")):
+                continue                                           # seule exception voulue par Adel : trait d'entrée jaune → vert si 1/3/5 min alignées
             for interdit in ("color.", "table.", "label.new", "line.new", "box.new", "bgcolor", "plotshape", "size.", "style=", "position."):
                 self.assertNotIn(interdit, l)
         v25 = (self.RACINE / "ALIGN_MTF_PRO_v25_PROPOSITION.pine").read_text(encoding="utf-8")
         self.assertIn("NON PUBLIÉE", v25)
-        self.assertEqual(v25.count("request.security("), 24)           # 21 en v24 + 3 (M1, M3, M5 ; limite TradingView : 40)
+        self.assertEqual(v25.count("request.security("), 28)           # 21 en v24 + 3 niveaux (M1, M3, M5) + 4 clôtures (M1, M3, M5, M15) ; limite TradingView : 40
         for marque in ("niveauxSn", "snOk", "entP", "lv1", "lv3", "lv5", "bbU"):                   # niveaux M1/M3/M5 séparés + cascade
             self.assertIn(marque, v25)
 
