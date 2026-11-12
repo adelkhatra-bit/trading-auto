@@ -285,7 +285,10 @@ var float slP = na
 var int dirFig = 0
 var string stratFig = ""
 nouvelle15 = ta.change(time("15")) != 0
-slFranchi = not na(sl) and ((dirFig == -1 and close > sl) or (dirFig == 1 and close < sl))
+// v25c : l'annulation du plan reste sur le STOP DU PLAN (slP), pas sur le stop sniper serré (sinon une simple mèche efface tout le plan).
+// La cassure des derniers plus hauts / plus bas M1-M3-M5-M15 est signalée à part (DÉPART / CASSURE).
+slRef = na(slP) ? sl : slP
+slFranchi = not na(slRef) and ((dirFig == -1 and close > slRef) or (dirFig == 1 and close < slRef))
 // ═════════ RETOURNEMENT : SL franchi à la clôture → position annulée ; confirmé quand le nouveau sens est validé ═════════
 var int retDir = 0
 var int retBar = 0
