@@ -167,5 +167,25 @@ class CarteOrdreEtMecheTest(unittest.TestCase):
         self.assertTrue(lignes[0].startswith("🏁 TP2") and lignes[-1].startswith("🛑 SL"), lignes)
 
 
+class FeteEtManipTest(unittest.TestCase):
+    def test_tp_se_fete(self):
+        t = ab.carte_suivi("GOLD", "TP1 TOUCHÉ", ["💰 TP1 : 3985 ✅"], "Sécuriser", {})
+        self.assertTrue(t.startswith("🎉🥳 GOLD - TP1 TOUCHÉ"))
+        self.assertIn("🎊", t)
+
+    def test_stop_ne_se_fete_pas(self):
+        t = ab.carte_suivi("GOLD", "STOP TOUCHÉ", ["🛑 SL : 4000"], "Attendre", {})
+        self.assertTrue(t.startswith("📍 GOLD - STOP TOUCHÉ"))
+
+    def test_pre_manip_perimee_jamais_annoncee(self):
+        b15 = [{"t": 1000 + 900 * i, "o": 100, "h": 101, "l": 99, "c": 100} for i in range(30)]
+        r = {"b15": b15, "atr": 1.0, "m1": []}
+        cle = {"pre_manip": {"t15": 1000, "d": 1}}            # bougie de plusieurs heures avant
+        out = []
+        ab.meche_suspecte(out, "BTC", r, cle)
+        self.assertFalse(any("pas de manipulation" in x for x in out))
+        self.assertNotIn("pre_manip", cle)
+
+
 if __name__ == "__main__":
     unittest.main()
