@@ -76,3 +76,16 @@ for i, (cid, lst) in enumerate(sorted(chats.items(), key=lambda z: -len(z[1]))[:
         print(f"ROUTAGE   âge des messages hors choix (h avant le dernier message) : {sorted(ages)}")
     for k, n in tit_sans.most_common(8):
         print(f"ROUTAGE   sans marché {n:3d} x {k}")
+
+# ── Exemples réels (un par type de titre, messages du bot uniquement) pour relire la forme ──
+if "--exemples" in sys.argv:
+    vus_t, n = set(), 0
+    for x in reversed(lst):
+        k = titre(x["text"])
+        if k in vus_t or n >= 26:
+            continue
+        vus_t.add(k); n += 1
+        corps = [l for l in re.sub(r"</?[bi]>|</?code>", "", x["text"]).splitlines()]
+        print(f"EXEMPLE ── {k}  (x{parttl.get(k, 1)}, {len(corps)} lignes)")
+        for l in corps[:14]:
+            print("EX|" + l[:130])
