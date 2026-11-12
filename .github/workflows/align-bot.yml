@@ -15,6 +15,7 @@ on:
 permissions:
   contents: write   # uniquement pour publier l'état PUBLIC sur la branche live-data (page ALIGN LIVE)
   models: read
+  actions: read    # lire l'état des runs : attendre que l'ancien worker ait fini de sauvegarder sa mémoire
 
 concurrency:
   # Un seul worker de production. Sur push, ce workflow ne démarre qu'après
@@ -48,6 +49,36 @@ jobs:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: align-bot
+
+      - name: Attendre la fin de l'ancien worker (sa sauvegarde de mémoire)
+        # Sans cette attente, le nouveau worker restaurait une mémoire PÉRIMÉE (celle de la dernière fin de bloc) pendant que l'ancien
+        # sauvegardait encore : envois oubliés (doublons), marchés cochés perdus, suivis de position perdus.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          repo, me, token = os.environ["REPO"], int(os.environ["RUN_ID"]), os.environ["GH_TOKEN"]
+          def autres():
+              url = f"https://api.github.com/repos/{repo}/actions/workflows/align-bot.yml/runs?status=in_progress&per_page=20"
+              req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json"})
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return [x["id"] for x in json.loads(r.read().decode()).get("workflow_runs", []) if x["id"] < me]
+          debut = time.time()
+          while time.time() - debut < 240:
+              try:
+                  vieux = autres()
+              except Exception as ex:
+                  print("WORKER_WAIT lecture impossible", type(ex).__name__); break
+              if not vieux:
+                  print(f"WORKER_WAIT ancien worker terminé après {int(time.time() - debut)} s"); break
+              print(f"WORKER_WAIT en attente de {vieux} ({int(time.time() - debut)} s)"); time.sleep(5)
+          else:
+              print("WORKER_WAIT délai de 240 s atteint : on continue")
+          PY
 
       - name: Récupérer la mémoire du robot
         id: restore_state
@@ -202,9 +233,25 @@ jobs:
           PAUSE_SEC: "5"
         run: exec python3 align_bot.py
 
+      - name: Clé unique de sauvegarde de la mémoire
+        id: cle_sauvegarde
+        if: always()
+        run: |
+          echo "a=align-etat-${GITHUB_RUN_ID}-a$(date +%s)" >> "$GITHUB_OUTPUT"
+          echo "b=align-etat-${GITHUB_RUN_ID}-b$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Sauver la mémoire du robot
+        # Un cache GitHub est immuable : l'ancienne clé fixe « align-etat-<run> » était refusée à l'arrêt (« Unable to reserve cache »)
+        # et la mémoire était perdue à chaque déploiement. Clés uniques datées ; le restore prend la plus récente (préfixe align-etat-).
         if: always()
         uses: actions/cache/save@v4
         with:
           path: align-bot/state.json
-          key: align-etat-${{ github.run_id }}
+          key: ${{ steps.cle_sauvegarde.outputs.a }}
+
+      - name: Sauver la mémoire du robot (deuxième exemplaire)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: align-bot/state.json
+          key: ${{ steps.cle_sauvegarde.outputs.b }}
