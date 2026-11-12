@@ -374,10 +374,16 @@ ll6 = ta.lowest(low, 6)
 snRng = math.max(high[1] - low[1], syminfo.mintick)
 snRej = dirPlan == -1 ? (high[1] >= snLvl - 0.5 * atrC and close[1] < snLvl and ((high[1] - math.max(open[1], close[1])) >= 0.4 * snRng or close[1] < bbU[1] or (close[1] < open[1] and close[1] < open[2]))) : (low[1] <= snLvl + 0.5 * atrC and close[1] > snLvl and ((math.min(open[1], close[1]) - low[1]) >= 0.4 * snRng or close[1] > bbL[1] or (close[1] > open[1] and close[1] > open[2])))
 snZone = not na(zBas) and close >= zBas - 0.5 * atrC and close <= zHaut + 0.5 * atrC
-snOk = snCtx and snZone and not na(snLvl) and snRej
+// v25b (demande d'Adel, 12/11) : ENTRÉE calée sur le DERNIER PLUS HAUT M5 (vente) / PLUS BAS M5 (achat) dès que le prix est dans la zone,
+// sans attendre le rejet (le rejet reste l'info « J'ENTRE MAINTENANT »). STOP juste derrière ce plus haut / plus bas : petite marge (15 % de l'ATR 15 min,
+// au moins 2 ticks). TP : inchangés (plan). Sans niveau M5 valide : cascade M1 / M3 / M15 comme avant.
+snLvl5 = f_bon(lv5) ? lv5 : snLvl
+snMarge = math.max(0.15 * atr15, 2 * syminfo.mintick)
+snOk = snCtx and snZone and not na(snLvl5)
+snRejOk = snOk and snRej
 if snOk
-    ent := snLvl
-    sl := dirPlan == -1 ? math.max(math.max(snLvl, hh6) + 0.5 * atrC, snLvl + math.max(close * 0.0012, atrC)) : math.min(math.min(snLvl, ll6) - 0.5 * atrC, snLvl - math.max(close * 0.0012, atrC))
+    ent := snLvl5
+    sl := dirPlan == -1 ? snLvl5 + snMarge : snLvl5 - snMarge
 
 
 // ═════════ SIGNAUX ═════════
