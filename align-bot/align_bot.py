@@ -6436,6 +6436,17 @@ def texte_zone_extreme(m, r, d):
             f"⛔ Je ne poursuis pas le {sens} ici : risque de {'repli' if d == 1 else 'rebond'}.\n"
             f"⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m, ou un meilleur prix.")
 
+def alerte_extreme_due(cle, d, t):
+    """Alerte « zone extrême Daily/Weekly » : UNE seule fois par situation. La situation est identifiée par le sens bloqué seul
+    (le libellé de zone oscille autour des seuils et ne doit pas relancer le message). Elle se réarme si le sens change
+    ou si la situation a disparu pendant plus de EXTREME_REARMEMENT_S."""
+    vu, sig = cle.get("extreme_vu_t", 0), cle.get("extreme_sig")
+    cle["extreme_vu_t"] = t
+    if sig == str(d) and t - vu <= EXTREME_REARMEMENT_S:
+        return False
+    cle["extreme_sig"] = str(d); cle["extreme_warn_t"] = t
+    return True
+
 def agent(m, r, cle, ferme):
     """Agent : tendance 4h + confirmation 1h → déclenchement sur bougie 5m clôturée."""
     out = []
