@@ -29,6 +29,7 @@ def titre(t):
 # Le plus grand chat sert d'échantillon : c'est celui qui reçoit tout.
 cid, lst = max(chats.items(), key=lambda z: len(z[1]))
 lst = sorted(lst, key=lambda x: float(x.get("timestamp", 0)))
+principal = list(lst)                                   # plus gros chat (la boucle de routage réutilise « lst »)
 exact, memes, parttl = 0, 0, collections.Counter()
 etat_sim, supprimes = {}, collections.Counter()
 derniere = {}
@@ -80,7 +81,7 @@ for i, (cid, lst) in enumerate(sorted(chats.items(), key=lambda z: -len(z[1]))[:
 # ── Exemples réels (un par type de titre, messages du bot uniquement) pour relire la forme ──
 if "--exemples" in sys.argv:
     vus_t, n = set(), 0
-    for x in reversed(lst):
+    for x in reversed(principal):
         k = titre(x["text"])
         if k in vus_t or n >= 26:
             continue
