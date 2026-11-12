@@ -324,3 +324,102 @@ class MessageEntreeLisible(unittest.TestCase):
     def test_prix_et_niveaux_toujours_formates(self):
         self.assertIn("Entrée : 4075,50 (ordre limite)", ab.mise_en_forme("t\\n🟨 Entrée : 4 075.50 (ordre limite)"))
         self.assertIn("TP1 : 3985 (15m)", ab.mise_en_forme("t\\n💰 TP1 : 3985.00 (15m)"))
+
+
+class CoachDeConcentration(unittest.TestCase):
+    """« Dis-moi sur quel marché me concentrer » : le plus proche d'une entrée, sa zone, le sens, la clôture à attendre."""
+    def r(self, prix, za, zb, d=-1, atr=4.0, **kw):
+        return dict({"m1": [dict(t=1, o=prix, h=prix, l=prix, c=prix)], "dirPlan": d, "atr": atr, "strat": "SWING",
+                     "zone_pine": {"za": za, "zb": zb, "zmil": (za + zb) / 2}, "posD": 0.5, "posW": 0.5, "basD": 0, "hautD": 1, "basW": 0, "hautW": 1}, **kw)
+
+    def derniers(self):
+        return {"GOLD": self.r(3985.0, 3994.0, 4012.0),            # à 9 pts ≈ 2,3 ATR : en approche
+                "NASDAQ": self.r(28000.0, 28500.0, 28700.0, atr=40.0),   # à 500 pts ≈ 12 ATR : loin
+                "BTC": self.r(73000.0, 73010.0, 73400.0, d=1, atr=200.0)}  # à 10 pts : proche
+
+    def classer(self, derniers=None, choisis=None, etats=None):
+        with patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "bloque_dw", return_value=False):
+            return ab.classer_marches(derniers or self.derniers(), etats or {}, choisis or {"GOLD", "NASDAQ", "BTC"}, 1_800_000_000)
+
+    def test_le_plus_proche_en_premier(self):
+        p = self.classer()
+        self.assertEqual([x["m"] for x in p], ["BTC", "GOLD", "NASDAQ"])
+        self.assertEqual([x["classe"] for x in p], ["proche", "en_approche", "loin"])
+
+    def test_seuls_les_marches_coches_sont_compares(self):
+        p = self.classer(choisis={"GOLD", "NASDAQ"})
+        self.assertEqual([x["m"] for x in p], ["GOLD", "NASDAQ"])
+        txt = ab.texte_concentration(p, True)
+        self.assertNotIn("BTC", txt)
+
+    def test_prix_dans_la_zone_passe_devant(self):
+        d = self.derniers(); d["NASDAQ"] = self.r(28600.0, 28500.0, 28700.0, atr=40.0)
+        p = self.classer(d)
+        self.assertEqual((p[0]["m"], p[0]["classe"]), ("NASDAQ", "dans_zone"))
+
+    def test_marche_ferme_bloque_ou_en_position_ne_sont_jamais_favoris(self):
+        d = self.derniers()
+        with patch.object(ab, "cme_ouvert", return_value=False), patch.object(ab, "bloque_dw", return_value=False):
+            p = ab.classer_marches(d, {}, {"GOLD", "BTC"}, 1_800_000_000)
+        self.assertEqual(p[0]["m"], "BTC")                                           # BTC 24/7, GOLD fermé
+        self.assertEqual(p[1]["classe"], "ferme")
+        with patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "bloque_dw", return_value=True):
+            self.assertEqual({x["classe"] for x in ab.classer_marches(d, {}, {"GOLD", "BTC"}, 1_800_000_000)}, {"bloque"})
+        p = self.classer(etats={"BTC": {"trade": {"d": 1}}})
+        self.assertEqual([x["classe"] for x in p if x["m"] == "BTC"], ["position"])
+        self.assertNotEqual(p[0]["m"], "BTC")
+        d2 = self.derniers(); d2["GOLD"]["dirPlan"] = 0; d2["GOLD"]["zone_pine"] = None
+        self.assertEqual([x["classe"] for x in self.classer(d2) if x["m"] == "GOLD"], ["sans_plan"])
+
+    def test_message_vip_zone_sens_distance_et_unite(self):
+        txt = ab.texte_concentration(self.classer(), True)
+        l = txt.split("\n")
+        self.assertEqual(l[0], "🎯 OÙ TE CONCENTRER")
+        self.assertIn("BTC", l[1]); self.assertIn("le plus proche", l[1])
+        self.assertIn("LONG", txt); self.assertIn("73010", txt); self.assertIn("73400", txt)                    # zone visée
+        self.assertIn("ATR 15 min", txt); self.assertIn("À surveiller : clôture 1h au-dessus de 73205", txt)    # unité à surveiller
+        self.assertIn("GOLD : en approche", txt); self.assertIn("NASDAQ : loin de la zone", txt)
+        self.assertIn("Je les surveille pour toi", txt)
+
+    def test_message_gratuit_sans_zone_ni_niveaux(self):
+        txt = ab.texte_concentration(self.classer(), False)
+        self.assertIn("BTC", txt); self.assertIn("VIP", txt)
+        for interdit in ("73010", "73400", "73205", "zone de retournement", "À surveiller"):
+            self.assertNotIn(interdit, txt)
+
+    def test_aucun_favori_si_tout_est_bloque_ou_ferme(self):
+        with patch.object(ab, "cme_ouvert", return_value=False):
+            p = ab.classer_marches({"GOLD": self.r(3985.0, 3994.0, 4012.0)}, {}, {"GOLD"}, 1_800_000_000)
+        self.assertIsNone(ab.texte_concentration(p, True))
+
+    def test_aucun_marche_proche_le_dit_honnetement(self):
+        d = {"NASDAQ": self.r(28000.0, 28500.0, 28700.0, atr=40.0), "GOLD": self.r(3900.0, 3994.0, 4012.0)}
+        txt = ab.texte_concentration(self.classer(d, {"GOLD", "NASDAQ"}), True)
+        self.assertIn("aucun n'est proche", txt)
+
+    def test_envoi_automatique_seulement_quand_le_favori_change_et_pas_plus_d_une_fois_par_30_min(self):
+        etat, envois = {"marches_par_chat": {"adel": ["GOLD", "NASDAQ", "BTC"], "solo": ["GOLD"]}}, []
+        with patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append((c, k["text"]))), patch.object(ab, "autorise", return_value=True), \
+             patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "bloque_dw", return_value=False):
+            T = 1_800_000_000
+            ab.coach_concentration(etat, {"adel", "solo"}, self.derniers(), T)
+            self.assertEqual([c for c, _ in envois], ["adel"])                                    # « solo » ne suit qu'un marché : rien à comparer
+            ab.coach_concentration(etat, {"adel"}, self.derniers(), T + 60)
+            ab.coach_concentration(etat, {"adel"}, self.derniers(), T + 3600)                    # même favori, pas plus proche : silence
+            self.assertEqual(len(envois), 1)
+            d = self.derniers(); d["GOLD"] = self.r(4000.0, 3994.0, 4012.0)                      # GOLD entre dans la zone : nouveau favori
+            ab.coach_concentration(etat, {"adel"}, d, T + 120)                                    # trop tôt (< 30 min)
+            self.assertEqual(len(envois), 1)
+            ab.coach_concentration(etat, {"adel"}, d, T + 3700)
+            self.assertEqual(len(envois), 2)
+            self.assertIn("GOLD", envois[1][1].split("\n")[1])
+
+    def test_le_gratuit_ne_recoit_pas_l_envoi_automatique(self):
+        envois = []
+        with patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append(c)), patch.object(ab, "autorise", return_value=False), \
+             patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "bloque_dw", return_value=False):
+            ab.coach_concentration({"marches_par_chat": {"x": ["GOLD", "BTC"]}}, {"x"}, self.derniers(), 1_800_000_000)
+        self.assertEqual(envois, [])
+
+    def test_commande_focus_declaree_dans_le_menu(self):
+        self.assertIn("/focus", ab.COMMANDES)
