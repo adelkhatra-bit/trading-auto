@@ -771,9 +771,7 @@ def _sniper(r):
     b5, b15 = (r.get("b5") or [])[:-1], (r.get("b15") or [])[:-1]          # la dernière bougie M5 / M15 est en formation
     if d not in (1, -1) or len(dirs) < 11 or not a3 or not a15 or not zp or len(m1) < 40 or len(b3) < 12 or len(b5) < 8 or len(b15) < 5:
         return None, f"DONNEES/PLAN absents (dirPlan={d}, zone={'oui' if zp else 'non'}, b3={len(b3)}, b5={len(b5)}, b15={len(b15)})"
-    # Le plan est figé jusqu'à la clôture 15 min : l'alignement vivant peut osciller autour du seuil sans
-    # invalider le plan. On exige donc le sens identique, 1h/4h non contraires, et au plus 2 UT sous le minimum.
-    if (r["bull"] if d == 1 else r["bear"]) < MIN_ALIGN - 2 or r.get("sens") != d or dirs[9] == -d or dirs[7] == -d:
+    if (r["bull"] if d == 1 else r["bear"]) < MIN_ALIGN or r.get("sens") != d or dirs[9] == -d or dirs[7] == -d:
         return None, f"CONTEXTE_HTF refusé (UT alignées {(r['bull'] if d == 1 else r['bear'])}/11, sens={r.get('sens')}, 4h={dirs[9]}, 1h={dirs[7]})"
     prix = m1[-1]["c"]
     if not (zp["za"] - 0.5 * a15 <= prix <= zp["zb"] + 0.5 * a15):

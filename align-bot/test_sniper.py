@@ -98,14 +98,9 @@ class Cascade(unittest.TestCase):
         self.assertEqual(sn["ut"], "M1")                                                         # M1 sans plus haut supérieur valide au-dessus : la plus petite UT
         self.assertIn("plus haut", sn["src"])
 
-    def test_plan_fige_tolere_alignement_vivant_7_sur_11(self):
-        # cas réel du rejeu : 7/11 pour un minimum de 8 ne doit pas annuler un plan figé de même sens
-        k, _ = premiere_proposition(self.M1)
-        self.assertIsNotNone(ab.entree_sniper(r_at(self.M1, k, bear=7)))
-
     def test_never_forced(self):
         k, _ = premiere_proposition(self.M1)
-        cas = {"UT non alignées": dict(bear=5), "sens flou": dict(sens=0), "contre la 1h": dict(dirs=[-1] * 7 + [1] + [-1] * 3), "contre la 4h": dict(dirs=[-1] * 9 + [1, -1]),
+        cas = {"UT non alignées": dict(bear=7), "sens flou": dict(sens=0), "contre la 1h": dict(dirs=[-1] * 7 + [1] + [-1] * 3), "contre la 4h": dict(dirs=[-1] * 9 + [1, -1]),
                "pas de direction": dict(dirPlan=0), "prix hors zone": dict(zone_pine=dict(za=4005.0, zb=4012.79, zmil=4009.0))}
         for nom, kw in cas.items():
             self.assertIsNone(ab.entree_sniper(r_at(self.M1, k, **kw)), nom)
