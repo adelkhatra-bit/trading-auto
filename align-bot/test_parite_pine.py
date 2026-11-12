@@ -422,7 +422,13 @@ class ParitePine(unittest.TestCase):
             self.assertEqual(r2["ret_conf"], bool(ref.retDir) and dirPlan == ref.retDir, ctx + " RETOURNEMENT confirmé")
             # --- niveaux de l'ordre Telegram == niveaux du graphique
             o = ab.point_entree(r2, dirPlan if dirPlan else 1, r2["prix"])
-            if dirPlan:
+            if dirPlan and o.get("fvg_ut"):
+                # v24.3 : sur la vue de référence (5 min), l'indicateur remplace le plan par FVG + mèche ; le plan reste la base de repli
+                ut = ab.UT_FVG.get(r2.get("strat") or "", "5")
+                fv = ab.plan_fvg(dirPlan, r2["struct_ut"][ut], ref.ent, ref.sl, ref.tp1, ref.tp2, ab.UT_FVG_NOM[ut])
+                for k in ("e", "sl", "tp1", "tp2"):
+                    self.assertAlmostEqual(o[k], fv[k], delta=1e-6, msg=ctx + " niveaux FVG " + k)
+            elif dirPlan:
                 self.assertAlmostEqual(o["e"], ref.ent, delta=1e-4 * max(1.0, abs(ref.ent) / 1000)); self.assertAlmostEqual(o["sl"], ref.sl, delta=1e-4 * max(1.0, abs(ref.sl) / 1000))
                 self.assertAlmostEqual(o["tp1"], ref.tp1, delta=1e-4 * max(1.0, abs(ref.tp1) / 1000)); self.assertAlmostEqual(o["tp2"], ref.tp2, delta=1e-4 * max(1.0, abs(ref.tp2) / 1000))
             stats["barres"] += 1
