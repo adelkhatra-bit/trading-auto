@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Audit des messages RÉELLEMENT envoyés par le bot (journal_telegram de state.json). Lecture seule, rien n'est envoyé.
+"""ATTENTION : le dépôt est PUBLIC, les journaux Actions sont lisibles par tous. Les textes de messages (VIP) ne s'affichent qu'avec AUDIT_TEXTE_OK=oui.
+Audit des messages RÉELLEMENT envoyés par le bot (journal_telegram de state.json). Lecture seule, rien n'est envoyé.
 Affiche : volume par conversation, titres les plus répétés (même titre à quelques minutes d'écart) et ce que l'anti-répétition aurait supprimé.
 Seuls les messages sortants du bot sont lus (titre tronqué) : jamais les messages des utilisateurs."""
 import collections
+import os
 import datetime
 import json
 import re
@@ -80,7 +82,7 @@ for i, (cid, lst) in enumerate(sorted(chats.items(), key=lambda z: -len(z[1]))[:
         print(f"ROUTAGE   sans marché {n:3d} x {k}")
 
 # ── Exemples réels (un par type de titre, messages du bot uniquement) pour relire la forme ──
-if "--exemples" in sys.argv:
+if "--exemples" in sys.argv and os.environ.get("AUDIT_TEXTE_OK") == "oui":
     vus_t, n = set(), 0
     for x in reversed(principal):
         k = titre(x["text"])
@@ -93,7 +95,7 @@ if "--exemples" in sys.argv:
             print("EX|" + l[:130])
 
 # ── Recherche ciblée : python3 audit_messages.py --cherche "baissier|mouvement" [--heures 6] ──
-if "--cherche" in sys.argv:
+if "--cherche" in sys.argv and os.environ.get("AUDIT_TEXTE_OK") == "oui":
     motif = re.compile(sys.argv[sys.argv.index("--cherche") + 1], re.I)
     h = float(sys.argv[sys.argv.index("--heures") + 1]) if "--heures" in sys.argv else 6.0
     fin_t = max(float(x.get("timestamp", 0)) for x in sortants)
