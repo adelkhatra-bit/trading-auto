@@ -5446,6 +5446,26 @@ def marche_autorise(etat, cid, marche):
 
 NOMS_MARCHES = {"BTC": "🟠 BTC", "GOLD": "🥇 GOLD", "NASDAQ": "💠 NASDAQ"}
 
+def _ou_en_est(etat, m, anglais=False):
+    """Une ligne « où ça en est » à partir des vraies données du dernier cycle (jamais inventée)."""
+    try:
+        tr = (etat.get(m) or {}).get("trade")
+        r = (DERNIERS or {}).get(m) or {}
+        prix = r.get("prix") or (r.get("m1") or [{}])[-1].get("c")
+        if isinstance(tr, dict) and tr.get("sl") is not None:
+            base = (f"price {px(prix)} • " if anglais else f"prix {px(prix)} • ") if prix else ""
+            return base + f"SL {px(tr['sl'])} • TP1 {px(tr['tp1'])}"
+        if not r:
+            return ""
+        h = hb_etat_surveille(r)
+        if not h["d"]:
+            return "no clear direction yet" if anglais else "pas encore de sens clair"
+        profil = f" • {h['strat']}" if h["strat"] else ""
+        return (f"{h['n']}/11 timeframes aligned{profil}" if anglais else f"{h['n']}/11 UT alignées{profil}")
+    except Exception as ex:
+        print("où en est", m, ex)
+        return ""
+
 def texte_suivi(etat, cid):
     """Bloc « 📡 JE SURVEILLE POUR TOI » : marché par marché, ce que le bot suit pour cette personne.
     Une seule source de vérité (marches_choisis / en_position / etat['auto']) réutilisée partout."""
@@ -5462,6 +5482,10 @@ def texte_suivi(etat, cid):
         else:
             etat_m = "⬜ not followed" if anglais else "⬜ non suivi"
         lignes.append(f"{NOMS_MARCHES[m]} : {etat_m}")
+        if m in dedans or m in choisis:
+            detail = _ou_en_est(etat, m, anglais)
+            if detail:
+                lignes.append(f"   ↳ {detail}")
     if not bot_on(etat, cid):
         lignes.append("⏸ Your bot is paused: 🤖 My bot to restart" if anglais
                       else "⏸ Ton bot est en pause : 🤖 Mon bot pour le relancer")

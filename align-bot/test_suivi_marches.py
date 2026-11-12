@@ -30,6 +30,13 @@ class SuiviMarchesTest(unittest.TestCase):
         self.assertIn("💠 NASDAQ : ⏳", t)
         self.assertIn("🟠 BTC : ⬜ non suivi", t)
 
+    def test_ou_en_est_avec_vraies_donnees(self):
+        ab.selectionner_marches_suivi(self.e, "42", ["GOLD"])
+        with mock.patch.object(ab, "DERNIERS", {"GOLD": {"prix": 3975.2, "dirPlan": -1, "bear": 11, "strat": "SWING", "atr": 5}}), \
+             mock.patch.object(ab, "strategie_alignement", lambda *a: (None, "OK")):
+            t = ab.texte_suivi(self.e, "42")
+        self.assertIn("↳ 11/11 UT alignées • SWING", t)
+
     def test_trois_marches(self):
         ab.selectionner_marches_suivi(self.e, "42", "ALL")
         self.assertEqual(ab.texte_suivi(self.e, "42").count("⏳"), 3)
