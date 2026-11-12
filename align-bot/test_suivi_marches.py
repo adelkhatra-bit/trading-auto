@@ -147,5 +147,25 @@ class StrategieMecheTest(unittest.TestCase):
         self.assertIn("(mèche)", ab.resume_ordre(tr))
 
 
+class CarteOrdreEtMecheTest(unittest.TestCase):
+    def test_carte_signal_short_dans_l_ordre_du_graphique(self):
+        tr = {"d": -1, "e": 71624, "sl": 71700, "tp1": 70489, "tp2": 69581, "sl_ut": "5 min"}
+        with mock.patch.object(ab, "niveaux_rs", lambda r: (None, None)):
+            txt = ab.carte_coach("BTC", {"macro_data": None}, {}, "signal", tr=tr)
+        lignes = [l for l in txt.splitlines() if l.startswith(("🛑", "🎯", "💰", "🏁"))]
+        self.assertTrue(lignes[0].startswith("🛑 SL"), lignes)
+        self.assertTrue(lignes[1].startswith("🎯 Entrée"), lignes)
+        self.assertTrue(lignes[2].startswith("💰 TP1"), lignes)
+        self.assertIn("mèche 5 min", lignes[0])
+        self.assertIn("vue 5 min", lignes[1])
+
+    def test_carte_signal_long_tp_en_haut(self):
+        tr = {"d": 1, "e": 100, "sl": 98, "tp1": 104, "tp2": 108}
+        with mock.patch.object(ab, "niveaux_rs", lambda r: (None, None)):
+            txt = ab.carte_coach("GOLD", {"macro_data": None}, {}, "signal", tr=tr)
+        lignes = [l for l in txt.splitlines() if l.startswith(("🛑", "🎯", "💰", "🏁"))]
+        self.assertTrue(lignes[0].startswith("🏁 TP2") and lignes[-1].startswith("🛑 SL"), lignes)
+
+
 if __name__ == "__main__":
     unittest.main()
