@@ -150,6 +150,23 @@ class EvenementsPine(unittest.TestCase):
         r2 = self.r(dirPlan=1, strat="DAY", dirs=r["dirs"], b5=r["b5"]); r2["b5"][-3] = dict(r2["b5"][-3], c=99.7)
         self.assertEqual(self.lance({}, "GOLD", r2), [])                                        # déjà au-dessus avant : pas de front
 
+    def test_confirmation_not_repeated_when_zone_moves(self):
+        """Cas réel 12/11 : « CONFIRMATION SHORT » 16:16, 16:30, 16:47 (zone recalculée). Une seule par période, même sens."""
+        etat, r = {}, self.r(dirPlan=1, strat="DAY", dirs=[1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0])
+        r["b5"][-3] = dict(r["b5"][-3], c=98.5); r["b5"][-2] = dict(r["b5"][-2], c=99.6)
+        self.assertEqual(self.kinds(self.lance(etat, "GOLD", r)), ["confirmation"])
+        r2 = self.r(dirPlan=1, strat="DAY", dirs=r["dirs"])
+        r2["b5"] = [dict(x, t=x["t"] + 900) for x in r["b5"]]                                   # nouvelle bougie, même croisement
+        self.assertEqual(self.lance(etat, "GOLD", r2, self.NOW + 900), [])
+        r3 = self.r(dirPlan=1, strat="DAY", dirs=r["dirs"])
+        r3["b5"] = [dict(x, t=x["t"] + 4000) for x in r["b5"]]
+        self.assertEqual(self.kinds(self.lance(etat, "GOLD", r3, self.NOW + 4000)), ["confirmation"])   # période écoulée : de nouveau possible
+
+    def test_rising_alignment_below_threshold_is_silent(self):
+        etat = {}
+        self.lance(etat, "NASDAQ", self.r(bull=4))
+        self.assertEqual(self.lance(etat, "NASDAQ", self.r(bull=6), self.NOW + 700), [])          # « l'alignement monte (6/11) » : déjà dans le RADAR
+
     def test_closed_or_stale_market_never_alerts(self):
         etat = {}
         with patch.object(ab, "cme_ouvert", return_value=False):

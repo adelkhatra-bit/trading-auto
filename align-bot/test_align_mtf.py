@@ -715,8 +715,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "meche_sl", return_value="sous la mèche"),
         ):
             msg = align_bot.texte_cloture("BTC", "5m", candle(7200), r, {"ordre": ordre})
-        self.assertIn("🟡 Zone 67490–67520", msg)
-        self.assertIn("Zone 67490–67520", msg)
+        self.assertIn("🟡 Zone 67490 → 67520", msg)
+        self.assertIn("Zone 67490 → 67520", msg)
         self.assertNotIn("POSITION EN COURS", msg)
 
     def test_candle_close_countdown_supports_every_watched_timeframe(self):

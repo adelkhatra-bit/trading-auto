@@ -3889,7 +3889,8 @@ def texte_cloture(m, tf, bougie, r, cle):
     elif ordre:
         entree = ordre.get("e", prix)
         bas, haut = sorted((ordre.get("za", entree), ordre.get("zb", entree)))
-        lignes.append(f"🟡 Zone {px(bas)}–{px(haut)} · SL {niveau(ordre.get('sl'))} · TP1 {niveau(ordre.get('tp1'))} · TP2 {niveau(ordre.get('tp2'))}")
+        tp2_ = f" · TP2 {niveau(ordre.get('tp2'))}" if tp2_affichable(ordre.get("d"), ordre.get("tp1"), ordre.get("tp2")) else ""
+        lignes.append(f"🟡 Zone {px(bas)} → {px(haut)} · Entrée {niveau(ordre.get('e'))} · SL {niveau(ordre.get('sl'))} · TP1 {niveau(ordre.get('tp1'))}{tp2_}")
     else:
         attente = "4h" if not d4h else "1h" if d1h != d4h else "15m" if not r.get("confirme") else "5m"
         try:
@@ -3909,7 +3910,7 @@ def signature_cloture(texte):
     for l in str(texte).splitlines()[1:]:
         if l.startswith(("🕯", "⏳ Prochaine", "━")) or not l.strip():
             continue
-        garde.append(l.strip())
+        garde.append(re.sub(r"[\d.,]+", "#", l.strip()))          # les niveaux qui bougent de quelques points ne changent pas la décision
     return "|".join(garde)
 
 def notifier_clotures(etat, m, r, cle):
@@ -3935,7 +3936,7 @@ def notifier_clotures(etat, m, r, cle):
                 texte_cl = texte_cloture(m, tf, bougie, r, cle)
                 # Anti-bruit : même décision qu'à la dernière carte (statut, alignement, profil) et moins de 30 min → on ne renvoie pas
                 sig = signature_cloture(texte_cl)
-                if sig == suivi.get("sig_cl") and time.time() - float(suivi.get("sig_t", 0)) < 1800:
+                if sig == suivi.get("sig_cl"):                       # même décision : jamais renvoyée (le RADAR montre l'état en continu)
                     derniers[tf] = int(bougie["t"])
                     continue
                 resultat = _envoi_sur(cid, text=texte_cl,
@@ -5068,6 +5069,8 @@ _PINE_TEXTES_EN = {
 }
 _PINE_PRIO = {"ret_conf": 0, "sniper": 1, "confirmation": 1, "ret_cancel": 2, "impulsion": 3, "surcharge": 4, "relache": 5, "align_haut": 6, "align_bas": 7}
 
+CONF_REPIT = {"SWING": 4 * 3600, "DAY": 3600, "SCALPING": 900}   # même confirmation (même sens) : une seule fois par période — la zone qui bouge ne la relance pas
+
 def evenements_pine(etat, m, r, cle, now):
     """Évènements de l'indicateur au moment où ils arrivent : chacun une seule fois (fronts montants mémorisés par marché)."""
     mem = etat.setdefault("al_mem", {}).setdefault("pine", {}).setdefault(m, {})
@@ -5081,9 +5084,10 @@ def evenements_pine(etat, m, r, cle, now):
     prev_n, prev_c = mem.get("n"), mem.get("comp")
     if prev_n is not None and not cle.get("trade") and now - mem.get("t_align", 0) >= 600:
         franchit_haut, franchit_bas = n >= MIN_ALIGN > prev_n, n < MIN_ALIGN <= prev_n
-        if franchit_haut or (n - prev_n >= 2 and n >= MIN_ALIGN - 2):
-            ev.append(dict(kind="align_haut", **base, etat_seuil="atteint ✅" if n >= MIN_ALIGN else "presque", etat_seuil_court="Seuil atteint" if n >= MIN_ALIGN else "Presque au seuil")); mem["t_align"] = now
-        elif franchit_bas or (prev_n - n >= 2 and prev_n >= MIN_ALIGN - 2):
+        # Seulement le franchissement du seuil : la montée « 6/11 → il en faut 8 » est déjà affichée dans le RADAR (pas de doublon).
+        if franchit_haut:
+            ev.append(dict(kind="align_haut", **base, etat_seuil="atteint ✅", etat_seuil_court="Seuil atteint")); mem["t_align"] = now
+        elif franchit_bas:
             ev.append(dict(kind="align_bas", **base)); mem["t_align"] = now
     if prev_c is not None:
         if comp >= MIN_SQZ > prev_c:
@@ -5117,8 +5121,9 @@ def evenements_pine(etat, m, r, cle, now):
         if len(barres) >= 3:
             c1, c0, t1 = barres[-2]["c"], barres[-3]["c"], barres[-2]["t"]
             au_dessus = lambda c: c > zp["zmil"] if d == 1 else c < zp["zmil"]
-            if au_dessus(c1) and not au_dessus(c0) and mem.get("conf_t") != t1:
-                mem["conf_t"] = t1
+            deja = mem.get("conf_sens") == d and now - float(mem.get("conf_at", 0)) < CONF_REPIT.get(strat, 3600)
+            if au_dessus(c1) and not au_dessus(c0) and mem.get("conf_t") != t1 and not deja:
+                mem["conf_t"], mem["conf_sens"], mem["conf_at"] = t1, d, now
                 ev.append(dict(kind="confirmation", **base, sens="LONG" if d == 1 else "SHORT", u=HB_UNITE_VALIDATION.get(strat, "15 min"),
                                pos="au-dessus de" if d == 1 else "sous", niv=px(zp["zmil"])))
     return ev
@@ -5225,38 +5230,16 @@ def _radar_ordre(props, derniers):
     """Marchés prêts (proches + alignés) d'abord, puis l'ordre de proximité habituel."""
     return sorted(props, key=lambda p: 0 if _radar_pret(p, derniers) else 1)
 
-def radar_entree_sl(r, d, za, zb):
-    """Entrée et SL proposés par le RADAR (demande d'Adel, 12/11) : l'entrée ET le SL visent le MÊME dernier plus haut (vente) / plus bas (achat),
-    jamais l'entrée en bas de zone avec le SL derrière un autre sommet lointain. Ordre : entrée sniper validée → dernier plus haut M5 dans la zone
-    → dernier plus haut M15 dans la zone → sinon plan de l'indicateur. SL = un tout petit peu derrière ce niveau (marge sniper)."""
-    sn = r.get("sniper")
-    if isinstance(sn, dict) and sn.get("d") == d:
-        return dict(e=sn["e"], sl=sn["sl"], tp1=sn["tp1"], src=sn.get("src", "sniper"))
-    prix = (r.get("m1") or [{}])[-1].get("c")
-    a15 = float(r.get("atr") or 0)
-    a3 = float(r.get("atr3") or r.get("atr5") or a15 or 0)
+def radar_entree_sl(r, d, za=None, zb=None):
+    """Entrée / SL / TP1 du RADAR = plan de l'indicateur (même plan que l'ordre Telegram : pine_entree), jamais un mini-SL M5 (trop dangereux).
+    L'entrée et le SL visent le même sommet / creux de structure du plan ; la zone affichée est réduite à sa partie rentable."""
+    pe = pine_entree(r, d) if r.get("b15") and "planH" in r else None
+    if pe:
+        return dict(e=pe["e"], sl=pe["sl"], tp1=pe["tp1"], za=pe["za"], zb=pe["zb"], src="plan de l'indicateur")
     plan = r.get("plan_fige") or {}
-    if d not in (1, -1):
-        return None
-    for nom, bars in ((("M5", (r.get("b5") or [])[:-1]), ("M15", (r.get("b15") or [])[:-1])) if prix is not None and a15 > 0 else ()):
-        if len(bars) < 12:
-            continue
-        piv = niveaux_ut(bars)[0 if d == -1 else 1]
-        if not piv:
-            continue
-        L, i = piv
-        if any((y["c"] - L) * (-d) > 0 for y in bars[i + 1:]):
-            continue                                   # clôture au-delà : niveau cassé, plus valable
-        if (L - prix) * (-d) < 0 or not (za - 0.5 * a15 <= L <= zb + 0.5 * a15):
-            continue                                   # pas devant le prix, ou hors de la zone d'entrée
-        sl = L - d * SNIPER_MARGE_ATR3 * a3
-        mini = max(a3, L * SL_RISQUE_MIN_PCT)
-        if abs(L - sl) < mini:
-            sl = L - d * mini
-        tp1 = plan.get("tp1") if plan.get("d") == d and plan.get("tp1") is not None and d * (plan["tp1"] - L) >= GAIN_MIN * abs(L - sl) else L + d * GAIN_MIN * abs(L - sl)
-        return dict(e=L, sl=sl, tp1=tp1, src=("dernier plus haut " if d == -1 else "dernier plus bas ") + nom)
     if plan.get("d") == d and plan.get("sl") is not None:
-        return dict(e=plan["e"], sl=plan["sl"], tp1=plan["tp1"], src="plan de l'indicateur")
+        a_, b_ = zone_rentable(d, za, zb, plan["sl"], plan["tp1"]) if za is not None else (None, None)
+        return dict(e=plan["e"], sl=plan["sl"], tp1=plan["tp1"], za=a_, zb=b_, src="plan de l'indicateur")
     return None
 
 def texte_radar(props, derniers, vip=True, anglais=False, now=None, intro=None):
@@ -5283,12 +5266,13 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None, intro=None):
         prof = {"SWING": "SWING", "DAY": "INTRADAY", "SCALPING": "SCALP"}.get(r.get("strat") or "", "")
         l.append(("📉 " if d == -1 else "📈 ") + (f"Direction : {SENS_COURT.get(d, '?')}" if anglais else f"Sens : {SENS_COURT.get(d, '?')}") + (f" · {prof}" if prof else ""))
         if vip:
-            l.append((f"📍 Entry zone : {px(t['za'])} → {px(t['zb'])}" if anglais else f"📍 Zone d'entrée : {px(t['za'])} → {px(t['zb'])}"))
             es = radar_entree_sl(r, d, t["za"], t["zb"])
+            za_, zb_ = (es.get("za"), es.get("zb")) if es and es.get("za") is not None else (t["za"], t["zb"])
+            l.append((f"📍 Entry zone : {px(za_)} → {px(zb_)}" if anglais else f"📍 Zone d'entrée : {px(za_)} → {px(zb_)}"))
             if es:
                 l.append((f"🎯 Entry : {px(es['e'])}" if anglais else f"🎯 Entrée : {px(es['e'])}") + f" ({es['src']})")
-                l.append(f"🛑 SL : {px(es['sl'])} " + ("(just behind)" if anglais else "(juste derrière)") + f" · {px(abs(es['e'] - es['sl']))} pts")
-                l.append(f"🏁 TP1 : {px(es['tp1'])}")
+                l.append(f"🛑 SL : {px(es['sl'])} · {px(abs(es['e'] - es['sl']))} pts")
+                l.append(f"🏁 TP1 : {px(es['tp1'])} · R/R {abs(es['tp1'] - es['e']) / max(abs(es['e'] - es['sl']), 1e-9):.1f}".replace(".", ","))
             if t["rang"] == 0:
                 l.append("🟨 Price is IN the zone" if anglais else "🟨 Le prix est DANS la zone")
             else:
@@ -6397,6 +6381,23 @@ def plan_entree(r, d, p):
                 tp2=t2[0], n2=(("résistance " if d == 1 else "support ") + t2[1]) if t2[1] in ("1h", "4h", "Daily") else t2[1],
                 rr=abs(t1[0] - p) / risque)
 
+def zone_rentable(d, za, zb, sl, tp1):
+    """Partie de la zone d'entrée où le gain vers le TP1 vaut au moins GAIN_MIN x le risque jusqu'au SL (plan de l'indicateur).
+    Ex. réel GOLD 12/11 : zone 3897 → 3961, SL 3976, TP1 3887 → entrer à 3897 = 79 pts de risque pour 10 de gain : zone ramenée à 3940 → 3961."""
+    if d not in (1, -1) or sl is None or tp1 is None:
+        return za, zb
+    seuil = (tp1 + GAIN_MIN * sl) / (1 + GAIN_MIN)          # point d'entrée où gain = GAIN_MIN x risque
+    if d == -1:
+        za = max(za, seuil)
+    else:
+        zb = min(zb, seuil)
+    return (za, zb) if za <= zb else (None, None)
+
+def tp2_affichable(d, tp1, tp2):
+    """Vrai si le TP2 est AU-DELÀ du TP1. La projection « 3,5 x le risque » du Pine peut tomber entre l'entrée et le TP1 (cas réel GOLD 12/11 :
+    TP1 3888,99, TP2 3910,44 en SHORT) : on ne l'affiche pas plutôt que d'afficher un objectif incohérent. Le graphique n'est pas modifié."""
+    return tp2 is not None and tp1 is not None and d in (1, -1) and d * (tp2 - tp1) > 0
+
 def pine_entree(r, d):
     """Ordre Telegram = niveaux du graphique : plan figé de l'indicateur Pine v24 (sens du plan) ou plan instantané de l'autre sens."""
     if d not in (1, -1) or not r.get("b15") or "planH" not in r:
@@ -6409,9 +6410,13 @@ def pine_entree(r, d):
     if not z:
         return None
     nom = lambda n: (("résistance " if d == 1 else "support ") + n) if n in ("15m", "1h", "4h", "Daily") else n
+    za, zb = zone_rentable(d, z["za"], z["zb"], pl["sl"], pl["tp1"])
+    if za is None:
+        za = zb = pl["e"]                                 # aucune partie rentable de la zone : seul le point d'entrée du plan
+    # TP2 = valeur du graphique (parité TradingView) ; s'il tombe avant le TP1 (projection du Pine), il n'est pas affiché : voir tp2_affichable.
     return dict(d=d, e=pl["e"], sl=pl["sl"], tp1=pl["tp1"], n1=nom(pl["n1"]), tp2=pl["tp2"], n2=nom(pl["n2"]), rr=pl["rr"],
-                src="Fibonacci 50 → 78,6 % (indicateur ALIGN)", za=z["za"], zb=z["zb"], f50=z["f50"], f618=z["f618"], f786=z["f786"],
-                zmil=z["zmil"], sl_h=bougie_protegee(r["b15"][-3:], d, pl["sl"]), sl_ut="15 min")
+                src="Fibonacci 50 → 78,6 % (indicateur ALIGN)", za=za, zb=zb, f50=z["f50"], f618=z["f618"], f786=z["f786"],
+                zmil=(za + zb) / 2, sl_h=bougie_protegee(r["b15"][-3:], d, pl["sl"]), sl_ut="15 min")
 
 def point_entree(r, d, p):
     """Zone limite basée sur le dernier mouvement 5m ; niveaux 1h/4h et FVG restent des confluences."""
