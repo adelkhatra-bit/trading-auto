@@ -339,22 +339,47 @@ zHaut := math.max(zMin, zMax)
 // LONG  : entrée = haut de la dernière FVG verte ; SL = un peu sous la mèche du dernier plus bas. Si le plus haut / plus bas casse, on prend automatiquement le suivant.
 // Vue 1 min → calcul en 3 min (le 1 min parasite). Daily et plus : plan inchangé. Zone verte, zone rouge, TP, design : INCHANGÉS.
 f_struct() =>
-    var float rTop = na
-    var float rBot = na
-    var float gTop = na
-    var float gBot = na
+    // toutes les FVG NON comblées sont gardées (pas seulement la dernière) : on renvoie la plus proche du prix de chaque côté
+    var float[] rT = array.new_float()
+    var float[] rB = array.new_float()
+    var float[] gT = array.new_float()
+    var float[] gB = array.new_float()
     if high < low[2]
-        rTop := low[2]
-        rBot := high
+        array.push(rT, low[2])
+        array.push(rB, high)
     if low > high[2]
-        gTop := low
-        gBot := high[2]
-    if not na(rTop) and close > rTop
-        rTop := na
-        rBot := na
-    if not na(gBot) and close < gBot
-        gTop := na
-        gBot := na
+        array.push(gT, low)
+        array.push(gB, high[2])
+    if array.size(rT) > 0
+        for k = array.size(rT) - 1 to 0
+            if close > array.get(rT, k)
+                array.remove(rT, k)
+                array.remove(rB, k)
+    if array.size(gB) > 0
+        for k = array.size(gB) - 1 to 0
+            if close < array.get(gB, k)
+                array.remove(gT, k)
+                array.remove(gB, k)
+    while array.size(rT) > 30
+        array.shift(rT)
+        array.shift(rB)
+    while array.size(gT) > 30
+        array.shift(gT)
+        array.shift(gB)
+    float rTop = na
+    float rBot = na
+    float gTop = na
+    float gBot = na
+    if array.size(rT) > 0
+        for k = 0 to array.size(rT) - 1
+            if na(rBot) or array.get(rB, k) < rBot
+                rBot := array.get(rB, k)
+                rTop := array.get(rT, k)
+    if array.size(gT) > 0
+        for k = 0 to array.size(gT) - 1
+            if na(gTop) or array.get(gT, k) > gTop
+                gTop := array.get(gT, k)
+                gBot := array.get(gB, k)
     ph = ta.pivothigh(high, 3, 3)
     pl = ta.pivotlow(low, 3, 3)
     hH = math.max(nz(ta.valuewhen(not na(ph), ph, 0), high), ta.highest(high, 4))
