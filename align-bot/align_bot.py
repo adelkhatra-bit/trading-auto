@@ -1447,15 +1447,18 @@ def plan_cassure(r, d):
     if not casse or trop:
         return None
     e = r["m1"][-1]["c"]
-    # Le déclencheur est M5, mais le SL protège la structure M15.
-    sl = stop_structure_15m(r, d, e)
+    # Règle d'Adel : déclencheur M5 → SL juste derrière la mèche du dernier plus haut / plus bas 5 min ; structure 15 min en secours.
+    sl, sl_ut = stop_meche_5m(r, d, e), "5 min"
+    if sl is None:
+        sl, sl_ut = stop_structure_15m(r, d, e), "15 min"
     if sl is None:
         return None
     risque = abs(e - sl)
     t1, t2 = objectifs(r, d, e, risque)
     nom = lambda z: (("résistance " if d == 1 else "support ") + z[1]) if z[1] in ("1h", "4h", "Daily") else z[1]
     return dict(d=d, e=e, sl=sl, tp1=t1[0], n1=nom(t1), tp2=t2[0], n2=nom(t2), rr=abs(t1[0] - e) / risque,
-                src="cassure 5 min", za=e, zb=e, niveau=L, t15=b[-1]["t"], sl_h=bougie_protegee(r["b15"][-3:], d, sl), sl_ut="15 min")
+                src="cassure 5 min", za=e, zb=e, niveau=L, t15=b[-1]["t"],
+                sl_h=bougie_protegee((r["b5"][:-1][-4:] if sl_ut == "5 min" else r["b15"][-3:]), d, sl), sl_ut=sl_ut)
 
 def stop_structure_15m(r, d, entry):
     """SL derrière la structure M15, pas derrière une seule mèche M5.
@@ -2255,7 +2258,13 @@ def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal
         l = [f"📍 {m} - {'LONG' if d == 1 else 'SHORT'}", ""]
         rr = abs(tr["tp1"] - tr["e"]) / max(abs(tr["e"] - tr["sl"]), 1e-9)
         tps = px(tr["tp1"]) + (f" / {px(tr['tp2'])}" if tr.get("tp2") is not None and tp2_affichable(d, tr["tp1"], tr["tp2"]) else "")
-        l += [f"🎯 Entrée : {px(tr['e'])} | 🛑 SL : {px(tr['sl'])}", f"💰 TP : {tps} | ⚖️ R:R : 1:{rr:.1f}".replace(".", ",")]
+        # Ordre du GRAPHIQUE (du plus haut au plus bas) : SHORT = SL, entrée, TP1, TP2 ; LONG = TP2, TP1, entrée, SL
+        vue_ = f" (vue {tr['sl_ut']})" if tr.get("sl_ut") else ""
+        niv = [(f"🛑 SL : {px(tr['sl'])}" + (" (mèche 5 min)" if tr.get("sl_ut") == "5 min" else ""), tr["sl"]),
+               (f"🎯 Entrée : {px(tr['e'])}{vue_}", tr["e"]), (f"💰 TP1 : {px(tr['tp1'])}", tr["tp1"])]
+        if tr.get("tp2") is not None and tp2_affichable(d, tr["tp1"], tr["tp2"]):
+            niv.append((f"🏁 TP2 : {px(tr['tp2'])}", tr["tp2"]))
+        l += [x for x, _ in sorted(niv, key=lambda z: -z[1])] + [f"⚖️ R:R : 1:{rr:.1f}".replace(".", ",")]
         if validite:
             l.append(f"⏱ Valide : {validite}")
         action = "ENTRER"
@@ -2949,7 +2958,7 @@ def ia(etat, consigne, donnees, cle_cache=None, duree=600, premium=False, recher
             cache.pop(k)
     return txt
 
-IA_TON_JEUNE = ("Ton : coach trading jeune et cool, tutoiement, phrases très simples, motivant, jamais vulgaire, "
+IA_TON_JEUNE = ("Réponds TOUJOURS en français. Ton : coach trading jeune et cool, tutoiement, phrases très simples, motivant, jamais vulgaire, "
                 "jamais de promesse de gain. FORMAT : 4 lignes courtes maximum, une info par ligne, "
                 "chaque ligne commence par un emoji, 12 mots maximum par ligne, aucun paragraphe.")
 
@@ -5238,7 +5247,7 @@ def texte_session(etat, ev, anglais=False):
     return out[:3]
 
 _PINE_TEXTES = {   # type -> variantes (FR, EN) ; {ic} {m} {n} {c} {seuil} {sens} {strat} {u} {niv} {fleche} {ratio}
-    "align_haut": (("📈 {ic} {m} : {n}/11 UT alignées", "🎯 Seuil {seuil} {etat_seuil}"), ("🧲 {ic} {m} : l'alignement monte ({n}/11)", "👀 Il en faut {seuil}"),
+    "align_haut": (("📈 {ic} {m} : {n}/11 UT alignées", "🎯 Seuil {seuil} {etat_seuil}"), ("🧲 {ic} {m} : l'alignement monte ({n}/11)", "🎯 {etat_seuil_court}"),
                    ("⬆️ {ic} {m} : {n} unités dans le même sens", "🎯 {etat_seuil_court}")),
     "align_bas": (("📉 {ic} {m} : alignement qui baisse ({n}/11)", "⏳ Il en faut {seuil}"), ("⬇️ {ic} {m} : {n}/11 UT, ça se disperse", "🙅 Pas de validation"),
                   ("🌫 {ic} {m} : moins d'unités d'accord ({n}/11)", "👀 Seuil {seuil}")),
@@ -5259,7 +5268,7 @@ _PINE_TEXTES = {   # type -> variantes (FR, EN) ; {ic} {m} {n} {c} {seuil} {sens
                      ("🎯 {ic} {m} : {sens} confirmé à la clôture {u}", "📍 Ligne de décision {niv}")),
 }
 _PINE_TEXTES_EN = {
-    "align_haut": (("📈 {ic} {m}: {n}/11 timeframes aligned", "🎯 Threshold {seuil} {etat_seuil}"), ("🧲 {ic} {m}: alignment is rising ({n}/11)", "👀 Need {seuil}"),
+    "align_haut": (("📈 {ic} {m}: {n}/11 timeframes aligned", "🎯 Threshold {seuil} {etat_seuil}"), ("🧲 {ic} {m}: alignment is rising ({n}/11)", "🎯 {etat_seuil_court}"),
                    ("⬆️ {ic} {m}: {n} timeframes agree", "🎯 {etat_seuil_court}")),
     "align_bas": (("📉 {ic} {m}: alignment dropping ({n}/11)", "⏳ Need {seuil}"), ("⬇️ {ic} {m}: {n}/11, it's scattering", "🙅 No validation"),
                   ("🌫 {ic} {m}: fewer timeframes agree ({n}/11)", "👀 Threshold {seuil}")),
@@ -5294,7 +5303,7 @@ def evenements_pine(etat, m, r, cle, now):
         mem.update(n=n, comp=comp)
         return ev                                      # marché fermé ou données périmées : aucune alerte inventée
     prev_n, prev_c = mem.get("n"), mem.get("comp")
-    if prev_n is not None and not cle.get("trade") and now - mem.get("t_align", 0) >= 600:
+    if prev_n is not None and not cle.get("trade") and now - mem.get("t_align", 0) >= 1800:   # 7↔8 qui clignote : au plus 1 alerte / 30 min
         franchit_haut, franchit_bas = n >= MIN_ALIGN > prev_n, n < MIN_ALIGN <= prev_n
         # Seulement le franchissement du seuil : la montée « 6/11 → il en faut 8 » est déjà affichée dans le RADAR (pas de doublon).
         if franchit_haut:
