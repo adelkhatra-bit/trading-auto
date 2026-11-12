@@ -1,7 +1,7 @@
 //@version=6
 // ═════════ PROPOSITION v25 — NON PUBLIÉE — À VALIDER PAR ADEL — NON COMPILÉE / NON TESTÉE SUR TRADINGVIEW ═════════
-// Seule modification : la logique du niveau d'entrée / SL (entrée sniper M1/M3). Design, couleurs, tableau, étiquettes : IDENTIQUES à la v24.
-// Voir pine/PROPOSITION_v25_sniper.diff pour le détail ligne à ligne.
+// Seule modification : la logique de ENTRÉE / STOP (entrée sniper en cascade par unité de temps). Design, couleurs, tableau, étiquettes, plan SWING (zone, TP) : IDENTIQUES à la v24.
+// Détail ligne à ligne : pine/PROPOSITION_v25_sniper.diff
 indicator("ALIGN MTF PRO (Inside)", shorttitle="ALIGN MTF", overlay=true, max_labels_count=200, max_lines_count=30, max_boxes_count=10)
 
 // ═════════ RÉGLAGES ═════════
@@ -116,9 +116,14 @@ nomsNiv = array.from("15m", "15m", "15m", "15m", "1h", "1h", "1h", "1h", "4h", "
 atrC = ta.atr(14)
 // ATR de la vue 15 min (la référence du bot) : le SL ne dépend plus de la petite unité de temps affichée
 atr15 = request.security(syminfo.tickerid, "15", ta.atr(14)[1])
-// v25 SNIPER : ATR et extrêmes de la vue 3 min (mèche récente du pic), lus sans repeindre (ATR[1])
-atr3 = request.security(syminfo.tickerid, "3", ta.atr(14)[1])
-[hi3, lo3] = request.security(syminfo.tickerid, "3", [ta.highest(high, 20)[1], ta.lowest(low, 20)[1]])
+// v25 SNIPER : dernier plus haut / plus bas de structure (pivot 2-2) de l'UT du graphique et des UT supérieures (cascade M1/M3 -> M5 -> M15)
+f_sw() =>
+    ph = ta.pivothigh(high, 2, 2)
+    pl = ta.pivotlow(low, 2, 2)
+    [ta.valuewhen(not na(ph), ph, 0), ta.valuewhen(not na(pl), pl, 0)]
+[swH, swL] = f_sw()
+[swH5, swL5] = request.security(syminfo.tickerid, "5", f_sw())
+[swH15, swL15] = request.security(syminfo.tickerid, "15", f_sw())
 
 // Niveau le plus proche au-dessus / en dessous (1er et 2e)
 f_dessus() =>
@@ -197,7 +202,7 @@ f_cible(d, ref, distMin, kmin, kmax) =>
             v1 := v
             n1 := array.get(nomsNiv, k)
     [v1, n1]
-f_plan(d, sMin, sMax, cMin, cMax, sniper) =>
+f_plan(d, sMin, sMax, cMin, cMax) =>
     sb = d == 1 ? f_stopB(sMin, sMax) : f_stopH(sMin, sMax)
     // SL un peu PLUS loin derrière la mèche (0,35 ATR) : la mèche peut être retouchée au même prix
     swing = d == 1 ? ta.lowest(low, 10) - atrC * 0.35 : ta.highest(high, 10) + atrC * 0.35
@@ -205,17 +210,6 @@ f_plan(d, sMin, sMax, cMin, cMax, sniper) =>
     // Point d'entrée : juste devant la zone de grosse UT (ordre limite), sinon au marché
     eLim = d == 1 ? sb + atrC * 0.3 : sb - atrC * 0.3
     e = d == 1 ? math.min(close, math.max(eLim, s + atrC * 0.5)) : math.max(close, math.min(eLim, s - atrC * 0.5))
-    // v25 SNIPER : dernière structure 15m / 1h du bon côté du prix (à portée), ordre limite dans la zone, SL derrière la mèche M3 + 0,5 ATR M3
-    if sniper and not na(atr3)
-        float snL = na
-        for k = 0 to 7
-            vk = array.get(niveaux, k)
-            if not na(vk) and (vk - close) * (-d) >= 0.3 * atr3 and math.abs(vk - close) <= 3.0 * math.max(atrC, nz(atr15, atrC)) and (na(snL) or math.abs(vk - close) < math.abs(snL - close))
-                snL := vk
-        if not na(snL)
-            mech = d == -1 ? (math.abs(hi3 - snL) <= 3.0 * atr3 ? math.max(snL, hi3) : snL) : (math.abs(lo3 - snL) <= 3.0 * atr3 ? math.min(snL, lo3) : snL)
-            e := snL - d * 0.15 * atr3
-            s := mech - d * 0.5 * atr3
     // Comme le bot Telegram : jamais un SL de plus de 1,5 bougie moyenne -> si trop loin, on attend un repli plus profond
     aP = math.max(atrC, nz(atr15, atrC))
     e := d == 1 ? math.min(e, s + aP * 1.5) : math.max(e, s - aP * 1.5)
@@ -274,18 +268,7 @@ sMaxP = profNiv == 3 ? 11 : profNiv == 2 ? 7 : profNiv == 1 ? 3 : 11
 cMinP = profNiv == 3 ? 8 : profNiv == 2 ? 4 : profNiv == 1 ? 0 : 4
 cMaxP = profNiv == 3 ? 15 : profNiv == 2 ? 11 : profNiv == 1 ? 7 : 15
 calePlan = profNiv == 3 ? "SL derrière la zone 1h / 4h • TP 4h / Daily • validation clôture 1h" : profNiv == 2 ? "SL derrière la zone 1h • TP 1h / 4h • validation clôture 5 min" : profNiv == 1 ? "SL derrière la zone 15 min • TP 15 min / 1h • validation clôture 1 min" : "plan standard 1h / 4h"
-// v25 : plan v24 (inchangé) ET plan sniper ; le sniper n'est retenu que si le contexte HTF est aligné, le prix est du bon côté de l'ordre limite
-// et du SL, et qu'une VRAIE cible respecte gainMin (jamais de projection forcée) : sinon on garde exactement le plan v24.
-snCtx = dirPlan != 0 and (dirPlan == 1 ? bull : bear) >= minAlign and sens == dirPlan and nz(d240) != -dirPlan and nz(d60) != -dirPlan
-[entV, tp1V, tp2V, slV, tTP1V, tTP2V] = f_plan(dirPlan == 0 ? 1 : dirPlan, sMinP, sMaxP, cMinP, cMaxP, false)
-[entS, tp1S, tp2S, slS, tTP1S, tTP2S] = f_plan(dirPlan == 0 ? 1 : dirPlan, sMinP, sMaxP, cMinP, cMaxP, snCtx)
-snBon = snCtx and not str.startswith(tTP1S, "projection") and (dirPlan == 1 ? (close > entS and close > slS) : (close < entS and close < slS))
-entC = snBon ? entS : entV
-tp1C = snBon ? tp1S : tp1V
-tp2C = snBon ? tp2S : tp2V
-slC = snBon ? slS : slV
-tTP1 = snBon ? tTP1S : tTP1V
-tTP2 = snBon ? tTP2S : tTP2V
+[entC, tp1C, tp2C, slC, tTP1, tTP2] = f_plan(dirPlan == 0 ? 1 : dirPlan, sMinP, sMaxP, cMinP, cMaxP)
 // ═════════ PLAN FIGÉ (anti-parasites en vue 1 / 3 / 5 min) ═════════
 // Entrée, SL et TP ne bougent qu'à la clôture d'une bougie 15 min, ou tout de suite si le sens / la stratégie change
 // ou si le SL est franchi. Entre-temps, les niveaux affichés restent fixes pour pouvoir entrer sans confusion.
@@ -293,6 +276,8 @@ var float ent = na
 var float tp1 = na
 var float tp2 = na
 var float sl = na
+var float entP = na   // v25 : plan v24 mémorisé (ENTRÉE / STOP du plan, avant affinage sniper)
+var float slP = na
 var int dirFig = 0
 var string stratFig = ""
 nouvelle15 = ta.change(time("15")) != 0
@@ -312,8 +297,14 @@ if barstate.isconfirmed and (na(ent) or nouvelle15 or dirPlan != dirFig or strat
     tp1 := tp1C
     tp2 := tp2C
     sl := slC
+    entP := entC
+    slP := slC
     dirFig := dirPlan
     stratFig := strat
+// v25 : à chaque barre on repart du plan v24 ; l'affinage sniper (plus bas dans le script) peut ensuite recaler ENTRÉE et STOP
+if not na(entP)
+    ent := entP
+    sl := slP
 // Compte à rebours jusqu'à la clôture de l'unité de validation (calé sur l'horloge, comme TradingView)
 f_mmss(ms) =>
     t = math.max(0, int(ms / 1000))
@@ -354,6 +345,28 @@ zMax = dirPlan == -1 ? math.min(math.max(ent, f786), sl - 0.25 * (sl - ent)) : m
 zBas = math.min(zMin, zMax)
 zHaut = math.max(zMin, zMax)
 
+// ═════════ v25 : ENTRÉE SNIPER EN CASCADE (logique seule) ═════════
+// L'ENTRÉE affichée suit le dernier plus haut (vente) / plus bas (achat) de l'UT du GRAPHIQUE (M1, M3, M5…), pas le haut de la zone SWING.
+// Conditions : contexte HTF aligné et sens clair, prix dans la zone du plan, dernier plus haut de cette UT SOUS celui de l'UT supérieure, rejet confirmé
+// sur la dernière bougie clôturée (mèche + clôture sous le niveau et sous la bande de Bollinger, ou chandelle de retournement). Sinon : plan v24 inchangé.
+// Le plan (zone, TP) reste affiché tel quel ; le STOP se cale derrière la mèche (+ marge ATR, plancher 0,12 % comme le plan).
+tfS = timeframe.in_seconds()
+swHup = tfS <= 180 ? swH5 : tfS <= 300 ? swH15 : na
+swLup = tfS <= 180 ? swL5 : tfS <= 300 ? swL15 : na
+[bbM, bbU, bbL] = ta.bb(close, 20, 2.0)
+hh6 = ta.highest(high, 6)
+ll6 = ta.lowest(low, 6)
+snCtx = dirPlan != 0 and (dirPlan == 1 ? bull : bear) >= minAlign and sens == dirPlan and nz(d240) != -dirPlan and nz(d60) != -dirPlan
+snLvl = dirPlan == -1 ? swH : swL
+snUp = dirPlan == -1 ? swHup : swLup
+snRng = math.max(high[1] - low[1], syminfo.mintick)
+snRej = dirPlan == -1 ? (high[1] >= snLvl - 0.5 * atrC and close[1] < snLvl and ((high[1] - math.max(open[1], close[1])) >= 0.4 * snRng or close[1] < bbU[1] or (close[1] < open[1] and close[1] < open[2]))) : (low[1] <= snLvl + 0.5 * atrC and close[1] > snLvl and ((math.min(open[1], close[1]) - low[1]) >= 0.4 * snRng or close[1] > bbL[1] or (close[1] > open[1] and close[1] > open[2])))
+snZone = not na(zBas) and close >= zBas - 0.5 * atrC and close <= zHaut + 0.5 * atrC
+snOk = snCtx and snZone and not na(snLvl) and (dirPlan == -1 ? snLvl >= close : snLvl <= close) and (na(snUp) or (dirPlan == -1 ? snLvl < snUp : snLvl > snUp)) and snRej
+if snOk
+    ent := snLvl
+    sl := dirPlan == -1 ? math.max(math.max(snLvl, hh6) + 0.5 * atrC, snLvl + math.max(close * 0.0012, atrC)) : math.min(math.min(snLvl, ll6) - 0.5 * atrC, snLvl - math.max(close * 0.0012, atrC))
+
 
 // ═════════ SIGNAUX ═════════
 fortHaut = rsiAchat and rsiOB < 3 and bull > bear and bull >= minAlign - 2 and (surcharge or surcharge[1] or alignHaut)
@@ -377,8 +390,8 @@ nomSigH = fortHaut ? "★ ACHAT FORT" : explHaut ? "EXPLOSION ▲" : "ZONE DE RE
 nomSigB = fortBas ? "★ VENTE FORTE" : explBas ? "EXPLOSION ▼" : "ZONE DE RETOURNEMENT ▼"
 pqH = str.tostring(bull) + "/11 UT haussières • " + str.tostring(comp) + "/11 comprimées • RSI " + str.tostring(rC, "#") + (zoneHaut ? " • sur support " + tB1 : "")
 pqB = str.tostring(bear) + "/11 UT baissières • " + str.tostring(comp) + "/11 comprimées • RSI " + str.tostring(rC, "#") + (zoneBas ? " • sur résistance " + tH1 : "")
-[hE, hT1, hT2, hSL, hN1, hN2] = f_plan(1, 4, 11, 4, 15, false)
-[bE, bT1, bT2, bSL, bN1, bN2] = f_plan(-1, 4, 11, 4, 15, false)
+[hE, hT1, hT2, hSL, hN1, hN2] = f_plan(1, 4, 11, 4, 15)
+[bE, bT1, bT2, bSL, bN1, bN2] = f_plan(-1, 4, 11, 4, 15)
 planH = "Entrée : " + px(hE) + (hE == close ? " (au marché)" : " (ordre limite)") + "\nTP1 : " + px(hT1) + " (" + hN1 + ")\nTP2 : " + px(hT2) + " (" + hN2 + ")" + "\nStop : " + px(hSL)
 planB = "Entrée : " + px(bE) + (bE == close ? " (au marché)" : " (ordre limite)") + "\nTP1 : " + px(bT1) + " (" + bN1 + ")\nTP2 : " + px(bT2) + " (" + bN2 + ")" + "\nStop : " + px(bSL)
 

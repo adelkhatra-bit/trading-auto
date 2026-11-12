@@ -37,7 +37,7 @@ while T <= fin:
         if cle not in vus:
             vus.add(cle); n_prop += 1
             res = ab.simuler_sniper(sn, [x for x in S["m1"] if x["t"] > T])
-            print(f"SNIPER {hp(T)} {'VENTE' if sn['d'] == -1 else 'ACHAT'} limite {ab.px(sn['za'])}–{ab.px(sn['zb'])} (entrée {ab.px(sn['e'])}, {sn['src']}) "
+            print(f"SNIPER {hp(T)} {'VENTE' if sn['d'] == -1 else 'ACHAT'} {ab.px(sn['za'])}–{ab.px(sn['zb'])} (entrée au rejet {ab.px(sn['e'])}, {sn['src']}, rejet {'+'.join(sn['rejets'])}) "
                   f"SL {ab.px(sn['sl'])} TP1 {ab.px(sn['tp1'])} ({sn['n1']}) R/R {sn['rr']:.1f} → {res['etat']}"
                   + (f" {res['pnl']:+.1f} pts, rempli {hp(res['t_fill'])}" if res.get("t_fill") else "")
                   + f" | UT alignées {r['bear'] if sn['d'] == -1 else r['bull']}/11, stratégie {r.get('strat') or '-'}")

@@ -1,97 +1,202 @@
-"""Entrée sniper M1/M3 : ordre limite sur la dernière structure, SL derrière la mèche, jamais forcé.
-SCÉNARIO « GOLD ce soir » (SIMULÉ à partir du récit d'Adel : tendance baissière 10/11 UT, ancienne résistance ~3994, pic ~3995 puis chute ~3979).
-Le rejeu sur les vraies bougies M1/M3 se lance avec replay_sniper.py (workflow sniper-replay.yml) : ce fichier ne prétend pas être du réel."""
+"""Entrée sniper EN CASCADE (M1 -> M3 -> M5 -> M15) : quand le prix entre dans la zone du plan, vente (achat) au rejet confirmé sous le dernier plus haut
+(au-dessus du dernier plus bas) de la plus petite UT valide ; SL derrière la mèche ; TP du plan conservé + TP1 intermédiaire ; jamais forcé.
+
+SCÉNARIO « GOLD cette nuit » : SIMULÉ à partir de la capture d'Adel (plan SWING short, zone 3993,28 → 4012,79, entrée 4012,79 jamais atteinte,
+pic à 3997,6 sous le dernier plus haut M5, chute vers 3978). Le rejeu sur les VRAIES bougies M1/M3/M5 se lance avec replay_sniper.py
+(workflow sniper-replay.yml) : ce fichier ne prétend pas être du réel."""
+import json
 import unittest
 from unittest.mock import patch
 
 import align_bot as ab
 from test_parite_pine import jeu_simule
 
-T0 = 1_800_000_000
+T0 = 1_800_000_000 // 900 * 900 - 3 * 3600
 
 
-def b(t, o, h, l, c):
-    return dict(t=t, o=o, h=h, l=l, c=c)
+def chemin_nuit():
+    c = [3976 + m * 0.27 + (0.8 if m % 7 == 3 else 0) for m in range(60)]                 # monte lentement vers ~3992
+    c += [3993.0, 3993.6, 3994.4, 3995.0, 3994.6, 3995.4, 3996.0, 3995.2, 3996.3, 3995.6]    # 60-69 : entre dans la zone par le bas
+    c += [3995.8, 3994.9, 3994.2, 3993.3, 3992.0]                                            # 70-74 : rejet
+    c += [3992.0 - k * 0.31 for k in range(1, 46)]                                           # chute vers ~3978
+    m1 = []
+    for i, cl in enumerate(c):
+        o = c[i - 1] if i else cl - 0.2
+        m1.append(dict(t=T0 + 60 * i, o=o, h=max(o, cl) + 0.35, l=min(o, cl) - 0.35, c=cl))
+    m1[66] = dict(t=m1[66]["t"], o=3996.0, h=3997.6, l=3995.0, c=3995.4)                    # le pic : mèche à 3997,6
+    m1[67] = dict(t=m1[67]["t"], o=3995.4, h=3995.6, l=3994.0, c=3994.1)
+    return m1
 
 
-def contexte_gold(prix=3988.0, **kw):
-    """Gold baissier : 10/11 UT en baisse, ATR 15 min = 6, ATR M3 = 2, structure 15 min 3994 (18:30) et support 1 h 3979."""
-    b3 = [b(T0 - 180 * (60 - i), 3990 - i * 0.05, 3990.5 - i * 0.05, 3987.5 - i * 0.05, 3989 - i * 0.05) for i in range(60)]
-    r = {"dirPlan": -1, "bull": 1, "bear": 10, "sens": -1, "dirs": [-1] * 11, "strat": "DAY", "atr": 6.0, "atr3": 2.0,
-         "m1": [b(T0 - 60 * (60 - i), prix, prix + 0.4, prix - 0.4, prix) for i in range(60)], "b3": b3,
-         "niveaux": [(3994.0, "15m"), (3979.0, "1h"), (3960.0, "4h")]}
+def miroir(m1, pivot=3990.0):
+    return [dict(t=x["t"], o=2 * pivot - x["o"], h=2 * pivot - x["l"], l=2 * pivot - x["h"], c=2 * pivot - x["c"]) for x in m1]
+
+
+def r_at(m1all, k, long=False, **kw):
+    m1 = m1all[:k + 1]; now = m1[-1]["t"] + 60
+    b3, b5, b15 = (ab.regrouper(m1, n, 60, now_ts=now) for n in (3, 5, 15))
+    f = lambda b: b + [dict(m1[-1])]                                          # la dernière bougie M5 / M15 du bot est en formation
+    piv = 3990.0
+    z = (3993.28, 4012.79) if not long else (2 * piv - 4012.79, 2 * piv - 3993.28)
+    niveaux = [(3985.0, "15m"), (3979.5, "1h"), (3960.0, "4h")]
+    if long:
+        niveaux = [(2 * piv - v, n) for v, n in niveaux]
+    r = dict(dirPlan=1 if long else -1, bull=10 if long else 1, bear=1 if long else 10, sens=1 if long else -1, dirs=[1 if long else -1] * 11, strat="SWING",
+             atr=6.0, atr3=1.8, atr5=2.6, m1=m1, b3=b3, b5=f(b5), b15=f(b15), zone_pine=dict(za=z[0], zb=z[1], zmil=(z[0] + z[1]) / 2), niveaux=niveaux,
+             plan=dict(d=1 if long else -1, e=(2 * piv - 4012.79) if long else 4012.79, sl=(2 * piv - 4019.86) if long else 4019.86,
+                       tp1=(2 * piv - 3895.54) if long else 3895.54, tp2=(2 * piv - 3850.0) if long else 3850.0), prix=m1[-1]["c"])
     r.update(kw)
     return r
 
 
-class Sniper(unittest.TestCase):
-    def test_gold_case_limit_sell_on_last_resistance(self):
-        sn = ab.entree_sniper(contexte_gold())
+def premiere_proposition(m1all, long=False, debut=58, fin=100, **kw):
+    for k in range(debut, fin):
+        sn = ab.entree_sniper(r_at(m1all, k, long, **kw))
+        if sn:
+            return k, sn
+    return None, None
+
+
+class Cascade(unittest.TestCase):
+    M1 = chemin_nuit()
+
+    def test_night_case_sell_at_the_rejection_with_sl_behind_the_wick(self):
+        k, sn = premiere_proposition(self.M1)
         self.assertIsNotNone(sn)
         self.assertEqual(sn["d"], -1)
-        self.assertAlmostEqual(sn["niveau"], 3994.0)
-        self.assertAlmostEqual(sn["za"], 3993.8); self.assertAlmostEqual(sn["zb"], 3994.8)          # « vente limite 3994–3995 »
-        self.assertAlmostEqual(sn["sl"], 3999.09, places=1)                                        # « SL 3999 » : plancher de risque 0,12 %
-        self.assertAlmostEqual(sn["tp1"], 3979.0); self.assertEqual(sn["n1"], "1h")
-        self.assertGreaterEqual(sn["rr"], ab.GAIN_MIN); self.assertGreater(sn["sl"], sn["e"]); self.assertLess(sn["tp1"], sn["e"])
+        self.assertTrue(3994.0 <= sn["e"] <= 3997.7, sn["e"])                                   # vente au niveau du rejet (~3995-3997)
+        self.assertTrue(3998.5 <= sn["sl"] <= 4001.0, sn["sl"])                                # SL juste derrière la mèche du pic (~3999-4000 + marge)
+        self.assertGreater(sn["sl"], 3997.6)                                                     # jamais sous la mèche
+        self.assertIn("M1", sn["rejets"]); self.assertIn("M3", sn["rejets"])                    # rejet confirmé sur M1 ET M3
+        self.assertAlmostEqual(sn["tp2"], 3895.54)                                               # TP du plan conservé
+        self.assertLess(sn["tp1"], sn["e"]); self.assertGreater(sn["tp1"], sn["tp2"])           # TP1 intermédiaire réaliste, avant le TP du plan
+        self.assertGreaterEqual(sn["rr"], ab.GAIN_MIN); self.assertGreater(sn["rr_plan"], sn["rr"])
+        res = ab.simuler_sniper(sn, self.M1[k + 1:])
+        self.assertEqual(res["etat"], "TP1"); self.assertGreater(res["pnl"], 8)
+        print(f"SNIPER_SIMULE minute {k} prix {self.M1[k]['c']:.2f} → vente {sn['e']:.2f} ({sn['src']}, rejet {'+'.join(sn['rejets'])}) SL {sn['sl']:.2f} "
+              f"TP1 {sn['tp1']:.2f} ({sn['n1']}) TP plan {sn['tp2']:.2f} R/R {sn['rr']:.1f} (plan {sn['rr_plan']:.1f}) → {res['etat']} {res['pnl']:+.1f} pts")
 
-    def test_replay_of_the_spike_then_drop(self):
-        sn = ab.entree_sniper(contexte_gold())
-        futur = [b(T0 + 60 * i, 3988 + i, 3989 + i, 3987 + i, 3988.5 + i) for i in range(1, 7)]            # montée vers 3994
-        futur += [b(T0 + 60 * 7, 3994.0, 3995.0, 3993.5, 3994.0)]                                            # pic 3995 (touche l'ordre limite)
-        futur += [b(T0 + 60 * (8 + i), 3994 - 1.5 * i, 3994.2 - 1.5 * i, 3993 - 1.5 * i, 3993.5 - 1.5 * i) for i in range(12)]   # chute vers 3978
-        res = ab.simuler_sniper(sn, futur)
-        self.assertEqual(res["etat"], "TP1"); self.assertGreater(res["pnl"], 14)
-        print(f"SNIPER_SIMULE entrée {sn['e']:.1f} SL {sn['sl']:.1f} TP1 {sn['tp1']:.1f} -> {res['etat']} {res['pnl']:+.1f} pts (R/R {sn['rr']:.1f})")
+    def test_plan_entry_4012_was_never_reachable_but_sniper_is(self):
+        tous = ab.simuler_sniper(dict(d=-1, e=4012.79, sl=4019.86, tp1=3895.54, t=self.M1[0]["t"], marche=False), self.M1)
+        self.assertEqual(tous["etat"], "non rempli")                                            # le plan SWING seul : position ratée
+        self.assertIsNotNone(premiere_proposition(self.M1)[1])
 
-    def test_stop_hit_and_unfilled_outcomes(self):
-        sn = ab.entree_sniper(contexte_gold())
-        monte = [b(T0 + 60 * i, 3990 + i * 2, 3991 + i * 2, 3989 + i * 2, 3990 + i * 2) for i in range(1, 8)]      # monte jusqu'à > SL
-        self.assertEqual(ab.simuler_sniper(sn, monte)["etat"], "SL")
-        plat = [b(T0 + 60 * i, 3986, 3987, 3985, 3986) for i in range(1, 30)]
-        self.assertEqual(ab.simuler_sniper(sn, plat)["etat"], "non rempli")
+    def test_cascade_goes_up_when_a_close_breaks_the_last_high(self):
+        k, sn = premiere_proposition(self.M1)
+        casse = [dict(x) for x in self.M1]
+        casse[68] = dict(casse[68], o=3995.0, h=3998.4, c=3998.0, l=3994.8)                      # clôture M1 AU-DESSUS du dernier plus haut M1 (3997,6)
+        k2, sn2 = premiere_proposition(casse)
+        self.assertTrue(sn2 is None or sn2["ut"] != "M1")
+
+    def test_cascade_picks_lowest_ut_under_the_upper_ut_high(self):
+        k, sn = premiere_proposition(self.M1)
+        self.assertEqual(sn["ut"], "M1")                                                         # M1 sans plus haut supérieur valide au-dessus : la plus petite UT
+        self.assertIn("plus haut", sn["src"])
 
     def test_never_forced(self):
-        cas = {"UT non alignées": contexte_gold(bear=7), "sens pas clair": contexte_gold(sens=0), "contre la 1h": contexte_gold(dirs=[-1] * 7 + [1] + [-1] * 3),
-               "contre la 4h": contexte_gold(dirs=[-1] * 9 + [1, -1]), "pas de direction": contexte_gold(dirPlan=0),
-               "trop loin": contexte_gold(prix=3950.0), "zone déjà traversée": contexte_gold(prix=3996.0), "au-delà du SL": contexte_gold(prix=4001.0),
-               "pas de cible gainMin": contexte_gold(niveaux=[(3994.0, "15m"), (3990.5, "1h")]), "pas de structure ni swing": contexte_gold(niveaux=[], b3=contexte_gold()["b3"][:5])}
-        for nom, r in cas.items():
-            self.assertIsNone(ab.entree_sniper(r), nom)
+        k, _ = premiere_proposition(self.M1)
+        cas = {"UT non alignées": dict(bear=7), "sens flou": dict(sens=0), "contre la 1h": dict(dirs=[-1] * 7 + [1] + [-1] * 3), "contre la 4h": dict(dirs=[-1] * 9 + [1, -1]),
+               "pas de direction": dict(dirPlan=0), "prix hors zone": dict(zone_pine=dict(za=4005.0, zb=4012.79, zmil=4009.0))}
+        for nom, kw in cas.items():
+            self.assertIsNone(ab.entree_sniper(r_at(self.M1, k, **kw)), nom)
+        self.assertIsNone(ab.entree_sniper(r_at(self.M1, 40)), "avant l'entrée dans la zone")
+        self.assertIsNone(ab.entree_sniper(r_at(self.M1, 66)), "pas de rejet confirmé encore (pic en cours)")
 
-    def test_long_mirror_on_last_support(self):
-        b3 = [b(T0 - 180 * (60 - i), 4000 + i * 0.05, 4001.5 + i * 0.05, 3999.5 + i * 0.05, 4001 + i * 0.05) for i in range(60)]
-        r = {"dirPlan": 1, "bull": 10, "bear": 1, "sens": 1, "dirs": [1] * 11, "strat": "DAY", "atr": 6.0, "atr3": 2.0, "b3": b3,
-             "m1": [b(T0 - 60 * (60 - i), 4006, 4006.4, 3999.6, 4006) for i in range(60)], "niveaux": [(4000.0, "15m"), (4020.0, "1h")]}
-        sn = ab.entree_sniper(r)
-        self.assertEqual(sn["d"], 1); self.assertLess(sn["sl"], sn["e"]); self.assertGreater(sn["tp1"], sn["e"]); self.assertLessEqual(sn["za"], sn["zb"])
+    def test_long_mirror_in_a_buy_zone(self):
+        miroir_m1 = miroir(self.M1)
+        k, sn = premiere_proposition(miroir_m1, long=True)
+        self.assertIsNotNone(sn); self.assertEqual(sn["d"], 1)
+        self.assertLess(sn["sl"], sn["e"]); self.assertGreater(sn["tp1"], sn["e"]); self.assertGreater(sn["tp2"], sn["tp1"])
+        self.assertEqual(ab.simuler_sniper(sn, miroir_m1[k + 1:])["etat"], "TP1")
 
-    def test_wick_of_the_spike_moves_the_stop_behind_it(self):
-        r = contexte_gold()
-        r["m1"][-5] = b(T0 - 300, 3993.0, 3999.5, 3992.5, 3994.0)                       # mèche M1 jusqu'à 3999,5 près de la structure
-        sn = ab.entree_sniper(r)
-        self.assertGreaterEqual(sn["sl"], 3999.5 + 0.5 * 2.0 - 1e-9)
+    def test_pipeline_attaches_sniper_without_crashing(self):
+        S = jeu_simule(11, 0.0006)
+        r = ab.analyser_avec_memoire(dict(S, m15=S["m15"][:340]), {})
+        self.assertIn("sniper", r); self.assertIsNotNone(r["atr3"])
 
-    def test_message_short_varied_vip_only_fr_en(self):
-        etat = {}
-        r = dict(contexte_gold(), bull=1, comp=0, b15=[b(T0 - 900 * (30 - i), 100, 101, 99, 100) for i in range(30)], sqzs=[0] * 11, dirW=0, pctH=20)
-        r["m1"] = [dict(x, t=T0 - 60 * (60 - i)) for i, x in enumerate(r["m1"])]
+
+class MessagesEtRegles(unittest.TestCase):
+    M1 = chemin_nuit()
+
+    def evenement(self, etat=None, now=None, k=None):
+        etat = {} if etat is None else etat
+        k, sn = premiere_proposition(self.M1) if k is None else (k, None)
+        r = dict(r_at(self.M1, k), comp=0, sqzs=[0] * 11, dirW=0, pctH=20, sniper=sn)
+        r["sniper"] = ab.entree_sniper(r)
+        now = now or r["m1"][-1]["t"]
         with patch.object(ab, "cme_ouvert", return_value=True):
-            ev = [e for e in ab.evenements_pine(etat, "GOLD", dict(r, sniper=ab.entree_sniper(r)), etat.setdefault("GOLD", {}), T0 + 10) if e["kind"] == "sniper"]
-            self.assertEqual(len(ev), 1)
-            self.assertEqual([e for e in ab.evenements_pine(etat, "GOLD", dict(r, sniper=ab.entree_sniper(r)), etat["GOLD"], T0 + 60) if e["kind"] == "sniper"], [])   # une fois
+            return etat, [e for e in ab.evenements_pine(etat, "GOLD", r, etat.setdefault("GOLD", {}), now) if e["kind"] == "sniper"], r
+
+    def test_message_in_addition_to_plan_short_varied_fr_en_once(self):
+        etat, ev, r = self.evenement()
+        self.assertEqual(len(ev), 1)
         fr = ab.texte_pine({}, ev[0]); en = ab.texte_pine({}, ev[0], True)
         self.assertLessEqual(len(fr), 3)
-        self.assertIn("vente limite 3993,80–3994,80", fr[0]); self.assertIn("SL 3999,09", fr[1]); self.assertIn("TP1 3979", fr[1])
-        self.assertIn("sell limit", en[0]); self.assertNotIn("vente", " ".join(en))
-        suivants = {" ".join(ab.texte_pine({"al_rot": {"p:sniper:GOLD": k}}, ev[0])) for k in (-1, 0, 1)}
-        self.assertEqual(len(suivants), 3)                                                # formulations différentes
+        self.assertIn("🎯 Entrée sniper 🥇 GOLD : vente", fr[0]); self.assertIn("SL ", fr[1]); self.assertIn("TP1", fr[1]); self.assertIn("3895,54", fr[1])
+        self.assertIn("Sniper entry", en[0]); self.assertIn("sell", en[0]); self.assertNotIn("vente", " ".join(en))
+        self.assertEqual(len({" ".join(ab.texte_pine({"al_rot": {"p:sniper:GOLD": k}}, ev[0])) for k in (-1, 0, 1)}), 3)
+        etat2, ev2, _ = self.evenement(etat, now=r["m1"][-1]["t"] + 60, k=None)
+        self.assertEqual(ev2, [])                                                                 # une seule fois (même niveau, même UT)
 
-    def test_pipeline_attaches_sniper_key_without_crashing(self):
-        S = jeu_simule(11, 0.0006)
-        mem = {}
-        r = ab.analyser_avec_memoire(dict(S, m15=S["m15"][:340]), mem)
-        self.assertIn("sniper", r); self.assertIn("b3", r); self.assertIsNotNone(r["atr3"])
+    def test_free_sees_nothing_of_the_sniper_and_vip_gets_it(self):
+        import inspect
+        src = inspect.getsource(ab.alertes_courtes)
+        self.assertIn("diffuser_alerte(etat, chats", src)                                          # VIP : chaîne + privés
+        envois = []
+        etat, ev, _ = self.evenement()
+        with patch.object(ab, "TOKEN", "x"), patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append((str(c), k["text"]))), \
+             patch.object(ab, "destinataires_message", return_value=["canal"]), patch.object(ab, "evenements_pine", return_value=ev):
+            etat["prospects"] = ["900"]
+            ab.alertes_courtes(etat, set(), {"GOLD": {}}, 1_000_000)
+        self.assertEqual([c for c, _ in envois], ["canal"])
+
+    def test_plan_sl_broken_by_confirmed_close_triggers_reversal_in_preparation_message(self):
+        """Règle du Pine (retDir) : SL du plan franchi par une clôture 15 min confirmée -> position annulée, retournement en préparation + message."""
+        S = jeu_simule(11, 0.0006); m15 = S["m15"]; mem, etat = {}, {}
+        ab.analyser_avec_memoire(dict(S, m15=m15[:340]), mem)
+        mem["dir_fig"] = mem.get("dir_fig") or 1
+        c = m15[340]["c"]
+        mem["sl"] = (c + 5.0) if mem["dir_fig"] == 1 else (c - 5.0)                                # SL du plan placé du mauvais côté de la prochaine clôture
+        ab.analyser_avec_memoire(dict(S, m15=m15[:341]), mem)
+        r = ab.analyser_avec_memoire(dict(S, m15=m15[:342]), mem)
+        self.assertNotEqual(r["ret_dir"], 0)
+        self.assertIn("SL cassé à la clôture", " ".join(ab.ligne_retournement(r)))
+        with patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "etat_marche_hb", return_value=("ouvert", None)):
+            r["ret_conf"] = False
+            ev = ab.evenements_pine(etat, "GOLD", dict(r, sniper=None), {}, r["m1"][-1]["t"])
+        self.assertIn("ret_cancel", [e["kind"] for e in ev])
+        r["ret_conf"] = True
+        with patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "etat_marche_hb", return_value=("ouvert", None)):
+            ev2 = ab.evenements_pine(etat, "GOLD", dict(r, sniper=None), {}, r["m1"][-1]["t"] + 900)
+        self.assertIn("ret_conf", [e["kind"] for e in ev2])
+
+
+class SensDansLeGratuit(unittest.TestCase):
+    """Adel garde le sens haussier / baissier dans le gratuit et sur la page ALIGN LIVE : jamais les niveaux."""
+
+    def test_free_heartbeat_keeps_the_bias_without_levels(self):
+        r = {"dirPlan": -1, "bull": 2, "bear": 6, "sens": -1, "pctH": 30, "strat": "DAY", "dirs": [-1] * 11, "dirW": 0, "atr": 2.0, "prix": 100.4,
+             "zone_pine": {"za": 101.0, "zb": 103.0, "zmil": 102.0}, "b5": [1] * 25}
+        fr = ab.texte_battement("GOLD", r, {}, False, vip=False); en = ab.texte_battement("GOLD", r, {}, True, vip=False)
+        self.assertIn("Biais : baissier", fr); self.assertIn("Bias: bearish", en)
+        for interdit in ("101", "102", "103", "100,4"):
+            self.assertNotIn(interdit, fr)
+        self.assertIn("VIP", fr)
+
+    def test_free_preparation_keeps_the_bias_without_levels(self):
+        envois = []
+        etat = {"prospects": ["900"]}
+        with patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append(k["text"])), patch.object(ab, "bot_on", return_value=True):
+            ab.alerte_gratuite_preparation(etat, "🔔 JE PRÉPARE UNE POSITION — 🥇 GOLD\n🟥 SHORT ⬇️ descend\n📌 Entrée : 4012,5")
+        self.assertIn("Biais : baissier", envois[0]); self.assertNotIn("4012", envois[0]); self.assertNotIn("SHORT", envois[0])
+
+    def test_live_page_json_still_has_the_bias(self):
+        etat = {}
+        r = {"dirPlan": -1, "bull": 1, "bear": 10, "sens": -1, "pctH": 20, "strat": "SWING", "dirs": [-1] * 11, "dirW": 0, "atr": 2.0, "prix": 3983.5,
+             "m1": [{"t": 1_800_000_000 - 20, "c": 3983.5}], "zone_pine": None}
+        with patch.object(ab, "cme_ouvert", return_value=True):
+            d = ab.construire_live(etat, {"GOLD": r}, 1_800_000_000)
+        self.assertEqual(d["marches"][0]["biais"], "baissier"); self.assertEqual(d["marches"][0]["ut"], 10)
 
 
 class PropositionPineV25(unittest.TestCase):
@@ -104,14 +209,15 @@ class PropositionPineV25(unittest.TestCase):
         self.assertEqual(hashlib.sha256(v24).hexdigest(), "0f1216cbb261eaaa3e019524071b67777cbecd0f5d10689cedf5727a06921085")      # empreinte du v24 publié (#134) : jamais modifié
         diff = (self.RACINE / "PROPOSITION_v25_sniper.diff").read_text(encoding="utf-8").splitlines()
         modifs = [l[1:] for l in diff if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+        self.assertGreater(len(modifs), 20)
         for l in modifs:
             for interdit in ("color.", "table.", "label.new", "line.new", "box.new", "bgcolor", "plotshape", "size.", "style=", "position."):
                 self.assertNotIn(interdit, l)
-        self.assertTrue(all(l.lstrip().startswith("//") or any(k in l for k in ("atr3", "hi3", "lo3", "sniper", "snL", "snCtx", "snBon", "mech", "vk", "k = 0 to 7",
-                                                                                   "entV", "entS", "tp1", "tp2", "slV", "slS", "tTP", "entC", "slC", "f_plan", "e :=", "s :=",
-                                                                                   "if not na", "if sniper", "@version", "")) for l in modifs))
         v25 = (self.RACINE / "ALIGN_MTF_PRO_v25_PROPOSITION.pine").read_text(encoding="utf-8")
-        self.assertIn("NON PUBLIÉE", v25); self.assertEqual(v25.count("request.security("), 23)   # 21 en v24 + 2 (limite TradingView : 40)
+        self.assertIn("NON PUBLIÉE", v25)
+        self.assertEqual(v25.count("request.security("), 23)           # 21 en v24 + 2 (limite TradingView : 40)
+        for marque in ("timeframe.in_seconds()", "snOk", "entP", "swHup", "bbU"):                   # cascade selon l'UT du graphique
+            self.assertIn(marque, v25)
 
 
 if __name__ == "__main__":
