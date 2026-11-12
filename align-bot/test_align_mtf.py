@@ -676,9 +676,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             align_bot.notifier_clotures(state, "BTC", r, {})
             align_bot.notifier_clotures(state, "BTC", r, {})
         self.assertEqual(send.call_count, 1)
-        self.assertTrue(send.call_args.kwargs["text"].startswith("🟠 BTC"))
-        self.assertIn("🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ", send.call_args.kwargs["text"])
-        self.assertIn("PAS D'ENTRÉE", send.call_args.kwargs["text"])
+        self.assertTrue(send.call_args.kwargs["text"].startswith("⏳ BTC - EN ATTENTE"))
+        self.assertIn("🚀 Déclencheur :", send.call_args.kwargs["text"])
         self.assertNotIn("123", state["veille_cloture"]["BTC"])
 
     def test_candle_alert_puts_clear_no_entry_verdict_before_market_details(self):
@@ -694,11 +693,11 @@ class AlignMtfRulesTest(unittest.TestCase):
             with patch.object(align_bot, "raison_attente", return_value="La 1 h doit confirmer la 4 h"):
                 with patch.object(align_bot, "prochaine", return_value="Pas encore de sens"):
                     msg = align_bot.texte_cloture("GOLD", "5m", candle(300, o=4029.73, h=4032, l=4028, c=4031.11), r, {})
-        self.assertTrue(msg.startswith("🥇 GOLD"))
-        self.assertLess(msg.index("🥇 GOLD"), msg.index("PAS D'ENTRÉE"))
-        self.assertIn("5m clôturée", msg)
-        self.assertIn("H4 LONG", msg)
-        self.assertIn("H1 NEUTRE", msg)
+        # Modèle 2 de la charte : titre « EN ATTENTE », puis Raison, puis Déclencheur — rien d'autre
+        self.assertTrue(msg.startswith("⏳ GOLD - EN ATTENTE"))
+        self.assertLess(msg.index("📉 Raison :"), msg.index("🚀 Déclencheur :"))
+        self.assertIn("Le 1h ne confirme pas la tendance 4h", msg)
+        self.assertEqual(len([l for l in msg.splitlines() if l.strip()]), 3)
         self.assertNotIn("POURQUOI", msg)
         self.assertNotIn("CE QUE TU DOIS FAIRE", msg)
 
@@ -715,8 +714,8 @@ class AlignMtfRulesTest(unittest.TestCase):
             patch.object(align_bot, "meche_sl", return_value="sous la mèche"),
         ):
             msg = align_bot.texte_cloture("BTC", "5m", candle(7200), r, {"ordre": ordre})
-        self.assertIn("🟡 Zone 67490 → 67520", msg)
-        self.assertIn("Zone 67490 → 67520", msg)
+        self.assertIn("zone 67490 → 67520", msg)                                   # la zone surveillée reste dans la raison
+        self.assertIn("🚀 Déclencheur : Clôture 5 min au-dessus de 67510", msg)
         self.assertNotIn("POSITION EN COURS", msg)
 
     def test_candle_close_countdown_supports_every_watched_timeframe(self):
@@ -1730,15 +1729,10 @@ class AlignMtfRulesTest(unittest.TestCase):
              patch.object(align_bot, "profil_strategie", return_value={"mode":"ATTENTE","direction":0}):
             message = align_bot.texte_cloture("GOLD", "1h", b, r, {})
         lines = message.splitlines()
-        self.assertTrue(lines[0].startswith("🥇 GOLD"))
-        self.assertIn("4046,76", lines[0])
-        self.assertEqual(lines[1], "🔴 PAS D'ENTRÉE — SIGNAL NON CONFIRMÉ")
-        self.assertIn("1h clôturée 06:00", lines[2])
-        self.assertIn("O 4050,53 → C 4046,76", lines[2])
-        self.assertIn("H4 NEUTRE", lines[3])
-        self.assertIn("H1 SHORT", lines[3])
-        self.assertIn("ALIGN 0/2", lines[3])
-        self.assertLess(len(message), 360)
+        self.assertEqual(lines[0], "⏳ GOLD - EN ATTENTE")                      # Modèle 2 : le marché est dans le titre
+        self.assertTrue(lines[2].startswith("📉 Raison :"))
+        self.assertTrue(lines[3].startswith("🚀 Déclencheur :"))
+        self.assertLess(len(message), 200)
         self.assertNotIn("POURQUOI", message)
         self.assertNotIn("RÉSULTAT DE LA BOUGIE", message)
 
@@ -1751,12 +1745,9 @@ class AlignMtfRulesTest(unittest.TestCase):
              patch.object(align_bot, "heure", return_value="03:00"), \
              patch.object(align_bot, "profil_strategie", return_value={"mode":"ATTENTE","direction":0}):
             translated = align_bot.traduire(align_bot.texte_cloture("BTC", "5m", b, r, {}))
-        self.assertTrue(translated.startswith("🟠 BTC"))
-        self.assertIn("🔴 NO ENTRY — SIGNAL NOT CONFIRMED", translated)
-        self.assertIn("closed", translated)
-        self.assertIn("UP", translated)
-        self.assertIn("NEUTRAL", translated)
-        self.assertIn("Next confirmation: candle close", translated)
+        self.assertTrue(translated.startswith("⏳ BTC - WAITING"))
+        self.assertIn("📉 Reason:", translated)
+        self.assertIn("🚀 Trigger:", translated)
 
     def test_candle_close_titles_support_all_watched_timeframes(self):
         from unittest.mock import patch
@@ -1768,9 +1759,9 @@ class AlignMtfRulesTest(unittest.TestCase):
              patch.object(align_bot, "profil_strategie", return_value={"mode":"ATTENTE","direction":0}):
             for tf in ("5m", "15m", "1h", "4h", "D", "W"):
                 message = align_bot.texte_cloture("BTC", tf, b, r, {})
-                self.assertTrue(message.startswith("🟠 BTC"))
-                self.assertIn(f"{tf} clôturée", message)
-                self.assertIn("🔴 PAS D'ENTRÉE", message)
+                self.assertTrue(message.startswith("⏳ BTC - EN ATTENTE"))
+                self.assertIn("📉 Raison :", message)
+                self.assertIn("🚀 Déclencheur :", message)
 
     def test_candle_close_title_confirms_only_when_entry_is_authorized(self):
         from unittest.mock import patch
