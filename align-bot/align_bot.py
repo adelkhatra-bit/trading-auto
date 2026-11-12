@@ -761,21 +761,25 @@ def _rejet(bars, d, niveau, a):
     return None
 
 def entree_sniper(r):
+    return _sniper(r)[0]
+
+def _sniper(r):
+    """(proposition ou None, raison du refus) : la raison sert au diagnostic du rejeu, jamais à Telegram."""
     d = r.get("dirPlan") or 0
     dirs, a3, a15, a5, zp = r.get("dirs") or [], r.get("atr3"), r.get("atr"), r.get("atr5") or r.get("atr"), r.get("zone_pine")
     m1, b3 = r.get("m1") or [], r.get("b3") or []
     b5, b15 = (r.get("b5") or [])[:-1], (r.get("b15") or [])[:-1]          # la dernière bougie M5 / M15 est en formation
     if d not in (1, -1) or len(dirs) < 11 or not a3 or not a15 or not zp or len(m1) < 40 or len(b3) < 12 or len(b5) < 8 or len(b15) < 5:
-        return None
+        return None, f"DONNEES/PLAN absents (dirPlan={d}, zone={'oui' if zp else 'non'}, b3={len(b3)}, b5={len(b5)}, b15={len(b15)})"
     if (r["bull"] if d == 1 else r["bear"]) < MIN_ALIGN or r.get("sens") != d or dirs[9] == -d or dirs[7] == -d:
-        return None                                         # contexte HTF non aligné, sens flou ou contre la 4 h / 1 h
+        return None, f"CONTEXTE_HTF refusé (UT alignées {(r['bull'] if d == 1 else r['bear'])}/11, sens={r.get('sens')}, 4h={dirs[9]}, 1h={dirs[7]})"
     prix = m1[-1]["c"]
     if not (zp["za"] - 0.5 * a15 <= prix <= zp["zb"] + 0.5 * a15):
-        return None                                         # le prix n'est pas (encore) dans la zone d'entrée du plan
+        return None, f"HORS_ZONE : prix {prix:.2f} hors zone du plan {zp['za']:.2f}–{zp['zb']:.2f}"
     m1c = m1[:-1]
     a1 = atr(m1c, 14)[-1] if len(m1c) >= 16 else None
     if not a1:
-        return None
+        return None, "ATR_M1 indisponible"
     uts = [("M1", m1c, a1), ("M3", b3, a3), ("M5", b5, a5), ("M15", b15, a15)]
     niv, structure = [], niveaux_structure_ut(dict(r, m1=m1))
     for nom, bars, a in uts:
@@ -793,11 +797,11 @@ def entree_sniper(r):
             choisi = (nom, L, a)
             break
     if not choisi:
-        return None
+        return None, "CASCADE : aucun dernier plus haut/bas valide sur M1/M3/M5/M15 (cascade)"
     ut, L, a_ut = choisi
     rej = {nom: _rejet(bars, d, L, a) for nom, _, bars, a in niv if nom in ("M1", "M3", "M5")}
     if rej["M1"] is None or rej["M3"] is None:
-        return None                                         # rejet confirmé exigé sur M1 ET M3
+        return None, f"REJET : pas de rejet confirmé sous {L:.2f} ({ut}) : M1={'oui' if rej['M1'] else 'non'} M3={'oui' if rej['M3'] else 'non'}"
     e = rej["M1"]["c"]
     meche = max([y["h"] if d == -1 else -y["l"] for y in m1c[-12:] + list(b3[-4:]) if abs((y["h"] if d == -1 else y["l"]) - L) <= 3 * a3] + [L if d == -1 else -L])
     meche = meche if d == -1 else -meche
@@ -807,7 +811,7 @@ def entree_sniper(r):
         sl = e - d * mini
     risque = abs(e - sl)
     if (prix - sl) * d <= 0:
-        return None                                         # SL déjà franchi
+        return None, "SL_FRANCHI"
     plan = r.get("plan") or {}
     tp_plan = plan.get("tp1") if plan.get("d", d) == d and plan.get("tp1") is not None and d * (plan["tp1"] - e) > 0 else None
     cibles = sorted([(v, n) for v, n in (r.get("niveaux") or []) if n in ("15m", "1h", "4h", "Daily") and d * (v - e) >= risque * GAIN_MIN and (tp_plan is None or d * (tp_plan - v) >= 0)],
@@ -815,9 +819,9 @@ def entree_sniper(r):
     tp1, n1 = cibles[0] if cibles else (e + d * risque * GAIN_MIN, f"projection {GAIN_MIN} x le risque")      # TP1 intermédiaire réaliste
     tp_final = tp_plan if tp_plan is not None else (cibles[1][0] if len(cibles) > 1 else e + d * risque * (GAIN_MIN + 2))
     za, zb = sorted((e, L))
-    return dict(d=d, ut=ut, e=e, za=za, zb=zb, sl=sl, tp1=tp1, n1=n1, tp2=tp_final, n2=("plan " + (r.get("strat") or "")).strip() if tp_plan is not None else "projection",
+    return (dict(d=d, ut=ut, e=e, za=za, zb=zb, sl=sl, tp1=tp1, n1=n1, tp2=tp_final, n2=("plan " + (r.get("strat") or "")).strip() if tp_plan is not None else "projection",
                 rr=abs(tp1 - e) / risque, rr_plan=abs(tp_final - e) / risque, niveau=L, src="dernier " + ("plus haut " if d == -1 else "plus bas ") + ut, meche=meche,
-                rejets=[n for n, x in rej.items() if x is not None], marche=True, t=m1[-1]["t"])
+                rejets=[n for n, x in rej.items() if x is not None], marche=True, t=m1[-1]["t"]), "")
 
 def simuler_sniper(sn, m1_futur, duree_min=240):
     """Que serait-il arrivé ? Entrée « au rejet » (marché) rempli à l'ouverture de la bougie suivante ; sinon ordre limite touché ; SL prioritaire si SL et TP1 dans la même bougie."""
