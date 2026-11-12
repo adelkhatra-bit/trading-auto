@@ -776,13 +776,9 @@ def _sniper(r):
     if (r["bull"] if d == 1 else r["bear"]) < MIN_ALIGN - 2 or r.get("sens") != d or dirs[9] == -d or dirs[7] == -d:
         return None, f"CONTEXTE_HTF refusé (UT alignées {(r['bull'] if d == 1 else r['bear'])}/11, sens={r.get('sens')}, 4h={dirs[9]}, 1h={dirs[7]})"
     prix = m1[-1]["c"]
+    if not (zp["za"] - 0.5 * a15 <= prix <= zp["zb"] + 0.5 * a15):
+        return None, f"HORS_ZONE : prix {prix:.2f} hors zone du plan {zp['za']:.2f}–{zp['zb']:.2f}"
     m1c = m1[:-1]
-    # La zone doit avoir été TOUCHÉE par la mèche des 12 dernières minutes M1 : un rejet confirmé a par définition
-    # ramené le dernier prix hors de la zone, donc tester le dernier prix l'interdirait toujours.
-    recent = m1c[-12:] + m1[-1:]
-    extreme = max(y["h"] for y in recent) if d == -1 else min(y["l"] for y in recent)
-    if not (zp["za"] - 0.5 * a15 <= extreme <= zp["zb"] + 0.5 * a15):
-        return None, f"HORS_ZONE : mèche {extreme:.2f} (prix {prix:.2f}) hors zone du plan {zp['za']:.2f}–{zp['zb']:.2f}"
     a1 = atr(m1c, 14)[-1] if len(m1c) >= 16 else None
     if not a1:
         return None, "ATR_M1 indisponible"

@@ -103,18 +103,6 @@ class Cascade(unittest.TestCase):
         k, _ = premiere_proposition(self.M1)
         self.assertIsNotNone(ab.entree_sniper(r_at(self.M1, k, bear=7)))
 
-    def test_meche_dans_la_zone_dernier_prix_sorti(self):
-        # cas réel 23:03 UTC : la mèche touche la zone, le rejet ramène le prix dessous -> la proposition reste possible
-        k, _ = premiere_proposition(self.M1)
-        r = r_at(self.M1, k)
-        close = r["m1"][-1]["c"]
-        haut = max(y["h"] for y in r["m1"][-13:])
-        zp = dict(r["zone_pine"], za=close + 0.5 * r["atr"] + 0.01, zb=close + 40)
-        self.assertGreater(haut, zp["za"] - 0.5 * r["atr"])                       # la mèche a touché
-        self.assertIsNotNone(ab.entree_sniper(r_at(self.M1, k, zone_pine=zp)))
-        zp2 = dict(zp, za=haut + 0.5 * r["atr"] + 1, zb=haut + 40)                 # mèche jamais arrivée à la zone
-        self.assertIsNone(ab.entree_sniper(r_at(self.M1, k, zone_pine=zp2)))
-
     def test_never_forced(self):
         k, _ = premiere_proposition(self.M1)
         cas = {"UT non alignées": dict(bear=5), "sens flou": dict(sens=0), "contre la 1h": dict(dirs=[-1] * 7 + [1] + [-1] * 3), "contre la 4h": dict(dirs=[-1] * 9 + [1, -1]),
