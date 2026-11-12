@@ -490,6 +490,109 @@ def fvgs(bars, ut, n=40):
         out.append((lo, hi, ut, dd))
     return out[-3:]
 
+# ═══ v24.3 — jumeau EXACT de f_struct() de l'indicateur « ALIGN MTF PRO (Inside) » : FVG non comblées + mèches, sur UNE unité de temps ═══
+# Le bot donne la même entrée / le même SL / les mêmes TP que le graphique quand on se met sur cette unité (1 min → structure 3 min, comme le Pine).
+UT_FVG = {"SCALPING": "3"}          # unité de référence du bot : 5 min (SCALPING : 3 min) = la vue à mettre sur TradingView
+UT_FVG_NOM = {"1h": "1h", "5": "5 min", "3": "3 min", "15": "15 min"}
+UT_FVG_BARS = {"1h": "b1h", "5": "b5", "3": "b3", "15": "b15"}
+
+def structure_fvg(bars):
+    """(rTop, rBot, gTop, gBot, dernier plus haut, dernier plus bas, ATR, clôture) — même calcul que f_struct() du Pine v24.3 :
+    FVG ≥ 0,3 ATR gardées tant qu'une clôture ne les a pas traversées (30 max par côté), la plus proche de chaque côté ;
+    plus haut / plus bas = dernier pivot 5-5 (ou les 4 dernières bougies si elles vont plus loin)."""
+    if not bars or len(bars) < 20:
+        return None
+    at = atr(bars, 14)
+    rT, rB, gT, gB = [], [], [], []
+    for i in range(len(bars)):
+        x = bars[i]; aF = at[i]
+        if i >= 2 and aF is not None:
+            if x["h"] < bars[i - 2]["l"] and bars[i - 2]["l"] - x["h"] >= 0.3 * aF:
+                rT.append(bars[i - 2]["l"]); rB.append(x["h"])
+            if x["l"] > bars[i - 2]["h"] and x["l"] - bars[i - 2]["h"] >= 0.3 * aF:
+                gT.append(x["l"]); gB.append(bars[i - 2]["h"])
+        for k in range(len(rT) - 1, -1, -1):
+            if x["c"] > rT[k]:
+                del rT[k], rB[k]
+        for k in range(len(gB) - 1, -1, -1):
+            if x["c"] < gB[k]:
+                del gT[k], gB[k]
+        del rT[:-30], rB[:-30], gT[:-30], gB[:-30]
+    rTop = rBot = gTop = gBot = None
+    for t_, b_ in zip(rT, rB):
+        if rBot is None or b_ < rBot:
+            rBot, rTop = b_, t_
+    for t_, b_ in zip(gT, gB):
+        if gTop is None or t_ > gTop:
+            gTop, gBot = t_, b_
+    ph = pl = None
+    for i in range(5, len(bars) - 5):
+        fen = bars[i - 5:i + 6]
+        if bars[i]["h"] == max(y["h"] for y in fen):
+            ph = bars[i]["h"]
+        if bars[i]["l"] == min(y["l"] for y in fen):
+            pl = bars[i]["l"]
+    hH = max(ph if ph is not None else bars[-1]["h"], max(y["h"] for y in bars[-4:]))
+    lL = min(pl if pl is not None else bars[-1]["l"], min(y["l"] for y in bars[-4:]))
+    return (rTop, rBot, gTop, gBot, hH, lL, at[-1], bars[-1]["c"])
+
+def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
+    """Entrée / SL / TP1 / TP2 de l'indicateur v24.3 sur l'unité affichée (règle identique au Pine). None = le Pine garde son plan d'origine.
+    SHORT : entrée = bas de la FVG rouge la plus proche ; SL = au-dessus de la mèche du dernier plus haut / du haut de la FVG (≥ 0,8 ATR) ;
+    TP1 = FVG verte ou dernier plus bas (≥ 1,5 x le risque), TP2 = le niveau suivant. LONG : l'inverse."""
+    if d not in (1, -1) or not st:
+        return None
+    rTop, rBot, gTop, gBot, swH, swL, aS, cl = st
+    if not aS:
+        return None
+    m = max(0.15 * aS, 3 * tick)
+    if d == -1:
+        if rBot is None or rBot < cl - 0.5 * aS:
+            return None
+        e = rBot
+        s = max(max(swH, rTop) + m, rBot + 0.8 * aS)
+        rq = 1.5 * (s - e)
+        c1 = gTop if gTop is not None and e - gTop >= rq else None
+        c2 = swL if e - swL >= rq else None
+        if c1 is None and c2 is None:
+            t1, n1 = (tp1, "objectif du plan") if tp1 is not None and e - tp1 >= rq else (e - 2 * (s - e), "2 x le risque")
+        elif c1 is None or c2 is None:
+            t1, n1 = (c1, f"FVG verte {ut_nom}") if c1 is not None else (c2, f"dernier plus bas {ut_nom}")
+        else:
+            t1, n1 = (c1, f"FVG verte {ut_nom}") if c1 >= c2 else (c2, f"dernier plus bas {ut_nom}")
+        if c1 is None or c2 is None:
+            t2 = min(t1, tp1) if tp1 is not None else t1
+            n2 = "objectif du plan" if t2 != t1 else n1
+        else:
+            t2 = min(c1, c2); n2 = f"FVG verte {ut_nom}" if t2 == c1 else f"dernier plus bas {ut_nom}"
+        src = f"FVG rouge {ut_nom}"
+    else:
+        if gTop is None or gTop > cl + 0.5 * aS:
+            return None
+        e = gTop
+        s = min(min(swL, gBot) - m, gTop - 0.8 * aS)
+        rq = 1.5 * (e - s)
+        c1 = rBot if rBot is not None and rBot - e >= rq else None
+        c2 = swH if swH - e >= rq else None
+        if c1 is None and c2 is None:
+            t1, n1 = (tp1, "objectif du plan") if tp1 is not None and tp1 - e >= rq else (e + 2 * (e - s), "2 x le risque")
+        elif c1 is None or c2 is None:
+            t1, n1 = (c1, f"FVG rouge {ut_nom}") if c1 is not None else (c2, f"dernier plus haut {ut_nom}")
+        else:
+            t1, n1 = (c1, f"FVG rouge {ut_nom}") if c1 <= c2 else (c2, f"dernier plus haut {ut_nom}")
+        if c1 is None or c2 is None:
+            t2 = max(t1, tp1) if tp1 is not None else t1
+            n2 = "objectif du plan" if t2 != t1 else n1
+        else:
+            t2 = max(c1, c2); n2 = f"FVG rouge {ut_nom}" if t2 == c1 else f"dernier plus haut {ut_nom}"
+        src = f"FVG verte {ut_nom}"
+    if d * (t2 - t1) < 0:
+        t2, n2 = t1, n1
+    if d * (e - s) <= 0 or d * (t1 - e) <= 0:
+        return None                                         # sécurité du Pine : SL / TP du mauvais côté → plan d'origine
+    za, zb = (e, s - 0.25 * (s - e)) if d == -1 else (s + 0.25 * (e - s), e)
+    return dict(e=e, sl=s, tp1=t1, n1=n1, tp2=t2, n2=n2, za=za, zb=zb, src=src)
+
 def analyser(pair, mem=None):
     """Télécharge les bougies puis calcule l'analyse (logique identique à l'indicateur Pine ALIGN MTF PRO v24).
     mem = mémoire persistante du marché (sens stable, plan figé, retournement) ; sans mémoire : calcul instantané."""
@@ -547,6 +650,16 @@ def plan_pine(d, cl, a, a15, tous_niv, hau1, bas1, bas10, haut10, ut_sl, ut_tp):
     loin = sorted([z for z in cibles_niv if d * (z[0] - e) >= abs(t1[0] - e) + a], key=lambda z: d * z[0])
     t2 = loin[0] if loin else (e + d * risque * (GAIN_MIN + 2), f"projection {GAIN_MIN + 2} x le risque")
     return dict(e=e, sl=sl, tp1=t1[0], n1=t1[1], tp2=t2[0], n2=t2[1], rr=abs(t1[0] - e) / max(risque, 1e-9), marche=e == cl)
+
+def _structures_ut(series):
+    out = {}
+    for k in UT_FVG_NOM:
+        try:
+            out[k] = structure_fvg(series.get(k) or [])
+        except Exception as ex:
+            print("structure_fvg", k, type(ex).__name__, ex)
+            out[k] = None
+    return out
 
 def calculer_analyse(S, stable=None, comp_prev=None):
     """Calcul pur à partir des bougies S (m1, m5, m15, m30, h1, h4, d1, w1). Aucun accès réseau."""
@@ -663,7 +776,8 @@ def calculer_analyse(S, stable=None, comp_prev=None):
                 pctH=pctH, sens=sens, retHaut=retHaut, retBas=retBas, sigHaut=sigHaut, sigBas=sigBas, nom=nom,
                 dirPlan=dirPlan, dirBrut=dirBrut, strat=strat_plan,
                 plan=plan(dirPlan if dirPlan else 1, strat_plan), planH=plan(1), planB=plan(-1), rC=rC,
-                dirW=dW_, ohlc15=b[-30:], b3=series["3"][-80:], atr3=(atr(series["3"], 14)[-1] if len(series["3"]) >= 16 else None))
+                dirW=dW_, ohlc15=b[-30:], b3=series["3"][-80:], atr3=(atr(series["3"], 14)[-1] if len(series["3"]) >= 16 else None),
+                struct_ut=_structures_ut(series))
 
 def analyser_avec_memoire(S, mem=None):
     """Sens stable, plan figé et retournement exactement comme l'indicateur (vue 15 min = unité de référence du bot).
@@ -5421,6 +5535,16 @@ def proximite_marche(m, r, cle, now=None):
         za, zb = min(zp["za"], zp["zb"]), max(zp["za"], zp["zb"])
     else:
         return dict(base, classe="sans_plan", rang=5)
+    pe = None
+    if not o and d in (1, -1):
+        try:
+            pe = pine_entree(r, d) if r.get("b15") and "planH" in r else None
+        except Exception:
+            pe = None
+        if pe and pe.get("fvg_ut"):                           # v24.3 : même zone que l'indicateur sur la vue 5 min (bande verte)
+            za, zb = min(pe["za"], pe["zb"]), max(pe["za"], pe["zb"])
+        else:
+            pe = None
     if d not in (1, -1):
         return dict(base, classe="sans_plan", rang=5)
     if bloque_dw(r, d, prix):
@@ -5429,8 +5553,8 @@ def proximite_marche(m, r, cle, now=None):
     dist = 0.0 if za <= prix <= zb else min(abs(prix - za), abs(prix - zb))
     atr_n = dist / a if a > 0 else 99.0
     classe, rang = (("dans_zone", 0) if dist == 0 else ("proche", 1) if atr_n <= 1.5 else ("en_approche", 2) if atr_n <= 4 else ("loin", 3))
-    unite = HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
-    mil = (zp or {}).get("zmil")
+    unite = pe["sl_ut"] if pe else HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
+    mil = pe["zmil"] if pe else (zp or {}).get("zmil")
     action = (f"clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(mil)}" if mil else f"rejet + clôture {unite} dans la zone")
     return dict(base, classe=classe, rang=rang, d=d, za=za, zb=zb, dist=dist, atr_n=atr_n, action=action, au_dessus=prix < za)
 
@@ -5465,7 +5589,9 @@ def radar_entree_sl(r, d, za=None, zb=None):
     L'entrée et le SL visent le même sommet / creux de structure du plan ; la zone affichée est réduite à sa partie rentable."""
     pe = pine_entree(r, d) if r.get("b15") and "planH" in r else None
     if pe:
-        return dict(e=pe["e"], sl=pe["sl"], tp1=pe["tp1"], za=pe["za"], zb=pe["zb"], src="plan de l'indicateur")
+        return dict(e=pe["e"], sl=pe["sl"], tp1=pe["tp1"], za=pe["za"], zb=pe["zb"],
+                    src=(pe["src"].replace(" (indicateur ALIGN)", "") if pe.get("fvg_ut") else "plan de l'indicateur"),
+                    tp2=pe.get("tp2"), ut=pe.get("sl_ut"), fvg=bool(pe.get("fvg_ut")), d=d)
     plan = r.get("plan_fige") or {}
     if plan.get("d") == d and plan.get("sl") is not None:
         a_, b_ = zone_rentable(d, za, zb, plan["sl"], plan["tp1"]) if za is not None else (None, None)
@@ -5503,6 +5629,12 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None, intro=None):
                 l.append((f"🎯 Entry : {px(es['e'])}" if anglais else f"🎯 Entrée : {px(es['e'])}") + f" ({es['src']})")
                 l.append(f"🛑 SL : {px(es['sl'])} · {px(abs(es['e'] - es['sl']))} pts")
                 l.append(f"🏁 TP1 : {px(es['tp1'])} · R/R {abs(es['tp1'] - es['e']) / max(abs(es['e'] - es['sl']), 1e-9):.1f}".replace(".", ","))
+                if es.get("fvg") and tp2_affichable(d, es["tp1"], es.get("tp2")):
+                    l.append(f"🏁 TP2 : {px(es['tp2'])}" + (" (if TP1 breaks, it keeps going)" if anglais else " (si le TP1 casse, ça continue)"))
+                if es.get("fvg"):
+                    l.append((f"👀 TradingView : {es['ut']} view = same levels" if anglais else f"👀 TradingView : vue {es['ut']} = mêmes niveaux"))
+                    l.append(("🧘 It's an FVG: it can sting a bit before turning, don't panic while the SL holds" if anglais else
+                              "🧘 C'est une FVG : ça peut piquer un peu avant de repartir, t'inquiète pas tant que le SL tient"))
             if t["rang"] == 0:
                 l.append("🟨 Price is IN the zone" if anglais else "🟨 Le prix est DANS la zone")
             else:
@@ -6705,9 +6837,18 @@ def pine_entree(r, d):
     if za is None:
         za = zb = pl["e"]                                 # aucune partie rentable de la zone : seul le point d'entrée du plan
     # TP2 = valeur du graphique (parité TradingView) ; s'il tombe avant le TP1 (projection du Pine), il n'est pas affiché : voir tp2_affichable.
-    return dict(d=d, e=pl["e"], sl=pl["sl"], tp1=pl["tp1"], n1=nom(pl["n1"]), tp2=pl["tp2"], n2=nom(pl["n2"]), rr=pl["rr"],
+    out = dict(d=d, e=pl["e"], sl=pl["sl"], tp1=pl["tp1"], n1=nom(pl["n1"]), tp2=pl["tp2"], n2=nom(pl["n2"]), rr=pl["rr"],
                 src="Fibonacci 50 → 78,6 % (indicateur ALIGN)", za=za, zb=zb, f50=z["f50"], f618=z["f618"], f786=z["f786"],
                 zmil=(za + zb) / 2, sl_h=bougie_protegee(r["b15"][-3:], d, pl["sl"]), sl_ut="15 min")
+    # v24.3 : mêmes niveaux que l'indicateur sur l'unité de référence (FVG + mèche). Sinon : plan d'origine, comme le Pine.
+    ut = UT_FVG.get(r.get("strat") or "", "5")
+    fv = plan_fvg(d, (r.get("struct_ut") or {}).get(ut), pl["e"], pl["sl"], pl["tp1"], pl["tp2"], UT_FVG_NOM[ut])
+    if fv:
+        bars_ut = [x for x in (r.get(UT_FVG_BARS[ut]) or [])][-3:]
+        out.update(fv, src=fv["src"] + " (indicateur ALIGN)", rr=abs(fv["tp1"] - fv["e"]) / max(abs(fv["e"] - fv["sl"]), 1e-9),
+                   zmil=(fv["za"] + fv["zb"]) / 2, sl_ut=UT_FVG_NOM[ut], fvg_ut=True,
+                   sl_h=bougie_protegee(bars_ut, d, fv["sl"]) if bars_ut else out["sl_h"])
+    return out
 
 def point_entree(r, d, p):
     """Zone limite basée sur le dernier mouvement 5m ; niveaux 1h/4h et FVG restent des confluences."""
