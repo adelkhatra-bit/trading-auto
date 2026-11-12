@@ -1572,7 +1572,7 @@ TRAD = {
 "🕒 Heure de clôture de la bougie :": "🕒 Candle close time:",
 "⏳ PROCHAINE CLÔTURE ": "⏳ NEXT CANDLE CLOSE ",
 "⏱ Temps restant :": "⏱ Time remaining:",
-"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "↩ RETOURNEMENT EN PRÉPARATION": "↩ REVERSAL BUILDING", "petites unités ont tourné contre le": "small timeframes turned against the", "🔒 Sécurise : stop à BE": "🔒 Secure: stop at BE", "si tu es en gain": "if you are in profit", "✅ Retournement confirmé si le 15 min ET la 1 h clôturent vers le": "✅ Reversal confirmed if the 15m AND the 1h close towards", "🙅 Aucune entrée en sens inverse avant cette confirmation": "🙅 No entry the other way before this confirmation", "⚡ Petites unités": "⚡ Small timeframes", "🏔 Grandes unités": "🏔 Big timeframes", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT": "⏳ 4h is neutral: no LONG or SHORT direction", "⏳ Le 1h ne confirme pas la tendance 4h": "⏳ 1h does not confirm the 4h trend", "🔔 Je te préviens dès que c'est validé": "🔔 I'll tell you as soon as it's validated", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi démarré depuis": "Tracking started", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
+"🕒 Heure prévue :": "🕒 Scheduled time:", "🏷 Barre TradingView :": "🏷 TradingView bar:", "retracement 15 min": "15m pullback", "SIGNAL FAIBLE": "WEAK SIGNAL", "ATTENDRE": "WAIT", "📺 Ton graphique": "📺 Your chart", "alignement LONG": "LONG alignment", "alignement SHORT": "SHORT alignment", "pas d'alignement complet : attendre": "no full alignment: wait", "plusieurs jours à semaines": "several days to weeks", "plusieurs jours": "several days", "dans la séance": "within the session", "dans la journée": "within the day", "quelques minutes": "a few minutes", "⛔ Le prix est déjà collé au stop : je ne lance pas le suivi.": "⛔ Price is already right at the stop: I am not starting tracking.", "⏳ N'entre pas maintenant, attends le prochain signal.": "⏳ Do not enter now, wait for the next signal.", "⚠️ Latence : le prix s'est rapproché du stop depuis le signal.": "⚠️ Latency: price has moved closer to the stop since the signal.", "ne le resserre pas ; réduis la taille si tu entres.": "do not tighten it; reduce size if you enter.", "Garde le SL du plan": "Keep the plan SL", "⚠️ Latence : le prix a déjà fait une bonne partie du chemin.": "⚠️ Latency: price has already covered much of the move.", "🎯 Le gain restant vers le TP1 est faible : entrée peu intéressante.": "🎯 Remaining gain to TP1 is small: entry not attractive.", "🕯 Clôture 5 min :": "🕯 5m close:", "🕯 Clôture 15 min :": "🕯 15m close:", "POURQUOI J'ATTENDS": "WHY I'M WAITING", "↩ RETOURNEMENT EN PRÉPARATION": "↩ REVERSAL BUILDING", "petites unités ont tourné contre le": "small timeframes turned against the", "🔒 Sécurise : stop à BE": "🔒 Secure: stop at BE", "si tu es en gain": "if you are in profit", "✅ Retournement confirmé si le 15 min ET la 1 h clôturent vers le": "✅ Reversal confirmed if the 15m AND the 1h close towards", "🙅 Aucune entrée en sens inverse avant cette confirmation": "🙅 No entry the other way before this confirmation", "⚡ Petites unités": "⚡ Small timeframes", "🏔 Grandes unités": "🏔 Big timeframes", "⏳ La 4 h est neutre : pas de direction LONG ni SHORT": "⏳ 4h is neutral: no LONG or SHORT direction", "⏳ Le 1h ne confirme pas la tendance 4h": "⏳ 1h does not confirm the 4h trend", "🔔 Je te préviens dès que c'est validé": "🔔 I'll tell you as soon as it's validated", "aucun sens LONG/SHORT validé": "no LONG/SHORT direction validated", "La bougie 4 h ne donne pas de direction nette : le marché est neutre. Aucun LONG ni SHORT n'est proposé.": "The 4h candle gives no clear direction: the market is neutral. No LONG or SHORT is proposed.", "Fin du suivi si aucun setup avant": "Tracking ends if no setup before", "aucune entrée forcée": "no forced entry", "Actualisé à": "Updated at", "confirmation 1 h manquante": "1h confirmation missing", "validation complète en attente": "full validation pending", "Suivi en cours depuis": "Tracking for", "À la clôture 4 h : je regarde si la 4 h donne enfin un sens LONG ou SHORT.": "At the 4h close: I check whether 4h finally gives a LONG or SHORT direction.", "À la clôture 1 h : je vérifie que la 1 h confirme la 4 h.": "At the 1h close: I check that 1h confirms 4h.", "À la clôture 15 min : je cherche un repli propre pour préparer l'entrée.": "At the 15m close: I look for a clean pullback to prepare the entry.", "À la clôture 5 min : si la bougie clôture dans le bon sens, l'entrée est validée.": "At the 5m close: if the candle closes in the right direction, the entry is validated.",
 "🟢 CLÔTURE — SIGNAL CONFIRMÉ": "🟢 CANDLE CLOSE — SIGNAL CONFIRMED",
 "🔴 CLÔTURE — SIGNAL NON CONFIRMÉ": "🔴 CANDLE CLOSE — SIGNAL NOT CONFIRMED",
 "🟢 POSITION EN COURS — SUIVI DU TRADE": "🟢 POSITION OPEN — TRADE MONITORING",
@@ -1638,7 +1638,7 @@ TRAD = {
 "pression haussière sur les rendements": "upward pressure on yields",
 "détente des rendements": "yields easing",
 "rendement stable": "yields stable",
-"favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position de LONGUE DURÉE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 Long-DURATION position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
+"favorable au 🟩 LONG": "favourable to 🟩 LONG", "frein pour le 🟩 LONG": "headwind for 🟩 LONG", "🏦 Taux US 10 ans": "🏦 US 10-year yield", "sur la journée": "on the day", "frein pour le Gold": "headwind for Gold", "favorable au Gold": "favourable to Gold", "📏 Hier : haut": "📏 Yesterday: high", "• bas": "• low", "🌏 Range Asie : haut": "🌏 Asia range: high", "💥 CASSURE": "💥 BREAKOUT", "🧲 NIVEAU CLÉ": "🧲 KEY LEVEL", "📍 Le prix approche le": "📍 Price is approaching the", "🕯 Vue 15 min : ça peut rebondir OU casser": "🕯 15 min view: it can bounce OR break", "⏳ J'attends la clôture de la bougie 15 min": "⏳ Waiting for the 15 min candle close", "plus haut d'hier et de la semaine dernière": "yesterday's and last week's high", "plus bas d'hier et de la semaine dernière": "yesterday's and last week's low", "plus haut d'hier": "yesterday's high", "plus bas d'hier": "yesterday's low", "plus haut de la semaine dernière": "last week's high", "plus bas de la semaine dernière": "last week's low", "plus haut du range Asie": "Asia range high", "plus bas du range Asie": "Asia range low", "👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer": "👀 I check the 15 min / 1 h / 4 h alignment before entering", "💵 DOLLAR EN FORTE BAISSE": "💵 DOLLAR FALLING HARD", "💵 DOLLAR EN FORTE HAUSSE": "💵 DOLLAR RISING HARD", "prudence": "be careful", "🧭 Le bot n'entre toujours qu'avec 15 min / 1 h / 4 h alignées": "🧭 The bot still only enters with 15 min / 1 h / 4 h aligned", "📰 NEWS USA DANS 1 H": "📰 US NEWS IN 1 H", "🛑 Pas de nouvelle position à partir de": "🛑 No new position from", "🔒 En position ? Mets-toi à BE si tu es en gain": "🔒 In a trade? Move to BE if in profit", "📊 Prévu": "📊 Forecast", "• avant": "• previous", "📰 RÉACTION À LA NEWS": "📰 NEWS REACTION", "⏳ J'attends la clôture de la bougie 15 min avant de reprendre": "⏳ Waiting for the 15 min close before resuming", "haussier ≈": "bullish ≈", "baissier ≈": "bearish ≈", ": le prix peut y rebondir": ": price may bounce there", ": le prix peut y buter": ": price may stall there", "🌙 MARCHÉ BIENTÔT FERMÉ": "🌙 MARKET CLOSING SOON", "⏰ Fermeture à": "⏰ Closes at", "🟥 Topstep / prop firms : tout fermé avant": "🟥 Topstep / prop firms: everything closed before", "(sinon fermeture automatique)": "(otherwise auto-flattened)", "🌙 Broker (CFD) / CME : fermeture": "🌙 Broker (CFD) / CME: close", "🔓 Réouverture": "🔓 Reopen", "dimanche": "Sunday", "• réouverture à": "• reopens at", "• réouverture dimanche soir": "• reopens Sunday evening", "(heure de Paris)": "(Paris time)", "🛡 Pas de nouvelle position avant la fermeture": "🛡 No new position before the close", "🔔 Je reprends la recherche après la réouverture": "🔔 I'll resume after the reopen", "🌙 FERMETURE DU GOLD DANS": "🌙 GOLD CLOSES IN", "🚦 🙅 PAS DE NOUVELLE POSITION": "🚦 🙅 NO NEW POSITION", "🔒 Tu es en position : mets-toi à BE si tu es en gain": "🔒 You're in a trade: move to BE if in profit", "🛡 Vérifie que ton SL est bien placé": "🛡 Check your SL is in place", "🛡 Ne pas ouvrir de position avant la fermeture": "🛡 Don't open a position before the close", "💥 Week-end : le prix peut s'ouvrir loin (écart), sécurise tes gains": "💥 Weekend: price may gap at the open, secure your profits", "💥 À la réouverture le prix peut sauter (écart)": "💥 At the reopen price may gap", "🎯 TP1 TOUCHÉ": "🎯 TP1 HIT", "✂️ Prends une partie des gains": "✂️ Take part of the profit", "🔒 Vérifie que ton SL est à BE": "🔒 Check your SL is at BE", "📈 Garde le reste : le marché peut encore pousser": "📈 Keep the rest: the market can push further", "🏁 TP2 visé": "🏁 Target TP2", "🙅 Ne coupe pas tout sur le TP1": "🙅 Don't close everything at TP1", "⏱ Durée estimée": "⏱ Estimated duration", "📅 Position de LONGUE DURÉE : elle peut durer plus d'une journée, garde ton SL en place la nuit": "📅 Long-DURATION position: it can last more than a day, keep your SL overnight", "🎁 Ta position gratuite arrive avec le prochain signal": "🎁 Your free position comes with the next signal", "🔒 Cette position est réservée aux VIP": "🔒 This position is VIP-only", "🎉🎉 BRAVO": "🎉🎉 WELL DONE", "💰 Ta position gratuite": "💰 Your free position", "🔥 C'est ça, ALIGN": "🔥 That's ALIGN", "😍 Imagine chaque position comme celle-là": "😍 Imagine every position like this one", "💎 En VIP : toutes les positions + le sens + le coach (BE, TP)": "💎 In VIP: every position + the direction + the coach (BE, TP)", "🔓 VIP 49,90 € / mois 👇": "🔓 VIP €49.90 / month 👇", "📊 Ça fait partie du jeu : on coupe petit, on gagne gros": "📊 It's part of the game: cut small, win big", "💎 En VIP : toutes les positions pour se refaire + le coach": "💎 In VIP: every position to bounce back + the coach", "RÉSULTAT ALIGN": "ALIGN RESULT", "📌 Entrée": "📌 Entry", "🏁 Sortie": "🏁 Exit", "📈 Résultat": "📈 Result", "⏱ Durée": "⏱ Duration", ": bravo !": ": well done!", "📸 N'hésite pas à partager ta capture dans ALIGN Résultats": "📸 Feel free to share your screenshot in ALIGN Results", "👇 Bouton 📸 Partager mon gain": "👇 Button 📸 Share my profit", "🛡 SL respecté, risque maîtrisé": "🛡 SL respected, risk under control", "📸 Voir les résultats ALIGN": "📸 See ALIGN results", ": SL touché, risque maîtrisé": ": SL hit, risk under control", "📊 Tous les résultats (TP et SL) sont publiés en toute transparence": "📊 All results (TP and SL) are published transparently", "👇 Bouton ci-dessous": "👇 Button below", "🔥 Une position VIP est EN COURS": "🔥 A VIP position is RUNNING", "👀 Une position VIP se PRÉPARE": "👀 A VIP position is COMING", "⏳ Pas de position pour l'instant": "⏳ No position right now", "🔒 Sens du marché : VIP": "🔒 Market direction: VIP", "🔒 LONG ou SHORT, entrée, SL, TP : réservés aux VIP": "🔒 LONG or SHORT, entry, SL, TP: VIP only", "Nouvelle info pour les VIP": "New info for VIPs", "🤫 Sens et niveaux cachés": "🤫 Direction and levels hidden", "🌀🌀 MANIPULATION EN COURS": "🌀🌀 MANIPULATION IN PROGRESS", "⚠️ MÈCHE SUSPECTE EN COURS": "⚠️ SUSPICIOUS WICK IN PROGRESS", "⏱ CHRONO EN DIRECT": "⏱ LIVE TIMER", "🚦 🟢 J'ENTRE": "🚦 🟢 I'M ENTERING", "🚦 🟢 ON RESTE EN POSITION": "🚦 🟢 WE STAY IN", "objectifs remis dans l'ordre": "targets put back in order", "🛑 SL inchangé": "🛑 SL unchanged", "🚦 🙅 JE N'ENTRE PAS": "🚦 🙅 I'M NOT ENTERING", "🚦 ⏳ JE N'ENTRE PAS ENCORE": "🚦 ⏳ NOT ENTERING YET", "💰 TP visé": "💰 Target TP", "🎯 Inscrit depuis": "🎯 Registered for", "✅ ENTRÉ": "✅ ENTERED", "🎯 Le coach te suit jusqu'au TP": "🎯 The coach follows you to TP",
 "⏸ News dans moins de 15 min : pause": "⏸ News in less than 15 min: pause", "⏳ Reprise juste après la news": "⏳ Resuming right after the news",
 ": j'attends 15 min + 1 h + 4 h": ": waiting for 15 min + 1 h + 4 h", "⏳ Pas d'estimation tant que ce n'est pas aligné": "⏳ No estimate until aligned",
 "🚀 Le marché est parti : j'attends le repli": "🚀 The market ran: waiting for the pullback", "↩️ Repli visé": "↩️ Target pullback",
@@ -2198,7 +2198,7 @@ def mise_en_forme(t):
         if niveau and len(niveau.group("label").strip()) <= 48:
             label = niveau.group("label").strip().rstrip(" :：≈=")
             bornes = re.split(r"\s*([–—→])\s*", niveau.group("value"))
-            value = (f" {bornes[1]} ".join(_compacte_prix(b) for b in bornes[0::2]) if len(bornes) == 3 else _compacte_prix(niveau.group("value")))
+            value = (" → ".join(_compacte_prix(b) for b in bornes[0::2]) if len(bornes) == 3 else _compacte_prix(niveau.group("value")))   # toujours « A → B » : lisible, jamais confondu avec une parenthèse
             detail = (niveau.group("detail") or "").strip()
             plage = re.match(r"^[—–-]\s*([+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?)\s*(.*)$", detail)
             if plage:                    # « zone 3981,48 – 4012,15 » : la 2e borne reste une borne, pas un détail entre parenthèses
@@ -3306,7 +3306,7 @@ def zone_retournement_visee(r, cle):
         l.append(f"📏 Prix à {px(dist)} de la zone ({'elle est au-dessus' if prix < za else 'elle est en dessous'})")
     return l
 
-def texte_apercu(m, r, cle):
+def texte_apercu(m, r, cle, vip=True):
     """Carte d'abordage : autorisation d'entrée en premier, détails derrière les boutons."""
     cle = cle or {}
     maj, n_ok = alignement(r)
@@ -3353,10 +3353,10 @@ def texte_apercu(m, r, cle):
     ]
     if not tr:
         lignes += zone_retournement_visee(r, cle)
-    jour_ = news_du_jour(DERNIER_ETAT) if DERNIER_ETAT else []
+    jour_ = news_du_jour(DERNIER_ETAT) if (DERNIER_ETAT and vip) else []      # news : VIP uniquement (règle gratuit/VIP)
     if jour_:
         lignes += [""] + jour_
-    elif r.get("news"):
+    elif r.get("news") and vip:
         lignes += [news_courte(r["news"])]
     lignes += ["", "👇 Détails : boutons ci-dessous", "ℹ️ Aucun ordre n'est envoyé automatiquement à ton broker."]
     return "\n".join(lignes)
@@ -3376,6 +3376,13 @@ def prochaine_cloture(ts, interval_sec=300):
         raise ValueError("interval_sec doit être positif")
     return (int(ts) // interval_sec + 1) * interval_sec
 
+
+def duree_humaine(sec):
+    """9 min 30 s · 1 h 05 : jamais confondu avec une heure de l'horloge (ancien « depuis 09:30 »)."""
+    sec = max(0, int(sec))
+    h, reste = divmod(sec, 3600)
+    mi, se = divmod(reste, 60)
+    return f"{h} h {mi:02d}" if h else f"{mi} min {se:02d} s" if mi else f"{se} s"
 
 def mmss(sec):
     """Affichage compact Telegram : MM:SS, sans texte ni chiffres parasites."""
@@ -3467,7 +3474,7 @@ def chrono_txt(m, r, cle, t0):
     if tr:
         return "\n".join([
             f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
-            f"🎯 Suivi démarré depuis {mmss(now - t0)}",
+            f"🎯 Suivi en cours depuis {duree_humaine(now - t0)}",
             f"🟢 POSITION OUVERTE — {SENS[tr['d']]}",
             statut_txt(1, tr).strip(),
             "🎯 Le coach surveille le SL, le passage à BE et les TP."
@@ -3489,7 +3496,7 @@ def chrono_txt(m, r, cle, t0):
         direction = f"4 h {('LONG' if d4h == 1 else 'SHORT')} — validation complète en attente"
     l = [
         f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
-        f"🎯 Suivi démarré depuis {mmss(now - t0)}",
+        f"🎯 Suivi en cours depuis {duree_humaine(now - t0)}",
         f"🧭 DIRECTION : {direction}",
         f"⏳ POURQUOI J'ATTENDS : {raison_attente(r, cle)}",
     ]
@@ -4056,10 +4063,10 @@ def texte_battement(m, r, cle, anglais=False, vip=True, variante=0):
         dist = 0 if dedans else min(abs(prix - zp["za"]), abs(prix - zp["zb"]))
         unite = HB_UNITE_VALIDATION.get(e["strat"], "15 min")
         if anglais:
-            zone_l = f"📍 Entry zone: {px(zp['za'])} – {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)")
+            zone_l = f"📍 Entry zone: {px(zp['za'])} → {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)")
             action = f"🕯 Waiting for a {unite} close {'below' if d == -1 else 'above'} {px(zp['zmil'])}"
         else:
-            zone_l = f"📍 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})")
+            zone_l = f"📍 Zone d'entrée : {px(zp['za'])} → {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})")
             action = f"🕯 J'attends une clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(zp['zmil'])}"
     sens_l = (f"🧭 Likely direction: {sens_txt}" if anglais else f"🧭 Sens probable : {sens_txt}") + (f" ({e['pct']} %)" if e["sens"] else "")
     ut_l = ((f"📊 Aligned timeframes: {n}/11 " + (f"(threshold {seuil} reached)" if atteint else f"(need {seuil})")) if anglais else
@@ -4148,7 +4155,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
     armer_cloture(etat, cid, m, r, cle)
     # Toutes les analyses passent par le même garde-fou 429 que les autres messages.
     # Une analyse refusée par Telegram n'est pas marquée comme livrée et pourra être retentée.
-    res = _envoi_sur(cid, text=texte_apercu(m, r, cle),
+    res = _envoi_sur(cid, text=texte_apercu(m, r, cle, vip=bool(autorise(etat, str(cid), str(cid)))),
                      reply_markup=markup_analyse(etat, m, r, cid))
     if not isinstance(res, dict) or res.get("ok") is not True:
         print(f"ANALYSE_NON_LIVREE market={m} chat={cid} reason=telegram_send_not_confirmed")
@@ -4711,14 +4718,14 @@ def traiter(etat, chats, updates):
                         print("rappel analyse", qui, mk, ex)
                         r_ref = DERNIERS.get(mk)
                         if r_ref:
-                            _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
+                            _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {}), vip=bool(autorise(etat, qui, qui))),
                                       reply_markup=markup_analyse(etat, mk, r_ref, qui))
                         else:
                             _envoi_sur(qui, text=f"⚠️ L'analyse {mk} n'est plus disponible. Relance l'analyse du marché.")
                 else:
                     r_ref = DERNIERS.get(mk)
                     if r_ref:
-                        res = _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {})),
+                        res = _envoi_sur(qui, text=texte_apercu(mk, r_ref, etat.get(mk, {}), vip=bool(autorise(etat, qui, qui))),
                                          reply_markup=markup_analyse(etat, mk, r_ref, qui))
                         if res and res.get("ok"):
                             etat.setdefault("vu_analyse", {}).setdefault(mk, {}).setdefault(qui, {})["mid"] = res["result"]["message_id"]
@@ -4800,7 +4807,7 @@ def traiter(etat, chats, updates):
                         print("retour analyse", mk, ex)
                         _envoi_sur(qui, text="⚠️ L'analyse n'est pas disponible pour le moment. Réessaie avec le bouton Analyse.")
                         continue
-                _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {})),
+                _envoi_sur(qui, text=texte_apercu(mk, r_resume, etat.get(mk, {}), vip=bool(autorise(etat, qui, qui))),
                            reply_markup=markup_analyse(etat, mk, r_resume, qui))
                 continue
             if choix in ("jok", "jno") and qui in proprio(etat):
@@ -5395,6 +5402,143 @@ def coach_concentration(etat, chats, derniers, now=None):
                 mem[cid] = {"m": tete["m"], "rang": tete["rang"], "t": now}
         except Exception as ex:
             print("coach concentration", type(ex).__name__)
+
+# ───────── RADAR ALIGN : UN seul message par personne, mis à jour sur place ─────────
+# Remplace la veille « je surveille » marché par marché et le message « OÙ TE CONCENTRER » : le marché le plus proche
+# d'une entrée en tête (niveaux du plan de l'indicateur), les autres en une ligne. Nouveau message (avec son) seulement
+# quand un marché devient « prépare-toi » ; sinon le message existant est édité (sans notification).
+RADAR_REFRESH_SEC = 120       # au plus une édition toutes les 2 min par personne (Telegram : pas de 429)
+RADAR_ALERTE_MIN_SEC = 900    # au plus une alerte « prépare-toi » (avec son) toutes les 15 min par personne
+RADAR_ALERTE_RANG = 1         # rang ≤ 1 (dans la zone ou à ≤ 1,5 ATR) : « prépare-toi » → nouveau message avec son
+SENS_COURT = {1: "LONG ⬆️", -1: "SHORT ⬇️"}
+
+def _radar_n_ut(r, d):
+    return r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
+
+def texte_radar(props, derniers, vip=True, anglais=False, now=None):
+    """Texte du RADAR, construit uniquement à partir des vraies données (classer_marches + plan figé de l'indicateur).
+    Gratuit : marché favori, sens et état — jamais l'entrée, le SL ni le TP (réservés aux VIP)."""
+    if not props:
+        return None
+    now = time.time() if now is None else now
+    ic = lambda p: ICONE.get(p["m"], "")
+    actifs = [p for p in props if 0 <= p["rang"] <= 3]
+    en_pos = [p for p in props if p["rang"] == -1]
+    t = actifs[0] if actifs else None
+    l = []
+    if t:
+        etat_t = ("get ready" if anglais else "prépare-toi") if t["rang"] <= RADAR_ALERTE_RANG else \
+                 ("approaching" if anglais else "en approche") if t["rang"] == 2 else ("least far, nothing close" if anglais else "le moins loin, rien de proche")
+        l.append(f"🎯 FOCUS : {ic(t)} {t['m']} — {etat_t}")
+        r = (derniers or {}).get(t["m"]) or {}
+        d = t.get("d")
+        prof = {"SWING": "SWING", "DAY": "INTRADAY", "SCALPING": "SCALP"}.get(r.get("strat") or "", "")
+        l.append(("📉 " if d == -1 else "📈 ") + (f"Direction : {SENS_COURT.get(d, '?')}" if anglais else f"Sens : {SENS_COURT.get(d, '?')}") + (f" · {prof}" if prof else ""))
+        if vip:
+            plan = r.get("plan_fige") or {}
+            l.append((f"📍 Entry zone : {px(t['za'])} → {px(t['zb'])}" if anglais else f"📍 Zone d'entrée : {px(t['za'])} → {px(t['zb'])}"))
+            if plan.get("d") == d and plan.get("sl") is not None and plan.get("tp1") is not None:
+                l.append(f"🛑 SL : {px(plan['sl'])}")
+                l.append(f"🏁 TP1 : {px(plan['tp1'])}")
+            if t["rang"] == 0:
+                l.append("🟨 Price is IN the zone" if anglais else "🟨 Le prix est DANS la zone")
+            else:
+                l.append((f"📏 Price {px(t['dist'])} away (≈ {t['atr_n']:.1f} ATR 15 min)" if anglais else
+                          f"📏 Prix à {px(t['dist'])} de la zone (≈ {t['atr_n']:.1f} ATR 15 min)".replace(".", ",")))
+            l.append(("⏳ Waiting for: " if anglais else "⏳ J'attends : ") + t["action"])
+        else:
+            l.append("🔒 Entry, SL, TP : VIP" if anglais else "🔒 Entrée, SL, TP : VIP")
+        n = _radar_n_ut(r, d)
+        l.append((f"🧭 Aligned timeframes : {n}/11" if anglais else f"🧭 UT alignées : {n}/11") + (" ✅" if n >= MIN_ALIGN else f" ({'need' if anglais else 'il en faut'} {MIN_ALIGN})"))
+    else:
+        l.append("📡 RADAR ALIGN — " + ("no entry close" if anglais else "aucune entrée proche"))
+    autres = [p for p in props if p is not t]
+    if autres:
+        l.append("━━━━━━━━━━━━━━━")
+        for k, p in enumerate(autres, start=2 if t else 1):
+            sens = SENS_COURT.get(p.get("d"), "")
+            etat_p = FOCUS_NOMS.get(p["classe"], p["classe"])
+            suite = f" (≈ {p['atr_n']:.1f} ATR)".replace(".", ",") if 0 <= p["rang"] <= 3 and p["atr_n"] < 90 else ""
+            l.append(f"{k}️⃣ {ic(p)} {p['m']} : " + (f"{sens} · " if sens and p["rang"] not in (5, 6) else "") + etat_p + suite)
+    if en_pos:
+        l.append("📍 " + ("In a trade: follow the coach" if anglais else "En position : suis les alertes du coach"))
+    l.append(("🔔 New message only when it's time to get ready" if anglais else "🔔 Nouveau message seulement quand il faut se préparer"))
+    l.append(f"🔄 {'Updated' if anglais else 'Mis à jour'} {datetime.datetime.fromtimestamp(now, PARIS).strftime('%H:%M')}")
+    return "\n".join(l)
+
+def _radar_fond(txt):
+    """Contenu du radar sans l'heure ni les distances (qui bougent à chaque tick) : on n'édite que si le fond change."""
+    lignes = [x for x in str(txt).split("\n") if not x.startswith("🔄")]
+    return re.sub(r"[\d.,]+", "#", "\n".join(x for x in lignes if not x.startswith("📏")))
+
+def destinataires_radar(etat, chats):
+    """Personnes qui suivent au moins un marché (« Valider et suivre ») + VIP qui ont coché au moins 2 marchés. Jamais la chaîne."""
+    canal = str(etat.get("canal") or "")
+    out = set()
+    for m, suivis in (etat.get("veille_cloture") or {}).items():
+        for cid, s in (suivis or {}).items():
+            if isinstance(s, dict) and s.get("multi"):
+                out.add(str(cid))
+    for cid in {str(c) for c in chats}:
+        try:
+            if autorise(etat, cid, cid) and len(marches_choisis(etat, cid)) >= 2:
+                out.add(cid)
+        except Exception:
+            pass
+    return sorted(out - {canal})
+
+def _radar_supprimer(cid, mid):
+    if not mid:
+        return
+    try:
+        telegram("deleteMessage", chat_id=cid, message_id=mid)
+    except Exception:
+        pass                                      # déjà supprimé ou trop ancien : sans gravité
+
+def radar_tick(etat, chats, derniers, now=None):
+    """Un RADAR par personne : édité sur place ; nouveau message (son) seulement quand un marché devient « prépare-toi »
+    ou quand le marché en tête change (l'ancien radar est alors supprimé : jamais deux radars dans la conversation)."""
+    now = time.time() if now is None else now
+    mem_all = etat.setdefault("radar_mem", {})
+    for cid in destinataires_radar(etat, chats):
+        try:
+            anglais = cid in LANG_EN
+            vip = bool(autorise(etat, cid, cid))
+            props = classer_marches(derniers, etat, marches_choisis(etat, cid), now)
+            txt = texte_radar(props, derniers, vip, anglais, now)
+            if not txt:
+                continue
+            mem = mem_all.setdefault(cid, {})
+            actifs = [p for p in props if 0 <= p["rang"] <= 3]
+            focus = actifs[0]["m"] if actifs else ""
+            rang = actifs[0]["rang"] if actifs else 9
+            alerte = (bool(focus) and rang <= RADAR_ALERTE_RANG and now - float(mem.get("t_alerte", 0)) >= RADAR_ALERTE_MIN_SEC
+                      and (mem.get("focus") != focus or int(mem.get("rang", 9)) > RADAR_ALERTE_RANG))
+            change_tete = mem.get("mid") and focus != mem.get("focus", "") and now - float(mem.get("t", 0)) >= RADAR_REFRESH_SEC
+            if alerte or change_tete or not mem.get("mid"):
+                res = _envoi_sur(cid, text=txt, **({} if alerte else {"disable_notification": "true"}))
+                if isinstance(res, dict) and res.get("ok"):
+                    _radar_supprimer(cid, mem.get("mid"))
+                    mem.update(mid=res["result"]["message_id"], t=now, fond=_radar_fond(txt), focus=focus, rang=rang)
+                    if alerte:
+                        mem["t_alerte"] = now
+                continue
+            mem["rang"] = rang
+            if now - float(mem.get("t", 0)) < RADAR_REFRESH_SEC or _radar_fond(txt) == mem.get("fond"):
+                continue                          # rien de nouveau sur le fond, ou édition trop récente
+            try:
+                telegram("editMessageText", chat_id=cid, message_id=mem["mid"], text=txt)
+                mem.update(t=now, fond=_radar_fond(txt))
+            except Exception as ex:
+                e = str(ex).lower()
+                if "not modified" in e:
+                    mem.update(t=now, fond=_radar_fond(txt))
+                elif any(x in e for x in ("not found", "can't be edited", "message_id_invalid")):
+                    mem.pop("mid", None)          # recréé au prochain tick
+                else:
+                    raise
+        except Exception as ex:
+            print("radar", cid, type(ex).__name__, ex)
 
 # ───────── /statut : tout est-il opérationnel ? (lu sur l'état réel du worker, jamais supposé) ─────────
 def prochaine_session(now):
@@ -6807,16 +6951,32 @@ def niveaux_cles(out, m, r, cle):
     h_ = datetime.datetime.now(PARIS).hour
     if r.get("asie") and 8 <= h_ < 14:
         niv += [(r["asie"][0], "plus haut du range Asie"), (r["asie"][1], "plus bas du range Asie")]
+    fus = []                                   # niveaux confondus (ex. plus bas d'hier = plus bas de la semaine) : UN seul message
     for v, nom in niv:
+        if v is None:
+            continue
+        pareil = next((f for f in fus if ("haut" in f[1][0]) == ("haut" in nom) and abs(f[0] - v) <= 0.05 * a), None)
+        if pareil:
+            pareil[1].append(nom)
+        else:
+            fus.append([v, [nom]])
+    niv = [(v, noms[0], noms) for v, noms in fus]
+    for v, nom, noms in niv:
+        if len(noms) > 1:
+            nom_aff = " et ".join([noms[0]] + [n.replace("plus haut ", "").replace("plus bas ", "") for n in noms[1:]])
+        else:
+            nom_aff = nom
         haut = "haut" in nom
         casse = (x15["c"] > v + 0.05 * a and prev <= v) if haut else (x15["c"] < v - 0.05 * a and prev >= v)
-        if casse and f"c{nom}{jour}" not in vu:
-            vu[f"c{nom}{jour}"] = 1
-            out.append(f"💥 CASSURE — {ICONE.get(m, '')} {m}\n🕯 La bougie 15 min de {heure(x15['t'])} a CLÔTURÉ {'au-dessus du' if haut else 'sous le'} {nom} ≈ {px(v)}\n"
+        if casse and not any(f"c{n}{jour}" in vu for n in noms):
+            for n in noms:
+                vu[f"c{n}{jour}"] = 1
+            out.append(f"💥 CASSURE — {ICONE.get(m, '')} {m}\n🕯 La bougie 15 min de {heure(x15['t'])} a CLÔTURÉ {'au-dessus du' if haut else 'sous le'} {nom_aff} ≈ {px(v)}\n"
                        f"{'⬆️ Le mouvement peut continuer vers le haut' if haut else '⬇️ Le mouvement peut continuer vers le bas'}\n👀 Je vérifie l'alignement 15 min / 1 h / 4 h avant d'entrer")
-        elif abs(p - v) <= 0.3 * a and f"a{nom}{jour}" not in vu and f"c{nom}{jour}" not in vu:
-            vu[f"a{nom}{jour}"] = 1
-            out.append(f"🧲 NIVEAU CLÉ — {ICONE.get(m, '')} {m}\n📍 Le prix approche le {nom} ≈ {px(v)}\n🕯 Vue 15 min : ça peut rebondir OU casser\n⏳ J'attends la clôture de la bougie 15 min")
+        elif abs(p - v) <= 0.3 * a and not any(f"a{n}{jour}" in vu or f"c{n}{jour}" in vu for n in noms):
+            for n in noms:
+                vu[f"a{n}{jour}"] = 1
+            out.append(f"🧲 NIVEAU CLÉ — {ICONE.get(m, '')} {m}\n📍 Le prix approche le {nom_aff} ≈ {px(v)}\n🕯 Vue 15 min : ça peut rebondir OU casser\n⏳ J'attends la clôture de la bougie 15 min")
 
 def manipulation(out, m, r, cle):
     """MANIPULATION (chasse aux stops) vue 15 min : une grosse bougie pique AU-DELÀ du dernier plus bas / plus haut
@@ -7591,10 +7751,7 @@ def un_tour(etat, chats):
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         synchroniser_veille_auto(etat, nom_marche, r)
         notifier_clotures(etat, nom_marche, r, cle)
-        try:
-            battement_coeur(etat, nom_marche, r, cle)
-        except Exception as ex:
-            print("battement cœur", nom_marche, ex)
+        # Veille « je surveille » marché par marché remplacée par le RADAR unique (radar_tick, après la boucle des marchés).
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"
                                  f"📍 Prix {zone_txt(r['posD'])} Daily\n🙅 Prudence sur les 🟩 LONG\n👀 Un 🟥 SHORT ⬇️ peut se préparer"),
@@ -7618,9 +7775,9 @@ def un_tour(etat, chats):
         print("alertes courtes", type(ex).__name__, ex)
     try:
         if TOKEN:
-            coach_concentration(etat, chats, derniers)
+            radar_tick(etat, chats, derniers)      # remplace « OÙ TE CONCENTRER » + la veille : UN message édité sur place
     except Exception as ex:
-        print("coach concentration", type(ex).__name__, ex)
+        print("radar", type(ex).__name__, ex)
     try:
         publier_live(etat, derniers)
     except Exception as ex:
