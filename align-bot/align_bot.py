@@ -1297,8 +1297,17 @@ def bloque_dw(r, d, prix=None):
     else:
         posD = (prix - r["basD"]) / max(r["hautD"] - r["basD"], 1e-9)
         posW = (prix - r["basW"]) / max(r["hautW"] - r["basW"], 1e-9)
-    return (d == -1 and (posD <= 0.15 or (posW <= 0.15 and posD <= 0.35))) or \
-           (d == 1 and (posD >= 0.85 or (posW >= 0.85 and posD >= 0.65)))
+    extreme = (d == -1 and (posD <= 0.15 or (posW <= 0.15 and posD <= 0.35))) or \
+              (d == 1 and (posD >= 0.85 or (posW >= 0.85 and posD >= 0.65)))
+    if not extreme:
+        return False
+    # Jour de TENDANCE (Daily, 4 h, 1 h et 15 min dans le même sens, aucun voyant de retournement sur les petites UT) :
+    # le prix est forcément « en bas » (baisse) ou « en haut » (hausse) du Daily — ce n'est pas une raison de rater le mouvement.
+    dirs = r.get("dirs") or []
+    if len(dirs) >= 11 and dirs[10] == d and dirs[9] == d and dirs[7] == d and dirs[4] == d \
+            and sum(1 for x in dirs[:5] if x == -d) == 0:
+        return False
+    return True
 
 # ───────── Mémoire du bot : il apprend de ses TP et de ses SL ─────────
 MEMOIRE = []          # copie de etat["memoire"] (sauvegardé entre les lancements)

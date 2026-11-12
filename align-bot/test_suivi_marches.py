@@ -105,5 +105,21 @@ class AntiBruitClotureTest(unittest.TestCase):
         self.assertNotEqual(ab.signature_cloture(a), ab.signature_cloture(c))
 
 
+class FiltreDailyTendanceTest(unittest.TestCase):
+    base = {"posD": 0.05, "posW": 0.4}
+
+    def test_jour_de_baisse_aligne_ne_bloque_plus_le_short(self):
+        r = dict(self.base, dirs=[-1] * 11)
+        self.assertFalse(ab.bloque_dw(r, -1))
+
+    def test_bas_du_daily_avec_retournement_bloque_toujours(self):
+        r = dict(self.base, dirs=[1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1])     # 1 min et 3 min repartent à la hausse
+        self.assertTrue(ab.bloque_dw(r, -1))
+
+    def test_daily_pas_aligne_bloque_toujours(self):
+        r = dict(self.base, dirs=[-1] * 10 + [1])
+        self.assertTrue(ab.bloque_dw(r, -1))
+
+
 if __name__ == "__main__":
     unittest.main()
