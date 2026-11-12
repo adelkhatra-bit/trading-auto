@@ -401,7 +401,7 @@ uSn = tfS < 180 ? "3 min" : timeframe.isminutes ? timeframe.period + " min" : ti
 //         TP1 = première FVG verte sous le prix (zone de retournement) ou dernier plus bas ; TP2 = le niveau suivant. LONG : l'inverse.
 if dirPlan == -1 and tfS < 86400 and not na(fRBot) and fRBot >= close - 0.5 * atrC
     entD := fRBot
-    slD := math.max(swH, fRTop) + margeS
+    slD := math.max(math.max(swH, fRTop) + margeS, fRBot + 0.8 * nz(atrS, atrC))
     rq = 1.5 * (slD - entD)
     c1 = not na(fGTop) and entD - fGTop >= rq ? fGTop : na
     c2 = entD - swL >= rq ? swL : na
@@ -410,7 +410,7 @@ if dirPlan == -1 and tfS < 86400 and not na(fRBot) and fRBot >= close - 0.5 * at
     srcD := "FVG rouge " + uSn
 if dirPlan == 1 and tfS < 86400 and not na(fGTop) and fGTop <= close + 0.5 * atrC
     entD := fGTop
-    slD := math.min(swL, fGBot) - margeS
+    slD := math.min(math.min(swL, fGBot) - margeS, fGTop - 0.8 * nz(atrS, atrC))
     rq = 1.5 * (entD - slD)
     c1 = not na(fRBot) and fRBot - entD >= rq ? fRBot : na
     c2 = swH - entD >= rq ? swH : na
@@ -426,10 +426,7 @@ if dirPlan != 0 and (dirPlan * (entD - slD) <= 0 or dirPlan * (tpD1 - entD) <= 0
     tpD1 := tp1
     tpD2 := tp2
     srcD := "plan"
-// même construction qu'avant (bande verte = on peut entrer de tel prix à tel prix, bande rouge = trop près du stop), recalée sur l'unité affichée
-if srcD != "plan"
-    zBas := dirPlan == -1 ? entD : slD + 0.25 * (entD - slD)
-    zHaut := dirPlan == -1 ? slD - 0.25 * (slD - entD) : entD
+// zones (bande verte, bande rouge, retournement) : INCHANGÉES, comme avant (plan des grosses UT)
 // Alignement : % de chaque UT vers son extrême dans le sens du plan (SHORT : 100 % = le prix est remonté tout en haut = endroit pour vendre)
 f_alg(i) => dirPlan == -1 ? array.get(pcts, i) : dirPlan == 1 ? 100 - array.get(pcts, i) : 0.0
 f_ok(i) => f_alg(i) >= 80 ? "✅" + array.get(noms, i) + " " : ""
@@ -518,7 +515,7 @@ if barstate.islast
             // Zone verte transparente = on peut rentrer de tel prix à tel prix
             bZone := box.new(x1, zHaut, bar_index + 20, zBas, border_color= color.new(color.lime, 60), bgcolor= color.new(color.lime, 85), extend=extend.right)
             // Zone rouge très légère = entre la limite d'entrée et le stop (ne plus rentrer ici)
-            bRisque := box.new(x1, dirPlan == 1 ? zBas : slD, bar_index + 20, dirPlan == 1 ? slD : zHaut, border_color= color.new(color.red, 100), bgcolor= color.new(color.red, 90), extend=extend.right)
+            bRisque := box.new(x1, dirPlan == 1 ? zBas : sl, bar_index + 20, dirPlan == 1 ? sl : zHaut, border_color= color.new(color.red, 100), bgcolor= color.new(color.red, 90), extend=extend.right)
             lF50  := line.new(x1, f50, x2, f50, color= color.new(color.gray, 40), style=line.style_dotted, extend=extend.right)
             lF618 := line.new(x1, f618, x2, f618, color= color.new(color.orange, 30), style=line.style_dotted, extend=extend.right)
             lF786 := line.new(x1, f786, x2, f786, color= color.new(color.gray, 40), style=line.style_dotted, extend=extend.right)
