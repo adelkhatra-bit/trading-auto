@@ -45,3 +45,26 @@ for x in lst:
 print(f"AUDIT plus gros chat : {len(lst)} messages • même titre <1 h après : {memes} • supprimés par le filet : {sum(supprimes.values())}")
 for k, n in parttl.most_common(18):
     print(f"TITRE {n:3d} x (supprimés {supprimes.get(k, 0):3d}) {k}")
+
+# ── Routage par compte : chaque conversation reçoit-elle seulement les marchés qu'elle a cochés ? ──
+print("ROUTAGE (marchés cochés par conversation vs marchés des messages reçus)")
+choix = etat.get("marches_par_chat", {})
+canal = str(etat.get("canal") or "")
+for i, (cid, lst) in enumerate(sorted(chats.items(), key=lambda z: -len(z[1]))[:6], 1):
+    brut = choix.get(cid)
+    coches = sorted(ab._vers_ensemble(brut)) if brut is not None else None
+    cpt, hors, sans, tit_hors = collections.Counter(), 0, 0, collections.Counter()
+    for x in lst:
+        ens = ab.marches_du_message(x["text"])
+        if not ens:
+            sans += 1
+            continue
+        for m in ens:
+            cpt[m] += 1
+        if coches is not None and not (ens & set(coches)):
+            hors += 1
+            tit_hors[titre(x["text"])] += 1
+    nom = "CANAL VIP" if cid == canal else f"chat#{i}"
+    print(f"ROUTAGE {nom} coches={coches if coches is not None else 'jamais choisi (tout)'} messages={len(lst)} par_marche={dict(cpt)} sans_marche={sans} HORS_CHOIX={hors}")
+    for k, n in tit_hors.most_common(5):
+        print(f"ROUTAGE   hors choix {n:3d} x {k}")
