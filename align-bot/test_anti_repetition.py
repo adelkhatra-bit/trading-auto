@@ -423,3 +423,56 @@ class CoachDeConcentration(unittest.TestCase):
 
     def test_commande_focus_declaree_dans_le_menu(self):
         self.assertIn("/focus", ab.COMMANDES)
+
+
+class StatutOperationnel(unittest.TestCase):
+    """/statut : chaque ligne vient d'une donnée réelle du worker ; « tout est opérationnel » seulement si rien ne cloche."""
+    T = 1_800_000_000
+
+    def derniers(self, age=30):
+        r = {"m1": [dict(t=self.T - age, o=1, h=1, l=1, c=1)], "dirPlan": -1, "bull": 1, "bear": 9}
+        return {"BTC": r, "GOLD": r, "NASDAQ": r}
+
+    def etat(self, **kw):
+        return dict({"ia_dernier_statut": "CONNECTED", "ia_dernier_fournisseur": "Groq", "sauve_t": self.T - 120,
+                     "cal": {"ev": [{"t": self.T + 3600, "titre": "CPI USA", "prev": "3 %", "avant": "3,1 %"}]}}, **kw)
+
+    def statut(self, etat=None, derniers=None):
+        with patch.object(ab, "cme_ouvert", return_value=True):
+            return ab.texte_statut(etat or self.etat(), self.derniers() if derniers is None else derniers, self.T)
+
+    def test_tout_est_operationnel_quand_tout_est_a_jour(self):
+        t = self.statut()
+        self.assertIn("✅ Tout est opérationnel", t)
+        for k in ("Telegram : connecté", "BTC : analyse de l'indicateur à jour (9/11 UT, plan SHORT", "IA : connectée (Groq)", "calendrier chargé",
+                  "Ouvertures de marché : prochaine", "Mémoire : sauvegardée il y a 2 min"):
+            self.assertIn(k, t)
+        self.assertNotIn("⚠️ 1 point", t)
+
+    def test_ia_indisponible_est_signalee_sans_declarer_tout_ok(self):
+        t = self.statut(self.etat(ia_dernier_statut="ALL_EXTERNAL_PROVIDERS_FAILED"))
+        self.assertIn("point(s) à surveiller", t); self.assertIn("IA externe indisponible", t); self.assertNotIn("Tout est opérationnel", t)
+
+    def test_donnees_en_retard_calendrier_vide_memoire_ancienne(self):
+        t = self.statut(self.etat(cal={"ev": []}, sauve_t=self.T - 7200), self.derniers(age=1500))
+        for k in ("données en retard de 25 min", "aucune annonce dans le calendrier", "aucune sauvegarde récente"):
+            self.assertIn(k, t)
+        self.assertNotIn("Tout est opérationnel", t)
+
+    def test_marche_ferme_est_normal_pas_une_alerte(self):
+        with patch.object(ab, "cme_ouvert", return_value=False):
+            t = ab.texte_statut(self.etat(), self.derniers(age=7200), self.T)
+        self.assertIn("GOLD : marché fermé (normal)", t)
+        self.assertIn("BTC : données en retard", t)                       # le BTC, lui, est 24/7 : 2 h de retard est un vrai problème
+
+    def test_pas_encore_d_analyse_est_signale(self):
+        t = self.statut(derniers={})
+        self.assertIn("pas encore d'analyse", t); self.assertNotIn("Tout est opérationnel", t)
+
+    def test_prochaine_session_est_dans_le_futur(self):
+        nom, quand = ab.prochaine_session(self.T)
+        self.assertGreater(quand, self.T); self.assertLess(quand - self.T, 8 * 86400)
+
+    def test_ia_jamais_sollicitee_n_est_pas_une_alerte(self):
+        e = self.etat(); e.pop("ia_dernier_statut"); e.pop("ia_dernier_fournisseur")
+        self.assertIn("pas encore sollicitée", self.statut(e))

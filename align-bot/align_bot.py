@@ -4915,6 +4915,9 @@ def traiter(etat, chats, updates):
         if "mes marches" in txt or "my markets" in txt or txt.startswith("/marches"):
             menu_marches(etat, cid)
             continue
+        if txt.startswith("/statut") and str(cid) in {str(x) for x in proprio(etat)}:
+            _envoi_sur(cid, text=texte_statut(etat, DERNIERS))
+            continue
         if "me concentrer" in txt or "where to focus" in txt or txt.startswith("/focus") or txt.strip() == "focus":
             props = classer_marches(DERNIERS, etat, marches_choisis(etat, cid))
             msg = texte_concentration(props, bool(autorise(etat, cid, cid)), cid in LANG_EN) if len(props) >= 1 else None
@@ -5319,6 +5322,80 @@ def coach_concentration(etat, chats, derniers, now=None):
                 mem[cid] = {"m": tete["m"], "rang": tete["rang"], "t": now}
         except Exception as ex:
             print("coach concentration", type(ex).__name__)
+
+# ───────── /statut : tout est-il opérationnel ? (lu sur l'état réel du worker, jamais supposé) ─────────
+def prochaine_session(now):
+    """(nom, heure) de la prochaine ouverture de session de marché (Tokyo, Londres, Wall Street, Gold CME)."""
+    meilleur = None
+    for code, nom_fr, nom_en, zone, ouv, fer, j_ouv, j_fer, mk_fr, mk_en in SESSIONS:
+        if not ouv:
+            continue
+        tz = ZoneInfo(zone)
+        auj = datetime.datetime.fromtimestamp(now, tz).date()
+        for k in range(0, 8):
+            jour = auj + datetime.timedelta(days=k)
+            if jour.weekday() not in j_ouv:
+                continue
+            t = datetime.datetime(jour.year, jour.month, jour.day, ouv[0], ouv[1], tzinfo=tz).timestamp()
+            if t > now:
+                if meilleur is None or t < meilleur[1]:
+                    meilleur = (nom_fr, t)
+                break
+    return meilleur
+
+def controles_statut(etat, derniers, now=None):
+    """Liste de (état, texte) : état = « ok » · « attention » · « veille » (normal, p. ex. marché fermé). Chaque ligne vient d'une donnée réelle."""
+    now = time.time() if now is None else now
+    out = [("ok", "📡 Telegram : connecté (je te réponds)")]
+    for m in MARCHES:
+        r = (derniers or {}).get(m)
+        ic = ICONE.get(m, "")
+        if not r or not r.get("m1"):
+            out.append(("attention", f"{ic} {m} : pas encore d'analyse (premier tour en cours ou données indisponibles)"))
+            continue
+        age = now - float(r["m1"][-1]["t"])
+        if m != "BTC" and not cme_ouvert(int(now)):
+            out.append(("veille", f"{ic} {m} : marché fermé (normal)"))
+            continue
+        if age > 600:
+            out.append(("attention", f"{ic} {m} : données en retard de {int(age // 60)} min"))
+            continue
+        d = r.get("dirPlan") or 0
+        n = r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
+        plan = f"plan {'LONG' if d == 1 else 'SHORT'}" if d else "pas de plan fixé"
+        out.append(("ok", f"{ic} {m} : analyse de l'indicateur à jour ({n}/11 UT, {plan}, données de {int(age)} s)"))
+    ia_st, ia_f = etat.get("ia_dernier_statut"), etat.get("ia_dernier_fournisseur")
+    if ia_st == "CONNECTED" and ia_f:
+        out.append(("ok", f"🧠 IA : connectée ({ia_f})"))
+    elif ia_st:
+        out.append(("attention", f"🧠 IA externe indisponible ({ia_st.lower().replace('_', ' ')}) : le moteur interne ALIGN continue, sans avis IA"))
+    else:
+        out.append(("veille", "🧠 IA : pas encore sollicitée depuis le démarrage"))
+    futurs = [e for e in etat.get("cal", {}).get("ev", []) if e["t"] >= now - 15 * 60]
+    if futurs:
+        out.append(("ok", "📅 News / annonces : calendrier chargé. " + prochaine_news(etat)))
+    else:
+        out.append(("attention", "📅 News / annonces : aucune annonce dans le calendrier (vide ou non chargé)"))
+    sess = prochaine_session(now)
+    if sess:
+        out.append(("ok", f"⏰ Ouvertures de marché : prochaine = {sess[0]}, {quand_txt(sess[1])}"))
+    sv = etat.get("sauve_t")
+    if sv and now - sv < 1800:
+        out.append(("ok", f"💾 Mémoire : sauvegardée il y a {int((now - sv) // 60)} min"))
+    else:
+        out.append(("attention", "💾 Mémoire : aucune sauvegarde récente"))
+    return out
+
+def texte_statut(etat, derniers, now=None):
+    now = time.time() if now is None else now
+    ctl = controles_statut(etat, derniers, now)
+    ico = {"ok": "✅", "attention": "⚠️", "veille": "💤"}
+    pb = [t for e, t in ctl if e == "attention"]
+    l = ["🩺 STATUT ALIGN", ("✅ Tout est opérationnel" if not pb else f"⚠️ {len(pb)} point(s) à surveiller")]
+    l += [f"{ico[e]} {t}" for e, t in ctl]
+    sha = os.environ.get("GITHUB_SHA", "")[:7]
+    l.append(f"🔧 Version {sha or 'inconnue'} • en route depuis {int((now - DEMARRE_T) // 60)} min")
+    return "\n".join(l)
 
 def diffuser_evenements(etat, chats, evts):
     """evts = [(marches, lignes_fr, lignes_en[, (mk_fr, mk_en)])] : marches = {"GOLD"} pour un évènement de marché, {"*"} pour une session (global).
@@ -7540,9 +7617,12 @@ def _sauver_etat_sous_verrou(etat, chats=None):
         os.fsync(f.fileno())
     os.replace(temporaire, ETAT_FICHIER)
 
+DEMARRE_T = time.time()          # heure de démarrage du worker (commande /statut)
+
 def sauver_etat(etat, chats=None):
     """Empêche le worker du chronomètre de modifier l'état pendant l'écriture atomique."""
     with CHRONO_LOCK:
+        etat["sauve_t"] = int(time.time())          # lu par /statut : la mémoire est-elle bien écrite ?
         return _sauver_etat_sous_verrou(etat, chats)
 
 
