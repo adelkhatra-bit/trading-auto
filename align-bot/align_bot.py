@@ -2153,7 +2153,7 @@ TRAD.update({
     # carte d'entrée (ordre du graphique, règle mèche 5 min) : même format propre en anglais
     "📊 Contexte": "📊 Context", "🔹 Niveaux :": "🔹 Levels:", "🔹 News : Aucune": "🔹 News: None", "🔹 News :": "🔹 News:",
     "🔹 DXY : n/d": "🔹 DXY: n/a", "🔹 DXY :": "🔹 DXY:", "(mèche 5 min)": "(5 min wick)", "(vue 5 min)": "(5 min chart)",
-    "(vue 15 min)": "(15 min chart)", "🛑 SL :": "🛑 SL:", "💰 TP1 :": "💰 TP1:", "🏁 TP2 :": "🏁 TP2:", "⚖️ R:R :": "⚖️ R:R:",
+    "(vue 15 min)": "(15 min chart)", "🕯 Prix encore près de l'entrée du bot": "🕯 Price still close to the bot's entry", "🛑 SL :": "🛑 SL:", "💰 TP1 :": "💰 TP1:", "🏁 TP2 :": "🏁 TP2:", "⚖️ R:R :": "⚖️ R:R:",
 })
 _CLES = sorted(TRAD, key=len, reverse=True)
 
@@ -7592,7 +7592,12 @@ def agent(m, r, cle, ferme):
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
                 tr["encore"] += 1
                 if True:
-                    out.append((carte_suivi(m, "ENTRÉE ENCORE POSSIBLE", [f"🎯 Entrée : {px(p)} | 🛑 SL : {px(sl)}", f"💰 TP1 : {px(t1)}"], "Entrer (bouton de suivi)", r), boutons(m)))
+                    vue_ = f" (vue {tr['sl_ut']})" if tr.get("sl_ut") else ""
+                    niv_ = [(f"🛑 SL : {px(sl)}", sl), (f"🎯 Entrée : {px(p)}{vue_}", p), (f"💰 TP1 : {px(t1)}", t1)]
+                    if t2 is not None and d * (t2 - t1) > 0:
+                        niv_.append((f"🏁 TP2 : {px(t2)}", t2))
+                    lignes_ = [f"🕯 Prix encore près de l'entrée du bot ({px(e)})", ""] + [x for x, _ in sorted(niv_, key=lambda z: -z[1])]   # ordre du graphique
+                    out.append((carte_suivi(m, "ENTRÉE ENCORE POSSIBLE", lignes_, "Entrer (bouton de suivi)", r), boutons(m)))
         elif not tr.get("tard"):
             tr["tard"] = True
             # Le bot reste en position jusqu'au TP ou au SL (son bilan compte toutes ses positions)
