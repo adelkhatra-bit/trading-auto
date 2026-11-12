@@ -218,3 +218,43 @@ class ZoneDeRetournementVisee(unittest.TestCase):
     def test_jamais_inventee_sans_plan(self):
         l = ab.zone_retournement_visee(self.r(3985.0, dirPlan=0), {})
         self.assertEqual(len(l), 1); self.assertIn("pas encore définie", l[0])
+
+
+class FormeDesMessages(unittest.TestCase):
+    """Relecture des vrais messages : lisibilité (plages de prix, consigne d'abord, marchés de la personne)."""
+    def test_plage_de_prix_reste_entiere(self):
+        t = ab.mise_en_forme("⏳ 🥇 GOLD : en attente\n📍 Zone d'entrée : 3986.06 – 4024.39 (prix à 14.38)\n📍 Zone d'entrée : 3986.00 → 3990.00 (prix dans la zone)")
+        self.assertIn("Zone d'entrée : 3986,06 – 4024,39 (prix à 14.38)", t)
+        self.assertIn("3986 → 3990 (prix dans la zone)", t)
+        self.assertNotIn("(4024", t)                                              # bug réel : « 3986,06 (4024,39 (prix à 14,38) »
+
+    def test_prix_isole_inchange(self):
+        self.assertIn("Entrée : 4075,50", ab.mise_en_forme("t\n📌 Entrée : 4 075.50"))
+
+    def test_battement_consigne_d_abord(self):
+        r = {"dirPlan": -1, "sens": -1, "bull": 0, "bear": 11, "pctH": 86, "strat": "SWING", "dirs": [-1] * 11, "atr": 4.0,
+             "zone_pine": {"za": 3986.06, "zb": 4024.39, "zmil": 4005.22}, "prix": 3972.0, "m1": [{"c": 3972.0}], "b5": [0] * 30}
+        l = ab.texte_battement("GOLD", r, {}, vip=True).split("\n")
+        self.assertTrue(l[1].startswith("🕯 J'attends une clôture 1h sous 4005,22"), l)       # la consigne juste sous le titre
+        self.assertTrue(l[2].startswith("🧭 Sens probable"))
+        for garde in ("📍 Zone d'entrée", "📊 UT alignées : 11/11", "🎯 Profil visé"):
+            self.assertTrue(any(x.startswith(garde) for x in l), garde)                # rien n'a disparu
+
+    def test_session_marches_de_la_personne(self):
+        self.assertEqual(ab.adapter_marches_session(["⏰ Ouverture Londres", "💥 Volatilité attendue sur GOLD et BTC"], "GOLD et BTC", {"GOLD", "NASDAQ"}),
+                         ["⏰ Ouverture Londres", "💥 Volatilité attendue sur GOLD"])
+        self.assertIsNone(ab.adapter_marches_session(["x GOLD et BTC"], "GOLD et BTC", {"NASDAQ"}))               # aucun de ses marchés
+        self.assertEqual(ab.adapter_marches_session(["NASDAQ, GOLD et BTC"], "NASDAQ, GOLD et BTC", {"NASDAQ", "GOLD"}), ["NASDAQ et GOLD"])
+        self.assertEqual(ab.adapter_marches_session(["a GOLD and BTC"], "GOLD and BTC", {"GOLD", "BTC"}, True), ["a GOLD and BTC"])
+        self.assertEqual(ab.adapter_marches_session(["x GOLD et BTC"], "GOLD et BTC", None), ["x GOLD et BTC"])         # pas de choix : inchangé
+
+    def test_diffusion_session_adaptee_par_compte(self):
+        envois = []
+        etat = {"marches_par_chat": {"adel": ["GOLD", "NASDAQ"], "nas": ["NASDAQ"], "tous": ["BTC", "GOLD", "NASDAQ"]}}
+        evts = [({"*"}, ["🚨 Londres ouvre dans 5 min", "💥 Attention à la volatilité sur GOLD et BTC"], ["x"], ("GOLD et BTC", "GOLD and BTC"))]
+        with patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append((c, k["text"]))):
+            ab.diffuser_evenements(etat, {"adel", "nas", "tous"}, evts)
+        par = dict(envois)
+        self.assertIn("sur GOLD", par["adel"]); self.assertNotIn("BTC", par["adel"])
+        self.assertNotIn("nas", par)                                                  # NASDAQ seul : Londres ne le concerne pas
+        self.assertIn("GOLD et BTC", par["tous"])

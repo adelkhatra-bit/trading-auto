@@ -2176,11 +2176,13 @@ def mise_en_forme(t):
             continue
         niveau = re.match(
             r"^(?P<label>.*?\b(?:TP\s*[12]|SL|STOP(?: LOSS)?|ENTR[ÉE]E?|ENTRY|SORTIE|EXIT|OBJECTIF(?: FINAL)?|TARGET|BREAK EVEN|BE)\b[^:：]*?)"
-            r"\s*(?::|：|≈|=)\s*(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)"
+            r"\s*(?::|：|≈|=)\s*(?P<value>[+-]?(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?"
+            r"(?:\s*[–—→]\s*(?:\d{1,3}(?:[ \u202f]\d{3})+|\d+)(?:[.,]\d+)?%?)?)"           # plage « A – B » : les deux bornes restent ensemble
             r"(?:\s*(?P<detail>.*))?$", l, re.IGNORECASE)
         if niveau and len(niveau.group("label").strip()) <= 48:
             label = niveau.group("label").strip().rstrip(" :：≈=")
-            value = _compacte_prix(niveau.group("value"))
+            bornes = re.split(r"\s*([–—→])\s*", niveau.group("value"))
+            value = (f" {bornes[1]} ".join(_compacte_prix(b) for b in bornes[0::2]) if len(bornes) == 3 else _compacte_prix(niveau.group("value")))
             detail = (niveau.group("detail") or "").strip()
             detail = re.sub(r"^[()\[\]—–,:; ]+|[()\[\] ]+$", "", detail)
             out.append(f"{label} : {value}" + (f" ({detail})" if detail and len(detail) <= 40 else ""))
@@ -3778,8 +3780,9 @@ def texte_cloture(m, tf, bougie, r, cle):
     lignes = [
         f"{ICONE.get(m, '📊')} {m}  ·  {px(prix)}",
         statut,
+    ] + [
         f"🕯 {tf} clôturée {heure(bougie['t'] + duree)} · {bougie_sens} · O {px(bougie['o'])} → C {px(bougie['c'])}",
-        f"H4 {sens(d4h)}  ·  H1 {sens(d1h)}  ·  ALIGN {n_ok}/2",
+        f"H4 {sens(d4h)}  ·  H1 {sens(d1h)}  ·  ALIGN {n_ok}/2 (4h + 1h d'accord)" if n_ok == 2 else f"H4 {sens(d4h)}  ·  H1 {sens(d1h)}  ·  ALIGN {n_ok}/2 (4h + 1h)",
     ]
     profil = profil_strategie(r) if len(dirs) > 9 else {"mode": "ATTENTE", "direction": 0}
     if profil.get("mode") not in ("ATTENTE", None):
@@ -3946,25 +3949,25 @@ def texte_battement(m, r, cle, anglais=False, vip=True, variante=0):
         return "\n".join([tete, (f"🧭 Bias: {biais[0]}" if anglais else f"🧭 Biais : {biais[1]}"),
                           (f"📊 Aligned timeframes: {n}/11 (need {seuil})" if anglais else f"📊 UT alignées : {n}/11 (il en faut {seuil})"),
                           ("🔒 Levels: VIP" if anglais else "🔒 Niveaux : VIP")])
-    lignes = [tete]
     sens_txt = {1: "LONG ⬆️", -1: "SHORT ⬇️", 0: "INDÉCIS" if not anglais else "UNDECIDED"}[e["sens"]]
-    lignes.append((f"🧭 Likely direction: {sens_txt}" if anglais else f"🧭 Sens probable : {sens_txt}") + (f" ({e['pct']} %)" if e["sens"] else ""))
     atteint = n >= seuil
-    lignes.append((f"📊 Aligned timeframes: {n}/11 " + (f"(threshold {seuil} reached)" if atteint else f"(need {seuil})")) if anglais else
-                  (f"📊 UT alignées : {n}/11 " + (f"(seuil {seuil} atteint)" if atteint else f"(il en faut {seuil})")))
     zp, prix, d = e["zp"], e["prix"], e["d"]
+    action, zone_l = None, None
     if zp and prix:
         dedans = zp["za"] <= prix <= zp["zb"]
         dist = 0 if dedans else min(abs(prix - zp["za"]), abs(prix - zp["zb"]))
-        if anglais:
-            lignes.append(f"📍 Entry zone: {px(zp['za'])} – {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)"))
-        else:
-            lignes.append(f"📍 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})"))
         unite = HB_UNITE_VALIDATION.get(e["strat"], "15 min")
         if anglais:
-            lignes.append(f"🕯 Waiting for a {unite} close {'below' if d == -1 else 'above'} {px(zp['zmil'])}")
+            zone_l = f"📍 Entry zone: {px(zp['za'])} – {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)")
+            action = f"🕯 Waiting for a {unite} close {'below' if d == -1 else 'above'} {px(zp['zmil'])}"
         else:
-            lignes.append(f"🕯 J'attends une clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(zp['zmil'])}")
+            zone_l = f"📍 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})")
+            action = f"🕯 J'attends une clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(zp['zmil'])}"
+    sens_l = (f"🧭 Likely direction: {sens_txt}" if anglais else f"🧭 Sens probable : {sens_txt}") + (f" ({e['pct']} %)" if e["sens"] else "")
+    ut_l = ((f"📊 Aligned timeframes: {n}/11 " + (f"(threshold {seuil} reached)" if atteint else f"(need {seuil})")) if anglais else
+            (f"📊 UT alignées : {n}/11 " + (f"(seuil {seuil} atteint)" if atteint else f"(il en faut {seuil})")))
+    # Ordre : la consigne d'abord (ce que j'attends), puis le sens, la zone, l'alignement.
+    lignes = [tete] + ([action] if action else []) + [sens_l] + ([zone_l] if zone_l else []) + [ut_l]
     profil = {"SWING": "SWING", "DAY": "INTRADAY" if not anglais else "DAY", "SCALPING": "SCALP"}.get(e["strat"], "")
     if profil:
         etat_t = {"CONFIRMÉ": "confirmed" if anglais else "confirmé", "EN ATTENTE": "pending" if anglais else "en attente"}.get(e["etat"], "")
@@ -5167,25 +5170,47 @@ def diffuser_alerte(etat, chats, fr, en):
     for cid in destinataires_message(etat, chats, "\n".join(fr)):
         _envoi_sur(cid, text="\n".join(en if str(cid) in LANG_EN else fr))
 
+def _liste_marches(noms, anglais=False):
+    """« GOLD » · « GOLD et NASDAQ » · « NASDAQ, GOLD et BTC » (anglais : and)."""
+    et = " and " if anglais else " et "
+    return noms[0] if len(noms) == 1 else ", ".join(noms[:-1]) + et + noms[-1]
+
+def adapter_marches_session(lignes, mk, choisis, anglais=False):
+    """Remplace la liste de marchés d'une session (« GOLD et BTC ») par les marchés de la personne ; None si aucun n'est concerné."""
+    if not mk or not choisis:
+        return lignes
+    cites = [m for m in re.findall(r"BTC|GOLD|NASDAQ", mk)]
+    a_garder = [m for m in cites if m in choisis]
+    if not a_garder:
+        return None
+    nouveau = _liste_marches(a_garder, anglais)
+    return [l.replace(mk, nouveau) for l in lignes]
+
 def diffuser_evenements(etat, chats, evts):
-    """evts = [(marches, lignes_fr, lignes_en)] : marches = {"GOLD"} pour un évènement de marché, {"*"} pour une session (global).
-    Chaque évènement est routé selon SON marché ; chaque personne reçoit un seul message regroupé, limité à ses marchés cochés."""
+    """evts = [(marches, lignes_fr, lignes_en[, (mk_fr, mk_en)])] : marches = {"GOLD"} pour un évènement de marché, {"*"} pour une session (global).
+    Chaque évènement est routé selon SON marché ; chaque personne reçoit un seul message regroupé, limité à ses marchés cochés
+    (liste de marchés d'une session et ligne « comprimé » réduites à ses marchés ; session sans aucun de ses marchés : non envoyée)."""
+    evts = [tuple(e) + (None,) * (4 - len(e)) for e in evts]
     dest_evt = []
-    for marches, fr, en in evts:
+    for marches, fr, en, _mk in evts:
         t = Msg("\n".join(fr)); t.marches = frozenset(marches)
         dest_evt.append(set(destinataires_message(etat, chats, t)))
     canal = str(etat.get("canal") or "")
     for cid in sorted(set().union(*dest_evt) if dest_evt else set()):
         choix = etat.get("marches_par_chat", {}).get(str(cid))
         choisis = marches_choisis(etat, cid) if (choix is not None and cid != canal) else None
+        anglais = str(cid) in LANG_EN
         blocs = []
-        for (marches, fr, en), dests in zip(evts, dest_evt):
+        for (marches, fr, en, mk), dests in zip(evts, dest_evt):
             if cid not in dests:
                 continue
-            lignes = en if str(cid) in LANG_EN else fr
-            bloc = ajuster_squeeze(lignes, choisis) if choisis else lignes
-            if bloc:
-                blocs.append(bloc)
+            lignes = en if anglais else fr
+            if choisis:
+                lignes = ajuster_squeeze(lignes, choisis)
+                if mk:
+                    lignes = adapter_marches_session(lignes, mk[1] if anglais else mk[0], choisis, anglais)
+            if lignes:
+                blocs.append(lignes)
         if blocs:
             _envoi_sur(cid, text="\n".join(regrouper_alertes(blocs)))
 
@@ -5194,7 +5219,7 @@ def alertes_courtes(etat, chats, derniers, now=None):
     now = now or time.time()
     evts, libres = [], []
     for ev in evenements_sessions(etat, now, derniers):
-        evts.append(({"*"}, texte_session(etat, ev), texte_session(etat, ev, True)))
+        evts.append(({"*"}, texte_session(etat, ev), texte_session(etat, ev, True), ev["mk"]))
         if (ev["code"], ev["evt"]) in SESSIONS_GRATUIT and ev["palier"] == 15:
             libres.append(ev)
     for m, r in derniers.items():
