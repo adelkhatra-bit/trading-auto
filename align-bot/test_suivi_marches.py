@@ -121,5 +121,18 @@ class FiltreDailyTendanceTest(unittest.TestCase):
         self.assertTrue(ab.bloque_dw(r, -1))
 
 
+class OrdreNiveauxTest(unittest.TestCase):
+    def _ordre(self, d, e, sl, t1, t2):
+        tr = {"d": d, "e": e, "sl": sl, "tp1": t1, "tp2": t2, "rr": 2.0, "n1": "projection", "n2": "projection"}
+        bloc = ab.fmt_trade("GOLD", tr).split("PLAN D'EXÉCUTION")[1].split("⚖️")[0]
+        return [l.split(" :")[0].split(" ", 1)[1] for l in bloc.splitlines() if " : " in l]
+
+    def test_short_sl_en_haut_tp_en_bas(self):
+        self.assertEqual(self._ordre(-1, 4000, 4012, 3980, 3950), ["Stop Loss", "Entrée", "TP1", "TP2"])
+
+    def test_long_tp_en_haut_sl_en_bas(self):
+        self.assertEqual(self._ordre(1, 4000, 3988, 4020, 4050), ["TP2", "TP1", "Entrée", "Stop Loss"])
+
+
 if __name__ == "__main__":
     unittest.main()

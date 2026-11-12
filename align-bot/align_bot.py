@@ -6327,12 +6327,12 @@ def fmt_trade(m, tr, p=None):
     echelle = "\n".join(f"{ic} {px(v)}  {nom}" for v, ic, nom in sorted(pts, key=lambda z: -z[0]))
     pct = lambda v: f"{(v - tr['e']) / tr['e'] * 100:+.2f} %".replace(".", ",")
     meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
+    # Niveaux dans l'ordre du GRAPHIQUE (du plus haut au plus bas) : SHORT = SL, entrée, TP1, TP2 ; LONG = TP2, TP1, entrée, SL
+    niv_plan = [(f"🛑 Stop Loss : {px(tr['sl'])}", tr["sl"]), (f"🟨 Entrée : {px(tr['e'])}", tr["e"]),
+                (f"💰 TP1 : {px(tr['tp1'])}", tr["tp1"]), (f"🏁 TP2 : {px(tr['tp2'])}", tr["tp2"])]
     resume = (f"📌 PLAN D'EXÉCUTION — {'🟩 LONG' if d == 1 else '🟥 SHORT'}\n"
-              f"🟨 Entrée : {px(tr['e'])}\n"
-              f"🛑 Stop Loss : {px(tr['sl'])}\n"
-              f"💰 TP1 : {px(tr['tp1'])}\n"
-              f"🏁 TP2 : {px(tr['tp2'])}\n"
-              f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n"
+              + "".join(l + "\n" for l, _ in sorted(niv_plan, key=lambda z: -z[1]))
+              + f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n"
               + (f"🏷 Type : {tr['strat']} — {DUREE_STRATEGIE[tr['strat']]}\n🧭 {CALE_STRATEGIE[tr['strat']]}\n" if tr.get("strat") in DUREE_STRATEGIE else ""))
     decision = (f"\n━━━━━━━━━━━━\n📍 RÉCAPITULATIF — {m}\n"
                 f"{'🟩 LONG ⬆️' if d == 1 else '🟥 SHORT ⬇️'}\n"
