@@ -6383,6 +6383,19 @@ def manip_txt(cle, d, r):
     mp = cle.get("manip")
     return "🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens\n" if mp and mp["d"] == d and r["t"] - mp["t"] <= 10800 else ""
 
+EXTREME_REARMEMENT_S = 3 * 3600      # l'alerte « zone extrême » ne se réarme qu'après 3 h sans situation extrême
+
+def alerte_extreme_due(cle, d, t):
+    """Alerte « zone extrême Daily/Weekly » : UNE seule fois par situation. La situation est identifiée par le sens bloqué seul
+    (le libellé de zone oscille autour des seuils et ne doit pas relancer le message). Elle se réarme si le sens change
+    ou si la situation a disparu pendant plus de EXTREME_REARMEMENT_S."""
+    vu, sig = cle.get("extreme_vu_t", 0), cle.get("extreme_sig")
+    cle["extreme_vu_t"] = t
+    if sig == str(d) and t - vu <= EXTREME_REARMEMENT_S:
+        return False
+    cle["extreme_sig"] = str(d); cle["extreme_warn_t"] = t
+    return True
+
 def agent(m, r, cle, ferme):
     """Agent : tendance 4h + confirmation 1h → déclenchement sur bougie 5m clôturée."""
     out = []
@@ -6423,10 +6436,7 @@ def agent(m, r, cle, ferme):
         if bloque_dw(r, d, p):
             cle["prep"] = False
             cle.pop("ordre", None)
-            sig_ext = f"{d}:{zone_txt(r['posW'])}"
-            # Une seule alerte par situation : on ne répète que si le sens / la zone Weekly change, ou après 2 h
-            if sig_ext != cle.get("extreme_sig") or r["t"] - cle.get("extreme_warn_t", 0) >= 7200:
-                cle["extreme_warn_t"] = r["t"]; cle["extreme_sig"] = sig_ext
+            if alerte_extreme_due(cle, d, r["t"]):
                 out.append(f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')}.\n⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
             cle["aligne"] = d
             return out
