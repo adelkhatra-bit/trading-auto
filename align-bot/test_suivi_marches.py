@@ -121,5 +121,31 @@ class FiltreDailyTendanceTest(unittest.TestCase):
         self.assertTrue(ab.bloque_dw(r, -1))
 
 
+class StrategieMecheTest(unittest.TestCase):
+    def _r(self, hs, ls):
+        b5 = [{"h": h, "l": l, "o": l, "c": l, "t": i} for i, (h, l) in enumerate(zip(hs, ls))] + [{"h": 0, "l": 0, "o": 0, "c": 0, "t": 99}]
+        return {"b5": b5, "atr5": 4.0}
+
+    def test_short_sl_juste_au_dessus_de_la_meche_5m(self):
+        r = self._r([4001, 4005, 4003, 3999], [3990, 3995, 3992, 3990])
+        sl = ab.stop_meche_5m(r, -1, 3995)
+        self.assertAlmostEqual(sl, 4005 + 1.0)            # mèche 4005 + 0,25 ATR5
+
+    def test_long_sl_juste_sous_la_meche_5m(self):
+        r = self._r([4010, 4012, 4011, 4013], [4000, 3996, 3999, 4002])
+        self.assertAlmostEqual(ab.stop_meche_5m(r, 1, 4005), 3996 - 1.0)
+
+    def test_niveaux_ordre_graphique(self):
+        tr = {"d": -1, "e": 4000, "sl": 4012, "tp1": 3980, "tp2": 3950, "rr": 2.0, "n1": "projection", "n2": "projection"}
+        bloc = ab.fmt_trade("GOLD", tr).split("PLAN D'EXÉCUTION")[1].split("⚖️")[0]
+        noms = [l.split(" :")[0].split(" ", 1)[1] for l in bloc.splitlines() if " : " in l]
+        self.assertEqual(noms, ["Stop Loss", "Entrée", "TP1", "TP2"])
+
+    def test_resume_dit_l_unite(self):
+        tr = {"d": -1, "e": 4000, "sl": 4006, "tp1": 3970, "tp2": 3950, "sl_ut": "5 min"}
+        self.assertIn("vue 5 min", ab.resume_ordre(tr))
+        self.assertIn("(mèche)", ab.resume_ordre(tr))
+
+
 if __name__ == "__main__":
     unittest.main()

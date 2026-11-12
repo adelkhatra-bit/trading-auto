@@ -1479,6 +1479,23 @@ def stop_structure_15m(r, d, entry):
     return sl
 
 
+def stop_meche_5m(r, d, entry):
+    """Règle d'Adel : l'entrée est vue en 5 min → SL juste derrière la MÈCHE du dernier plus haut (SHORT) / plus bas (LONG) des bougies 5 min
+    clôturées (là où le marché s'est retourné), avec une petite marge. Si cette mèche est cassée, le cycle suivant reprend le nouveau dernier plus haut / bas."""
+    bars = (r.get("b5") or [])[:-1][-4:]                 # la dernière bougie M5 est en formation
+    a5 = float(r.get("atr5") or r.get("atr") or 0)
+    if len(bars) < 2 or a5 <= 0 or d not in (-1, 1):
+        return None
+    meche = min(x["l"] for x in bars) if d == 1 else max(x["h"] for x in bars)
+    sl = meche - d * 0.25 * a5
+    distance = d * (entry - sl)
+    if distance <= 0:
+        return None
+    minimum = max(0.5 * a5, entry * 0.0004)               # jamais un SL collé au prix (bruit d'une seule bougie)
+    if distance < minimum:
+        sl = entry - d * minimum
+    return sl
+
 def ligne_cassure(r, d):
     L = niveau_cassure(r, d)
     return (f"🅱️ Ou CASSURE : si une bougie 5 min CLÔTURE {'au-dessus' if d == 1 else 'en dessous'} de ≈ {px(L)}\n"
@@ -6291,7 +6308,9 @@ def duree_txt(tr):
 
 def resume_ordre(tr):
     """Une ligne, tout en haut du message d'entrée : sens, entrée, SL, TP1, TP2 (l'essentiel avant le détail)."""
-    l = f"{SENS[tr['d']]} • Entrée {px(tr['e'])} • SL {px(tr['sl'])} • TP1 {px(tr['tp1'])}"
+    vue_ = f" • vue {tr['sl_ut']}" if tr.get("sl_ut") else ""
+    l = f"{SENS[tr['d']]}{vue_} • Entrée {px(tr['e'])} • SL {px(tr['sl'])} (mèche) • TP1 {px(tr['tp1'])}" if tr.get("sl_ut") == "5 min" \
+        else f"{SENS[tr['d']]}{vue_} • Entrée {px(tr['e'])} • SL {px(tr['sl'])} • TP1 {px(tr['tp1'])}"
     return l + (f" • TP2 {px(tr['tp2'])}" if tr.get("tp2") else "")
 
 def fmt_trade(m, tr, p=None):
@@ -6311,12 +6330,11 @@ def fmt_trade(m, tr, p=None):
     echelle = "\n".join(f"{ic} {px(v)}  {nom}" for v, ic, nom in sorted(pts, key=lambda z: -z[0]))
     pct = lambda v: f"{(v - tr['e']) / tr['e'] * 100:+.2f} %".replace(".", ",")
     meche = "la mèche du dernier creux" if d == 1 else "la mèche du dernier sommet"
+    niv_plan = [(f"🛑 Stop Loss : {px(tr['sl'])}", tr["sl"]), (f"🟨 Entrée : {px(tr['e'])}", tr["e"]),
+                (f"💰 TP1 : {px(tr['tp1'])}", tr["tp1"]), (f"🏁 TP2 : {px(tr['tp2'])}", tr["tp2"])]
     resume = (f"📌 PLAN D'EXÉCUTION — {'🟩 LONG' if d == 1 else '🟥 SHORT'}\n"
-              f"🟨 Entrée : {px(tr['e'])}\n"
-              f"🛑 Stop Loss : {px(tr['sl'])}\n"
-              f"💰 TP1 : {px(tr['tp1'])}\n"
-              f"🏁 TP2 : {px(tr['tp2'])}\n"
-              f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n"
+              + "".join(l + "\n" for l, _ in sorted(niv_plan, key=lambda z: -z[1]))   # ordre du graphique, du plus haut au plus bas
+              + f"⚖️ Ratio gain/risque TP1 : 1:{tr['rr']:.1f}\n"
               + (f"🏷 Type : {tr['strat']} — {DUREE_STRATEGIE[tr['strat']]}\n🧭 {CALE_STRATEGIE[tr['strat']]}\n" if tr.get("strat") in DUREE_STRATEGIE else ""))
     decision = (f"\n━━━━━━━━━━━━\n📍 RÉCAPITULATIF — {m}\n"
                 f"{'🟩 LONG ⬆️' if d == 1 else '🟥 SHORT ⬇️'}\n"
@@ -7205,13 +7223,16 @@ def agent(m, r, cle, ferme):
             if bj:
                 cle.pop("attente_rejet", None); cle.pop("touche_t", None); cle.pop("traverse", None)
                 # Le déclencheur reste M5, mais le stop protège la structure M15 pour éviter les sorties sur le bruit d'une seule bougie.
-                sl_m = stop_structure_15m(r, d, p)
+                sl_m = stop_meche_5m(r, d, p)
+                sl_ut_ = "5 min"
+                if sl_m is None:
+                    sl_m = stop_structure_15m(r, d, p); sl_ut_ = "15 min"
                 if sl_m is None:
                     cle["prep"] = False; cle.pop("ordre", None); cle["attente_rsi"] = False
                     out.append(f"⛔ {ICONE.get(m, '')} {m} : entrée annulée\nLa structure 15 min exige un risque trop grand ou les données sont insuffisantes.\nJe ne resserre pas artificiellement le SL : j'attends un nouveau setup.")
                     return out
                 o = dict(o, e=p, sl=sl_m, za=p, zb=p, rr=abs(o["tp1"] - p) / max(abs(p - sl_m), 1e-9), rejet=True,
-                         sl_h=bougie_protegee(r["b15"][-3:], d, sl_m), sl_ut="15 min")
+                         sl_h=bougie_protegee((r["b5"][:-1][-4:] if sl_ut_ == "5 min" else r["b15"][-3:]), d, sl_m), sl_ut=sl_ut_)
                 tr = dict(o, statut="entree", cree=r["t"], encore=0, atr_e=a_)
                 tr["profil"] = profil_trade(m, tr, r)
                 tr.update(strategie_trade(r, d))
