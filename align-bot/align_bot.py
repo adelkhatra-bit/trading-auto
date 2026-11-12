@@ -3963,8 +3963,6 @@ def notifier_clotures(etat, m, r, cle):
         if suivi["restants"] <= 0 or cle.get("trade"):
             etat["veille_cloture"][m].pop(cid, None)
 
-HB_INTERVALLE_VIP = 300        # 5 min minimum entre deux infos : une clôture M5 sur deux au plus, jamais de spam
-HB_INTERVALLE_GRATUIT = 1800   # gratuit : discret et espacé (30 min)
 
 def prochaine_ouverture_cme(ts):
     """Prochaine réouverture CME/CFD (Gold, Nasdaq), cherchée par pas de 5 min avec la même règle que cme_ouvert."""
@@ -3975,13 +3973,6 @@ def prochaine_ouverture_cme(ts):
             return t
     return None
 
-def heure_reprise(ts, anglais=False):
-    d = datetime.datetime.fromtimestamp(ts, PARIS)
-    jours_fr = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
-    jours_en = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-    jour = (jours_en if anglais else jours_fr)[d.weekday()]
-    auj = datetime.datetime.now(PARIS).date()
-    return d.strftime("%H:%M") if d.date() == auj else f"{jour} {d.strftime('%H:%M')}"
 
 def etat_marche_hb(m, r, now):
     """(« ferme » | « perime » | « ouvert »), réouverture. Uniquement à partir des vraies horloges et des vraies bougies."""
@@ -3992,10 +3983,6 @@ def etat_marche_hb(m, r, now):
         return "perime", None
     return "ouvert", None
 
-HB_VARIANTES_FR = ("🟡 {ic} {m} : je surveille, pas d'entrée pour l'instant", "👀 {ic} {m} : rien de validé, je garde l'œil dessus",
-                   "⏳ {ic} {m} : toujours en attente d'une confirmation", "🧐 {ic} {m} : le marché n'a pas encore validé d'entrée")
-HB_VARIANTES_EN = ("🟡 {ic} {m}: watching, no entry for now", "👀 {ic} {m}: nothing confirmed yet, keeping an eye on it",
-                   "⏳ {ic} {m}: still waiting for a confirmation", "🧐 {ic} {m}: the market has not confirmed an entry yet")
 HB_UNITE_VALIDATION = {"SWING": "1h", "DAY": "5 min", "SCALPING": "1 min"}        # unité de validation de l'indicateur (15 min sans stratégie)
 
 def hb_etat_surveille(r):
@@ -4012,132 +3999,8 @@ def hb_etat_surveille(r):
     return dict(d=d, strat=strat, etat=etat_s, n=n, zp=zp, a=a, prix=prix, sens=sens, pct=pct if sens >= 0 else 100 - pct,
                 sig=(d, n, strat, etat_s, sens, round(float(zp["zmil"]), 4) if zp else None, round(a, 4)))
 
-HB_ECART_UT = 3              # alignement qui bouge d'au moins 3 UT (ou seuil franchi) : évolution FORTE
-HB_ECART_ZONE_ATR = 1.0      # zone décalée d'au moins 1 ATR 15 min : évolution FORTE
-HB_ECART_ZONE_FAIBLE_ATR = 0.5
-HB_INTERVALLE_FAIBLE = 1800  # petite évolution (1-2 UT, zone d'un demi-ATR) : au plus une info toutes les 30 min
 
-def hb_evolution(ancien, nouveau):
-    """Niveau d'évolution depuis le dernier battement ENVOYÉ : 2 = forte (sens, stratégie, état, biais, seuil d'alignement franchi, alignement d'au moins
-    HB_ECART_UT, zone décalée d'au moins 1 ATR) → envoyée au délai habituel ; 1 = faible (1-2 UT, zone d'un demi-ATR) → au plus toutes les
-    HB_INTERVALLE_FAIBLE secondes (sinon l'oscillation 8 → 9 → 8 UT ressemble à des messages identiques) ; 0 = rien de nouveau."""
-    try:
-        if not ancien or len(ancien) != len(nouveau):
-            return 2
-        d0, n0, st0, et0, se0, z0, a0 = ancien
-        d1, n1, st1, et1, se1, z1, a1 = nouveau
-        if (d0, st0, et0, se0) != (d1, st1, et1, se1):
-            return 2
-        if (n0 >= MIN_ALIGN) != (n1 >= MIN_ALIGN) or abs(n1 - n0) >= HB_ECART_UT:
-            return 2
-        if (z0 is None) != (z1 is None):
-            return 2
-        ecart_zone = abs(z1 - z0) / max(float(a1 or 0), 1e-9) if z1 is not None else 0.0
-        if ecart_zone >= HB_ECART_ZONE_ATR:
-            return 2
-        if n1 != n0 or ecart_zone >= HB_ECART_ZONE_FAIBLE_ATR:
-            return 1
-        return 0
-    except Exception:
-        return 2
 
-def texte_battement(m, r, cle, anglais=False, vip=True, variante=0):
-    """Message de veille : CE QUI EST SURVEILLÉ (jamais inventé). Gratuit : sobre, sans sens ni niveaux (réservés aux VIP)."""
-    if len(r.get("b5") or []) < 21 and "bull" not in r:
-        return None
-    e = hb_etat_surveille(r)
-    ic = ICONE.get(m, "📊")
-    tete = (HB_VARIANTES_EN if anglais else HB_VARIANTES_FR)[variante % 4].format(ic=ic, m=m)
-    n, seuil = e["n"], MIN_ALIGN
-    if not vip:                                     # gratuit : le biais reste visible (demande d'Adel), jamais les niveaux
-        biais = {1: ("bullish", "haussier"), -1: ("bearish", "baissier"), 0: ("undecided", "indécis")}[e["sens"]]
-        return "\n".join([tete, (f"🧭 Bias: {biais[0]}" if anglais else f"🧭 Biais : {biais[1]}"),
-                          (f"📊 Aligned timeframes: {n}/11 (need {seuil})" if anglais else f"📊 UT alignées : {n}/11 (il en faut {seuil})"),
-                          ("🔒 Levels: VIP" if anglais else "🔒 Niveaux : VIP")])
-    sens_txt = {1: "LONG ⬆️", -1: "SHORT ⬇️", 0: "INDÉCIS" if not anglais else "UNDECIDED"}[e["sens"]]
-    atteint = n >= seuil
-    zp, prix, d = e["zp"], e["prix"], e["d"]
-    action, zone_l = None, None
-    if zp and prix:
-        dedans = zp["za"] <= prix <= zp["zb"]
-        dist = 0 if dedans else min(abs(prix - zp["za"]), abs(prix - zp["zb"]))
-        unite = HB_UNITE_VALIDATION.get(e["strat"], "15 min")
-        if anglais:
-            zone_l = f"📍 Entry zone: {px(zp['za'])} → {px(zp['zb'])} " + ("(price inside)" if dedans else f"(price {px(dist)} away)")
-            action = f"🕯 Waiting for a {unite} close {'below' if d == -1 else 'above'} {px(zp['zmil'])}"
-        else:
-            zone_l = f"📍 Zone d'entrée : {px(zp['za'])} → {px(zp['zb'])} " + ("(prix dans la zone)" if dedans else f"(prix à {px(dist)})")
-            action = f"🕯 J'attends une clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(zp['zmil'])}"
-    sens_l = (f"🧭 Likely direction: {sens_txt}" if anglais else f"🧭 Sens probable : {sens_txt}") + (f" ({e['pct']} %)" if e["sens"] else "")
-    ut_l = ((f"📊 Aligned timeframes: {n}/11 " + (f"(threshold {seuil} reached)" if atteint else f"(need {seuil})")) if anglais else
-            (f"📊 UT alignées : {n}/11 " + (f"(seuil {seuil} atteint)" if atteint else f"(il en faut {seuil})")))
-    # Ordre : la consigne d'abord (ce que j'attends), puis le sens, la zone, l'alignement.
-    lignes = [tete] + ([action] if action else []) + [sens_l] + ([zone_l] if zone_l else []) + [ut_l]
-    profil = {"SWING": "SWING", "DAY": "INTRADAY" if not anglais else "DAY", "SCALPING": "SCALP"}.get(e["strat"], "")
-    if profil:
-        etat_t = {"CONFIRMÉ": "confirmed" if anglais else "confirmé", "EN ATTENTE": "pending" if anglais else "en attente"}.get(e["etat"], "")
-        lignes.append((f"🎯 Target profile: {profil} ({etat_t})" if anglais else f"🎯 Profil visé : {profil} ({etat_t})"))
-    else:
-        lignes.append("🎯 Target profile: none yet" if anglais else "🎯 Profil visé : aucun pour l'instant")
-    return "\n".join(lignes)
-
-def _forme(texte):
-    """Forme d'un message sans chiffres : deux messages à la même forme sont « quasi identiques »."""
-    return re.sub(r"[\d.,]+", "#", str(texte))
-
-def battement_coeur(etat, m, r, cle, now=None):
-    """Veille : une info seulement à une VRAIE évolution (sens, UT alignées, stratégie, zone), au plus à une clôture M5, avec
-    5 min minimum (VIP) ou 30 min (gratuit). Mémoire dédiée dans etat['hb_mem'] : indépendante de la vie des suivis, sauvegardée avec l'état."""
-    now = now or time.time()
-    if cle.get("trade"):
-        return                                    # position ouverte : le coach parle déjà
-    titre = str(verdict(r, cle)[0]).upper()
-    if "TU PEUX ENTRER" in titre or "J'ENTRE MAINTENANT" in titre:
-        return                                    # signal validé : l'alerte d'entrée s'en charge
-    statut, reprise = etat_marche_hb(m, r, now)
-    b5 = r.get("b5") or []
-    memoire = etat.setdefault("hb_mem", {}).setdefault(m, {})
-    for cid, suivi in list(etat.get("veille_cloture", {}).get(m, {}).items()):
-        if not suivi.get("multi") or not marche_autorise(etat, cid, m):
-            continue
-        cid = str(cid)
-        anglais = cid in LANG_EN
-        mem = memoire.setdefault(cid, {})
-        if statut == "ferme":
-            if mem.get("ferme_dit") != reprise:
-                quand = heure_reprise(reprise, anglais) if reprise else "?"
-                txt = (f"⏸ {m}: market closed, back at {quand} (Paris time)" if anglais
-                       else f"⏸ {m} : marché fermé, reprise à {quand} (heure de Paris)")
-                res = _envoi_sur(cid, text=txt)
-                if isinstance(res, dict) and res.get("ok") is not False:
-                    mem["ferme_dit"] = reprise; mem["t"] = now
-            continue
-        mem.pop("ferme_dit", None)
-        if statut == "perime":
-            if not mem.get("perime_dit"):
-                res = _envoi_sur(cid, text=(f"⚠️ {m}: data not up to date, I can't judge right now" if anglais
-                                            else f"⚠️ {m} : données pas à jour, je ne peux pas juger pour l'instant"))
-                if isinstance(res, dict) and res.get("ok") is not False:
-                    mem["perime_dit"] = True; mem["t"] = now
-            continue
-        mem.pop("perime_dit", None)
-        if not b5 or int(b5[-1]["t"]) <= int(mem.get("bar", 0)):
-            continue                              # pas de nouvelle clôture M5
-        vip = bool(autorise(etat, cid, cid))
-        if now - float(mem.get("t", 0)) < (HB_INTERVALLE_VIP if vip else HB_INTERVALLE_GRATUIT):
-            continue                              # délai minimal non écoulé (mémoire du dernier envoi)
-        sig = list(hb_etat_surveille(r)["sig"])
-        mem["bar"] = int(b5[-1]["t"])
-        niveau = hb_evolution(mem.get("sig"), sig)
-        if niveau == 0 or (niveau == 1 and now - float(mem.get("t", 0)) < HB_INTERVALLE_FAIBLE):
-            continue                              # rien de nouveau, ou petite oscillation trop proche du dernier envoi
-        txt = texte_battement(m, r, cle, anglais, vip=vip, variante=int(mem.get("i", 0)))
-        if not txt or _forme(txt) == mem.get("forme"):
-            continue                              # jamais deux messages quasi identiques de suite
-        # Gratuit : discret (sans son). VIP : notification normale.
-        res = _envoi_sur(cid, text=txt, **({} if vip else {"disable_notification": "true"}))
-        if isinstance(res, dict) and res.get("ok") is not False:
-            mem.update(t=now, sig=sig, forme=_forme(txt), i=int(mem.get("i", 0)) + 1)
 
 def envoyer_analyse_a(etat, cid, m, r, cle):
     """Analyse à la demande ; le rappel est lié au bon marché et au message d'origine."""
@@ -5000,7 +4863,7 @@ def traiter(etat, chats, updates):
             continue
         if "me concentrer" in txt or "where to focus" in txt or txt.startswith("/focus") or txt.strip() == "focus":
             props = classer_marches(DERNIERS, etat, marches_choisis(etat, cid))
-            msg = texte_concentration(props, bool(autorise(etat, cid, cid)), cid in LANG_EN) if len(props) >= 1 else None
+            msg = texte_radar(props, DERNIERS, bool(autorise(etat, cid, cid)), cid in LANG_EN) if len(props) >= 1 else None   # même logique que le RADAR (aucun doublon)
             _envoi_sur(cid, text=msg or ("🎯 Aucun de tes marchés n'a de plan exploitable pour l'instant : je te préviens dès que l'un se rapproche."
                                          if cid not in LANG_EN else "🎯 None of your markets has a usable plan right now: I will warn you as soon as one gets close."))
             continue
@@ -5300,7 +5163,6 @@ def adapter_marches_session(lignes, mk, choisis, anglais=False):
     return [l.replace(mk, nouveau) for l in lignes]
 
 # ───────── Coach de concentration : sur quel marché se concentrer ? ─────────
-FOCUS_INTERVALLE = 1800          # au plus un message de concentration toutes les 30 min par personne (sauf demande /focus)
 FOCUS_NOMS = {"dans_zone": "dans la zone d'entrée", "proche": "proche de la zone", "en_approche": "en approche", "loin": "loin de la zone",
               "bloque": "bloqué (zone extrême Daily/Weekly)", "sans_plan": "pas de plan fixé", "ferme": "marché fermé", "position": "déjà en position"}
 
@@ -5342,66 +5204,6 @@ def classer_marches(derniers, etat, choisis, now=None):
     props = [proximite_marche(m, r, etat.get(m, {}), now) for m, r in (derniers or {}).items() if m in choisis and r.get("m1")]
     return sorted(props, key=lambda p: (p["rang"] if p["rang"] >= 0 else 9, p["atr_n"]))
 
-def texte_concentration(props, vip=True, anglais=False):
-    """Message de coach : le marché sur lequel se concentrer, sa zone, le sens visé, la clôture à attendre ; les autres en une ligne.
-    Gratuit : le marché favori et l'état, jamais la zone ni les niveaux (réservés aux VIP)."""
-    ic = lambda p: ICONE.get(p["m"], "")
-    actifs = [p for p in props if 0 <= p["rang"] <= 3]
-    if not actifs:
-        return None
-    t = actifs[0]
-    sens = SENS[t["d"]] if t.get("d") in (1, -1) else ""
-    if t["rang"] <= 1:
-        tete = "est le plus proche d'une entrée" if not anglais else "is the closest to an entry"
-    elif t["rang"] == 2:
-        tete = "est le plus proche, il s'approche" if not anglais else "is the closest and approaching"
-    else:
-        tete = "est le moins loin, mais aucun n'est proche" if not anglais else "is the least far, but none is close"
-    l = [("🎯 WHERE TO FOCUS" if anglais else "🎯 OÙ TE CONCENTRER"), f"👉 {ic(t)} {t['m']} {tete}"]
-    if vip:
-        l.append(f"{sens} • " + (f"reversal zone ≈ {px(t['za'])} → {px(t['zb'])}" if anglais else f"zone de retournement visée ≈ {px(t['za'])} → {px(t['zb'])}"))
-        if t["rang"] == 0:
-            l.append("📍 Price is in the zone: waiting for the rejection and the close" if anglais else "📍 Le prix est dans la zone : j'attends le rejet et la clôture")
-        else:
-            l.append(f"📏 Price {px(t['dist'])} away (≈ {t['atr_n']:.1f} ATR 15 min), zone {'above' if t['au_dessus'] else 'below'}" if anglais else
-                     f"📏 Prix à {px(t['dist'])} de la zone (≈ {t['atr_n']:.1f} ATR 15 min), elle est {'au-dessus' if t['au_dessus'] else 'en dessous'}")
-        l.append(("🕯 Watch: " if anglais else "🕯 À surveiller : ") + t["action"])
-    else:
-        l.append(("🔒 Zone and levels: VIP" if anglais else "🔒 Zone et niveaux : VIP"))
-    autres = [p for p in props if p is not t]
-    if autres:
-        l.append("━━━━━━━━━━━━━━━")
-        for p in autres:
-            etat_p = FOCUS_NOMS[p["classe"]]
-            suite = f" (≈ {p['atr_n']:.1f} ATR)" if p["rang"] in (0, 1, 2, 3) and p["atr_n"] < 90 else ""
-            l.append(f"{ic(p)} {p['m']} : {etat_p}{suite}")
-        l.append("👀 I watch them for you: I warn you if one gets closer" if anglais else "👀 Je les surveille pour toi : je te préviens si l'un devient plus proche")
-    return "\n".join(l)
-
-def coach_concentration(etat, chats, derniers, now=None):
-    """Envoi automatique (VIP, au moins 2 marchés suivis) quand le marché favori change ou se rapproche, 30 min minimum entre deux messages."""
-    now = time.time() if now is None else now
-    mem = etat.setdefault("focus_mem", {})
-    canal = str(etat.get("canal") or "")
-    for cid in sorted({str(c) for c in chats} - {canal}):
-        try:
-            if not autorise(etat, cid, cid):
-                continue
-            choisis = marches_choisis(etat, cid)
-            props = classer_marches(derniers, etat, choisis, now)
-            if len(props) < 2 or not (0 <= props[0]["rang"] <= 3):
-                continue
-            tete, dernier = props[0], mem.get(cid, {})
-            if now - dernier.get("t", 0) < FOCUS_INTERVALLE:
-                continue
-            if tete["m"] == dernier.get("m") and tete["rang"] >= dernier.get("rang", 9):
-                continue                                   # même favori et pas plus proche : rien de nouveau
-            txt = texte_concentration(props, True, cid in LANG_EN)
-            if txt:
-                _envoi_sur(cid, text=txt)
-                mem[cid] = {"m": tete["m"], "rang": tete["rang"], "t": now}
-        except Exception as ex:
-            print("coach concentration", type(ex).__name__)
 
 # ───────── RADAR ALIGN : UN seul message par personne, mis à jour sur place ─────────
 # Remplace la veille « je surveille » marché par marché et le message « OÙ TE CONCENTRER » : le marché le plus proche
@@ -5415,6 +5217,48 @@ SENS_COURT = {1: "LONG ⬆️", -1: "SHORT ⬇️"}
 def _radar_n_ut(r, d):
     return r.get("bull", 0) if d == 1 else r.get("bear", 0) if d == -1 else max(r.get("bull", 0), r.get("bear", 0))
 
+def _radar_pret(p, derniers):
+    """« Prépare-toi » seulement si le prix est proche (rang ≤ 1) ET que l'alignement a atteint le seuil (8/11) : sinon c'est juste « proche »."""
+    return 0 <= p["rang"] <= RADAR_ALERTE_RANG and _radar_n_ut((derniers or {}).get(p["m"]) or {}, p.get("d")) >= MIN_ALIGN
+
+def _radar_ordre(props, derniers):
+    """Marchés prêts (proches + alignés) d'abord, puis l'ordre de proximité habituel."""
+    return sorted(props, key=lambda p: 0 if _radar_pret(p, derniers) else 1)
+
+def radar_entree_sl(r, d, za, zb):
+    """Entrée et SL proposés par le RADAR (demande d'Adel, 12/11) : l'entrée ET le SL visent le MÊME dernier plus haut (vente) / plus bas (achat),
+    jamais l'entrée en bas de zone avec le SL derrière un autre sommet lointain. Ordre : entrée sniper validée → dernier plus haut M5 dans la zone
+    → dernier plus haut M15 dans la zone → sinon plan de l'indicateur. SL = un tout petit peu derrière ce niveau (marge sniper)."""
+    sn = r.get("sniper")
+    if isinstance(sn, dict) and sn.get("d") == d:
+        return dict(e=sn["e"], sl=sn["sl"], tp1=sn["tp1"], src=sn.get("src", "sniper"))
+    prix = (r.get("m1") or [{}])[-1].get("c")
+    a15 = float(r.get("atr") or 0)
+    a3 = float(r.get("atr3") or r.get("atr5") or a15 or 0)
+    plan = r.get("plan_fige") or {}
+    if d not in (1, -1):
+        return None
+    for nom, bars in ((("M5", (r.get("b5") or [])[:-1]), ("M15", (r.get("b15") or [])[:-1])) if prix is not None and a15 > 0 else ()):
+        if len(bars) < 12:
+            continue
+        piv = niveaux_ut(bars)[0 if d == -1 else 1]
+        if not piv:
+            continue
+        L, i = piv
+        if any((y["c"] - L) * (-d) > 0 for y in bars[i + 1:]):
+            continue                                   # clôture au-delà : niveau cassé, plus valable
+        if (L - prix) * (-d) < 0 or not (za - 0.5 * a15 <= L <= zb + 0.5 * a15):
+            continue                                   # pas devant le prix, ou hors de la zone d'entrée
+        sl = L - d * SNIPER_MARGE_ATR3 * a3
+        mini = max(a3, L * SL_RISQUE_MIN_PCT)
+        if abs(L - sl) < mini:
+            sl = L - d * mini
+        tp1 = plan.get("tp1") if plan.get("d") == d and plan.get("tp1") is not None and d * (plan["tp1"] - L) >= GAIN_MIN * abs(L - sl) else L + d * GAIN_MIN * abs(L - sl)
+        return dict(e=L, sl=sl, tp1=tp1, src=("dernier plus haut " if d == -1 else "dernier plus bas ") + nom)
+    if plan.get("d") == d and plan.get("sl") is not None:
+        return dict(e=plan["e"], sl=plan["sl"], tp1=plan["tp1"], src="plan de l'indicateur")
+    return None
+
 def texte_radar(props, derniers, vip=True, anglais=False, now=None):
     """Texte du RADAR, construit uniquement à partir des vraies données (classer_marches + plan figé de l'indicateur).
     Gratuit : marché favori, sens et état — jamais l'entrée, le SL ni le TP (réservés aux VIP)."""
@@ -5422,12 +5266,14 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None):
         return None
     now = time.time() if now is None else now
     ic = lambda p: ICONE.get(p["m"], "")
+    props = _radar_ordre(props, derniers)
     actifs = [p for p in props if 0 <= p["rang"] <= 3]
     en_pos = [p for p in props if p["rang"] == -1]
     t = actifs[0] if actifs else None
     l = []
     if t:
-        etat_t = ("get ready" if anglais else "prépare-toi") if t["rang"] <= RADAR_ALERTE_RANG else \
+        etat_t = ("get ready" if anglais else "prépare-toi") if _radar_pret(t, derniers) else \
+                 ("close, alignment not reached yet" if anglais else "proche, alignement pas encore atteint") if t["rang"] <= RADAR_ALERTE_RANG else \
                  ("approaching" if anglais else "en approche") if t["rang"] == 2 else ("least far, nothing close" if anglais else "le moins loin, rien de proche")
         l.append(f"🎯 FOCUS : {ic(t)} {t['m']} — {etat_t}")
         r = (derniers or {}).get(t["m"]) or {}
@@ -5435,11 +5281,12 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None):
         prof = {"SWING": "SWING", "DAY": "INTRADAY", "SCALPING": "SCALP"}.get(r.get("strat") or "", "")
         l.append(("📉 " if d == -1 else "📈 ") + (f"Direction : {SENS_COURT.get(d, '?')}" if anglais else f"Sens : {SENS_COURT.get(d, '?')}") + (f" · {prof}" if prof else ""))
         if vip:
-            plan = r.get("plan_fige") or {}
             l.append((f"📍 Entry zone : {px(t['za'])} → {px(t['zb'])}" if anglais else f"📍 Zone d'entrée : {px(t['za'])} → {px(t['zb'])}"))
-            if plan.get("d") == d and plan.get("sl") is not None and plan.get("tp1") is not None:
-                l.append(f"🛑 SL : {px(plan['sl'])}")
-                l.append(f"🏁 TP1 : {px(plan['tp1'])}")
+            es = radar_entree_sl(r, d, t["za"], t["zb"])
+            if es:
+                l.append((f"🎯 Entry : {px(es['e'])}" if anglais else f"🎯 Entrée : {px(es['e'])}") + f" ({es['src']})")
+                l.append(f"🛑 SL : {px(es['sl'])} " + ("(just behind)" if anglais else "(juste derrière)") + f" · {px(abs(es['e'] - es['sl']))} pts")
+                l.append(f"🏁 TP1 : {px(es['tp1'])}")
             if t["rang"] == 0:
                 l.append("🟨 Price is IN the zone" if anglais else "🟨 Le prix est DANS la zone")
             else:
@@ -5509,10 +5356,11 @@ def radar_tick(etat, chats, derniers, now=None):
             if not txt:
                 continue
             mem = mem_all.setdefault(cid, {})
-            actifs = [p for p in props if 0 <= p["rang"] <= 3]
+            actifs = [p for p in _radar_ordre(props, derniers) if 0 <= p["rang"] <= 3]
             focus = actifs[0]["m"] if actifs else ""
-            rang = actifs[0]["rang"] if actifs else 9
-            alerte = (bool(focus) and rang <= RADAR_ALERTE_RANG and now - float(mem.get("t_alerte", 0)) >= RADAR_ALERTE_MIN_SEC
+            pret = bool(actifs) and _radar_pret(actifs[0], derniers)
+            rang = (actifs[0]["rang"] if pret else max(actifs[0]["rang"], RADAR_ALERTE_RANG + 1)) if actifs else 9
+            alerte = (bool(focus) and pret and now - float(mem.get("t_alerte", 0)) >= RADAR_ALERTE_MIN_SEC
                       and (mem.get("focus") != focus or int(mem.get("rang", 9)) > RADAR_ALERTE_RANG))
             change_tete = mem.get("mid") and focus != mem.get("focus", "") and now - float(mem.get("t", 0)) >= RADAR_REFRESH_SEC
             if alerte or change_tete or not mem.get("mid"):
