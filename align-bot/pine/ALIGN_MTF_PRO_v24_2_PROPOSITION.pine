@@ -86,7 +86,7 @@ alignBas  = bear >= minAlign
 surcharge = comp >= minSqz
 
 // ═════════ UT DU GRAPHIQUE : RSI, MOMENTUM, EXPLOSION ═════════
-[dC, sC, rC] = f_etat()
+[dC, sC, rC, pC] = f_etat()
 rsiSig = ta.ema(rC, 9)
 rsiAchat = (ta.crossover(rC, rsiSig) and rC < 50) or ta.crossover(rC, 30) or ta.crossover(rC, 50)
 rsiVente = (ta.crossunder(rC, rsiSig) and rC > 50) or ta.crossunder(rC, 70) or ta.crossunder(rC, 50)
@@ -650,11 +650,12 @@ if voirFvg and barstate.isconfirmed
     while i >= 0
         b = array.get(fvgs, i)
         sv = array.get(fvgSens, i)
-        if (sv == 1 and low <= box.get_bottom(b)) or (sv == -1 and high >= box.get_top(b))
+        // comblée, OU trop loin du prix (> 1,5 %) : on l'efface — une vieille FVG lointaine écrasait l'échelle du graphique (« ça monte tout en haut »)
+        if (sv == 1 and low <= box.get_bottom(b)) or (sv == -1 and high >= box.get_top(b)) or math.abs((box.get_top(b) + box.get_bottom(b)) / 2 - close) > close * 0.015
             box.delete(b)
             array.remove(fvgs, i)
             array.remove(fvgSens, i)
         i -= 1
-    while array.size(fvgs) > 12
+    while array.size(fvgs) > 8
         box.delete(array.shift(fvgs))
         array.shift(fvgSens)
