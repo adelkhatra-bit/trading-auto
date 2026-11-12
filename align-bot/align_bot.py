@@ -5025,7 +5025,7 @@ def texte_session(etat, ev, anglais=False):
     return out[:3]
 
 _PINE_TEXTES = {   # type -> variantes (FR, EN) ; {ic} {m} {n} {c} {seuil} {sens} {strat} {u} {niv} {fleche} {ratio}
-    "align_haut": (("📈 {ic} {m} : {n}/11 UT alignées", "🎯 Seuil {seuil} {etat_seuil}"), ("🧲 {ic} {m} : l'alignement monte ({n}/11)", "👀 Il en faut {seuil}"),
+    "align_haut": (("📈 {ic} {m} : {n}/11 UT alignées", "🎯 Seuil {seuil} {etat_seuil}"), ("🧲 {ic} {m} : l'alignement monte ({n}/11)", "🎯 {etat_seuil_court}"),
                    ("⬆️ {ic} {m} : {n} unités dans le même sens", "🎯 {etat_seuil_court}")),
     "align_bas": (("📉 {ic} {m} : alignement qui baisse ({n}/11)", "⏳ Il en faut {seuil}"), ("⬇️ {ic} {m} : {n}/11 UT, ça se disperse", "🙅 Pas de validation"),
                   ("🌫 {ic} {m} : moins d'unités d'accord ({n}/11)", "👀 Seuil {seuil}")),
@@ -5046,7 +5046,7 @@ _PINE_TEXTES = {   # type -> variantes (FR, EN) ; {ic} {m} {n} {c} {seuil} {sens
                      ("🎯 {ic} {m} : {sens} confirmé à la clôture {u}", "📍 Ligne de décision {niv}")),
 }
 _PINE_TEXTES_EN = {
-    "align_haut": (("📈 {ic} {m}: {n}/11 timeframes aligned", "🎯 Threshold {seuil} {etat_seuil}"), ("🧲 {ic} {m}: alignment is rising ({n}/11)", "👀 Need {seuil}"),
+    "align_haut": (("📈 {ic} {m}: {n}/11 timeframes aligned", "🎯 Threshold {seuil} {etat_seuil}"), ("🧲 {ic} {m}: alignment is rising ({n}/11)", "🎯 {etat_seuil_court}"),
                    ("⬆️ {ic} {m}: {n} timeframes agree", "🎯 {etat_seuil_court}")),
     "align_bas": (("📉 {ic} {m}: alignment dropping ({n}/11)", "⏳ Need {seuil}"), ("⬇️ {ic} {m}: {n}/11, it's scattering", "🙅 No validation"),
                   ("🌫 {ic} {m}: fewer timeframes agree ({n}/11)", "👀 Threshold {seuil}")),
@@ -5079,11 +5079,12 @@ def evenements_pine(etat, m, r, cle, now):
         mem.update(n=n, comp=comp)
         return ev                                      # marché fermé ou données périmées : aucune alerte inventée
     prev_n, prev_c = mem.get("n"), mem.get("comp")
-    if prev_n is not None and not cle.get("trade") and now - mem.get("t_align", 0) >= 600:
+    # Anti-bruit : seulement quand le SEUIL est franchi (dans un sens ou dans l'autre), au plus une fois toutes les 30 min
+    if prev_n is not None and not cle.get("trade") and now - mem.get("t_align", 0) >= 1800:
         franchit_haut, franchit_bas = n >= MIN_ALIGN > prev_n, n < MIN_ALIGN <= prev_n
-        if franchit_haut or (n - prev_n >= 2 and n >= MIN_ALIGN - 2):
+        if franchit_haut:
             ev.append(dict(kind="align_haut", **base, etat_seuil="atteint ✅" if n >= MIN_ALIGN else "presque", etat_seuil_court="Seuil atteint" if n >= MIN_ALIGN else "Presque au seuil")); mem["t_align"] = now
-        elif franchit_bas or (prev_n - n >= 2 and prev_n >= MIN_ALIGN - 2):
+        elif franchit_bas:
             ev.append(dict(kind="align_bas", **base)); mem["t_align"] = now
     if prev_c is not None:
         if comp >= MIN_SQZ > prev_c:
