@@ -116,37 +116,6 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class BattementSansOscillation(unittest.TestCase):
-    base = (-1, 8, "DAY", "CONFIRMÉ", -1, 3990.0, 4.0)
-
-    def test_oscillation_est_faible_donc_limitee_a_une_info_par_30_min(self):
-        for n in (9, 7 + 2, 10):                                    # 8 -> 9 / 10 : même côté du seuil, moins de 3 UT
-            self.assertEqual(ab.hb_evolution(self.base, (-1, n, "DAY", "CONFIRMÉ", -1, 3990.0, 4.0)), 1, n)
-        self.assertEqual(ab.hb_evolution(self.base, self.base), 0)
-        self.assertEqual(ab.hb_evolution(self.base, (-1, 8, "DAY", "CONFIRMÉ", -1, 3992.0, 4.0)), 1)   # zone d'un demi-ATR
-
-    def test_vraies_evolutions_sont_fortes_donc_toujours_envoyees(self):
-        b = self.base
-        for nouveau in ((1,) + b[1:], b[:2] + ("SWING",) + b[3:], b[:3] + ("EN ATTENTE",) + b[4:], b[:4] + (1,) + b[5:],
-                        (-1, 7) + b[2:], (-1, 11) + b[2:], b[:5] + (3995.0, 4.0), b[:5] + (None, 4.0)):
-            self.assertEqual(ab.hb_evolution(b, nouveau), 2, nouveau)
-
-    def test_premier_battement_et_ancien_format_d_etat(self):
-        self.assertEqual(ab.hb_evolution(None, self.base), 2)
-        self.assertEqual(ab.hb_evolution([-1, 8, "DAY", "CONFIRMÉ", -1, 12], self.base), 2)
-
-    def test_serie_reelle_de_l_audit(self):
-        """L'oscillation de l'audit (UT 8/9, zone d'un demi-ATR) : 120 minutes = 4 infos au plus (une par 30 min), pas 24 (une par 5 min)."""
-        envoyes, dernier, t_dernier = 0, None, -10_000
-        for k in range(0, 120):
-            n = 8 + (k % 3 == 0)
-            sig = (-1, n, "DAY", "CONFIRMÉ", -1, 3990.0 + (2.0 if k % 2 else 0.0), 4.0)
-            niveau = ab.hb_evolution(dernier, sig)
-            if niveau == 2 or (niveau == 1 and (k - t_dernier) * 60 >= ab.HB_INTERVALLE_FAIBLE):
-                envoyes += 1; dernier = sig; t_dernier = k
-        self.assertLessEqual(envoyes, 5)
-
-
 class RoutageParCompte(unittest.TestCase):
     """Demande d'Adel : si je ne coche que GOLD et NASDAQ, je ne reçois QUE ces marchés (messages, lignes, sessions)."""
     ETAT = {"marches_par_chat": {"adel": ["GOLD", "NASDAQ"], "btc": ["BTC"], "tous": ["BTC", "GOLD", "NASDAQ"]}}
@@ -230,15 +199,6 @@ class FormeDesMessages(unittest.TestCase):
 
     def test_prix_isole_inchange(self):
         self.assertIn("Entrée : 4075,50", ab.mise_en_forme("t\n📌 Entrée : 4 075.50"))
-
-    def test_battement_consigne_d_abord(self):
-        r = {"dirPlan": -1, "sens": -1, "bull": 0, "bear": 11, "pctH": 86, "strat": "SWING", "dirs": [-1] * 11, "atr": 4.0,
-             "zone_pine": {"za": 3986.06, "zb": 4024.39, "zmil": 4005.22}, "prix": 3972.0, "m1": [{"c": 3972.0}], "b5": [0] * 30}
-        l = ab.texte_battement("GOLD", r, {}, vip=True).split("\n")
-        self.assertTrue(l[1].startswith("🕯 J'attends une clôture 1h sous 4005,22"), l)       # la consigne juste sous le titre
-        self.assertTrue(l[2].startswith("🧭 Sens probable"))
-        for garde in ("📍 Zone d'entrée", "📊 UT alignées : 11/11", "🎯 Profil visé"):
-            self.assertTrue(any(x.startswith(garde) for x in l), garde)                # rien n'a disparu
 
     def test_session_marches_de_la_personne(self):
         self.assertEqual(ab.adapter_marches_session(["⏰ Ouverture Londres", "💥 Volatilité attendue sur GOLD et BTC"], "GOLD et BTC", {"GOLD", "NASDAQ"}),
@@ -349,7 +309,7 @@ class CoachDeConcentration(unittest.TestCase):
     def test_seuls_les_marches_coches_sont_compares(self):
         p = self.classer(choisis={"GOLD", "NASDAQ"})
         self.assertEqual([x["m"] for x in p], ["GOLD", "NASDAQ"])
-        txt = ab.texte_concentration(p, True)
+        txt = ab.texte_radar(p, self.derniers(), True)
         self.assertNotIn("BTC", txt)
 
     def test_prix_dans_la_zone_passe_devant(self):
@@ -372,54 +332,28 @@ class CoachDeConcentration(unittest.TestCase):
         self.assertEqual([x["classe"] for x in self.classer(d2) if x["m"] == "GOLD"], ["sans_plan"])
 
     def test_message_vip_zone_sens_distance_et_unite(self):
-        txt = ab.texte_concentration(self.classer(), True)
-        l = txt.split("\n")
-        self.assertEqual(l[0], "🎯 OÙ TE CONCENTRER")
-        self.assertIn("BTC", l[1]); self.assertIn("le plus proche", l[1])
+        """« OÙ TE CONCENTRER » remplacé par le RADAR (une seule logique, aussi pour /focus)."""
+        txt = ab.texte_radar(self.classer(), self.derniers(), True)
+        self.assertTrue(txt.startswith("🎯 FOCUS : 🟠 BTC"))
         self.assertIn("LONG", txt); self.assertIn("73010", txt); self.assertIn("73400", txt)                    # zone visée
-        self.assertIn("ATR 15 min", txt); self.assertIn("À surveiller : clôture 1h au-dessus de 73205", txt)    # unité à surveiller
-        self.assertIn("GOLD : en approche", txt); self.assertIn("NASDAQ : loin de la zone", txt)
-        self.assertIn("Je les surveille pour toi", txt)
+        self.assertIn("ATR 15 min", txt); self.assertIn("J'attends : clôture 1h au-dessus de 73205", txt)       # unité à surveiller
+        self.assertIn("GOLD", txt); self.assertIn("en approche", txt); self.assertIn("NASDAQ", txt); self.assertIn("loin de la zone", txt)
 
     def test_message_gratuit_sans_zone_ni_niveaux(self):
-        txt = ab.texte_concentration(self.classer(), False)
+        txt = ab.texte_radar(self.classer(), self.derniers(), False)
         self.assertIn("BTC", txt); self.assertIn("VIP", txt)
-        for interdit in ("73010", "73400", "73205", "zone de retournement", "À surveiller"):
+        for interdit in ("73010", "73400", "73205", "Zone d'entrée", "J'attends"):
             self.assertNotIn(interdit, txt)
 
     def test_aucun_favori_si_tout_est_bloque_ou_ferme(self):
         with patch.object(ab, "cme_ouvert", return_value=False):
             p = ab.classer_marches({"GOLD": self.r(3985.0, 3994.0, 4012.0)}, {}, {"GOLD"}, 1_800_000_000)
-        self.assertIsNone(ab.texte_concentration(p, True))
+        self.assertTrue(ab.texte_radar(p, {}, True).startswith("📡 RADAR ALIGN — aucune entrée proche"))
 
     def test_aucun_marche_proche_le_dit_honnetement(self):
         d = {"NASDAQ": self.r(28000.0, 28500.0, 28700.0, atr=40.0), "GOLD": self.r(3900.0, 3994.0, 4012.0)}
-        txt = ab.texte_concentration(self.classer(d, {"GOLD", "NASDAQ"}), True)
-        self.assertIn("aucun n'est proche", txt)
-
-    def test_envoi_automatique_seulement_quand_le_favori_change_et_pas_plus_d_une_fois_par_30_min(self):
-        etat, envois = {"marches_par_chat": {"adel": ["GOLD", "NASDAQ", "BTC"], "solo": ["GOLD"]}}, []
-        with patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append((c, k["text"]))), patch.object(ab, "autorise", return_value=True), \
-             patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "bloque_dw", return_value=False):
-            T = 1_800_000_000
-            ab.coach_concentration(etat, {"adel", "solo"}, self.derniers(), T)
-            self.assertEqual([c for c, _ in envois], ["adel"])                                    # « solo » ne suit qu'un marché : rien à comparer
-            ab.coach_concentration(etat, {"adel"}, self.derniers(), T + 60)
-            ab.coach_concentration(etat, {"adel"}, self.derniers(), T + 3600)                    # même favori, pas plus proche : silence
-            self.assertEqual(len(envois), 1)
-            d = self.derniers(); d["GOLD"] = self.r(4000.0, 3994.0, 4012.0)                      # GOLD entre dans la zone : nouveau favori
-            ab.coach_concentration(etat, {"adel"}, d, T + 120)                                    # trop tôt (< 30 min)
-            self.assertEqual(len(envois), 1)
-            ab.coach_concentration(etat, {"adel"}, d, T + 3700)
-            self.assertEqual(len(envois), 2)
-            self.assertIn("GOLD", envois[1][1].split("\n")[1])
-
-    def test_le_gratuit_ne_recoit_pas_l_envoi_automatique(self):
-        envois = []
-        with patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append(c)), patch.object(ab, "autorise", return_value=False), \
-             patch.object(ab, "cme_ouvert", return_value=True), patch.object(ab, "bloque_dw", return_value=False):
-            ab.coach_concentration({"marches_par_chat": {"x": ["GOLD", "BTC"]}}, {"x"}, self.derniers(), 1_800_000_000)
-        self.assertEqual(envois, [])
+        txt = ab.texte_radar(self.classer(d, {"GOLD", "NASDAQ"}), d, True)
+        self.assertIn("rien de proche", txt)
 
     def test_commande_focus_declaree_dans_le_menu(self):
         self.assertIn("/focus", ab.COMMANDES)

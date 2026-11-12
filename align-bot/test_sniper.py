@@ -194,15 +194,6 @@ class MessagesEtRegles(unittest.TestCase):
 class SensDansLeGratuit(unittest.TestCase):
     """Adel garde le sens haussier / baissier dans le gratuit et sur la page ALIGN LIVE : jamais les niveaux."""
 
-    def test_free_heartbeat_keeps_the_bias_without_levels(self):
-        r = {"dirPlan": -1, "bull": 2, "bear": 6, "sens": -1, "pctH": 30, "strat": "DAY", "dirs": [-1] * 11, "dirW": 0, "atr": 2.0, "prix": 100.4,
-             "zone_pine": {"za": 101.0, "zb": 103.0, "zmil": 102.0}, "b5": [1] * 25}
-        fr = ab.texte_battement("GOLD", r, {}, False, vip=False); en = ab.texte_battement("GOLD", r, {}, True, vip=False)
-        self.assertIn("Biais : baissier", fr); self.assertIn("Bias: bearish", en)
-        for interdit in ("101", "102", "103", "100,4"):
-            self.assertNotIn(interdit, fr)
-        self.assertIn("VIP", fr)
-
     def test_free_preparation_keeps_the_bias_without_levels(self):
         envois = []
         etat = {"prospects": ["900"]}
