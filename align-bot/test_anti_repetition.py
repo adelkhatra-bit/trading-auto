@@ -224,7 +224,7 @@ class FormeDesMessages(unittest.TestCase):
     """Relecture des vrais messages : lisibilité (plages de prix, consigne d'abord, marchés de la personne)."""
     def test_plage_de_prix_reste_entiere(self):
         t = ab.mise_en_forme("⏳ 🥇 GOLD : en attente\n📍 Zone d'entrée : 3986.06 – 4024.39 (prix à 14.38)\n📍 Zone d'entrée : 3986.00 → 3990.00 (prix dans la zone)")
-        self.assertIn("Zone d'entrée : 3986,06 – 4024,39 (prix à 14.38)", t)
+        self.assertIn("Zone d'entrée : 3986,06 → 4024,39 (prix à 14.38)", t)
         self.assertIn("3986 → 3990 (prix dans la zone)", t)
         self.assertNotIn("(4024", t)                                              # bug réel : « 3986,06 (4024,39 (prix à 14,38) »
 
