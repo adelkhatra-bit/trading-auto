@@ -26,46 +26,107 @@ class ZeroBlabla(unittest.TestCase):
         self.assertTrue(ab.mise_en_forme("😎 RIEN N'A BOUGÉ\n📉 Raison : x").startswith("😎 RIEN N'A BOUGÉ"))
 
 
-class Modele1Signal(unittest.TestCase):
-    def test_format_exact_short_et_long(self):
-        txt = ab.msg_signal("GOLD", -1, 3995.2, 3999.99, 3985.0, 3895.54, "Rejet H1 + corrélation DXY", "jusqu'à la clôture 15 min (14:15)")
-        self.assertEqual(txt.split("\n"), ["🔴 GOLD - SHORT", "", "🎯 Entrée : 3995,20", "🛑 Stop : 3999,99", "💰 TP1 : 3985", "💰 TP2 : 3895,54", "",
-                                           "📊 Contexte : Rejet H1 + corrélation DXY", "⏱ Validité : jusqu'à la clôture 15 min (14:15)"])
-        self.assertTrue(ab.msg_signal("BTC", 1, 100.0, 99.0, 102.0, 105.0, "x", "y").startswith("🟢 BTC - LONG"))
+class CarteCoach(unittest.TestCase):
+    """Carte unique compressée : toutes les informations (ordre, DXY, news, niveaux, agent, action, système), une information par ligne."""
+    TR = dict(d=-1, e=3995.2, sl=3999.99, tp1=3985.0, tp2=3895.54)
 
-    def test_tp2_absent_ou_incoherent_n_est_pas_affiche(self):
-        self.assertNotIn("TP2", ab.msg_signal("GOLD", -1, 3995.2, 3999.99, 3985.0, None, "x", "y"))
-        self.assertNotIn("TP2", ab.msg_signal("GOLD", -1, 3995.2, 3999.99, 3985.0, 4100.0, "x", "y"))      # TP2 du mauvais côté
+    def r(self, **kw):
+        return dict({"m1": [{"t": T - 20, "o": 3985.0, "h": 3985.0, "l": 3985.0, "c": 3985.0}], "dirPlan": -1, "atr": 4.0, "strat": "SWING",
+                     "niveaux": [(3995.0, "1h"), (4010.0, "4h"), (3970.0, "Daily"), (3999.0, "15m")], "tv_indicator_mtf": {"available": False},
+                     "macro_data": {"disponible": True, "dollar_direction": "HAUSSIER (BULLISH)", "dxy_variation_1h_pct": 0.13}}, **kw)
 
-    def test_une_information_par_ligne_et_aucun_paragraphe(self):
-        txt = ab.mise_en_forme(ab.msg_signal("GOLD", -1, 3995.2, 3999.99, 3985.0, 3895.54, "Rejet 5 min + 4h/1h alignées", "clôture 15 min"))
-        for l in txt.splitlines():
-            self.assertLessEqual(len(l), 80, l)
+    def etat(self, **kw):
+        return dict({"cal": {"ev": [{"t": T + 900, "titre": "CPI USA", "prev": "3", "avant": "3"}]}}, **kw)
 
-    def test_detecte_comme_signal_d_entree_et_jamais_filtre_par_l_anti_doublon(self):
-        sig = ab.msg_signal("GOLD", -1, 3995.2, 3999.99, 3985.0, 3895.54, "x", "y")
+    def test_signal_format_complet(self):
+        with patch.object(ab, "heure", return_value="14:30"), patch.object(ab, "time", wraps=ab.time) as tm:
+            tm.time.return_value = T
+            txt = ab.carte_coach("GOLD", self.r(), {}, "signal", tr=self.TR, validite="clôture 15 min (14:15)", signal="Rejet 5 min + 4h/1h", etat=self.etat())
+        self.assertEqual(txt.split("\n"), [
+            "📍 GOLD - SHORT", "", "🎯 Entrée : 3995,20 | 🛑 SL : 3999,99", "💰 TP : 3985 / 3895,54 | ⚖️ R:R : 1:2,1", "⏱ Valide : clôture 15 min (14:15)", "",
+            "📊 Contexte :", "🔹 Signal : Rejet 5 min + 4h/1h", "🔹 DXY : Haussier ⚠️ +0,13 %/1h", "🔹 News : CPI USA 14:30 (dans 15 min)",
+            "🔹 Niveaux : R: 3995 | S: 3970", "", "🤖 Agent Auto-Trade : %%AGENT:signal%%", "🛡️ Action : ENTRER", "", "🔌 Sys: TV❌ News✅ DXY✅ Agent✅"])
+
+    def test_attente_raison_declencheur_zone_et_contexte(self):
+        r = self.r(zone_pine={"za": 3994.0, "zb": 4012.0, "zmil": 4005.22})
+        with patch.object(ab, "heure", return_value="14:30"):
+            txt = ab.carte_coach("GOLD", r, {}, "attente", raison="Hors zone", declencheur="Clôture 1h sous 4005,22", etat=self.etat())
+        l = txt.split("\n")
+        self.assertEqual(l[:6], ["📍 GOLD - ATTENTE", "", "⏳ Raison : Hors zone", "🚀 Déclencheur : Clôture 1h sous 4005,22", "🔑 Zone : 3994 → 4012", ""])
+        for k in ("🔹 DXY :", "🔹 News :", "🔹 Niveaux :", "🤖 Agent Auto-Trade :", "🛡️ Action : NE PAS RENTRER", "🔌 Sys:"):
+            self.assertTrue(any(x.startswith(k) for x in l), k)
+
+    def test_aucune_information_du_systeme_perdue(self):
+        txt = ab.carte_coach("GOLD", self.r(), {}, "attente", raison="News proche", declencheur="x", etat=self.etat())
+        for k in ("DXY", "News", "Niveaux", "Agent Auto-Trade", "Action", "Sys:"):
+            self.assertIn(k, txt)
+
+    def test_donnees_manquantes_affichees_honnetement(self):
+        txt = ab.carte_coach("GOLD", self.r(niveaux=[], macro_data=None), {}, "attente", raison="x", declencheur="y", etat={})
+        self.assertIn("DXY : n/d", txt); self.assertIn("News : Aucune", txt); self.assertIn("R: — | S: —", txt)
+        self.assertIn("TV❌ News❌ DXY❌ Agent✅", txt)
+
+    def test_raisons_en_deux_mots(self):
+        for brut, court in (("La 4 h est neutre : pas de direction", "4h neutre"), ("Le 1h ne confirme pas la tendance 4h", "1h non confirmé"),
+                            ("Le prix doit revenir en zone", "Hors zone"), ("📰 News dans moins de 15 min", "News proche"),
+                            ("Prix tout en BAS Daily / Weekly", "Zone extrême D/W"), ("Rien de connu ici bas", "Rien de connu")):
+            self.assertEqual(ab.raison_2_mots(brut), court)
+
+    def test_agent_auto_trade_par_compte(self):
+        e = {"bot_off": ["off"], "canal": "canal", "GOLD": {}}
+        self.assertEqual(ab.agent_pour(e, "off", "GOLD", "attente"), "OFF")
+        self.assertEqual(ab.agent_pour(e, "on", "GOLD", "attente"), "Attente")
+        self.assertEqual(ab.agent_pour(e, "on", "GOLD", "signal"), "ON")
+        self.assertEqual(ab.agent_pour(dict(e, GOLD={"trade": {"d": 1}}), "on", "GOLD", "attente"), "ON")
+        self.assertEqual(ab.agent_pour(e, "canal", "GOLD", "signal"), "Actif")
+
+    def test_substitution_par_destinataire_dans_telegram(self):
+        envoyes = []
+        txt = "📍 GOLD - ATTENTE\n\n🤖 Agent Auto-Trade : %%AGENT:attente%%"
+        with patch.object(ab, "DERNIER_ETAT", {"bot_off": ["off"]}), patch.object(ab, "TOKEN", "x"), \
+             patch.object(ab, "_telegram_verifie_cooldown", lambda *a, **k: None), patch.object(ab, "api_telegram", create=True), \
+             patch("time.sleep"), patch("urllib.request.urlopen", side_effect=lambda req, timeout=None: envoyes.append(req.data) or (_ for _ in ()).throw(RuntimeError("stop"))):
+            for cid in ("on", "off"):
+                try:
+                    ab.telegram("sendMessage", chat_id=cid, text=txt)
+                except Exception:
+                    pass
+        corps = [b.decode() if isinstance(b, bytes) else str(b) for b in envoyes]
+        self.assertTrue(any("Attente" in c for c in corps), corps)
+        self.assertTrue(any("OFF" in c for c in corps), corps)
+        self.assertFalse(any("%%AGENT" in c or "%25%25AGENT" in c for c in corps), corps)
+
+    def test_detecte_comme_signal_et_jamais_filtre(self):
+        sig = ab.carte_coach("GOLD", self.r(), {}, "signal", tr=self.TR, etat=self.etat())
         self.assertTrue(ab.est_entree(sig)); self.assertTrue(ab.est_entree("🟢🟢🟢 J'ENTRE MAINTENANT — GOLD"))
-        self.assertFalse(ab.est_entree("⏳ GOLD - EN ATTENTE\n\n📉 Raison : x"))
+        self.assertFalse(ab.est_entree(ab.carte_coach("GOLD", self.r(), {}, "attente", raison="x", etat=self.etat())))
         e = {}
         self.assertFalse(ab.doublon_message(e, sig, T)); self.assertFalse(ab.doublon_message(e, sig, T + 5))
 
-    def test_traduction_anglaise(self):
-        t = ab.traduire(ab.msg_signal("GOLD", -1, 3995.2, 3999.99, 3985.0, 3895.54, "x", "jusqu'à la clôture 15 min (14:15)"))
-        for k in ("🎯 Entry:", "🛑 SL:", "📊 Context:", "⏱ Validity: until the 15 min close (14:15)"):
-            self.assertIn(k, t)
+    def test_traduction_anglaise_de_la_carte(self):
+        txt = ab.traduire(ab.carte_coach("GOLD", self.r(), {}, "attente", raison="Hors zone", declencheur="Clôture 1h sous 4005,22", etat=self.etat()))
+        for k in ("📍 GOLD - WAIT", "⏳ Reason: Hors zone", "🚀 Trigger: 1h close below 4005,22", "📊 Context:", "Action: DO NOT ENTER", "Bullish"):
+            self.assertIn(k, txt)
+
+    def test_paires_compressees_restent_sur_une_ligne(self):
+        txt = ab.mise_en_forme("📍 GOLD - SHORT\n\n🎯 Entrée : 3995,20 | 🛑 SL : 3999,99\n💰 TP : 3985 / 3895,54 | ⚖️ R:R : 1:2,1\n🔹 Niveaux : R: 3995 | S: 3970")
+        l = txt.splitlines()
+        for k in ("🎯 Entrée : 3995,20 | 🛑 SL : 3999,99", "💰 TP : 3985 / 3895,54 | ⚖️ R:R : 1:2,1", "🔹 Niveaux : R: 3995 | S: 3970"):
+            self.assertIn(k, l)
+
+    def test_une_information_par_ligne(self):
+        txt = ab.mise_en_forme(ab.carte_coach("GOLD", self.r(), {}, "signal", tr=self.TR, validite="clôture 15 min (14:15)", signal="Rejet 5 min", etat=self.etat()))
+        for l in txt.splitlines():
+            self.assertLessEqual(len(l), 70, l)
 
 
-class Modele2Attente(unittest.TestCase):
-    def test_format_exact(self):
-        self.assertEqual(ab.msg_attente("GOLD", "Marché neutre, zone de bruit", "Clôture > 3990"),
-                         "⏳ GOLD - EN ATTENTE\n\n📉 Raison : Marché neutre, zone de bruit\n🚀 Déclencheur : Clôture > 3990")
-
-    def test_raison_et_declencheur_issus_des_vraies_donnees(self):
-        r = {"dirs": [0] * 11, "confirme": 0, "m1": [{"t": T - 10, "o": 1, "h": 1, "l": 1, "c": 3985.0}], "dirPlan": -1, "strat": "SWING",
-             "zone_pine": {"za": 3994.0, "zb": 4012.0, "zmil": 4005.22}}
-        self.assertEqual(ab.declencheur_attente(r, {}, 3985.0, 0, 0), "Clôture 1h sous 4005,22")
-        self.assertEqual(ab.declencheur_attente(r, {"ordre": {"d": 1, "e": 3996.0}}, 3985.0, 0, 0), "Clôture 5 min au-dessus de 3996")
-        self.assertEqual(ab.ligne_raison_attente("⏳ La 4 h est neutre : pas de direction\n🔔 Je te préviens"), "La 4 h est neutre : pas de direction")
+class Hygiene(unittest.TestCase):
+    def test_aucune_fonction_definie_deux_fois(self):
+        """Une 2e définition du même nom écrase silencieusement la 1re (arrivé deux fois : raison_attente, news_courte)."""
+        import collections, pathlib, re
+        src = (pathlib.Path(ab.__file__)).read_text(encoding="utf-8")
+        dups = {n: c for n, c in collections.Counter(re.findall(r"^def (\w+)\(", src, re.M)).items() if c > 1}
+        self.assertEqual(dups, {})
 
 
 class ErreursTechniques(unittest.TestCase):
@@ -147,10 +208,10 @@ class Modele3Ouverture(unittest.TestCase):
 
 class RenduTelegram(unittest.TestCase):
     def test_niveaux_importants_en_gras_et_sauts_de_ligne_entre_blocs(self):
-        html = ab.rendu_html(ab.mise_en_forme(ab.msg_signal("GOLD", -1, 3995.2, 3999.99, 3985.0, 3895.54, "Rejet 5 min", "clôture 15 min")))
+        html = ab.rendu_html(ab.mise_en_forme("🔴 GOLD - SHORT\n\n🎯 Entrée : 3995,20\n🛑 Stop : 3999,99\n💰 TP1 : 3985\n\n📊 Contexte : x"))
         l = html.split("\n")
         self.assertEqual(l[0], "<b>🔴 GOLD - SHORT</b>")
-        for lab, val in (("🎯 Entrée", "3995,20"), ("🛑 Stop", "3999,99"), ("💰 TP1", "3985"), ("💰 TP2", "3895,54")):
+        for lab, val in (("🎯 Entrée", "3995,20"), ("🛑 Stop", "3999,99"), ("💰 TP1", "3985")):
             self.assertIn(f"<b>{lab} :</b> <b>{val}</b>", l)
         self.assertEqual(l.count(""), 1)                                    # un seul saut de ligne : entre les niveaux et le contexte
         self.assertNotEqual(l[-1], ""); self.assertNotEqual(l[2], "")

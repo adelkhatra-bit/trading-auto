@@ -2142,6 +2142,8 @@ TRAD.update({
     "jusqu'à la clôture 15 min": "until the 15 min close", "jusqu'à la clôture 5 min": "until the 5 min close", "Cassure confirmée, clôture 5 min au-dessus": "Breakout confirmed, 5 min close above",
     "Cassure confirmée, clôture 5 min sous": "Breakout confirmed, 5 min close below", "Prix hors zone": "Price outside the zone",
     "Le prix doit revenir en zone": "Price must return to the zone",
+    "⏳ Raison :": "⏳ Reason:", "🔑 Zone :": "🔑 Zone:", "⏱ Valide :": "⏱ Valid:", "🔹 Signal :": "🔹 Signal:", "🤖 Agent Auto-Trade :": "🤖 Auto-Trade agent:",
+    "Action : NE PAS RENTRER": "Action: DO NOT ENTER", "Action : ENTRER": "Action: ENTER", "Action : Prêt à entrer": "Action: Ready to enter",
     "🔔 OUVERTURE MARCHÉ :": "🔔 MARKET OPEN:", "⏰ Ouverture :": "⏰ Opening:", "📈 Tendance H4 :": "📈 H4 trend:", "📈 Tendance H1 :": "📈 H1 trend:",
     "🔑 Niveaux clés :": "🔑 Key levels:", "· Résistance :": "· Resistance:", "· Support :": "· Support:", "⚠️ News :": "⚠️ News:",
     "Haussier": "Bullish", "Baissier": "Bearish", "Neutre": "Neutral",
@@ -2184,25 +2186,111 @@ def epurer_blabla(lignes):
     """Retire les phrases de remplissage (jamais la première ligne : le titre). Les avertissements de risque (SL obligatoire, analyse indicative) restent."""
     return [l for k, l in enumerate(lignes) if k == 0 or not _BLABLA.search(l)]
 
-_ENTREE_RE = re.compile(r"^[🟢🔴] [A-Z0-9]+ - (?:LONG|SHORT)\s*$")
+_ENTREE_RE = re.compile(r"^(?:[🟢🔴]|📍) [A-Z0-9]+ - (?:LONG|SHORT)\s*$")
 
 def est_entree(texte):
     """Vrai pour un message de signal d'entrée : ancien titre « J'ENTRE MAINTENANT » ou modèle « 🟢 GOLD - LONG »."""
     t = str(texte or "")
     return "J'ENTRE MAINTENANT" in t or bool(_ENTREE_RE.match(t.split("\n", 1)[0].strip()))
 
-def msg_signal(m, d, e, sl, tp1, tp2, contexte, validite):
-    """Modèle 1 — signal de trade, exactement : titre, Entrée / Stop / TP1 / TP2, Contexte, Validité. Une information par ligne."""
-    l = [f"{'🟢' if d == 1 else '🔴'} {m} - {'LONG' if d == 1 else 'SHORT'}", "",
-         f"🎯 Entrée : {px(e)}", f"🛑 Stop : {px(sl)}", f"💰 TP1 : {px(tp1)}"]
-    if tp2 is not None and tp2_affichable(d, tp1, tp2):
-        l.append(f"💰 TP2 : {px(tp2)}")
-    l += ["", f"📊 Contexte : {contexte}", f"⏱ Validité : {validite}"]
+_RAISONS = (   # (mots-clés, abréviation de 2 mots) — la première qui correspond gagne
+    (("zone extrême", "daily / weekly", "daily/weekly"), "Zone extrême D/W"), (("4 h est neutre", "4h est neutre", "4 h neutre"), "4h neutre"),
+    (("ne confirme pas", "1 h doit confirmer", "1h doit confirmer"), "1h non confirmé"), (("news", "annonce"), "News proche"),
+    (("revenir en zone", "pas encore dans la zone", "hors zone"), "Hors zone"), (("trop tard", "déjà parti", "étiré"), "Trop tard"),
+    (("alignement", "unités"), "Alignement <8"), (("stop trop", "risque trop", "sl trop"), "Stop trop loin"), (("rejet", "mèche"), "Attente rejet"),
+    (("neutre",), "Marché neutre"))
+
+def raison_2_mots(texte):
+    """Raison de l'attente en 2 mots (abréviation), jamais une phrase : « Hors zone », « 1h non confirmé », « News proche »…"""
+    t = str(texte or "").lower()
+    for mots, court in _RAISONS:
+        if any(k in t for k in mots):
+            return court
+    mots = re.sub(r"[^\w' /<>-]", " ", str(texte or "")).split()
+    return " ".join(mots[:3]) or "Pas de signal"
+
+def dxy_court(macro):
+    """DXY en 2-3 mots, issu de macro_confluence (variation réelle sur 1 h) : « Haussier ⚠️ +0,13 %/1h »."""
+    if not macro or not macro.get("disponible"):
+        return "n/d"
+    d, v = str(macro.get("dollar_direction", "")), macro.get("dxy_variation_1h_pct") or 0.0
+    base = "Haussier ⚠️" if "HAUSS" in d else "Baissier" if "BAISS" in d else "Stable"
+    return f"{base} {v:+.2f} %/1h".replace(".", ",")
+
+def news_prochaine_courte(etat, now=None):
+    """Prochaine annonce (24 h) : « CPI USA 14:30 (dans 15 min) » ou « Aucune »."""
+    now = time.time() if now is None else now
+    ev = sorted((e for e in ((etat or {}).get("cal", {}) or {}).get("ev", []) if now - 15 * 60 <= e["t"] <= now + 24 * 3600), key=lambda e: e["t"])
+    if not ev:
+        return "Aucune"
+    e = ev[0]
+    dans = int((e["t"] - now) // 60)
+    return f"{e['titre']} {heure(e['t'])}" + (f" (dans {dans} min)" if 0 < dans <= 60 else " (en cours)" if dans <= 0 else "")
+
+def niveaux_rs(r):
+    """(résistance, support) les plus proches parmi les niveaux 1h / 4h / Daily — jamais inventés."""
+    if not r.get("m1"):
+        return None, None
+    prix = r["m1"][-1]["c"]
+    niv = [v for v, n in (r.get("niveaux") or []) if n in ("1h", "4h", "Daily", "D") and v is not None]
+    return min((v for v in niv if v > prix), default=None), max((v for v in niv if v < prix), default=None)
+
+def statut_sys(etat, r, now=None):
+    """Micro-ligne de preuve : chaque ✅ / ❌ vient d'un état réel (TradingView, news, DXY, agent)."""
+    now = time.time() if now is None else now
+    tv = bool(((r or {}).get("tv_indicator_mtf") or {}).get("available"))
+    news = bool([e for e in ((etat or {}).get("cal", {}) or {}).get("ev", []) if e["t"] >= now - 15 * 60])
+    dxy = bool(((r or {}).get("macro_data") or {}).get("disponible"))
+    ok = lambda b: "✅" if b else "❌"
+    return f"🔌 Sys: TV{ok(tv)} News{ok(news)} DXY{ok(dxy)} Agent✅"
+
+def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal=None, validite=None, etat=None):
+    """Carte unique (charte du propriétaire) : titre, [raison], ordre, contexte (DXY, news, niveaux), agent auto-trade, action, statut système.
+    genre « signal » (trade validé) ou « attente ». Aucune donnée supprimée : tout est compressé en abréviations, une information par ligne."""
+    etat = etat if etat is not None else DERNIER_ETAT
+    macro = r.get("macro_data")
+    res, sup = niveaux_rs(r)
+    if genre == "signal":
+        d = tr["d"]
+        l = [f"📍 {m} - {'LONG' if d == 1 else 'SHORT'}", ""]
+        rr = abs(tr["tp1"] - tr["e"]) / max(abs(tr["e"] - tr["sl"]), 1e-9)
+        tps = px(tr["tp1"]) + (f" / {px(tr['tp2'])}" if tr.get("tp2") is not None and tp2_affichable(d, tr["tp1"], tr["tp2"]) else "")
+        l += [f"🎯 Entrée : {px(tr['e'])} | 🛑 SL : {px(tr['sl'])}", f"💰 TP : {tps} | ⚖️ R:R : 1:{rr:.1f}".replace(".", ",")]
+        if validite:
+            l.append(f"⏱ Valide : {validite}")
+        action = "ENTRER"
+    else:
+        l = [f"📍 {m} - ATTENTE", "", f"⏳ Raison : {raison}"]
+        if declencheur:
+            l.append(f"🚀 Déclencheur : {declencheur}")
+        zp = r.get("zone_pine") if r.get("dirPlan") else None
+        o = (cle or {}).get("ordre")
+        if o or zp:
+            za, zb = (min(o.get("za", o["e"]), o.get("zb", o["e"])), max(o.get("za", o["e"]), o.get("zb", o["e"]))) if o else (min(zp["za"], zp["zb"]), max(zp["za"], zp["zb"]))
+            l.append(f"🔑 Zone : {px(za)} → {px(zb)}")
+        action = "NE PAS RENTRER"
+        try:
+            pr = proximite_marche(m, r, cle, time.time())
+            if 0 <= pr["rang"] <= 1 and _radar_n_ut(r, pr.get("d")) >= MIN_ALIGN and not r.get("annonce"):
+                action = "Prêt à entrer"
+        except Exception:
+            pass
+    l += ["", "📊 Contexte :"]
+    if signal:
+        l.append(f"🔹 Signal : {signal}")
+    l += [f"🔹 DXY : {dxy_court(macro)}", f"🔹 News : {news_prochaine_courte(etat)}",
+          f"🔹 Niveaux : R: {px(res) if res is not None else '—'} | S: {px(sup) if sup is not None else '—'}",
+          "", f"🤖 Agent Auto-Trade : %%AGENT:{genre}%%", f"🛡️ Action : {action}", "", statut_sys(etat, r)]
     return "\n".join(l)
 
-def msg_attente(m, raison, declencheur):
-    """Modèle 2 — en attente (pas de trade) : titre, Raison, Déclencheur."""
-    return f"⏳ {m} - EN ATTENTE\n\n📉 Raison : {raison}\n🚀 Déclencheur : {declencheur}"
+def agent_pour(etat, cid, marche, genre):
+    """Statut « Agent Auto-Trade » PAR COMPTE (réglage « Mon bot ») : OFF · Attente · ON. Chaîne commune : « Actif »."""
+    cid = str(cid)
+    if cid == str(etat.get("canal") or ""):
+        return "Actif"
+    if not bot_on(etat, cid):
+        return "OFF"
+    return "ON" if genre == "signal" or ((etat.get(marche) or {}).get("trade")) else "Attente"
 
 def erreur_technique(connexion):
     """Une donnée manquante n'est jamais un pavé : une ligne."""
@@ -2245,7 +2333,7 @@ def mise_en_forme(t):
                 plat.extend(parts)
             else:
                 plat.append(l)
-        elif " | " in l and not l.startswith(("http", "🔗")):
+        elif " | " in l and not l.startswith(("http", "🔗", "🎯 Entrée :", "💰 TP :", "🔹 Niveaux :")):      # paires compressées de la carte coach
             parts = [x.strip() for x in l.split(" | ") if x.strip()]
             plat.extend(parts if len(parts) > 1 else [l])
         else:
@@ -2394,6 +2482,9 @@ def telegram(methode, **params):
         if callback_id and callback_id in CALLBACKS_ACKNOWLEDGED:
             CALLBACKS_ACKNOWLEDGED.discard(callback_id)
             return {"ok": True, "result": True}
+    if methode in ("sendMessage", "editMessageText") and "%%AGENT:" in str(params.get("text", "")):
+        t_ = str(params["text"]); mk_ = re.search(r"📍 (\w+) - ", t_)
+        params["text"] = re.sub(r"%%AGENT:(\w+)%%", lambda g: agent_pour(DERNIER_ETAT or {}, params.get("chat_id"), mk_.group(1) if mk_ else "", g.group(1)), t_)
     if methode in ("sendMessage", "editMessageText", "sendPhoto") and str(params.get("chat_id")) in LANG_EN:
         if "text" in params:
             params["text"] = traduire(params["text"])
@@ -4014,11 +4105,8 @@ def texte_cloture(m, tf, bougie, r, cle):
             chrono_ = ""
         lignes.append(f"⏳ Prochaine validation : clôture {attente}{chrono_}")
     if not tr and not statut.startswith("🟢"):
-        raison_txt = ligne_raison_attente(raison_v, titre)
-        if ordre:
-            _e = ordre.get("e", prix); _b, _h = sorted((ordre.get("za", _e), ordre.get("zb", _e)))
-            raison_txt += f" — zone {px(_b)} → {px(_h)}"
-        return msg_attente(m, raison_txt, declencheur_attente(r, cle, prix, d4h, d1h))      # Modèle 2 : raison + déclencheur, rien d'autre
+        return carte_coach(m, r, cle, "attente", raison=raison_2_mots(ligne_raison_attente(raison_v, titre)),
+                           declencheur=declencheur_attente(r, cle, prix, d4h, d1h))      # carte unique : raison en 2 mots + déclencheur
     if not tr:
         lignes.append("🚫 Aucun ordre envoyé au broker.")
     return "\n".join(lignes)
@@ -7228,8 +7316,8 @@ def agent(m, r, cle, ferme):
                 out.append(f"🧠 {ICONE.get(m, '')} {m} : cassure vue, mais je passe mon tour\n📚 Ce type de position a perdu trop souvent ({w_}/{n_} gagnés)")
                 return out
             cle["trade"] = tr; cle["prep"] = False; cle["attente_rsi"] = False; cle["parti"] = False; cle.pop("ordre", None)
-            out.append((msg_signal(m, d, tr["e"], tr["sl"], tr["tp1"], tr.get("tp2"),
-                                f"Cassure confirmée, clôture 5 min {'au-dessus' if d == 1 else 'sous'} {px(pc['niveau'])}", validite_cloture(r, "5m")) + ferme, boutons(m)))
+            out.append((carte_coach(m, r, cle, "signal", tr=tr, validite=validite_cloture(r, "5m"),
+                                signal=f"Cassure 5 min {'au-dessus' if d == 1 else 'sous'} {px(pc['niveau'])}") + ferme, boutons(m)))
             return out
         # Le prix approche du niveau de cassure : on l'annonce AVANT (1 fois par niveau)
         if len(r["b5"]) >= 22 and not r.get("annonce"):
@@ -7416,9 +7504,9 @@ def agent(m, r, cle, ferme):
                 score = sum(ok for _, ok in checks)
                 liste = "\n".join(f"{'✅' if ok else '➖'} {t}" for t, ok in checks)
                 pct_conf = round(100 * score / len(checks))
-                ctx = " + ".join([t for t, ok in checks if ok and not t.startswith(("Pas de news", "Gain / risque"))][:3]) or raison
-                out.append((msg_signal(m, d, tr["e"], tr["sl"], tr["tp1"], tr.get("tp2"), f"{raison} + {ctx}" if raison not in ctx else ctx,
-                                       validite_cloture(r, "15m")) + ferme, boutons(m)))
+                ctx = " + ".join([t for t, ok in checks if ok and not t.startswith(("Pas de news", "Gain / risque"))][:3])
+                out.append((carte_coach(m, r, cle, "signal", tr=tr, validite=validite_cloture(r, "15m"),
+                                        signal=f"{raison} + {ctx}" if ctx and raison not in ctx else (ctx or raison)) + ferme, boutons(m)))
             elif not cle.get("attente_rsi"):
                 cle["attente_rsi"] = True
                 if r["t"] - cle.get("recalc_t", 0) >= 1800:
