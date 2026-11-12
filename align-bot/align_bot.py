@@ -2757,6 +2757,8 @@ def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
     vus = etat.setdefault("ia_moments", {})
     for t in nouveaux or []:
         texte = t[0] if isinstance(t, tuple) else t
+        if doublon_message(etat, str(texte), enregistrer=False):      # message principal supprimé (doublon) : pas de commentaire IA orphelin
+            continue
         tete = str(texte).split("\n")[0].upper()
         for nom, cles, delai, consigne in MOMENTS_IA:
             if not any(k in tete for k in cles):
@@ -6383,7 +6385,53 @@ def manip_txt(cle, d, r):
     mp = cle.get("manip")
     return "🌀 Après la manipulation : les stops ont été pris, on rentre dans le bon sens\n" if mp and mp["d"] == d and r["t"] - mp["t"] <= 10800 else ""
 
+ANTI_REPETITION_S = 3 * 3600           # même message (mêmes informations) : une seule fois pendant 3 h
+# Messages jamais filtrés : exécution du trade (entrée, TP, stop, BE), news/annonces, fermeture, IA, dollar. Ils portent une information
+# d'évènement unique : les supprimer serait dangereux.
+ANTI_REPETITION_EXEMPTS = ("J'ENTRE MAINTENANT", "TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL", "STOP TOUCHÉ", "SORTIE AU STOP", "METS-TOI À BE",
+                           "sorti à BE", "OBJECTIFS REMIS", "ENTRÉE ENCORE POSSIBLE", "TROP TARD POUR ENTRER", "NEWS", "News passée", "FERMETURE",
+                           "FERMÉ", "Annonces importantes", "Aucune annonce", "L'IA ALIGN", "leçon de l'IA", "DOLLAR")
+
+_NOMBRE_RE = re.compile(r"(?<![\w.])\d{1,3}(?: \d{3})+(?:\.\d+)?(?!\d)|(?<![\w.])\d+(?:\.\d+)?")
+
+def _forme_message(texte):
+    """(modèle, nombres) : le modèle est le texte sans ses chiffres (heures comprises) ; les nombres servent à juger si l'information a changé."""
+    t = re.sub(r"\b\d{1,2}[:h]\d{2}\b", "HH:MM", texte)
+    nombres = [float(x.replace(" ", "")) for x in _NOMBRE_RE.findall(t)]
+    modele = re.sub(r"\s+", " ", _NOMBRE_RE.sub("#", t)).strip()
+    return modele, nombres
+
+def _memes_nombres(a, b):
+    """Mêmes informations : même nombre de valeurs, chacune à moins de 0,05 % (prix) ou 2 unités (petites valeurs : RSI, scores, compteurs)."""
+    if len(a) != len(b):
+        return False
+    return all(abs(x - y) <= (0.0005 * max(abs(x), abs(y)) if max(abs(x), abs(y)) >= 1000 else 2.0) for x, y in zip(a, b))
+
+def doublon_message(etat, texte, t=None, enregistrer=True):
+    """Filet commun d'anti-répétition (une seule boucle d'envoi). True = même message, mêmes informations, déjà envoyé il y a moins de ANTI_REPETITION_S.
+    Un message dont les chiffres ont vraiment changé (nouvelle zone, nouveau prix) passe toujours : c'est une information nouvelle."""
+    if any(k in texte for k in ANTI_REPETITION_EXEMPTS):
+        return False
+    t = time.time() if t is None else t
+    mem = etat.setdefault("anti_rep", {})
+    for k in [k for k, v in mem.items() if t - v["t"] > 2 * ANTI_REPETITION_S]:
+        mem.pop(k, None)
+    modele, nombres = _forme_message(texte)
+    cle = hashlib.sha1(modele.encode()).hexdigest()[:16]
+    vu = mem.get(cle)
+    if vu and t - vu["t"] <= ANTI_REPETITION_S and _memes_nombres(vu["n"], nombres):
+        return True
+    if enregistrer:
+        mem[cle] = {"t": t, "n": nombres}
+    return False
+
 EXTREME_REARMEMENT_S = 3 * 3600      # l'alerte « zone extrême » ne se réarme qu'après 3 h sans situation extrême
+
+def texte_zone_extreme(m, r, d):
+    """Message unique « zone extrême Daily/Weekly » (utilisé partout où l'on refuse de suivre la tendance, pour ne pas dire deux fois la même chose)."""
+    return (f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n"
+            f"⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')} : risque de {'repli' if d == 1 else 'rebond'}.\n"
+            f"⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
 
 def alerte_extreme_due(cle, d, t):
     """Alerte « zone extrême Daily/Weekly » : UNE seule fois par situation. La situation est identifiée par le sens bloqué seul
@@ -6427,7 +6475,9 @@ def agent(m, r, cle, ferme):
         return out
     if not tr:
         if not d:
-            if cle.get("aligne"):
+            # Seulement si un ordre avait été annoncé (sinon « ordre annulé » ne veut rien dire), et pas plus d'une fois par heure (oscillation 1h/4h)
+            if cle.get("aligne") and (cle.get("ordre") or cle.get("prep")) and r["t"] - cle.get("perdue_t", 0) >= 3600:
+                cle["perdue_t"] = r["t"]
                 out.append(f"⚪ {m} : confirmation 1h / tendance 4h perdue. Ordre annulé, j'attends.")
             cle["aligne"] = 0; cle["prep"] = False; cle.pop("ordre", None)
             return out
@@ -6437,7 +6487,7 @@ def agent(m, r, cle, ferme):
             cle["prep"] = False
             cle.pop("ordre", None)
             if alerte_extreme_due(cle, d, r["t"]):
-                out.append(f"⚠️ {m} : marché en zone extrême Daily/Weekly ({zone_txt(r['posD'])} / {zone_txt(r['posW'])}).\n⛔ Je ne poursuis pas le {('LONG' if d == 1 else 'SHORT')}.\n⏳ J'attends un repli ou un retournement confirmé en 1h + clôture 5m.")
+                out.append(texte_zone_extreme(m, r, d))
             cle["aligne"] = d
             return out
         # ── Entrée sur CASSURE confirmée (clôture 5 min au-delà du niveau) ──
@@ -6505,8 +6555,8 @@ def agent(m, r, cle, ferme):
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
-                out.append(f"🧭 {m} : 4h + 1h alignées {'▲' if d == 1 else '▼'}, MAIS prix {zone_txt(r['posD'])} Daily / {zone_txt(r['posW'])} Weekly.\n"
-                           f"⛔ Pas de {'long' if d == 1 else 'short'} ici : risque de rebond. J'attends un meilleur prix.")
+                if alerte_extreme_due(cle, d, r["t"]):          # même message et même anti-répétition que « zone extrême » (plus de double discours)
+                    out.append(texte_zone_extreme(m, r, d))
             else:
                 cle["ordre"] = o
                 out.append((f"🔔 JE PRÉPARE UNE POSITION — {ICONE.get(m, '')} {m}\n{SENS[d]}   {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n{qualite(o)}"
@@ -7101,6 +7151,9 @@ def un_tour(etat, chats):
     if TOKEN:
         for t in envois:
             texte, clavier = (t if isinstance(t, tuple) else (t, None))
+            if doublon_message(etat, texte):
+                print("anti-répétition : message identique ignoré —", texte.splitlines()[0][:80])
+                continue
             for cid in destinataires_message(etat, chats, texte):
                 try:
                     if cid == etat.get("canal"):
