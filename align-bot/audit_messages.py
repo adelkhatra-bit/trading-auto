@@ -54,17 +54,25 @@ for i, (cid, lst) in enumerate(sorted(chats.items(), key=lambda z: -len(z[1]))[:
     brut = choix.get(cid)
     coches = sorted(ab._vers_ensemble(brut)) if brut is not None else None
     cpt, hors, sans, tit_hors = collections.Counter(), 0, 0, collections.Counter()
+    tit_sans, ages = collections.Counter(), []
+    fin_t = max(float(y.get("timestamp", 0)) for y in lst)
     for x in lst:
         ens = ab.marches_du_message(x["text"])
         if not ens:
             sans += 1
+            tit_sans[titre(x["text"])] += 1
             continue
         for m in ens:
             cpt[m] += 1
         if coches is not None and not (ens & set(coches)):
             hors += 1
             tit_hors[titre(x["text"])] += 1
+            ages.append(round((fin_t - float(x.get("timestamp", 0))) / 3600, 1))
     nom = "CANAL VIP" if cid == canal else f"chat#{i}"
     print(f"ROUTAGE {nom} coches={coches if coches is not None else 'jamais choisi (tout)'} messages={len(lst)} par_marche={dict(cpt)} sans_marche={sans} HORS_CHOIX={hors}")
     for k, n in tit_hors.most_common(5):
         print(f"ROUTAGE   hors choix {n:3d} x {k}")
+    if ages:
+        print(f"ROUTAGE   âge des messages hors choix (h avant le dernier message) : {sorted(ages)}")
+    for k, n in tit_sans.most_common(8):
+        print(f"ROUTAGE   sans marché {n:3d} x {k}")
