@@ -353,7 +353,8 @@ zHaut = math.max(zMin, zMax)
 // du bon côté du prix et SOUS (ou sur) celui de l'UT supérieure. Rejet confirmé sur la dernière bougie clôturée du graphique (mèche + clôture sous le niveau et sous la bande
 // de Bollinger, ou chandelle de retournement). Contexte HTF aligné et sens clair exigés. Sinon : plan v24 inchangé. Plan (zone, TP) toujours affiché tel quel ;
 // le STOP se cale derrière la mèche (+ marge ATR, plancher 0,12 % comme le plan).
-snCtx = dirPlan != 0 and (dirPlan == 1 ? bull : bear) >= minAlign and sens == dirPlan and nz(d240) != -dirPlan and nz(d60) != -dirPlan
+// v25c : le sens du plan est connu → l'entrée sniper s'applique dès qu'un plan existe (refus seulement si la 1h ou la 4h va CONTRE le plan)
+snCtx = dirPlan != 0 and nz(d240) != -dirPlan and nz(d60) != -dirPlan
 lv1 = dirPlan == -1 ? rA1 : sA1
 lv3 = dirPlan == -1 ? rA3 : sA3
 lv5 = dirPlan == -1 ? rA5 : sA5
