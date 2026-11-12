@@ -3589,7 +3589,7 @@ def menu_bot_gratuit(etat, cid):
                ["⏸ Aucune position proposée", "🔒 Tu sais juste qu'une position VIP sort"])
     lignes += ["━━━━━━━━━━━━", "🎁 Position du jour : " + ("déjà utilisée (nouvelle demain)" if utilise else "disponible"),
                "📡 Marchés : " + " + ".join(NOMS_MARCHES[m] for m in MARCHES if m in marches_choisis(etat, cid))]
-    _envoi_sur(cid, text="\n".join(lignes), reply_markup=json.dumps({"inline_keyboard": [
+    _envoi_sur(cid, text="\n".join(lignes) + "\n\n" + texte_suivi(etat, cid), reply_markup=json.dumps({"inline_keyboard": [
         [{"text": "⏸ Non, plus de positions", "callback_data": "botoff:x"} if on else
          {"text": "✅ Oui, je veux des positions", "callback_data": "boton:x"}],
         [{"text": "📡 Choisir mes marchés", "callback_data": "marketsmenu:x"}],
@@ -3605,9 +3605,11 @@ def menu_bot(etat, cid):
     _envoi_sur(cid, text=(f"🤖 MON BOT   {'▶️ ON' if on else '⏸ OFF'}\n━━━━━━━━━━━━\n"
                           + ("✅ Il entre tout seul dans chaque position\n👀 Vue 15 min • SL un peu sous / au-dessus de la mèche\n🎯 Le coach te suit jusqu'au TP\n"
                              if on else "⏸ Il n'entre plus pour toi\n🔔 Tu reçois quand même les positions\n")
-                          + f"━━━━━━━━━━━━\n🤖 Positions prises par ton bot   {st['auto']}\n⏸ Arrêts manuels   {st['arrets']}"),
+                          + f"━━━━━━━━━━━━\n🤖 Positions prises par ton bot   {st['auto']}\n⏸ Arrêts manuels   {st['arrets']}"
+                          + "\n\n" + texte_suivi(etat, cid)),
                reply_markup=json.dumps({"inline_keyboard": [[{"text": "⏸ Arrêter mon bot", "callback_data": "botoff:x"} if on
                                                             else {"text": "▶️ Relancer mon bot", "callback_data": "boton:x"}],
+                                                           [{"text": "📡 Choisir mes marchés", "callback_data": "marketsmenu:x"}],
                                                            [{"text": "🔔 Son pièce", "callback_data": "son:piece"}]]
                                        + ([[{"text": "👁 Tester la version gratuite", "callback_data": "vuegratuit:on"}]] if str(cid) in {str(x) for x in proprio(etat)} else [])}))
 
@@ -4473,7 +4475,7 @@ def traiter(etat, chats, updates):
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Sélection enregistrée")
                 except Exception:
                     pass
-                menu_marches(etat, qui)
+                menu_marches(etat, qui, (cb.get("message") or {}).get("message_id"))
                 continue
             if choix == "followmarket" and (mk in MARCHES or mk == "BOTH"):
                 if not (autorise(etat, qui, cb.get("from", {}).get("id")) or qui not in etat.get("bienvenue", {})):
@@ -5408,8 +5410,7 @@ def valider_et_suivre_marches(etat, cid, user_id, message_id=None):
                 telegram("editMessageReplyMarkup", chat_id=cid, message_id=message_id, reply_markup=json.dumps({"inline_keyboard": []}))
             except Exception as ex:
                 print("fermeture menu marchés", ex)
-    _envoi_sur(cid, text=(f"✅ Tracking on: {noms}\n🔔 I'll alert you when an entry is confirmed." if anglais
-                          else f"✅ Suivi activé : {noms}\n🔔 Je t'alerterai lorsqu'un point d'entrée sera confirmé."))
+    _envoi_sur(cid, text=(f"✅ Tracking on: {noms}" if anglais else f"✅ Suivi activé : {noms}") + "\n\n" + texte_suivi(etat, cid))
     return True
 
 def basculer_marche(etat, cid, marche):
@@ -5439,19 +5440,56 @@ def marche_autorise(etat, cid, marche):
 
 NOMS_MARCHES = {"BTC": "🟠 BTC", "GOLD": "🥇 GOLD", "NASDAQ": "💠 NASDAQ"}
 
-def menu_marches(etat, cid):
-    """Cases à cocher : chaque personne choisit ses marchés (ex. GOLD + NASDAQ, rien du BTC)."""
+def texte_suivi(etat, cid):
+    """Bloc « 📡 JE SURVEILLE POUR TOI » : marché par marché, ce que le bot suit pour cette personne.
+    Une seule source de vérité (marches_choisis / en_position / etat['auto']) réutilisée partout."""
+    cid = str(cid)
+    anglais = cid in LANG_EN
+    dedans = set(en_position(etat, cid))
+    choisis = marches_choisis(etat, cid)
+    lignes = ["📡 I'M WATCHING FOR YOU" if anglais else "📡 JE SURVEILLE POUR TOI", "━━━━━━━━━━━━━━━"]
+    for m in MARCHES:
+        if m in dedans:
+            etat_m = "🎯 in a position (followed to TP / SL)" if anglais else "🎯 en position (suivi jusqu'au TP / SL)"
+        elif m in choisis:
+            etat_m = "⏳ waiting for a confirmed entry" if anglais else "⏳ j'attends une entrée confirmée"
+        else:
+            etat_m = "⬜ not followed" if anglais else "⬜ non suivi"
+        lignes.append(f"{NOMS_MARCHES[m]} : {etat_m}")
+    if not bot_on(etat, cid):
+        lignes.append("⏸ Your bot is paused: 🤖 My bot to restart" if anglais
+                      else "⏸ Ton bot est en pause : 🤖 Mon bot pour le relancer")
+    else:
+        lignes.append("🔔 I'll alert you as soon as an entry is confirmed" if anglais
+                      else "🔔 Je te préviens dès qu'une entrée est confirmée")
+    return "\n".join(lignes)
+
+def menu_marches(etat, cid, message_id=None):
+    """Cases à cocher : chaque personne choisit ses marchés (ex. GOLD + NASDAQ, rien du BTC).
+    Avec message_id, le même menu est mis à jour sur place (pas de nouveau message à chaque case)."""
     choisis = marches_choisis(etat, cid)
     anglais = str(cid) in LANG_EN
+    tout = set(MARCHES) <= set(choisis)
     lignes = [[{"text": ("✅ " if m in choisis else "⬜ ") + NOMS_MARCHES[m], "callback_data": f"markets:{m}"}] for m in MARCHES]
-    lignes.append([{"text": ("✅ Everything" if anglais else "✅ Tout recevoir"), "callback_data": "markets:ALL"}])
+    lignes.append([{"text": ("✅ " if tout else "⬜ ") + ("Everything" if anglais else "Tout recevoir"), "callback_data": "markets:ALL"}])
     lignes.append([{"text": ("✅ Confirm & follow" if anglais else "✅ Valider et suivre"), "callback_data": "markets:OK"}])
-    texte = ("📡 MY MARKETS\n━━━━━━━━━━━━━━━\n👆 Tap to tick / untick\n🔔 You only get alerts for ticked markets\n"
+    coches = " + ".join(NOMS_MARCHES[m] for m in MARCHES if m in choisis)
+    texte = ("📡 MY MARKETS\n━━━━━━━━━━━━━━━\n👆 Tap to tick / untick\n"
+             f"☑️ Ticked now: {coches}\n🔔 You only get alerts for ticked markets\n"
              "📍 Prices can differ by a few points from your broker: follow the candles (wicks)"
              if anglais else
-             "📡 MES MARCHÉS\n━━━━━━━━━━━━━━━\n👆 Touche pour cocher / décocher\n🔔 Tu reçois uniquement les marchés cochés\n"
+             "📡 MES MARCHÉS\n━━━━━━━━━━━━━━━\n👆 Touche pour cocher / décocher\n"
+             f"☑️ Cochés en ce moment : {coches}\n🔔 Tu reçois uniquement les marchés cochés\n"
              "📍 Le prix peut différer de quelques points selon ton broker : suis les bougies (mèches)")
-    _envoi_sur(cid, text=texte, reply_markup=json.dumps({"inline_keyboard": lignes}))
+    clavier = json.dumps({"inline_keyboard": lignes})
+    if message_id:
+        try:
+            return telegram("editMessageText", chat_id=cid, message_id=message_id, text=texte, reply_markup=clavier)
+        except Exception as ex:
+            if "not modified" in str(ex).lower():
+                return None
+            print("menu marchés (édition)", ex)
+    return _envoi_sur(cid, text=texte, reply_markup=clavier)
 
 def marches_du_message(texte):
     """Marchés cités dans l'en-tête d'une notification."""
