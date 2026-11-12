@@ -11,20 +11,25 @@ from unittest.mock import patch
 import align_bot as ab
 from test_parite_pine import jeu_simule
 
-T0 = 1_800_000_000 // 900 * 900 - 3 * 3600
+T0 = 1_800_000_000 // 900 * 900 - 6 * 3600
+PTS = [(0, 3960), (30, 3980), (60, 3990), (120, 3996.0), (122, 3998.2), (124, 3996.0), (150, 3984), (163, 3996.0), (165, 3997.9), (167, 3996.0), (185, 3988),
+       (193, 3995.0), (195, 3996.9), (197, 3995.0), (205, 3990), (215, 3993.3), (225, 3995.0), (229, 3995.8), (231, 3996.0), (233, 3995.2), (236, 3994.0),
+       (240, 3992.0), (285, 3978.0)]     # structure M5 (3998,2) > M3 (3997,9) > M1 (3996,9), entrée dans la zone par le bas vers la minute 215, pic ~3997,6, chute
 
 
 def chemin_nuit():
-    c = [3976 + m * 0.27 + (0.8 if m % 7 == 3 else 0) for m in range(60)]                 # monte lentement vers ~3992
-    c += [3993.0, 3993.6, 3994.4, 3995.0, 3994.6, 3995.4, 3996.0, 3995.2, 3996.3, 3995.6]    # 60-69 : entre dans la zone par le bas
-    c += [3995.8, 3994.9, 3994.2, 3993.3, 3992.0]                                            # 70-74 : rejet
-    c += [3992.0 - k * 0.31 for k in range(1, 46)]                                           # chute vers ~3978
+    def interp(m):
+        for (a, pa), (b_, pb) in zip(PTS, PTS[1:]):
+            if a <= m <= b_:
+                return pa + (pb - pa) * (m - a) / (b_ - a)
+        return PTS[-1][1]
+    c = [interp(m) for m in range(286)]
     m1 = []
     for i, cl in enumerate(c):
         o = c[i - 1] if i else cl - 0.2
-        m1.append(dict(t=T0 + 60 * i, o=o, h=max(o, cl) + 0.35, l=min(o, cl) - 0.35, c=cl))
-    m1[66] = dict(t=m1[66]["t"], o=3996.0, h=3997.6, l=3995.0, c=3995.4)                    # le pic : mèche à 3997,6
-    m1[67] = dict(t=m1[67]["t"], o=3995.4, h=3995.6, l=3994.0, c=3994.1)
+        m1.append(dict(t=T0 + 60 * i, o=o, h=max(o, cl) + 0.3, l=min(o, cl) - 0.3, c=cl))
+    m1[232] = dict(t=m1[232]["t"], o=3995.8, h=3997.6, l=3994.8, c=3995.2)                  # le pic : mèche à 3997,6, clôture 3995,2
+    m1[233] = dict(t=m1[233]["t"], o=3995.2, h=3995.4, l=3993.9, c=3994.0)
     return m1
 
 
@@ -49,7 +54,7 @@ def r_at(m1all, k, long=False, **kw):
     return r
 
 
-def premiere_proposition(m1all, long=False, debut=58, fin=100, **kw):
+def premiere_proposition(m1all, long=False, debut=205, fin=284, **kw):
     for k in range(debut, fin):
         sn = ab.entree_sniper(r_at(m1all, k, long, **kw))
         if sn:
@@ -84,7 +89,7 @@ class Cascade(unittest.TestCase):
     def test_cascade_goes_up_when_a_close_breaks_the_last_high(self):
         k, sn = premiere_proposition(self.M1)
         casse = [dict(x) for x in self.M1]
-        casse[68] = dict(casse[68], o=3995.0, h=3998.4, c=3998.0, l=3994.8)                      # clôture M1 AU-DESSUS du dernier plus haut M1 (3997,6)
+        casse[232] = dict(casse[232], o=3995.8, h=3998.4, c=3997.9, l=3994.8)                      # clôture M1 AU-DESSUS du dernier plus haut (3997,2)
         k2, sn2 = premiere_proposition(casse)
         self.assertTrue(sn2 is None or sn2["ut"] != "M1")
 
@@ -99,8 +104,8 @@ class Cascade(unittest.TestCase):
                "pas de direction": dict(dirPlan=0), "prix hors zone": dict(zone_pine=dict(za=4005.0, zb=4012.79, zmil=4009.0))}
         for nom, kw in cas.items():
             self.assertIsNone(ab.entree_sniper(r_at(self.M1, k, **kw)), nom)
-        self.assertIsNone(ab.entree_sniper(r_at(self.M1, 40)), "avant l'entrée dans la zone")
-        self.assertIsNone(ab.entree_sniper(r_at(self.M1, 66)), "pas de rejet confirmé encore (pic en cours)")
+        self.assertIsNone(ab.entree_sniper(r_at(self.M1, 150)), "avant l'entrée dans la zone")
+        self.assertIsNone(ab.entree_sniper(r_at(self.M1, 231)), "pas de rejet confirmé encore (pic pas encore formé)")
 
     def test_long_mirror_in_a_buy_zone(self):
         miroir_m1 = miroir(self.M1)
@@ -109,10 +114,25 @@ class Cascade(unittest.TestCase):
         self.assertLess(sn["sl"], sn["e"]); self.assertGreater(sn["tp1"], sn["e"]); self.assertGreater(sn["tp2"], sn["tp1"])
         self.assertEqual(ab.simuler_sniper(sn, miroir_m1[k + 1:])["etat"], "TP1")
 
+    def test_m1_m3_m5_structure_levels_same_method_and_never_used_for_targets(self):
+        r = r_at(self.M1, 236)
+        niv = ab.niveaux_structure_ut(dict(r, m1=r["m1"]))
+        self.assertEqual(sorted(niv), ["M1", "M3", "M5"])
+        for nom, bars in (("M5", r["b5"][:-1]), ("M3", r["b3"])):                                  # même méthode que pivots() des niveaux 15 min / 1 h / 4 h / Daily
+            quatre = tuple(x[0] if x else None for x in niv[nom])
+            attendu = ab.pivots(bars, 5)
+            self.assertEqual((quatre[0], quatre[1], quatre[2], quatre[3]), tuple(attendu))
+        self.assertAlmostEqual(niv["M5"][0][0], 3997.2, places=1); self.assertAlmostEqual(niv["M5"][2][0], 3998.2, places=1)   # dernier et avant-dernier plus haut M5
+        k, sn = premiere_proposition(self.M1)
+        self.assertTrue(all(n in ("15m", "1h", "4h", "Daily") for _, n in r["niveaux"]))             # TP / plan : aucun niveau M1 / M3 / M5
+        self.assertIn(sn["n1"], ("15m", "1h", "4h", "Daily")); self.assertAlmostEqual(sn["tp2"], 3895.54)   # TP inchangés par la cascade
+
     def test_pipeline_attaches_sniper_without_crashing(self):
         S = jeu_simule(11, 0.0006)
         r = ab.analyser_avec_memoire(dict(S, m15=S["m15"][:340]), {})
         self.assertIn("sniper", r); self.assertIsNotNone(r["atr3"])
+        self.assertTrue(all(n in ("M1", "M3", "M5") for _, n in r["niveaux_ut"]) and r["niveaux_ut"])      # niveaux sniper visibles, séparés de r["niveaux"]
+        self.assertTrue(all(n in ("15m", "1h", "4h", "Daily") for _, n in r["niveaux"]))
 
 
 class MessagesEtRegles(unittest.TestCase):
@@ -215,8 +235,8 @@ class PropositionPineV25(unittest.TestCase):
                 self.assertNotIn(interdit, l)
         v25 = (self.RACINE / "ALIGN_MTF_PRO_v25_PROPOSITION.pine").read_text(encoding="utf-8")
         self.assertIn("NON PUBLIÉE", v25)
-        self.assertEqual(v25.count("request.security("), 23)           # 21 en v24 + 2 (limite TradingView : 40)
-        for marque in ("timeframe.in_seconds()", "snOk", "entP", "swHup", "bbU"):                   # cascade selon l'UT du graphique
+        self.assertEqual(v25.count("request.security("), 24)           # 21 en v24 + 3 (M1, M3, M5 ; limite TradingView : 40)
+        for marque in ("niveauxSn", "snOk", "entP", "lv1", "lv3", "lv5", "bbU"):                   # niveaux M1/M3/M5 séparés + cascade
             self.assertIn(marque, v25)
 
 

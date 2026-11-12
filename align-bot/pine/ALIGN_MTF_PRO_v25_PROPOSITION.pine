@@ -1,6 +1,8 @@
 //@version=6
 // ═════════ PROPOSITION v25 — NON PUBLIÉE — À VALIDER PAR ADEL — NON COMPILÉE / NON TESTÉE SUR TRADINGVIEW ═════════
-// Seule modification : la logique de ENTRÉE / STOP (entrée sniper en cascade par unité de temps). Design, couleurs, tableau, étiquettes, plan SWING (zone, TP) : IDENTIQUES à la v24.
+// Seule modification : la logique de ENTRÉE / STOP (entrée sniper en cascade M1 -> M3 -> M5 -> M15). Design, couleurs, tableau, étiquettes, plan SWING (zone, TP) : IDENTIQUES à la v24.
+// Cause racine corrigée : le tableau « niveaux » ne contient que 15 min / 1h / 4h / Daily ; aucun niveau M1 / M3 / M5 n'existait. Ils sont ajoutés
+// dans un tableau SÉPARÉ (niveauxSn), calculés comme les autres (pivots 5-5, deux derniers hauts / bas), et servent UNIQUEMENT à l'entrée sniper et à son SL.
 // Détail ligne à ligne : pine/PROPOSITION_v25_sniper.diff
 indicator("ALIGN MTF PRO (Inside)", shorttitle="ALIGN MTF", overlay=true, max_labels_count=200, max_lines_count=30, max_boxes_count=10)
 
@@ -116,14 +118,11 @@ nomsNiv = array.from("15m", "15m", "15m", "15m", "1h", "1h", "1h", "1h", "4h", "
 atrC = ta.atr(14)
 // ATR de la vue 15 min (la référence du bot) : le SL ne dépend plus de la petite unité de temps affichée
 atr15 = request.security(syminfo.tickerid, "15", ta.atr(14)[1])
-// v25 SNIPER : dernier plus haut / plus bas de structure (pivot 2-2) de l'UT du graphique et des UT supérieures (cascade M1/M3 -> M5 -> M15)
-f_sw() =>
-    ph = ta.pivothigh(high, 2, 2)
-    pl = ta.pivotlow(low, 2, 2)
-    [ta.valuewhen(not na(ph), ph, 0), ta.valuewhen(not na(pl), pl, 0)]
-[swH, swL] = f_sw()
-[swH5, swL5] = request.security(syminfo.tickerid, "5", f_sw())
-[swH15, swL15] = request.security(syminfo.tickerid, "15", f_sw())
+// v25 SNIPER : niveaux de structure M1 / M3 / M5 (même f_niv que les niveaux existants). Tableau séparé : jamais utilisé pour les TP ni le plan.
+[rA1, sA1, rB1, sB1] = request.security(syminfo.tickerid, "1", f_niv())
+[rA3, sA3, rB3, sB3] = request.security(syminfo.tickerid, "3", f_niv())
+[rA5, sA5, rB5, sB5] = request.security(syminfo.tickerid, "5", f_niv())
+niveauxSn = array.from(rA1, sA1, rB1, sB1, rA3, sA3, rB3, sB3, rA5, sA5, rB5, sB5)
 
 // Niveau le plus proche au-dessus / en dessous (1er et 2e)
 f_dessus() =>
@@ -346,23 +345,36 @@ zBas = math.min(zMin, zMax)
 zHaut = math.max(zMin, zMax)
 
 // ═════════ v25 : ENTRÉE SNIPER EN CASCADE (logique seule) ═════════
-// L'ENTRÉE affichée suit le dernier plus haut (vente) / plus bas (achat) de l'UT du GRAPHIQUE (M1, M3, M5…), pas le haut de la zone SWING.
-// Conditions : contexte HTF aligné et sens clair, prix dans la zone du plan, dernier plus haut de cette UT SOUS celui de l'UT supérieure, rejet confirmé
-// sur la dernière bougie clôturée (mèche + clôture sous le niveau et sous la bande de Bollinger, ou chandelle de retournement). Sinon : plan v24 inchangé.
-// Le plan (zone, TP) reste affiché tel quel ; le STOP se cale derrière la mèche (+ marge ATR, plancher 0,12 % comme le plan).
-tfS = timeframe.in_seconds()
-swHup = tfS <= 180 ? swH5 : tfS <= 300 ? swH15 : na
-swLup = tfS <= 180 ? swL5 : tfS <= 300 ? swL15 : na
+// Dès que le prix est dans la zone du plan : ENTRÉE = dernier plus haut (vente) / plus bas (achat) de la PLUS PETITE UT (M1, M3, M5, puis 15 min) dont le niveau est
+// du bon côté du prix et SOUS (ou sur) celui de l'UT supérieure. Rejet confirmé sur la dernière bougie clôturée du graphique (mèche + clôture sous le niveau et sous la bande
+// de Bollinger, ou chandelle de retournement). Contexte HTF aligné et sens clair exigés. Sinon : plan v24 inchangé. Plan (zone, TP) toujours affiché tel quel ;
+// le STOP se cale derrière la mèche (+ marge ATR, plancher 0,12 % comme le plan).
+snCtx = dirPlan != 0 and (dirPlan == 1 ? bull : bear) >= minAlign and sens == dirPlan and nz(d240) != -dirPlan and nz(d60) != -dirPlan
+lv1 = dirPlan == -1 ? rA1 : sA1
+lv3 = dirPlan == -1 ? rA3 : sA3
+lv5 = dirPlan == -1 ? rA5 : sA5
+lv15 = dirPlan == -1 ? array.get(niveaux, 0) : array.get(niveaux, 1)
+f_bon(l) => not na(l) and (dirPlan == -1 ? l >= close : l <= close)
+f_sous(l, up) => na(up) or (dirPlan == -1 ? l <= up : l >= up)
+up15 = f_bon(lv15) ? lv15 : na
+up5 = f_bon(lv5) ? lv5 : up15
+up3 = f_bon(lv3) ? lv3 : up5
+float snLvl = na
+if f_bon(lv1) and f_sous(lv1, up3)
+    snLvl := lv1
+else if f_bon(lv3) and f_sous(lv3, up5)
+    snLvl := lv3
+else if f_bon(lv5) and f_sous(lv5, up15)
+    snLvl := lv5
+else if f_bon(lv15)
+    snLvl := lv15
 [bbM, bbU, bbL] = ta.bb(close, 20, 2.0)
 hh6 = ta.highest(high, 6)
 ll6 = ta.lowest(low, 6)
-snCtx = dirPlan != 0 and (dirPlan == 1 ? bull : bear) >= minAlign and sens == dirPlan and nz(d240) != -dirPlan and nz(d60) != -dirPlan
-snLvl = dirPlan == -1 ? swH : swL
-snUp = dirPlan == -1 ? swHup : swLup
 snRng = math.max(high[1] - low[1], syminfo.mintick)
 snRej = dirPlan == -1 ? (high[1] >= snLvl - 0.5 * atrC and close[1] < snLvl and ((high[1] - math.max(open[1], close[1])) >= 0.4 * snRng or close[1] < bbU[1] or (close[1] < open[1] and close[1] < open[2]))) : (low[1] <= snLvl + 0.5 * atrC and close[1] > snLvl and ((math.min(open[1], close[1]) - low[1]) >= 0.4 * snRng or close[1] > bbL[1] or (close[1] > open[1] and close[1] > open[2])))
 snZone = not na(zBas) and close >= zBas - 0.5 * atrC and close <= zHaut + 0.5 * atrC
-snOk = snCtx and snZone and not na(snLvl) and (dirPlan == -1 ? snLvl >= close : snLvl <= close) and (na(snUp) or (dirPlan == -1 ? snLvl < snUp : snLvl > snUp)) and snRej
+snOk = snCtx and snZone and not na(snLvl) and snRej
 if snOk
     ent := snLvl
     sl := dirPlan == -1 ? math.max(math.max(snLvl, hh6) + 0.5 * atrC, snLvl + math.max(close * 0.0012, atrC)) : math.min(math.min(snLvl, ll6) - 0.5 * atrC, snLvl - math.max(close * 0.0012, atrC))

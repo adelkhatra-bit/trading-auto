@@ -706,6 +706,7 @@ def analyser_avec_memoire(S, mem=None):
     r["ret_conf"] = bool(r["ret_dir"]) and r["dirPlan"] == r["ret_dir"]
     r["nVoy"] = sum(1 for k in range(5) if r["dirPlan"] != 0 and r["dirs"][k] == -r["dirPlan"])
     r["pine"] = mem
+    r["niveaux_ut"] = [(v[0], nom) for nom, quatre in niveaux_structure_ut(r).items() for v in quatre if v]      # visibles, mais jamais mélangés à r["niveaux"] (TP / plan)
     r["sniper"] = entree_sniper(r)
     return r
 
@@ -716,14 +717,22 @@ def analyser_avec_memoire(S, mem=None):
 # de Bollinger haute (ou chandelle de retournement). Une clôture au-dessus du niveau l'annule : on remonte d'une UT. Le plan n'est jamais remplacé : message en plus.
 SNIPER_MARGE_ATR3 = 0.5         # marge du SL derrière la mèche (en ATR M3)
 
-def _dernier_extreme(bars, d):
-    """Dernier plus haut (d=-1) / plus bas (d=+1) de structure : pivot 2-2 sur les bougies clôturées. Retourne (niveau, indice) ou (None, None)."""
-    ex = (lambda x: x["h"]) if d == -1 else (lambda x: x["l"])
-    fort = (lambda x: x["h"]) if d == -1 else (lambda x: -x["l"])
-    for i in range(len(bars) - 3, 1, -1):
-        if fort(bars[i]) >= max(fort(y) for y in bars[i - 2:i + 3]):
-            return ex(bars[i]), i
-    return None, None
+def niveaux_ut(bars, g=5):
+    """Niveaux de structure d'une UT, calculés comme les niveaux 15 min / 1 h / 4 h / Daily de l'indicateur (pivots 5-5, deux derniers hauts et deux derniers bas) :
+    (dernier plus haut, dernier plus bas, avant-dernier plus haut, avant-dernier plus bas), chacun (niveau, indice de bougie) ou None."""
+    hs, ls = [], []
+    for i in range(g, len(bars) - g):
+        if bars[i]["h"] == max(x["h"] for x in bars[i - g:i + g + 1]):
+            hs.append((bars[i]["h"], i))
+        if bars[i]["l"] == min(x["l"] for x in bars[i - g:i + g + 1]):
+            ls.append((bars[i]["l"], i))
+    return (hs[-1] if hs else None, ls[-1] if ls else None, hs[-2] if len(hs) > 1 else None, ls[-2] if len(ls) > 1 else None)
+
+def niveaux_structure_ut(r):
+    """Niveaux M1 / M3 / M5 (même méthode que les niveaux existants) : UNIQUEMENT pour l'entrée sniper et son SL — jamais pour les TP ni le plan."""
+    m1 = (r.get("m1") or [])[:-1]
+    uts = {"M1": m1, "M3": r.get("b3") or [], "M5": (r.get("b5") or [])[:-1]}
+    return {nom: niveaux_ut(bars) for nom, bars in uts.items()}
 
 def _rejet(bars, d, niveau, a):
     """Rejet confirmé sur les 3 dernières bougies clôturées : mèche qui touche (ou frôle) le niveau, CLÔTURE du bon côté, et (mèche franche OU
@@ -768,9 +777,11 @@ def entree_sniper(r):
     if not a1:
         return None
     uts = [("M1", m1c, a1), ("M3", b3, a3), ("M5", b5, a5), ("M15", b15, a15)]
-    niv = []
+    niv, structure = [], niveaux_structure_ut(dict(r, m1=m1))
     for nom, bars, a in uts:
-        L, i = _dernier_extreme(bars, d)
+        quatre = structure[nom] if nom in structure else niveaux_ut(bars)
+        piv = quatre[0] if d == -1 else quatre[1]
+        L, i = piv if piv else (None, None)
         valide = L is not None and (L - prix) * (-d) >= 0 and not any((y["c"] - L) * (-d) > 0 for y in bars[i + 1:])    # pas de clôture au-delà : sinon annulé
         niv.append((nom, L if valide else None, bars, a))
     choisi = None
@@ -778,7 +789,7 @@ def entree_sniper(r):
         if L is None:
             continue
         sup = next((x[1] for x in niv[k + 1:] if x[1] is not None), None)
-        if sup is None or (sup - L) * (-d) > 0:
+        if sup is None or (sup - L) * (-d) >= 0:                       # sous (ou sur) le dernier plus haut de l'UT supérieure : même structure
             choisi = (nom, L, a)
             break
     if not choisi:
