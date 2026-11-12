@@ -2755,6 +2755,21 @@ MOMENTS_IA = (
      "Grosse turbulence ou news. Explique simplement ce qui se passe, le risque, et quoi faire (patience, SL, BE)."),
 )
 
+REGLE_SENS_IA = (" Ne prédis JAMAIS un sens à venir (ni haussier, ni baissier, ni LONG, ni SHORT) : décris seulement ce qui vient de se passer "
+                 "et ce qu'il faut surveiller. Le sens vient uniquement de l'indicateur.")
+_IA_BAISSIER = re.compile(r"baissi(?:er|ère)|\bvente\s+à\s+venir|va\s+(?:baisser|chuter|plonger|s'effondrer)|chute\s+à\s+venir", re.I)
+_IA_HAUSSIER = re.compile(r"haussi(?:er|ère)|va\s+(?:monter|grimper)|hausse\s+à\s+venir", re.I)
+
+def sens_ia_contradictoire(texte, sens):
+    """Vrai si l'IA annonce un sens (haussier / baissier / LONG / SHORT) CONTRAIRE à celui de l'indicateur (et n'annonce pas aussi le bon).
+    Les descriptions du passé (« forte baisse », « rebond ») ne sont pas des annonces de sens et ne déclenchent rien."""
+    if sens not in (1, -1):
+        return False
+    t = str(texte or "")
+    bear = bool(_IA_BAISSIER.search(t) or re.search(r"\bSHORT\b", t))
+    bull = bool(_IA_HAUSSIER.search(t) or re.search(r"\bLONG\b", t))
+    return (bear and not bull) if sens == 1 else (bull and not bear)
+
 def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
     """La vraie IA revient aux moments clés : préparation de l'entrée, TP touché, turbulence / news (1 fois par moment)."""
     out = []
@@ -2772,10 +2787,13 @@ def commentaires_ia_temps_reel(etat, m, r, cle, nouveaux):
                 break
             vus[k] = time.time()
             try:
-                avis = ia(etat, consigne + " " + IA_TON_JEUNE, dict(donnees_ia(m, r, cle), evenement=str(texte)[:600]),
+                avis = ia(etat, consigne + REGLE_SENS_IA + " " + IA_TON_JEUNE, dict(donnees_ia(m, r, cle), evenement=str(texte)[:600]),
                           cle_cache=f"moment:{k}", duree=delai, premium=True)
             except Exception as ex:
                 print("ia moment", ex); avis = ""
+            if avis and sens_ia_contradictoire(avis, r.get("sens")):
+                print(f"IA_SENS_CONTRADICTOIRE {m} : commentaire IA non envoyé (annonce un sens contraire à l'indicateur)")
+                avis = ""
             if avis:
                 out.append(f"🧠 L'IA ALIGN EN DIRECT — {ICONE.get(m, '')} {m}\n{compacter_ia(avis)}")
             break
@@ -7255,7 +7273,7 @@ def un_tour(etat, chats):
             if mq in (None, nom_marche) and (index, nom_marche) not in demandes_servies:
                 envoyer_analyse_a(etat, cid, nom_marche, r, cle)
                 demandes_servies.add((index, nom_marche))
-        print(texte_etat(nom_marche, r), "\n")
+        print(texte_etat(nom_marche, r, vip=False), "\n")      # journal du run PUBLIC (dépôt public) : jamais les niveaux VIP
 
     try:
         if TOKEN:

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Audit des messages RÉELLEMENT envoyés par le bot (journal_telegram de state.json). Lecture seule, rien n'est envoyé.
+"""ATTENTION : le dépôt est PUBLIC, les journaux Actions sont lisibles par tous. Les textes de messages (VIP) ne s'affichent qu'avec AUDIT_TEXTE_OK=oui.
+Audit des messages RÉELLEMENT envoyés par le bot (journal_telegram de state.json). Lecture seule, rien n'est envoyé.
 Affiche : volume par conversation, titres les plus répétés (même titre à quelques minutes d'écart) et ce que l'anti-répétition aurait supprimé.
 Seuls les messages sortants du bot sont lus (titre tronqué) : jamais les messages des utilisateurs."""
 import collections
+import os
+import datetime
 import json
 import re
 import sys
@@ -79,7 +82,7 @@ for i, (cid, lst) in enumerate(sorted(chats.items(), key=lambda z: -len(z[1]))[:
         print(f"ROUTAGE   sans marché {n:3d} x {k}")
 
 # ── Exemples réels (un par type de titre, messages du bot uniquement) pour relire la forme ──
-if "--exemples" in sys.argv:
+if "--exemples" in sys.argv and os.environ.get("AUDIT_TEXTE_OK") == "oui":
     vus_t, n = set(), 0
     for x in reversed(principal):
         k = titre(x["text"])
@@ -90,3 +93,22 @@ if "--exemples" in sys.argv:
         print(f"EXEMPLE ── {k}  (x{parttl.get(k, 1)}, {len(corps)} lignes)")
         for l in corps[:14]:
             print("EX|" + l[:130])
+
+# ── Recherche ciblée : python3 audit_messages.py --cherche "baissier|mouvement" [--heures 6] ──
+if "--cherche" in sys.argv and os.environ.get("AUDIT_TEXTE_OK") == "oui":
+    motif = re.compile(sys.argv[sys.argv.index("--cherche") + 1], re.I)
+    h = float(sys.argv[sys.argv.index("--heures") + 1]) if "--heures" in sys.argv else 6.0
+    fin_t = max(float(x.get("timestamp", 0)) for x in sortants)
+    trouves = [x for x in sortants if motif.search(re.sub(r"<[^>]+>", "", x["text"])) and fin_t - float(x.get("timestamp", 0)) <= h * 3600]
+    print(f"CHERCHE {len(trouves)} message(s) sortants correspondant sur les {h:g} dernières heures (dernier message du journal = {datetime.datetime.fromtimestamp(fin_t, ab.PARIS).strftime('%d/%m %H:%M')} Paris)")
+    vus_c = set()
+    for x in sorted(trouves, key=lambda y: float(y.get("timestamp", 0)))[-14:]:
+        corps = re.sub(r"</?[bi]>|</?code>", "", x["text"]).splitlines()
+        cle_c = (str(x.get("chat_id")), tuple(corps[:3]))
+        if cle_c in vus_c:
+            continue
+        vus_c.add(cle_c)
+        quand = datetime.datetime.fromtimestamp(float(x.get("timestamp", 0)), ab.PARIS).strftime("%d/%m %H:%M")
+        print(f"TROUVE {quand} chat#{[k for k in chats].index(str(x.get('chat_id'))) + 1}")
+        for l in corps[:9]:
+            print("TR|" + l[:140])

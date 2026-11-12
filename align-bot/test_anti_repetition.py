@@ -258,3 +258,38 @@ class FormeDesMessages(unittest.TestCase):
         self.assertIn("sur GOLD", par["adel"]); self.assertNotIn("BTC", par["adel"])
         self.assertNotIn("nas", par)                                                  # NASDAQ seul : Londres ne le concerne pas
         self.assertIn("GOLD et BTC", par["tous"])
+
+
+class SensIaCoherent(unittest.TestCase):
+    """Cas signalé par Adel : « gros mouvement baissier à venir » pendant que le marché explosait à la hausse."""
+    def test_sens_contraire_a_l_indicateur_bloque(self):
+        self.assertTrue(ab.sens_ia_contradictoire("Gros mouvement baissier à venir, reste prudent.", 1))
+        self.assertTrue(ab.sens_ia_contradictoire("Le prix va chuter, SHORT possible.", 1))
+        self.assertTrue(ab.sens_ia_contradictoire("Gros mouvement haussier à venir.", -1))
+        self.assertTrue(ab.sens_ia_contradictoire("Prépare un LONG.", -1))
+
+    def test_meme_sens_ou_description_du_passe_passe(self):
+        self.assertFalse(ab.sens_ia_contradictoire("Mouvement haussier en cours, attends le repli.", 1))
+        self.assertFalse(ab.sens_ia_contradictoire("BTC en forte baisse, RSI très bas. Patience, surveille le rebond.", -1))
+        self.assertFalse(ab.sens_ia_contradictoire("Un long mouvement vient de se terminer, prudence.", 1))          # « long » (adjectif) ≠ LONG
+        self.assertFalse(ab.sens_ia_contradictoire("Marché baissier à court terme mais rebond haussier possible.", 1)) # cite aussi le bon sens
+
+    def test_sans_sens_de_l_indicateur_aucun_blocage(self):
+        self.assertFalse(ab.sens_ia_contradictoire("Gros mouvement baissier à venir.", 0))
+        self.assertFalse(ab.sens_ia_contradictoire("Gros mouvement baissier à venir.", None))
+
+    def test_commentaire_en_direct_contradictoire_n_est_pas_envoye(self):
+        r = {"sens": 1}
+        with patch.object(ab, "ia", return_value="Gros mouvement baissier à venir."), patch.object(ab, "donnees_ia", return_value={}):
+            sortie = ab.commentaires_ia_temps_reel({}, "GOLD", r, {}, ["⚡⚡ PRÉPARE-TOI — 🥇 GOLD\nzone"])
+        self.assertEqual(sortie, [])
+
+    def test_commentaire_en_direct_coherent_est_envoye(self):
+        r = {"sens": 1}
+        with patch.object(ab, "ia", return_value="Mouvement haussier en cours, attends le repli."), patch.object(ab, "donnees_ia", return_value={}):
+            sortie = ab.commentaires_ia_temps_reel({}, "GOLD", r, {}, ["⚡⚡ PRÉPARE-TOI — 🥇 GOLD\nzone"])
+        self.assertEqual(len(sortie), 1)
+        self.assertIn("haussier", sortie[0])
+
+    def test_consigne_interdit_la_prediction_de_sens(self):
+        self.assertIn("JAMAIS un sens à venir", ab.REGLE_SENS_IA)
