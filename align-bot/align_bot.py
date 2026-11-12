@@ -2743,6 +2743,12 @@ MOMENTS_IA = (
      "Une position se prépare. Dis à l'abonné de se tenir prêt, ce que tu vois en bougies maintenant, et ce qui validera l'entrée."),
     ("tp", ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"), 3600,
      "Un objectif vient d'être touché. Félicite simplement, dis quoi faire maintenant (sécuriser, BE) et ce que le marché peut faire ensuite."),
+    ("sl", ("STOP TOUCHÉ", "SORTI À BE", "SORTIE AU STOP SÉCURISÉ"), 1800,
+     "La position vient de se fermer au stop (ou à BE). Dis-le clairement : on n'est plus en position. Explique simplement "
+     "ce que les bougies ont fait, rassure (risque maîtrisé), et dis ce qu'on surveille maintenant (retournement confirmé ou pas). Jamais de reproche."),
+    ("danger", ("RETOURNEMENT EN PRÉPARATION", "METS-TOI À BE"), 1800,
+     "On est en position et la situation change (retournement possible ou passage à BE). Analyse les bougies maintenant, "
+     "dis clairement si on reste en position, où est le SL et quoi faire tout de suite."),
     ("turbulence", ("MANIPULATION", "MOUVEMENT FORT", "RÉACTION À LA NEWS", "NEWS USA DANS", "MÈCHE SUSPECTE"), 1800,
      "Grosse turbulence ou news. Explique simplement ce qui se passe, le risque, et quoi faire (patience, SL, BE)."),
 )

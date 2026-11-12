@@ -60,5 +60,16 @@ class SuiviMarchesTest(unittest.TestCase):
         self.assertIn("✅ Tout recevoir", textes)
 
 
+class IaEnPositionTest(unittest.TestCase):
+    def test_ia_branchee_au_sl_be_et_retournement(self):
+        appels = []
+        with mock.patch.object(ab, "ia", lambda etat, consigne, data, **kw: appels.append(consigne) or "🧠 test"), \
+             mock.patch.object(ab, "donnees_ia", lambda *a, **k: {}):
+            for i, entete in enumerate(("❌ STOP TOUCHÉ — 🥇 GOLD", "🔒 🥇 GOLD : sorti à BE", "↩ RETOURNEMENT EN PRÉPARATION — 🥇 GOLD")):
+                out = ab.commentaires_ia_temps_reel({"ia_moments": {}}, f"M{i}", {}, {}, [entete + "\nligne"])
+                self.assertTrue(out and "L'IA ALIGN EN DIRECT" in out[0], entete)
+        self.assertEqual(len(appels), 3)
+
+
 if __name__ == "__main__":
     unittest.main()
