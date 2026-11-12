@@ -344,10 +344,11 @@ f_struct() =>
     var float[] rB = array.new_float()
     var float[] gT = array.new_float()
     var float[] gB = array.new_float()
-    if high < low[2]
+    aF = ta.atr(14)
+    if high < low[2] and low[2] - high >= 0.3 * aF
         array.push(rT, low[2])
         array.push(rB, high)
-    if low > high[2]
+    if low > high[2] and low - high[2] >= 0.3 * aF
         array.push(gT, low)
         array.push(gB, high[2])
     if array.size(rT) > 0
@@ -380,8 +381,8 @@ f_struct() =>
             if na(gTop) or array.get(gT, k) > gTop
                 gTop := array.get(gT, k)
                 gBot := array.get(gB, k)
-    ph = ta.pivothigh(high, 3, 3)
-    pl = ta.pivotlow(low, 3, 3)
+    ph = ta.pivothigh(high, 5, 5)
+    pl = ta.pivotlow(low, 5, 5)
     hH = math.max(nz(ta.valuewhen(not na(ph), ph, 0), high), ta.highest(high, 4))
     lL = math.min(nz(ta.valuewhen(not na(pl), pl, 0), low), ta.lowest(low, 4))
     [rTop, rBot, gTop, gBot, hH, lL, ta.atr(14)]
@@ -401,18 +402,20 @@ uSn = tfS < 180 ? "3 min" : timeframe.isminutes ? timeframe.period + " min" : ti
 if dirPlan == -1 and tfS < 86400 and not na(fRBot) and fRBot >= close - 0.5 * atrC
     entD := fRBot
     slD := math.max(swH, fRTop) + margeS
-    c1 = not na(fGTop) and fGTop < entD - margeS ? fGTop : na
-    c2 = swL < entD - margeS ? swL : na
-    tpD1 := na(c1) ? (na(c2) ? tp1 : c2) : na(c2) ? c1 : math.max(c1, c2)
-    tpD2 := na(c1) or na(c2) ? tp1 : math.min(c1, c2)
+    rq = 1.5 * (slD - entD)
+    c1 = not na(fGTop) and entD - fGTop >= rq ? fGTop : na
+    c2 = entD - swL >= rq ? swL : na
+    tpD1 := na(c1) ? (na(c2) ? (entD - tp1 >= rq ? tp1 : entD - 2 * (slD - entD)) : c2) : na(c2) ? c1 : math.max(c1, c2)
+    tpD2 := na(c1) or na(c2) ? math.min(tpD1, tp1) : math.min(c1, c2)
     srcD := "FVG rouge " + uSn
 if dirPlan == 1 and tfS < 86400 and not na(fGTop) and fGTop <= close + 0.5 * atrC
     entD := fGTop
     slD := math.min(swL, fGBot) - margeS
-    c1 = not na(fRBot) and fRBot > entD + margeS ? fRBot : na
-    c2 = swH > entD + margeS ? swH : na
-    tpD1 := na(c1) ? (na(c2) ? tp1 : c2) : na(c2) ? c1 : math.min(c1, c2)
-    tpD2 := na(c1) or na(c2) ? tp1 : math.max(c1, c2)
+    rq = 1.5 * (entD - slD)
+    c1 = not na(fRBot) and fRBot - entD >= rq ? fRBot : na
+    c2 = swH - entD >= rq ? swH : na
+    tpD1 := na(c1) ? (na(c2) ? (tp1 - entD >= rq ? tp1 : entD + 2 * (entD - slD)) : c2) : na(c2) ? c1 : math.min(c1, c2)
+    tpD2 := na(c1) or na(c2) ? math.max(tpD1, tp1) : math.max(c1, c2)
     srcD := "FVG verte " + uSn
 if dirPlan != 0 and dirPlan * (tpD2 - tpD1) < 0
     tpD2 := tpD1
@@ -423,10 +426,10 @@ if dirPlan != 0 and (dirPlan * (entD - slD) <= 0 or dirPlan * (tpD1 - entD) <= 0
     tpD1 := tp1
     tpD2 := tp2
     srcD := "plan"
-// zone verte = la FVG utilisée (de l'entrée au bord opposé), même style
+// même construction qu'avant (bande verte = on peut entrer de tel prix à tel prix, bande rouge = trop près du stop), recalée sur l'unité affichée
 if srcD != "plan"
-    zBas := dirPlan == -1 ? entD : fGBot
-    zHaut := dirPlan == -1 ? fRTop : entD
+    zBas := dirPlan == -1 ? entD : slD + 0.25 * (entD - slD)
+    zHaut := dirPlan == -1 ? slD - 0.25 * (slD - entD) : entD
 // Alignement : % de chaque UT vers son extrême dans le sens du plan (SHORT : 100 % = le prix est remonté tout en haut = endroit pour vendre)
 f_alg(i) => dirPlan == -1 ? array.get(pcts, i) : dirPlan == 1 ? 100 - array.get(pcts, i) : 0.0
 f_ok(i) => f_alg(i) >= 80 ? "✅" + array.get(noms, i) + " " : ""
