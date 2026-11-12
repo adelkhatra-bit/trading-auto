@@ -161,7 +161,7 @@ class MessagesEtRegles(unittest.TestCase):
     def test_free_sees_nothing_of_the_sniper_and_vip_gets_it(self):
         import inspect
         src = inspect.getsource(ab.alertes_courtes)
-        self.assertIn("diffuser_alerte(etat, chats", src)                                          # VIP : chaîne + privés
+        self.assertIn("diffuser_evenements(etat, chats", src)                                          # VIP : chaîne + privés
         envois = []
         etat, ev, _ = self.evenement()
         with patch.object(ab, "TOKEN", "x"), patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append((str(c), k["text"]))), \

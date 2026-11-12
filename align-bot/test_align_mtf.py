@@ -2465,13 +2465,15 @@ class AlignTelegramMarketPreferencesTest(unittest.TestCase):
         self.assertTrue(align_bot.partage_du(state, jour))
         self.assertFalse(align_bot.partage_du(state, jour + datetime.timedelta(minutes=5)))
 
-    def test_mixed_market_macro_alert_requires_both_selection(self):
-        state = {"marches_par_chat": {"101": "BTC", "202": "GOLD", "303": "BOTH"}}
-        recipients = align_bot.destinataires_message(
-            state, {"101", "202", "303"},
-            "💵 DOLLAR EN FORTE HAUSSE\\n🥇 GOLD : prudence\\n🟠 BTC : prudence"
-        )
-        self.assertEqual(set(recipients), {"303"})
+    def test_mixed_market_macro_alert_goes_to_each_concerned_account_with_only_its_markets(self):
+        """Règle remplacée (demande d'Adel) : un message multi-marchés arrive à chaque compte concerné, mais réduit à SES marchés cochés."""
+        state = {"marches_par_chat": {"101": "BTC", "202": "GOLD", "303": "BOTH", "404": ["NASDAQ"]}}
+        texte = "💵 DOLLAR EN FORTE HAUSSE\n🥇 GOLD : prudence\n🟠 BTC : prudence"
+        recipients = align_bot.destinataires_message(state, {"101", "202", "303", "404"}, texte)
+        self.assertEqual(set(recipients), {"101", "202", "303"})                  # 404 (NASDAQ seul) n'est pas concerné
+        self.assertNotIn("GOLD", align_bot.filtrer_texte_par_marches(texte, {"BTC"}))
+        self.assertNotIn("BTC", align_bot.filtrer_texte_par_marches(texte, {"GOLD"}))
+        self.assertIn("DOLLAR", align_bot.filtrer_texte_par_marches(texte, {"GOLD"}))
 
     def test_market_selection_menu_exposes_three_real_callbacks(self):
         from unittest.mock import patch

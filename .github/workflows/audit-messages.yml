@@ -27,4 +27,4 @@ jobs:
       - name: Audit des messages
         run: |
           test -f state.json || { echo "AUDIT aucun état restauré"; exit 0; }
-          python3 audit_messages.py
+          python3 audit_messages.py --exemples
