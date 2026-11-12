@@ -123,6 +123,10 @@ atr15 = request.security(syminfo.tickerid, "15", ta.atr(14)[1])
 [rA3, sA3, rB3, sB3] = request.security(syminfo.tickerid, "3", f_niv())
 [rA5, sA5, rB5, sB5] = request.security(syminfo.tickerid, "5", f_niv())
 niveauxSn = array.from(rA1, sA1, rB1, sB1, rA3, sA3, rB3, sB3, rA5, sA5, rB5, sB5)
+// v25c : dernière CLÔTURE M1 / M3 / M5 (bougie terminée) pour détecter la cassure des derniers plus hauts / plus bas
+c1Sn = request.security(syminfo.tickerid, "1", close[1])
+c3Sn = request.security(syminfo.tickerid, "3", close[1])
+c5Sn = request.security(syminfo.tickerid, "5", close[1])
 
 // Niveau le plus proche au-dessus / en dessous (1er et 2e)
 f_dessus() =>
@@ -373,11 +377,20 @@ hh6 = ta.highest(high, 6)
 ll6 = ta.lowest(low, 6)
 snRng = math.max(high[1] - low[1], syminfo.mintick)
 snRej = dirPlan == -1 ? (high[1] >= snLvl - 0.5 * atrC and close[1] < snLvl and ((high[1] - math.max(open[1], close[1])) >= 0.4 * snRng or close[1] < bbU[1] or (close[1] < open[1] and close[1] < open[2]))) : (low[1] <= snLvl + 0.5 * atrC and close[1] > snLvl and ((math.min(open[1], close[1]) - low[1]) >= 0.4 * snRng or close[1] > bbL[1] or (close[1] > open[1] and close[1] > open[2])))
-snZone = not na(zBas) and close >= zBas - 0.5 * atrC and close <= zHaut + 0.5 * atrC
+// v25c : le sens est connu → l'entrée sniper reste calée tant que le prix est SOUS le haut de la zone (vente) / AU-DESSUS du bas (achat),
+// même si le prix est déjà parti (avant : seulement dans la zone, sinon l'entrée restait trop loin sur le plan 1h / 4h).
+snZone = not na(zBas) and (dirPlan == -1 ? close <= zHaut + 0.5 * atrC : close >= zBas - 0.5 * atrC)
 // v25b (demande d'Adel, 12/11) : ENTRÉE calée sur le DERNIER PLUS HAUT M5 (vente) / PLUS BAS M5 (achat) dès que le prix est dans la zone,
 // sans attendre le rejet (le rejet reste l'info « J'ENTRE MAINTENANT »). STOP juste derrière ce plus haut / plus bas : petite marge (15 % de l'ATR 15 min,
 // au moins 2 ticks). TP : inchangés (plan). Sans niveau M5 valide : cascade M1 / M3 / M15 comme avant.
-snLvl5 = f_bon(lv5) ? lv5 : snLvl
+// v25c : niveau selon l'unité AFFICHÉE — graphique 1 min ou 3 min → dernier plus haut / plus bas M3 ; graphique 5 min → M5 ; au-dessus → cascade.
+tfSn = timeframe.in_seconds()
+snLvl5 = tfSn <= 180 ? (f_bon(lv3) ? lv3 : f_bon(lv5) ? lv5 : snLvl) : tfSn <= 300 ? (f_bon(lv5) ? lv5 : snLvl) : (f_bon(lv5) ? lv5 : snLvl)
+// v25c : 1 min, 3 min et 5 min dans le sens du plan → le trait d'entrée passe du JAUNE au VERT
+al135 = dirPlan != 0 and array.get(dirs, 0) == dirPlan and array.get(dirs, 1) == dirPlan and array.get(dirs, 2) == dirPlan
+// v25c : CASSURE (retournement qui démarre) — la dernière clôture M1 / M3 / M5 passe au-delà de son dernier plus haut (vente) / plus bas (achat)
+f_cas(c, hautSn, basSn) => dirPlan == -1 ? (not na(hautSn) and c > hautSn ? 1 : 0) : dirPlan == 1 ? (not na(basSn) and c < basSn ? 1 : 0) : 0
+nCas = f_cas(c1Sn, rA1, sA1) + f_cas(c3Sn, rA3, sA3) + f_cas(c5Sn, rA5, sA5)
 snMarge = math.max(0.15 * atr15, 2 * syminfo.mintick)
 snOk = snCtx and snZone and not na(snLvl5)
 snRejOk = snOk and snRej
@@ -460,8 +473,8 @@ if barstate.islast
         x2 = bar_index + 3
         lTP1 := line.new(x1, tp1, x2, tp1, color= color.aqua, width=2, extend=extend.right)
         lSL  := line.new(x1, sl, x2, sl, color= color.red, width=2, extend=extend.right)
-        lE   := line.new(x1, ent, x2, ent, color= color.yellow, width=2, style=line.style_dotted, extend=extend.right)
-        eE   := label.new(x1, ent, "ENTRÉE " + px(ent), style=label.style_label_right, color= color.new(color.yellow, 10), textcolor= color.black, size=size.small, tooltip="Point d'entrée : " + tEnt + "\nJuste devant la zone 1h / 4h, dans le sens des grosses UT")
+        lE   := line.new(x1, ent, x2, ent, color= al135 ? color.lime : color.yellow, width=2, style=line.style_dotted, extend=extend.right)
+        eE   := label.new(x1, ent, "ENTRÉE " + px(ent), style=label.style_label_right, color= color.new(al135 ? color.lime : color.yellow, 10), textcolor= color.black, size=size.small, tooltip="Point d'entrée : " + tEnt + "\nJuste devant la zone 1h / 4h, dans le sens des grosses UT")
         eTP1 := label.new(x1, tp1, "TP1 " + px(tp1), style=label.style_label_right, color= color.new(color.aqua, 20), textcolor= color.black, size=size.small, tooltip="Objectif 1 : " + tTP1 + "\nObjectif 2 : " + px(tp2) + " (" + tTP2 + ")\nGain/risque ≈ " + str.tostring(rr, "#.#"))
         if voirFibo and fR > 0
             // Zone verte transparente = on peut rentrer de tel prix à tel prix
@@ -506,7 +519,7 @@ if barstate.islast
         table.cell(t, i, 0, array.get(noms, i), width=largCol, bgcolor=rv >= 70 ?  color.rgb(120, 20, 30) : rv <= 30 ?  color.rgb(0, 90, 50) :  color.rgb(30, 34, 45), text_color=rv >= 70 or rv <= 30 ?  color.white :  color.gray, text_size=size.small, tooltip=tip)
         table.cell(t, i, 1, sym, width=largCol, bgcolor=bg, text_color= color.white, text_size=size.normal, tooltip=tip)
     titre = zoneBas ? "RETOURNEMENT ▼" : zoneHaut ? "REBOND ▲" : fortHaut ? "★ ACHAT FORT" : fortBas ? "★ VENTE FORTE" : retHaut ? "RETOURNEMENT ▲" : retBas ? "RETOURNEMENT ▼" : rsiOB >= 3 ? "RSI SURACHAT " + str.tostring(rsiOB) + "/11" : rsiOS >= 3 ? "RSI SURVENTE " + str.tostring(rsiOS) + "/11" : surcharge ? "⚡ SURCHARGE" : sens == 1 ? "HAUSSE" : sens == -1 ? "BAISSE" : "ATTENDRE"
-    ligne = (retDir != 0 and not retConf ? "↩ RETOURNEMENT  " : nVoy >= 3 ? "↩ " + str.tostring(nVoy) + "/5  " : "") + (dirPlan == 1 ? "▲ LONG" : dirPlan == -1 ? "▼ SHORT" : "ATTENDRE") + (dirPlan != 0 ? (strat != "" ? " • " + (strat == "SCALPING" ? "SCALP" : strat) + (etatS == "CONFIRMÉ" and scoreV >= 75 ? " ✅ " : " ⏳ ") + str.tostring(scoreV) : "") + "  E " + px(ent) + "  TP " + px(tp1) + "  SL " + px(sl) : "   " + titre)
+    ligne = (retDir != 0 and not retConf ? "↩ RETOURNEMENT  " : nCas >= 2 ? "↩ CASSURE " + str.tostring(nCas) + "/3  " : nVoy >= 3 ? "↩ " + str.tostring(nVoy) + "/5  " : "") + (dirPlan == 1 ? "▲ LONG" : dirPlan == -1 ? "▼ SHORT" : "ATTENDRE") + (dirPlan != 0 ? (strat != "" ? " • " + (strat == "SCALPING" ? "SCALP" : strat) + (etatS == "CONFIRMÉ" and scoreV >= 75 ? " ✅ " : " ⏳ ") + str.tostring(scoreV) : "") + "  E " + px(ent) + "  TP " + px(tp1) + "  SL " + px(sl) : "   " + titre)
     plan = (retTxt != "" ? retTxt + "\n\n" : "") + (dirPlan != 0 ? "STRATÉGIE : " + (strat == "" ? "aucune" : strat + " — " + etatS) + "\nScore : " + str.tostring(scoreV) + " / 100\n• Alignement : " + str.tostring(ptsAlign) + " / 25\n• Structure : " + str.tostring(ptsStruct) + " / 20\n• Zone d'entrée : " + str.tostring(ptsZone) + " / 20\n• Volume : " + str.tostring(ptsVol) + " / 15" + (volOk ? "" : " (indisponible)") + "\n• Indicateurs : " + str.tostring(ptsInd) + " / 10\n• Risque / rendement : " + str.tostring(ptsRR) + " / 10\n⏱ Clôture de validation " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))) + "\nDécision : " + decisionS + "\nMotif : " + motifS + "\nPlan : " + calePlan + "\n\n" : "") + "SENS PROBABLE : " + (sens == 1 ? "HAUSSE " : sens == -1 ? "BAISSE " : "INDÉCIS ") + str.tostring(pctH) + "% hausse / " + str.tostring(100 - pctH) + "% baisse\n" + str.tostring(bull) + " UT en hausse • " + str.tostring(bear) + " en baisse • " + str.tostring(comp) + " comprimées\nRSI : " + str.tostring(rsiOB) + " UT en surachat (>70) • " + str.tostring(rsiOS) + " en survente (<30)" + (rsiOB >= 3 ? "\nSURCHARGE RSI HAUTE : éviter d'acheter, retournement baissier possible" : rsiOS >= 3 ? "\nSURCHARGE RSI BASSE : éviter de vendre, rebond possible" : "") + (retHaut ? "\nLes petites UT montent avant les grandes : retournement HAUSSIER en préparation" : retBas ? "\nLes petites UT baissent avant les grandes : retournement BAISSIER en préparation" : "") + (zoneBas ? "\nPrix sur une résistance " + tH1 + " : risque de retournement à la baisse" : zoneHaut ? "\nPrix sur un support " + tB1 + " : rebond possible" : "") + (dirPlan != 0 ? "\n\nPLAN " + (dirPlan == 1 ? "ACHAT" : "VENTE") + "\nEntrée " + px(ent) + " (" + tEnt + ")\nTP1 " + px(tp1) + " (" + tTP1 + ")\nTP2 " + px(tp2) + " (" + tTP2 + ")\nStop " + px(sl) + "\nGain/risque ≈ " + str.tostring(rr, "#.#") : "")
     vbg0 = zoneBas or zoneHaut ?  color.rgb(170, 130, 0) : dirPlan == 1 ?  color.rgb(0, 140, 70) : dirPlan == -1 ?  color.rgb(190, 30, 45) :  color.rgb(60, 60, 60)
     actif = zoneBas or zoneHaut or fortHaut or fortBas or retHaut or retBas or surcharge
@@ -635,3 +648,7 @@ if barstate.islast
         eRet := label.new(bar_index + 30, sl, "↩ RETOURNEMENT", style=label.style_label_left, color= color.rgb(30, 34, 45), textcolor= color.white, size=size.small, tooltip="↩ LIGNE DE RETOURNEMENT : " + px(sl) + "\n\nSi une bougie " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " CLÔTURE " + (dirPlan == -1 ? "AU-DESSUS" : "EN DESSOUS") + " de cette ligne :\n⛔ le " + (dirPlan == -1 ? "SHORT" : "LONG") + " est annulé\n↩ retournement possible vers le " + (dirPlan == -1 ? "LONG" : "SHORT") + "\n\nEntrée dans l'autre sens SEULEMENT si le 15 min et la 1h confirment\n(et les unités de la stratégie SWING / DAY / SCALP)\n\n⏱ Prochaine clôture " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))) + (retTxt != "" ? "\n\n" + retTxt : ""))
         lConf := line.new(bar_index, ent, bar_index + 30, ent, color= color.new(color.white, 30), style=line.style_dotted, width=1)
         eConf := label.new(bar_index + 30, ent, "✅ CONFIRMATION", style=label.style_label_left, color= color.rgb(30, 34, 45), textcolor= color.white, size=size.small, tooltip="✅ LIGNE DE CONFIRMATION : " + px(ent) + "\n\nPour entrer en " + (dirPlan == -1 ? "SHORT" : "LONG") + " :\n1. le prix revient sur cette ligne\n2. une bougie " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " CLÔTURE " + (dirPlan == -1 ? "EN DESSOUS" : "AU-DESSUS") + "\n3. les unités de la stratégie " + (strat == "" ? "(aucune pour l'instant)" : strat) + " sont alignées\n\nÉtat des unités :\n" + "1h " + (u1h ? "✅" : "⏳") + "  15 min " + (u15 ? "✅" : "⏳") + "  5 min " + (u5 ? "✅" : "⏳") + "  1 min " + (u1 ? "✅" : "⏳") + "  4h " + (u4 ? "✅" : nz(d240) == 0 ? "—" : "⛔") + "  Daily " + (uD ? "✅" : "⏳") + "\n\nÉtat : " + (etatS == "CONFIRMÉ" and scoreV >= 75 ? "✅ entrée possible" : "⏳ pas encore : " + decisionS) + "\n⏱ Prochaine clôture " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))))
+
+// v25c : alerte cassure des derniers plus hauts / plus bas M1 / M3 / M5 (retournement qui démarre)
+if nCas >= 2 and nz(nCas[1]) < 2
+    alert(syminfo.ticker + " : ↩ CASSURE " + str.tostring(nCas) + "/3 des derniers " + (dirPlan == -1 ? "plus hauts" : "plus bas") + " M1/M3/M5 contre le " + (dirPlan == -1 ? "SHORT" : "LONG") + " — le marché commence à se retourner", alert.freq_once_per_bar_close)
