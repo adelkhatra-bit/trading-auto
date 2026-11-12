@@ -2150,6 +2150,10 @@ TRAD.update({
     "🔔 OUVERTURE MARCHÉ :": "🔔 MARKET OPEN:", "⏰ Ouverture :": "⏰ Opening:", "📈 Tendance H4 :": "📈 H4 trend:", "📈 Tendance H1 :": "📈 H1 trend:",
     "🔑 Niveaux clés :": "🔑 Key levels:", "· Résistance :": "· Resistance:", "· Support :": "· Support:", "⚠️ News :": "⚠️ News:",
     "Haussier": "Bullish", "Baissier": "Bearish", "Neutre": "Neutral",
+    # carte d'entrée (ordre du graphique, règle mèche 5 min) : même format propre en anglais
+    "📊 Contexte": "📊 Context", "🔹 Niveaux :": "🔹 Levels:", "🔹 News : Aucune": "🔹 News: None", "🔹 News :": "🔹 News:",
+    "🔹 DXY : n/d": "🔹 DXY: n/a", "🔹 DXY :": "🔹 DXY:", "(mèche 5 min)": "(5 min wick)", "(vue 5 min)": "(5 min chart)",
+    "(vue 15 min)": "(15 min chart)", "🛑 SL :": "🛑 SL:", "💰 TP1 :": "💰 TP1:", "🏁 TP2 :": "🏁 TP2:", "⚖️ R:R :": "⚖️ R:R:",
 })
 _CLES = sorted(TRAD, key=len, reverse=True)
 
