@@ -4269,7 +4269,7 @@ def changer_langue(etat, cid, anglais, membre_ok):
 COMMANDES = {"/faire_analyse": "📊 Faire une analyse", "/analyse_btc": "🟠 Analyse BTC", "/analyse_gold": "🥇 Analyse Gold", "/mon_bot": "🤖 Mon bot",
              "/resultats": "📈 Mes résultats", "/gain": "📸 Partager mon gain", "/vip": "💎 Devenir VIP",
              "/english": "🌐 English", "/francais": "🌐 Français", "/rentre": "✅ Je suis rentré", "/sorti": "🚪 Je suis sorti",
-             "/indicateur": "🧩 Indicateur TradingView"}
+             "/indicateur": "🧩 Indicateur TradingView", "/focus": "🎯 Où me concentrer ?"}
 
 def installer_menu(etat):
     """Bouton « Menu » à gauche du champ + description du bot (une seule fois par version)."""
@@ -4915,6 +4915,12 @@ def traiter(etat, chats, updates):
         if "mes marches" in txt or "my markets" in txt or txt.startswith("/marches"):
             menu_marches(etat, cid)
             continue
+        if "me concentrer" in txt or "where to focus" in txt or txt.startswith("/focus") or txt.strip() == "focus":
+            props = classer_marches(DERNIERS, etat, marches_choisis(etat, cid))
+            msg = texte_concentration(props, bool(autorise(etat, cid, cid)), cid in LANG_EN) if len(props) >= 1 else None
+            _envoi_sur(cid, text=msg or ("🎯 Aucun de tes marchés n'a de plan exploitable pour l'instant : je te préviens dès que l'un se rapproche."
+                                         if cid not in LANG_EN else "🎯 None of your markets has a usable plan right now: I will warn you as soon as one gets close."))
+            continue
         if "mon bot" in txt or "mon_bot" in txt:
             menu_bot(etat, cid)
             continue
@@ -5209,6 +5215,110 @@ def adapter_marches_session(lignes, mk, choisis, anglais=False):
         return None
     nouveau = _liste_marches(a_garder, anglais)
     return [l.replace(mk, nouveau) for l in lignes]
+
+# ───────── Coach de concentration : sur quel marché se concentrer ? ─────────
+FOCUS_INTERVALLE = 1800          # au plus un message de concentration toutes les 30 min par personne (sauf demande /focus)
+FOCUS_NOMS = {"dans_zone": "dans la zone d'entrée", "proche": "proche de la zone", "en_approche": "en approche", "loin": "loin de la zone",
+              "bloque": "bloqué (zone extrême Daily/Weekly)", "sans_plan": "pas de plan fixé", "ferme": "marché fermé", "position": "déjà en position"}
+
+def proximite_marche(m, r, cle, now=None):
+    """Distance à l'entrée d'un marché, en ATR 15 min. rang : 0 dans la zone • 1 proche (≤ 1,5 ATR) • 2 en approche (≤ 4) • 3 loin
+    • 4 bloqué par le Daily/Weekly • 5 pas de plan • 6 marché fermé • -1 déjà en position. Rien n'est inventé : zone du plan ou ordre surveillé."""
+    now = time.time() if now is None else now
+    cle = cle or {}
+    prix = r["m1"][-1]["c"]
+    base = dict(m=m, prix=prix, atr_n=99.0)
+    if cle.get("trade"):
+        return dict(base, classe="position", rang=-1, d=cle["trade"].get("d"))
+    if m != "BTC" and not cme_ouvert(int(now)):
+        return dict(base, classe="ferme", rang=6)
+    o, d = cle.get("ordre"), r.get("dirPlan") or 0
+    zp = r.get("zone_pine") if d else None
+    if o:
+        za, zb = min(o.get("za", o["e"]), o.get("zb", o["e"])), max(o.get("za", o["e"]), o.get("zb", o["e"]))
+        d = o.get("d") or d
+    elif zp:
+        za, zb = min(zp["za"], zp["zb"]), max(zp["za"], zp["zb"])
+    else:
+        return dict(base, classe="sans_plan", rang=5)
+    if d not in (1, -1):
+        return dict(base, classe="sans_plan", rang=5)
+    if bloque_dw(r, d, prix):
+        return dict(base, classe="bloque", rang=4, d=d, za=za, zb=zb)
+    a = float(r.get("atr") or 0)
+    dist = 0.0 if za <= prix <= zb else min(abs(prix - za), abs(prix - zb))
+    atr_n = dist / a if a > 0 else 99.0
+    classe, rang = (("dans_zone", 0) if dist == 0 else ("proche", 1) if atr_n <= 1.5 else ("en_approche", 2) if atr_n <= 4 else ("loin", 3))
+    unite = HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
+    mil = (zp or {}).get("zmil")
+    action = (f"clôture {unite} {'sous' if d == -1 else 'au-dessus de'} {px(mil)}" if mil else f"rejet + clôture {unite} dans la zone")
+    return dict(base, classe=classe, rang=rang, d=d, za=za, zb=zb, dist=dist, atr_n=atr_n, action=action, au_dessus=prix < za)
+
+def classer_marches(derniers, etat, choisis, now=None):
+    """Marchés suivis par la personne, du plus proche d'une entrée au plus loin."""
+    props = [proximite_marche(m, r, etat.get(m, {}), now) for m, r in (derniers or {}).items() if m in choisis and r.get("m1")]
+    return sorted(props, key=lambda p: (p["rang"] if p["rang"] >= 0 else 9, p["atr_n"]))
+
+def texte_concentration(props, vip=True, anglais=False):
+    """Message de coach : le marché sur lequel se concentrer, sa zone, le sens visé, la clôture à attendre ; les autres en une ligne.
+    Gratuit : le marché favori et l'état, jamais la zone ni les niveaux (réservés aux VIP)."""
+    ic = lambda p: ICONE.get(p["m"], "")
+    actifs = [p for p in props if 0 <= p["rang"] <= 3]
+    if not actifs:
+        return None
+    t = actifs[0]
+    sens = SENS[t["d"]] if t.get("d") in (1, -1) else ""
+    if t["rang"] <= 1:
+        tete = "est le plus proche d'une entrée" if not anglais else "is the closest to an entry"
+    elif t["rang"] == 2:
+        tete = "est le plus proche, il s'approche" if not anglais else "is the closest and approaching"
+    else:
+        tete = "est le moins loin, mais aucun n'est proche" if not anglais else "is the least far, but none is close"
+    l = [("🎯 WHERE TO FOCUS" if anglais else "🎯 OÙ TE CONCENTRER"), f"👉 {ic(t)} {t['m']} {tete}"]
+    if vip:
+        l.append(f"{sens} • " + (f"reversal zone ≈ {px(t['za'])} → {px(t['zb'])}" if anglais else f"zone de retournement visée ≈ {px(t['za'])} → {px(t['zb'])}"))
+        if t["rang"] == 0:
+            l.append("📍 Price is in the zone: waiting for the rejection and the close" if anglais else "📍 Le prix est dans la zone : j'attends le rejet et la clôture")
+        else:
+            l.append(f"📏 Price {px(t['dist'])} away (≈ {t['atr_n']:.1f} ATR 15 min), zone {'above' if t['au_dessus'] else 'below'}" if anglais else
+                     f"📏 Prix à {px(t['dist'])} de la zone (≈ {t['atr_n']:.1f} ATR 15 min), elle est {'au-dessus' if t['au_dessus'] else 'en dessous'}")
+        l.append(("🕯 Watch: " if anglais else "🕯 À surveiller : ") + t["action"])
+    else:
+        l.append(("🔒 Zone and levels: VIP" if anglais else "🔒 Zone et niveaux : VIP"))
+    autres = [p for p in props if p is not t]
+    if autres:
+        l.append("━━━━━━━━━━━━━━━")
+        for p in autres:
+            etat_p = FOCUS_NOMS[p["classe"]]
+            suite = f" (≈ {p['atr_n']:.1f} ATR)" if p["rang"] in (0, 1, 2, 3) and p["atr_n"] < 90 else ""
+            l.append(f"{ic(p)} {p['m']} : {etat_p}{suite}")
+        l.append("👀 I watch them for you: I warn you if one gets closer" if anglais else "👀 Je les surveille pour toi : je te préviens si l'un devient plus proche")
+    return "\n".join(l)
+
+def coach_concentration(etat, chats, derniers, now=None):
+    """Envoi automatique (VIP, au moins 2 marchés suivis) quand le marché favori change ou se rapproche, 30 min minimum entre deux messages."""
+    now = time.time() if now is None else now
+    mem = etat.setdefault("focus_mem", {})
+    canal = str(etat.get("canal") or "")
+    for cid in sorted({str(c) for c in chats} - {canal}):
+        try:
+            if not autorise(etat, cid, cid):
+                continue
+            choisis = marches_choisis(etat, cid)
+            props = classer_marches(derniers, etat, choisis, now)
+            if len(props) < 2 or not (0 <= props[0]["rang"] <= 3):
+                continue
+            tete, dernier = props[0], mem.get(cid, {})
+            if now - dernier.get("t", 0) < FOCUS_INTERVALLE:
+                continue
+            if tete["m"] == dernier.get("m") and tete["rang"] >= dernier.get("rang", 9):
+                continue                                   # même favori et pas plus proche : rien de nouveau
+            txt = texte_concentration(props, True, cid in LANG_EN)
+            if txt:
+                _envoi_sur(cid, text=txt)
+                mem[cid] = {"m": tete["m"], "rang": tete["rang"], "t": now}
+        except Exception as ex:
+            print("coach concentration", type(ex).__name__)
 
 def diffuser_evenements(etat, chats, evts):
     """evts = [(marches, lignes_fr, lignes_en[, (mk_fr, mk_en)])] : marches = {"GOLD"} pour un évènement de marché, {"*"} pour une session (global).
@@ -7291,6 +7401,11 @@ def un_tour(etat, chats):
             alertes_courtes(etat, chats, derniers)
     except Exception as ex:
         print("alertes courtes", type(ex).__name__, ex)
+    try:
+        if TOKEN:
+            coach_concentration(etat, chats, derniers)
+    except Exception as ex:
+        print("coach concentration", type(ex).__name__, ex)
     try:
         publier_live(etat, derniers)
     except Exception as ex:
