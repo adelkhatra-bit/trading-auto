@@ -391,7 +391,7 @@ f_struct() =>
 tfS = timeframe.in_seconds()
 tfStruct = tfS < 180 ? "3" : timeframe.period
 [fRTop, fRBot, fGTop, fGBot, swH, swL, atrS] = request.security(syminfo.tickerid, tfStruct, f_struct())
-margeS = math.max(0.15 * nz(atrS, atrC), 3 * syminfo.mintick)
+margeS = math.max(0.3 * nz(atrS, atrC), 3 * syminfo.mintick)
 float entD = ent
 float slD = sl
 float tpD1 = tp1
@@ -403,7 +403,7 @@ uSn = tfS < 180 ? "3 min" : timeframe.isminutes ? timeframe.period + " min" : ti
 //         TP1 = première FVG verte sous le prix (zone de retournement) ou dernier plus bas ; TP2 = le niveau suivant. LONG : l'inverse.
 if dirPlan == -1 and tfS < 86400 and not na(fRBot) and fRBot >= close - 0.5 * atrC
     entD := fRBot
-    slD := math.max(math.max(swH, fRTop) + margeS, fRBot + 0.8 * nz(atrS, atrC))
+    slD := math.max(math.max(swH, fRTop) + margeS, fRBot + 1.0 * nz(atrS, atrC))
     rq = 1.5 * (slD - entD)
     c1 = not na(fGTop) and entD - fGTop >= rq ? fGTop : na
     c2 = entD - swL >= rq ? swL : na
@@ -412,7 +412,7 @@ if dirPlan == -1 and tfS < 86400 and not na(fRBot) and fRBot >= close - 0.5 * at
     srcD := "FVG rouge " + uSn
 if dirPlan == 1 and tfS < 86400 and not na(fGTop) and fGTop <= close + 0.5 * atrC
     entD := fGTop
-    slD := math.min(math.min(swL, fGBot) - margeS, fGTop - 0.8 * nz(atrS, atrC))
+    slD := math.min(math.min(swL, fGBot) - margeS, fGTop - 1.0 * nz(atrS, atrC))
     rq = 1.5 * (entD - slD)
     c1 = not na(fRBot) and fRBot - entD >= rq ? fRBot : na
     c2 = swH - entD >= rq ? swH : na

@@ -537,6 +537,9 @@ def structure_fvg(bars):
     lL = min(pl if pl is not None else bars[-1]["l"], min(y["l"] for y in bars[-4:]))
     return (rTop, rBot, gTop, gBot, hH, lL, at[-1], bars[-1]["c"])
 
+SL_FVG_MARGE = 0.3   # SL un peu plus large derrière la mèche (0,15 → 0,3 ATR) : moins de SL touchés de justesse — identique au Pine
+SL_FVG_MIN = 1.0     # distance mini entrée → SL (0,8 → 1 ATR)
+
 def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
     """Entrée / SL / TP1 / TP2 de l'indicateur v24.3 sur l'unité affichée (règle identique au Pine). None = le Pine garde son plan d'origine.
     SHORT : entrée = bas de la FVG rouge la plus proche ; SL = au-dessus de la mèche du dernier plus haut / du haut de la FVG (≥ 0,8 ATR) ;
@@ -546,12 +549,12 @@ def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
     rTop, rBot, gTop, gBot, swH, swL, aS, cl = st
     if not aS:
         return None
-    m = max(0.15 * aS, 3 * tick)
+    m = max(SL_FVG_MARGE * aS, 3 * tick)
     if d == -1:
         if rBot is None or rBot < cl - 0.5 * aS:
             return None
         e = rBot
-        s = max(max(swH, rTop) + m, rBot + 0.8 * aS)
+        s = max(max(swH, rTop) + m, rBot + SL_FVG_MIN * aS)
         rq = 1.5 * (s - e)
         c1 = gTop if gTop is not None and e - gTop >= rq else None
         c2 = swL if e - swL >= rq else None
@@ -571,7 +574,7 @@ def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
         if gTop is None or gTop > cl + 0.5 * aS:
             return None
         e = gTop
-        s = min(min(swL, gBot) - m, gTop - 0.8 * aS)
+        s = min(min(swL, gBot) - m, gTop - SL_FVG_MIN * aS)
         rq = 1.5 * (e - s)
         c1 = rBot if rBot is not None and rBot - e >= rq else None
         c2 = swH if swH - e >= rq else None
@@ -1605,7 +1608,7 @@ def stop_meche_5m(r, d, entry):
     if len(bars) < 2 or a5 <= 0 or d not in (-1, 1):
         return None
     meche = min(x["l"] for x in bars) if d == 1 else max(x["h"] for x in bars)
-    sl = meche - d * 0.25 * a5
+    sl = meche - d * 0.4 * a5            # un peu plus large (0,25 → 0,4 ATR 5 min) : moins de SL touchés de justesse
     distance = d * (entry - sl)
     if distance <= 0:
         return None
