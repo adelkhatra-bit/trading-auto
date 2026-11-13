@@ -492,7 +492,8 @@ def fvgs(bars, ut, n=40):
 
 # ═══ v24.3 — jumeau EXACT de f_struct() de l'indicateur « ALIGN MTF PRO (Inside) » : FVG non comblées + mèches, sur UNE unité de temps ═══
 # Le bot donne la même entrée / le même SL / les mêmes TP que le graphique quand on se met sur cette unité (1 min → structure 3 min, comme le Pine).
-UT_FVG = {"SCALPING": "3"}          # unité de référence du bot : 5 min (SCALPING : 3 min) = la vue à mettre sur TradingView
+UT_FVG = {"SWING": "1h", "DAY": "5", "SCALPING": "3"}   # structure = unité de VALIDATION du profil (1 min → 3 min, comme le Pine) ; sans profil : 15 min
+# La vue à mettre sur TradingView = HB_UNITE_VALIDATION (SWING 1h, DAY 5 min, SCALPING 1 min) : même zone, même trait « Clôture … », même entrée / SL / TP.
 UT_FVG_NOM = {"1h": "1h", "5": "5 min", "3": "3 min", "15": "15 min"}
 UT_FVG_BARS = {"1h": "b1h", "5": "b5", "3": "b3", "15": "b15"}
 
@@ -4176,6 +4177,7 @@ def declencheur_attente(r, cle, prix, d4h, d1h):
     if o and o.get("d") in (1, -1):
         return f"Clôture 5 min {'au-dessus de' if o['d'] == 1 else 'sous'} {px(o['e'])}"
     zp, d = r.get("zone_pine"), r.get("dirPlan") or 0
+    zp = trait_indicateur(r, d) or zp
     if zp and d in (1, -1) and zp.get("zmil"):
         return f"Clôture {HB_UNITE_VALIDATION.get(r.get('strat') or '', '15 min')} {'au-dessus de' if d == 1 else 'sous'} {px(zp['zmil'])}"
     attente = "4h" if not d4h else "1h" if d1h != d4h else "15m" if not r.get("confirme") else "5m"
@@ -5460,6 +5462,7 @@ def evenements_pine(etat, m, r, cle, now):
             ev.append(dict(kind="sniper", **base, ordre="vente" if sn["d"] == -1 else "achat", za=f(sn["za"]), zb=f(sn["zb"]), sl=f(sn["sl"]), tp1=f(sn["tp1"]),
                            tp=f(sn["tp2"]), ut=sn["ut"], rejets="+".join(sn["rejets"]), rr=str(round(sn["rr"], 1)).replace(".", ","), rrp=str(round(sn["rr_plan"], 1)).replace(".", ",")))
     zp, strat = r.get("zone_pine"), r.get("strat") or ""
+    zp = trait_indicateur(r, d) or zp                  # v24.3 : trait blanc « Clôture … ce trait » de l'indicateur sur la vue de validation
     if d and zp and strat and not cle.get("trade") and strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)[1] == "CONFIRMÉ":
         barres = {"SWING": r.get("b1h"), "DAY": r.get("b5"), "SCALPING": r.get("m1")}.get(strat) or []
         if len(barres) >= 3:
@@ -5878,12 +5881,34 @@ def messages_ouverture(etat, ev, derniers, now, vip=True):
             out.append((m, texte_ouverture(ev["nom"][0], heure(ev["t"]), int(ev["palier"]), donnees_ouverture(etat, m, r, now), vip, m in (ev.get("marches") or []))))
     return out
 
+def fusion_ouvertures(textes):
+    """Plusieurs fiches « 🔔 OUVERTURE MARCHÉ » de la MÊME session → UN seul message : titre, heure et news une seule fois, puis un bloc par marché."""
+    if len(textes) <= 1:
+        return textes[0] if textes else ""
+    lignes = [t.split("\n") for t in textes]
+    titre = lignes[0][0]
+    commun = lambda pre: [x for x in lignes[0] if x.startswith(pre)] if all(any(y == x for y in l) for l in lignes for x in lignes[0] if x.startswith(pre)) else []
+    heure_l, news_l = commun("⏰"), commun("⚠️")
+    out = [titre] + heure_l
+    for l in lignes:
+        corps = [x for x in l[1:] if x.strip() and x not in heure_l and x not in news_l]
+        out += ["━━━━━━━━━━━━━━━"] + corps
+    out += ["━━━━━━━━━━━━━━━"] + news_l if news_l else []
+    return "\n".join(out)
+
 def diffuser_messages(etat, chats, msgs):
-    """msgs = [(marché, texte)] envoyés TELS QUELS (jamais regroupés : le modèle reste complet), routés selon le marché de chacun."""
+    """msgs = [(marché, texte)] routés selon le marché de chacun ; chaque personne reçoit UN seul message par session (ses marchés seulement)."""
+    par_cid = {}
     for m, texte in msgs:
         t = Msg(texte); t.marches = frozenset({m})
         for cid in destinataires_message(etat, chats, t):
-            _envoi_sur(cid, text=texte)
+            par_cid.setdefault(cid, []).append(texte)
+    for cid, textes in par_cid.items():
+        groupes = {}
+        for tx in textes:
+            groupes.setdefault(tx.split("\n")[0], []).append(tx)
+        for g in groupes.values():
+            _envoi_sur(cid, text=fusion_ouvertures(g))
 
 def diffuser_evenements(etat, chats, evts):
     """evts = [(marches, lignes_fr, lignes_en[, (mk_fr, mk_en)])] : marches = {"GOLD"} pour un évènement de marché, {"*"} pour une session (global).
@@ -5941,9 +5966,9 @@ def alertes_courtes(etat, chats, derniers, now=None):
             for ev in libres:
                 msgs = messages_ouverture(etat, ev, derniers, now, False) if ev["evt"] == "ouvre" and ev["palier"] == 15 else []
                 if msgs:
-                    for m, texte in msgs:
-                        if marche_autorise(etat, cid, m):
-                            _envoi_sur(cid, text=texte)
+                    mes = [texte for m, texte in msgs if marche_autorise(etat, cid, m)]
+                    if mes:
+                        _envoi_sur(cid, text=fusion_ouvertures(mes))
                 else:
                     fr, en = texte_session(etat, ev), texte_session(etat, ev, True)
                     _envoi_sur(cid, text="\n".join(regrouper_alertes([en if str(cid) in LANG_EN else fr])))
@@ -6821,6 +6846,15 @@ def tp2_affichable(d, tp1, tp2):
     TP1 3888,99, TP2 3910,44 en SHORT) : on ne l'affiche pas plutôt que d'afficher un objectif incohérent. Le graphique n'est pas modifié."""
     return tp2 is not None and tp1 is not None and d in (1, -1) and d * (tp2 - tp1) > 0
 
+def trait_indicateur(r, d):
+    """Zone + trait « Clôture {UT} sous/au-dessus de ce trait » tels que l'indicateur v24.3 les dessine sur la vue de validation (FVG + mèche).
+    None si l'indicateur garde son plan d'origine (on utilise alors zone_pine, comme lui)."""
+    try:
+        pe = pine_entree(r, d) if d in (1, -1) and r.get("b15") and "planH" in r else None
+    except Exception:
+        return None
+    return dict(za=min(pe["za"], pe["zb"]), zb=max(pe["za"], pe["zb"]), zmil=pe["zmil"]) if pe and pe.get("fvg_ut") else None
+
 def pine_entree(r, d):
     """Ordre Telegram = niveaux du graphique : plan figé de l'indicateur Pine v24 (sens du plan) ou plan instantané de l'autre sens."""
     if d not in (1, -1) or not r.get("b15") or "planH" not in r:
@@ -6841,12 +6875,13 @@ def pine_entree(r, d):
                 src="Fibonacci 50 → 78,6 % (indicateur ALIGN)", za=za, zb=zb, f50=z["f50"], f618=z["f618"], f786=z["f786"],
                 zmil=(za + zb) / 2, sl_h=bougie_protegee(r["b15"][-3:], d, pl["sl"]), sl_ut="15 min")
     # v24.3 : mêmes niveaux que l'indicateur sur l'unité de référence (FVG + mèche). Sinon : plan d'origine, comme le Pine.
-    ut = UT_FVG.get(r.get("strat") or "", "5")
-    fv = plan_fvg(d, (r.get("struct_ut") or {}).get(ut), pl["e"], pl["sl"], pl["tp1"], pl["tp2"], UT_FVG_NOM[ut])
+    ut = UT_FVG.get(r.get("strat") or "", "15")
+    vue = HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
+    fv = plan_fvg(d, (r.get("struct_ut") or {}).get(ut), pl["e"], pl["sl"], pl["tp1"], pl["tp2"], vue)
     if fv:
         bars_ut = [x for x in (r.get(UT_FVG_BARS[ut]) or [])][-3:]
         out.update(fv, src=fv["src"] + " (indicateur ALIGN)", rr=abs(fv["tp1"] - fv["e"]) / max(abs(fv["e"] - fv["sl"]), 1e-9),
-                   zmil=(fv["za"] + fv["zb"]) / 2, sl_ut=UT_FVG_NOM[ut], fvg_ut=True,
+                   zmil=(fv["za"] + fv["zb"]) / 2, sl_ut=vue, fvg_ut=True,
                    sl_h=bougie_protegee(bars_ut, d, fv["sl"]) if bars_ut else out["sl_h"])
     return out
 

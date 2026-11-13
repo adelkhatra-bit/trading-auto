@@ -179,8 +179,11 @@ class Modele3Ouverture(unittest.TestCase):
             ab.diffuser_messages(etat, {"adel", "btc", "tous"}, msgs)
         recu = {}
         for c, t in envois:
-            recu.setdefault(c, []).append(t.split("\n")[2])
-        self.assertEqual(recu, {"adel": ["🥇 GOLD"], "btc": ["🟠 BTC"], "tous": ["🥇 GOLD", "🟠 BTC"]})      # chaque compte : seulement ses marchés
+            recu.setdefault(c, []).append([x for x in t.split("\n") if x in ("🥇 GOLD", "🟠 BTC", "💠 NASDAQ")])
+        self.assertEqual(recu, {"adel": [["🥇 GOLD"]], "btc": [["🟠 BTC"]], "tous": [["🥇 GOLD", "🟠 BTC"]]})   # ses marchés seulement, UN message par session
+        t_tous = dict(envois)["tous"]
+        self.assertEqual(t_tous.count("🔔 OUVERTURE MARCHÉ"), 1)
+        self.assertEqual(t_tous.count("⏰ Ouverture"), 1)
 
     def test_integration_alertes_courtes_n_envoie_plus_l_ancienne_alerte_groupee(self):
         ev = dict(kind="session", code="londres", evt="ouvre", palier=15, t=T + 900, nom=("Londres", "London"), mk=("GOLD et BTC", "GOLD and BTC"), marches=[])
@@ -188,8 +191,9 @@ class Modele3Ouverture(unittest.TestCase):
         with patch.object(ab, "TOKEN", "x"), patch.object(ab, "evenements_sessions", return_value=[ev]), patch.object(ab, "evenements_pine", return_value=[]), \
              patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: envois.append((c, k["text"]))), patch.object(ab, "destinataires_gratuits", return_value=[]):
             ab.alertes_courtes({}, {"vip"}, {"GOLD": self.r(), "BTC": self.r(73000.0)}, T)
-        self.assertEqual(len(envois), 2)
-        self.assertTrue(all(t.startswith("🔔 OUVERTURE MARCHÉ : LONDRES") for _, t in envois))
+        self.assertEqual(len(envois), 1)                                                     # GOLD + BTC regroupés en un seul message
+        self.assertTrue(envois[0][1].startswith("🔔 OUVERTURE MARCHÉ : LONDRES"))
+        self.assertIn("🥇 GOLD", envois[0][1]); self.assertIn("🟠 BTC", envois[0][1])
 
     def test_sans_donnees_repli_sur_l_ancienne_alerte(self):
         ev = dict(kind="session", code="londres", evt="ouvre", palier=15, t=T + 900, nom=("Londres", "London"), mk=("GOLD et BTC", "GOLD and BTC"), marches=[])
