@@ -346,51 +346,78 @@ f_struct() =>
     var float[] rB = array.new_float()
     var float[] gT = array.new_float()
     var float[] gB = array.new_float()
+    // v24.4 : ORDER BLOCK de chaque FVG = dernière bougie inverse juste avant l'impulsion (bougie haussière avant une chute, baissière avant une hausse)
+    var float[] rOH = array.new_float()
+    var float[] rOL = array.new_float()
+    var float[] gOH = array.new_float()
+    var float[] gOL = array.new_float()
     aF = ta.atr(14)
     if high < low[2] and low[2] - high >= 0.3 * aF
         array.push(rT, low[2])
         array.push(rB, high)
+        kR = close[2] > open[2] ? 2 : close[3] > open[3] ? 3 : 2
+        array.push(rOH, high[kR])
+        array.push(rOL, low[kR])
     if low > high[2] and low - high[2] >= 0.3 * aF
         array.push(gT, low)
         array.push(gB, high[2])
+        kG = close[2] < open[2] ? 2 : close[3] < open[3] ? 3 : 2
+        array.push(gOH, high[kG])
+        array.push(gOL, low[kG])
     if array.size(rT) > 0
         for k = array.size(rT) - 1 to 0
             if close > array.get(rT, k)
                 array.remove(rT, k)
                 array.remove(rB, k)
+                array.remove(rOH, k)
+                array.remove(rOL, k)
     if array.size(gB) > 0
         for k = array.size(gB) - 1 to 0
             if close < array.get(gB, k)
                 array.remove(gT, k)
                 array.remove(gB, k)
+                array.remove(gOH, k)
+                array.remove(gOL, k)
     while array.size(rT) > 30
         array.shift(rT)
         array.shift(rB)
+        array.shift(rOH)
+        array.shift(rOL)
     while array.size(gT) > 30
         array.shift(gT)
         array.shift(gB)
+        array.shift(gOH)
+        array.shift(gOL)
     float rTop = na
     float rBot = na
     float gTop = na
     float gBot = na
+    float rObH = na
+    float rObL = na
+    float gObH = na
+    float gObL = na
     if array.size(rT) > 0
         for k = 0 to array.size(rT) - 1
             if na(rBot) or array.get(rB, k) < rBot
                 rBot := array.get(rB, k)
                 rTop := array.get(rT, k)
+                rObH := array.get(rOH, k)
+                rObL := array.get(rOL, k)
     if array.size(gT) > 0
         for k = 0 to array.size(gT) - 1
             if na(gTop) or array.get(gT, k) > gTop
                 gTop := array.get(gT, k)
                 gBot := array.get(gB, k)
+                gObH := array.get(gOH, k)
+                gObL := array.get(gOL, k)
     ph = ta.pivothigh(high, 5, 5)
     pl = ta.pivotlow(low, 5, 5)
     hH = math.max(nz(ta.valuewhen(not na(ph), ph, 0), high), ta.highest(high, 4))
     lL = math.min(nz(ta.valuewhen(not na(pl), pl, 0), low), ta.lowest(low, 4))
-    [rTop, rBot, gTop, gBot, hH, lL, ta.atr(14)]
+    [rTop, rBot, gTop, gBot, hH, lL, ta.atr(14), rObH, rObL, gObH, gObL]
 tfS = timeframe.in_seconds()
 tfStruct = tfS < 180 ? "3" : timeframe.period
-[fRTop, fRBot, fGTop, fGBot, swH, swL, atrS] = request.security(syminfo.tickerid, tfStruct, f_struct())
+[fRTop, fRBot, fGTop, fGBot, swH, swL, atrS, obRH, obRL, obGH, obGL] = request.security(syminfo.tickerid, tfStruct, f_struct())
 margeS = math.max(0.3 * nz(atrS, atrC), 3 * syminfo.mintick)
 float entD = ent
 float slD = sl
@@ -402,23 +429,23 @@ uSn = tfS < 180 ? "3 min" : timeframe.isminutes ? timeframe.period + " min" : ti
 // SHORT : entrée = bas de la FVG rouge la plus proche au-dessus du prix ; SL = un peu au-dessus de la mèche du dernier plus haut / du haut de la FVG ;
 //         TP1 = première FVG verte sous le prix (zone de retournement) ou dernier plus bas ; TP2 = le niveau suivant. LONG : l'inverse.
 if dirPlan == -1 and tfS < 86400 and not na(fRBot) and fRBot >= close - 0.5 * atrC
-    entD := fRBot
-    slD := math.max(math.max(swH, fRTop) + margeS, fRBot + 1.0 * nz(atrS, atrC))
+    entD := na(obRL) ? fRBot : math.max(fRBot, obRL)
+    slD := math.max(math.max(math.max(swH, fRTop), nz(obRH, fRTop)) + margeS, entD + 1.0 * nz(atrS, atrC))
     rq = 1.5 * (slD - entD)
     c1 = not na(fGTop) and entD - fGTop >= rq ? fGTop : na
     c2 = entD - swL >= rq ? swL : na
     tpD1 := na(c1) ? (na(c2) ? (entD - tp1 >= rq ? tp1 : entD - 2 * (slD - entD)) : c2) : na(c2) ? c1 : math.max(c1, c2)
     tpD2 := na(c1) or na(c2) ? math.min(tpD1, tp1) : math.min(c1, c2)
-    srcD := "FVG rouge " + uSn
+    srcD := (na(obRL) ? "FVG rouge " : "Order block + FVG rouge ") + uSn
 if dirPlan == 1 and tfS < 86400 and not na(fGTop) and fGTop <= close + 0.5 * atrC
-    entD := fGTop
-    slD := math.min(math.min(swL, fGBot) - margeS, fGTop - 1.0 * nz(atrS, atrC))
+    entD := na(obGH) ? fGTop : math.min(fGTop, obGH)
+    slD := math.min(math.min(math.min(swL, fGBot), nz(obGL, fGBot)) - margeS, entD - 1.0 * nz(atrS, atrC))
     rq = 1.5 * (entD - slD)
     c1 = not na(fRBot) and fRBot - entD >= rq ? fRBot : na
     c2 = swH - entD >= rq ? swH : na
     tpD1 := na(c1) ? (na(c2) ? (tp1 - entD >= rq ? tp1 : entD + 2 * (entD - slD)) : c2) : na(c2) ? c1 : math.min(c1, c2)
     tpD2 := na(c1) or na(c2) ? math.max(tpD1, tp1) : math.max(c1, c2)
-    srcD := "FVG verte " + uSn
+    srcD := (na(obGH) ? "FVG verte " : "Order block + FVG verte ") + uSn
 if dirPlan != 0 and dirPlan * (tpD2 - tpD1) < 0
     tpD2 := tpD1
 // sécurité : jamais un SL du mauvais côté, jamais un TP derrière l'entrée → plan d'origine
