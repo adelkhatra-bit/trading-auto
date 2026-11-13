@@ -1,5 +1,5 @@
 //@version=6
-indicator("ALIGN MTF PRO (Inside)", shorttitle="ALIGN MTF", overlay=true, max_labels_count=200, max_lines_count=30, max_boxes_count=40, calc_bars_count=2000)
+indicator("ALIGN MTF PRO (Inside)", shorttitle="ALIGN MTF", overlay=true, max_labels_count=200, max_lines_count=30, max_boxes_count=40)
 
 // ═════════ RÉGLAGES ═════════
 grpS = "Signaux"
