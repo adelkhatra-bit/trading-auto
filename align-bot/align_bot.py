@@ -2277,7 +2277,9 @@ TRAD.update({
     "4h + 1h alignées": "4h + 1h aligned", " - EN ATTENTE": " - WAITING", "🕯 Prix encore près de l'entrée du bot": "🕯 Price still close to the bot's entry", "🛑 SL :": "🛑 SL:", "💰 TP1 :": "💰 TP1:", "🏁 TP2 :": "🏁 TP2:", "⚖️ R:R :": "⚖️ R:R:",
 })
 TRAD.update({   # v24.3 : cartes coach FVG, scalp, suivi, ouvertures — même format propre en anglais
-    "ENTRÉE ENCORE POSSIBLE": "ENTRY STILL POSSIBLE", "TROP TARD POUR ENTRER": "TOO LATE TO ENTER", "TP1 TOUCHÉ": "TP1 HIT", "TP2 TOUCHÉ": "TP2 HIT",
+    "ENTRÉE ENCORE POSSIBLE": "ENTRY STILL POSSIBLE", "TROP TARD POUR ENTRER": "TOO LATE TO ENTER", "TP1 TOUCHÉ": "TP1 HIT", "TP2 TOUCHÉ": "TP2 HIT", "TP3 TOUCHÉ": "TP3 HIT", "TP4 TOUCHÉ": "TP4 HIT", "TP5 TOUCHÉ": "TP5 HIT",
+    "TP touchés sur ce trade": "TPs hit on this trade", "avant le retournement": "before the reversal", "TP encaissés": "TPs banked", "TP encaissé": "TP banked",
+    "🚀 La tendance continue, on laisse courir": "🚀 The trend continues, we let it run", "✅ Aucune perte": "✅ No loss", "Nouveau SL": "New SL",
     "OBJECTIF FINAL ATTEINT": "FINAL TARGET REACHED", "METS-TOI À BE": "MOVE TO BE", "SORTIE AU STOP SÉCURISÉ": "EXIT AT PROTECTED SL",
     "SORTI À BE": "OUT AT BE", "STOP TOUCHÉ": "SL HIT", "OBJECTIFS REMIS DANS L'ORDRE": "TARGETS REORDERED",
     "🕯 Prix actuel": "🕯 Current price", ": encore près de l'entrée du bot": ": still close to the bot's entry",
@@ -2444,7 +2446,7 @@ def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal
 
 def carte_suivi(m, titre, lignes, action, r=None, genre="signal", d=None):
     """Carte compressée du suivi de position (TP, stop, BE…) : même charte que la carte signal. Rien n'est supprimé (niveaux, raison), les formules en moins."""
-    fete = any(k in titre for k in ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"))
+    fete = bool(re.search(r"TP\d TOUCHÉ|OBJECTIF FINAL", titre))
     if d is None:                                         # sens de la position en cours : LONG / SHORT toujours en PREMIER (demande d'Adel)
         d = (((DERNIER_ETAT or {}).get(m) or {}).get("trade") or {}).get("d")
     sens_ = (f"{'🟢 LONG' if d == 1 else '🔴 SHORT'} " if d in (1, -1) else "")     # UNE seule ligne de titre : le sens en premier, en couleur
@@ -3134,7 +3136,7 @@ IA_TON_JEUNE = ("Réponds TOUJOURS en français. Ton : coach trading jeune et co
 MOMENTS_IA = (
     ("prep", ("JE PRÉPARE UNE POSITION", "PRÉPARE-TOI", "ÇA ARRIVE"), 7200,
      "Une position se prépare. Dis à l'abonné de se tenir prêt, ce que tu vois en bougies maintenant, et ce qui validera l'entrée."),
-    ("tp", ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"), 3600,
+    ("tp", ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "TP3 TOUCHÉ", "TP4 TOUCHÉ", "TP5 TOUCHÉ", "OBJECTIF FINAL"), 3600,
      "Un objectif vient d'être touché. Félicite simplement, dis quoi faire maintenant (sécuriser, BE) et ce que le marché peut faire ensuite."),
     ("sl", ("STOP TOUCHÉ", "SORTI À BE", "SORTIE AU STOP SÉCURISÉ"), 1800,
      "La position vient de se fermer au stop (ou à BE). Dis-le clairement : on n'est plus en position. Explique simplement "
@@ -7532,7 +7534,7 @@ def manip_txt(cle, d, r):
 ANTI_REPETITION_S = 3 * 3600           # même message (mêmes informations) : une seule fois pendant 3 h
 # Messages jamais filtrés : exécution du trade (entrée, TP, stop, BE), news/annonces, fermeture, IA, dollar. Ils portent une information
 # d'évènement unique : les supprimer serait dangereux.
-ANTI_REPETITION_EXEMPTS = ("J'ENTRE MAINTENANT", "TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL", "STOP TOUCHÉ", "SORTIE AU STOP", "METS-TOI À BE",
+ANTI_REPETITION_EXEMPTS = ("J'ENTRE MAINTENANT", "TP1 TOUCHÉ", "TP2 TOUCHÉ", "TP3 TOUCHÉ", "TP4 TOUCHÉ", "TP5 TOUCHÉ", "OBJECTIF FINAL", "STOP TOUCHÉ", "SORTIE AU STOP", "METS-TOI À BE",
                            "sorti à BE", "SORTI À BE", "OBJECTIFS REMIS", "ENTRÉE ENCORE POSSIBLE", "TROP TARD POUR ENTRER", "NEWS", "News passée", "FERMETURE",
                            "FERMÉ", "Annonces importantes", "Aucune annonce", "L'IA ALIGN", "leçon de l'IA", "DOLLAR")
 
@@ -7923,20 +7925,27 @@ def agent(m, r, cle, ferme):
         return out
 
     if tr["statut"] == "tp1":
+        n_tp = int(tr.get("n_tp") or 2)                  # numéro du TP visé (TP2, puis TP3, TP4…) : la course continue tant que la tendance tient
         if touche_t2:
-            # Déplacement du TP : tendance 4h toujours dans le bon sens et RSI 15m pas en excès → on vise plus loin
+            # Déplacement du TP : tendance 4h toujours dans le bon sens et RSI 15m pas en excès → on vise plus loin (jusqu'au TP5)
             suivants = sorted([z for z in r["grosses"] if d * (z[0] - t2) >= r["atr"]], key=lambda z: d * z[0])
             excès = (r["r15"] >= 70) if d == 1 else (r["r15"] <= 30)
-            if r["dirs"][9] == d and not excès and suivants and not tr.get("etendu"):
-                tr["etendu"] = True; tr["sl"] = t1; tr["tp2"] = suivants[0][0]
-                out.append(cs_(m, "TP2 TOUCHÉ", [f"🛑 Nouveau SL : {px(t1)} (au TP1)", f"🎯 Nouvel objectif : {px(suivants[0][0])}"], "Rester en position (tendance continue)", r))
+            if r["dirs"][9] == d and not excès and suivants and n_tp < 5:
+                prec = tr.get("tp_prec", t1)
+                tr["etendu"] = True; tr["sl"] = prec; tr["tp_prec"] = t2; tr["tp2"] = suivants[0][0]; tr["n_tp"] = n_tp + 1
+                out.append(cs_(m, f"TP{n_tp} TOUCHÉ", [f"💰 TP{n_tp} : {px(t2)} ✅", f"🏆 {n_tp} TP touchés sur ce trade",
+                                                     f"🛑 Nouveau SL : {px(tr['sl'])} (au TP{n_tp - 1})",
+                                                     f"🎯 TP{n_tp + 1} : {px(suivants[0][0])}", "🚀 La tendance continue, on laisse courir"],
+                               "Rester en position (tendance continue)", r))
                 return out
-            out.append(cs_(m, "OBJECTIF FINAL ATTEINT", [f"🎯 TP2 : {px(t2)} ✅"], "Trade terminé", r, "attente"))
-            cle["fin"] = [tr, t2, "🏆 Objectif final"]
+            out.append(cs_(m, "OBJECTIF FINAL ATTEINT", [f"🎯 TP{n_tp} : {px(t2)} ✅", f"🏆 {n_tp} TP touchés sur ce trade"], "Trade terminé", r, "attente"))
+            cle["fin"] = [tr, t2, f"🏆 Objectif final ({n_tp} TP)"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
-            out.append(cs_(m, "SORTIE AU STOP SÉCURISÉ", [f"🛑 Sortie : {px(tr['sl'])}", "✅ TP1 encaissé, aucune perte"], "Hors position", r, "attente"))
-            cle["fin"] = [tr, t1 if d * (tr["sl"] - t1) < 0 else tr["sl"], "💰 TP1 encaissé"]
+            n_ok = n_tp - 1
+            out.append(cs_(m, "SORTIE AU STOP SÉCURISÉ", [f"🛑 Sortie : {px(tr['sl'])}", f"🏆 {n_ok} TP encaissé{'s' if n_ok > 1 else ''} avant le retournement",
+                                                         "✅ Aucune perte"], "Hors position", r, "attente"))
+            cle["fin"] = [tr, t1 if d * (tr["sl"] - t1) < 0 else tr["sl"], f"💰 {n_ok} TP encaissé{'s' if n_ok > 1 else ''}"]
             cle.pop("trade"); cle["aligne"] = 0; return out
     return out
 

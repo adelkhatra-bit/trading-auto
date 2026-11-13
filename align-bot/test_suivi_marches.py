@@ -214,3 +214,10 @@ class EpinglesSansDoublon(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CourseDesTP(unittest.TestCase):
+    """TP2 → TP3 → … : le bot compte les TP touchés et remonte le SL au TP précédent ; fête à chaque TP."""
+    def test_fete_pour_tout_tp(self):
+        for n in (1, 2, 3, 4, 5):
+            self.assertTrue(ab.carte_suivi("GOLD", f"TP{n} TOUCHÉ", ["x"], "S", {}).startswith("🎉🥳"))
