@@ -28,7 +28,7 @@ class PlanFVG(unittest.TestCase):
         fv = ab.plan_fvg(-1, st, 120, 125, 90, 80, "5 min")
         self.assertIsNotNone(fv)
         self.assertAlmostEqual(fv["e"], 104)                                     # entrée = bas de la FVG rouge
-        self.assertAlmostEqual(fv["sl"], max(110 + max(0.15 * a, 0.03), 104 + 0.8 * a))   # un peu au-dessus de la mèche du dernier plus haut
+        self.assertAlmostEqual(fv["sl"], max(110 + max(0.3 * a, 0.03), 104 + 1.0 * a))   # un peu au-dessus de la mèche du dernier plus haut
         self.assertLess(fv["tp1"], fv["e"])
         self.assertGreaterEqual(fv["e"] - fv["tp1"], 1.5 * (fv["sl"] - fv["e"]) - 1e-9)    # TP1 ≥ 1,5 x le risque
         self.assertLessEqual(fv["tp2"], fv["tp1"])                               # TP2 = plus loin (continuation)

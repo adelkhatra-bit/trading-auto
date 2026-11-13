@@ -129,11 +129,11 @@ class StrategieMecheTest(unittest.TestCase):
     def test_short_sl_juste_au_dessus_de_la_meche_5m(self):
         r = self._r([4001, 4005, 4003, 3999], [3990, 3995, 3992, 3990])
         sl = ab.stop_meche_5m(r, -1, 3995)
-        self.assertAlmostEqual(sl, 4005 + 1.0)            # mèche 4005 + 0,25 ATR5
+        self.assertAlmostEqual(sl, 4005 + 1.6)            # mèche 4005 + 0,4 ATR5
 
     def test_long_sl_juste_sous_la_meche_5m(self):
         r = self._r([4010, 4012, 4011, 4013], [4000, 3996, 3999, 4002])
-        self.assertAlmostEqual(ab.stop_meche_5m(r, 1, 4005), 3996 - 1.0)
+        self.assertAlmostEqual(ab.stop_meche_5m(r, 1, 4005), 3996 - 1.6)
 
     def test_niveaux_ordre_graphique(self):
         tr = {"d": -1, "e": 4000, "sl": 4012, "tp1": 3980, "tp2": 3950, "rr": 2.0, "n1": "projection", "n2": "projection"}
