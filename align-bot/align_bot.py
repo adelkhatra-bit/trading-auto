@@ -605,14 +605,63 @@ def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
     za, zb = (e, s - 0.25 * (s - e)) if d == -1 else (s + 0.25 * (e - s), e)
     return dict(e=e, sl=s, tp1=t1, n1=n1, tp2=t2, n2=n2, za=za, zb=zb, src=src)
 
+# ═══ Même prix que le graphique de l'utilisateur : le dernier prix de SON symbole TradingView sert d'étalon ═══
+# Les bougies gratuites (Kraken, PAXG / COMEX, NQ futures) gardent leur forme ; on les décale de l'écart mesuré en direct avec le symbole
+# TradingView (CRYPTO:BTCUSD, FOREXCOM:XAUUSD, FX:NAS100 — liste de secours si un symbole ne répond pas). Écart lissé, plafonné à 2 %.
+TV_ETALON = {"XBTUSD": ("CRYPTO:BTCUSD",), "XAUUSD": ("FOREXCOM:XAUUSD", "FX:XAUUSD", "OANDA:XAUUSD"),
+             "NAS100": ("FX:NAS100", "CAPITALCOM:US100", "PEPPERSTONE:NAS100", "OANDA:NAS100USD")}
+TV_ETALON_TTL = 30
+
+def prix_tradingview(pair):
+    """Dernier prix du symbole TradingView de l'utilisateur (cache 30 s) ; None si aucun symbole ne répond."""
+    c = _CACHE.get(("tv_prix", pair))
+    if c and time.time() - c[0] < TV_ETALON_TTL:
+        return c[1]
+    v = None
+    for sym in TV_ETALON.get(pair, ()):
+        try:
+            v = float(http_json("https://scanner.tradingview.com/symbol?symbol=" + urllib.parse.quote(sym, safe="") + "&fields=close")["close"])
+            break
+        except Exception:
+            continue
+    _CACHE[("tv_prix", pair)] = (time.time(), v)
+    return v
+
+def ecart_tradingview(pair, dernier):
+    """Écart lissé (prix TradingView − prix de nos bougies). 0 si indisponible ou aberrant (> 2 %)."""
+    ref = prix_tradingview(pair)
+    ancien = _CACHE.get(("tv_ecart", pair))
+    if ref is None or not dernier:
+        return ancien or 0.0
+    brut = ref - dernier
+    if abs(brut) > 0.02 * abs(ref):
+        return ancien or 0.0
+    lisse = brut if ancien is None else 0.7 * ancien + 0.3 * brut
+    _CACHE[("tv_ecart", pair)] = lisse
+    return lisse
+
+def decaler(bars, e):
+    if not e:
+        return bars
+    return [dict(b, o=b["o"] + e, h=b["h"] + e, l=b["l"] + e, c=b["c"] + e) for b in bars]
+
 def analyser(pair, mem=None):
     """Télécharge les bougies puis calcule l'analyse (logique identique à l'indicateur Pine ALIGN MTF PRO v24).
     mem = mémoire persistante du marché (sens stable, plan figé, retournement) ; sans mémoire : calcul instantané."""
     m1, m5, m15, h1, h4, d1 = (bougies(pair, i) for i in (1, 5, 15, 60, 240, 1440))
     if pair == "XBTUSD":
         m1 = direct_btc(m1, pair)
-    return analyser_avec_memoire(dict(m1=m1, m5=m5, m15=m15, m30=bougies(pair, 30), h1=h1, h4=h4, d1=d1,
-                                      w1=bougies(pair, 10080)), mem)
+    S = dict(m1=m1, m5=m5, m15=m15, m30=bougies(pair, 30), h1=h1, h4=h4, d1=d1, w1=bougies(pair, 10080))
+    try:
+        e = ecart_tradingview(pair, m1[-1]["c"] if m1 else None)
+    except Exception as ex:
+        print("étalon TradingView", pair, type(ex).__name__)
+        e = 0.0
+    if e:
+        S = {k: decaler(v, e) for k, v in S.items()}
+    r = analyser_avec_memoire(S, mem)
+    r["ecart_tv"] = e
+    return r
 
 def dir_stable_pas(stable, brut, d15, d60):
     """Anti-parasites de l'indicateur : le sens ne change qu'à la clôture d'une bougie 15 min, et seulement si le 15 min ou la 1h confirme."""

@@ -232,3 +232,24 @@ class ReleveDuWorker(unittest.TestCase):
     def test_ignore_les_anciens_et_les_termines(self):
         self.assertFalse(ab.releve_en_attente([{"id": 9, "status": "in_progress"}, {"id": 11, "status": "completed"}], 10))
         self.assertFalse(ab.releve_en_attente([], 10))
+
+
+class EtalonTradingView(unittest.TestCase):
+    """Même prix que le graphique : décalage mesuré sur le symbole TradingView, lissé, ignoré s'il est aberrant."""
+    def setUp(self):
+        for k in [k for k in ab._CACHE if isinstance(k, tuple) and k[0] in ("tv_prix", "tv_ecart")]:
+            ab._CACHE.pop(k)
+
+    def test_ecart_applique_et_lisse(self):
+        with mock.patch.object(ab, "prix_tradingview", return_value=3880.0):
+            self.assertAlmostEqual(ab.ecart_tradingview("XAUUSD", 3875.0), 5.0)
+        with mock.patch.object(ab, "prix_tradingview", return_value=3881.0):
+            self.assertAlmostEqual(ab.ecart_tradingview("XAUUSD", 3875.0), 0.7 * 5.0 + 0.3 * 6.0)
+        b = ab.decaler([dict(t=1, o=1.0, h=2.0, l=0.5, c=1.5)], 5.0)[0]
+        self.assertEqual((b["o"], b["h"], b["l"], b["c"]), (6.0, 7.0, 5.5, 6.5))
+
+    def test_ecart_aberrant_ou_absent_ignore(self):
+        with mock.patch.object(ab, "prix_tradingview", return_value=None):
+            self.assertEqual(ab.ecart_tradingview("NAS100", 28000.0), 0.0)
+        with mock.patch.object(ab, "prix_tradingview", return_value=30000.0):
+            self.assertEqual(ab.ecart_tradingview("NAS100", 28000.0), 0.0)   # > 2 % : jamais appliqué
