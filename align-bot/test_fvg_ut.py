@@ -82,6 +82,23 @@ class PlanFVG(unittest.TestCase):
         self.assertIn("📍 Prix DANS la zone d'entrée (vue 5 min)", txt)
         self.assertEqual(ab.coach_fvg(dict(r, struct_ut={}), -1, 104.5), [])        # pas de FVG : rien d'inventé
 
+    def test_scalp_inverse_vers_l_entree_du_plan(self):
+        st = (None, None, 100.0, 99.0, 110.0, 98.0, 1.0, 100.2)                 # FVG verte 99–100, plus bas 98, ATR 1
+        pl = dict(e=108, sl=112, tp1=95, n1="15m", tp2=90, n2="1h", rr=3)
+        r = dict(dirs=[1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1], dirPlan=-1, planB=pl, planH=pl, struct_ut={"5": st})
+        si = ab.scalp_inverse(r, -1)
+        self.assertEqual(si["d"], 1)                                             # plan SHORT → scalp LONG
+        self.assertAlmostEqual(si["e"], 100.0)                                   # haut de la FVG verte
+        self.assertAlmostEqual(si["sl"], 97.7)                                   # sous la mèche du dernier creux (98 - 0,3 ATR)
+        self.assertAlmostEqual(si["tp"], 108)                                    # TP = entrée du SHORT principal
+        self.assertEqual(si["voy"], 3)
+        self.assertIsNone(ab.scalp_inverse(dict(r, dirs=[1, 1, -1, -1, -1] + [-1] * 6), -1))   # 2/5 seulement : rien
+        self.assertIsNone(ab.scalp_inverse(dict(r, planB=dict(pl, e=101)), -1))                # gain trop petit : rien
+        txt = ab.texte_scalp("GOLD", si, -1)
+        self.assertEqual(txt[0], "↩ 🟢 GOLD - SCALP LONG")                          # sens en couleur en premier
+        self.assertEqual(txt[2:5], ["💰 TP : 108 (= entrée du SHORT)", "🎯 Entrée : 100 (vue 5 min)", "🛑 SL : 97,70"])   # ordre du graphique
+        self.assertFalse(ab.est_entree("\n".join(txt)))                            # jamais confondu avec le signal principal
+
 
 if __name__ == "__main__":
     unittest.main()

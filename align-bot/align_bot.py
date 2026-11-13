@@ -2726,6 +2726,13 @@ def epingler(etat, cid):
     """Envoie les règles et les épingle en haut de la conversation (une seule fois par conversation)."""
     if cid in etat.setdefault("epingles_v5", []):
         return
+    try:                                  # mémoire perdue (redémarrage) : on regarde ce qui est DÉJÀ épinglé — jamais deux fois les mêmes règles
+        pm = ((telegram("getChat", chat_id=cid) or {}).get("result") or {}).get("pinned_message") or {}
+        if str(pm.get("text") or "").startswith(REGLES.split("\n")[0].strip()[:18]):
+            etat["epingles_v5"].append(cid)
+            return
+    except Exception as ex:
+        print("epingler getChat", cid, ex)
     try:
         res = telegram("sendMessage", chat_id=cid, text=REGLES, disable_notification="true")
         telegram("pinChatMessage", chat_id=cid, message_id=res["result"]["message_id"], disable_notification="true")
@@ -2835,6 +2842,13 @@ def menu_canal_vip(etat):
     """Chaîne VIP : Telegram n'autorise pas le clavier du bas dans une chaîne → menu à boutons épinglé en haut (1 seule fois)."""
     if not etat.get("canal") or etat.get("menu_vip_v1"):
         return
+    try:                                  # déjà épinglé (mémoire perdue au redémarrage) : on ne le renvoie pas
+        pm = ((telegram("getChat", chat_id=etat["canal"]) or {}).get("result") or {}).get("pinned_message") or {}
+        if "MENU ALIGN VIP" in str(pm.get("text") or ""):
+            etat["menu_vip_v1"] = pm.get("message_id") or 1
+            return
+    except Exception as ex:
+        print("menu VIP getChat", ex)
     bot = etat.get("bot") or "align_mtf_adel_bot"
     lien = lambda p: f"https://t.me/{bot}?start={p}"
     kb = json.dumps({"inline_keyboard": [
@@ -5428,7 +5442,7 @@ _PINE_TEXTES_EN = {
     "confirmation": (("✅ {ic} {m}: CONFIRMATION {sens}", "🕯 {u} close {pos} {niv}"), ("🔔 {ic} {m}: {sens} confirmation validated", "🕯 {u} closed {pos} {niv}"),
                      ("🎯 {ic} {m}: {sens} confirmed at the {u} close", "📍 Decision line {niv}")),
 }
-_PINE_PRIO = {"ret_conf": 0, "sniper": 1, "confirmation": 1, "ret_cancel": 2, "impulsion": 3, "surcharge": 4, "relache": 5, "align_haut": 6, "align_bas": 7}
+_PINE_PRIO = {"ret_conf": 0, "sniper": 1, "scalp_inv": 1, "confirmation": 1, "ret_cancel": 2, "impulsion": 3, "surcharge": 4, "relache": 5, "align_haut": 6, "align_bas": 7}
 
 CONF_REPIT = {"SWING": 4 * 3600, "DAY": 3600, "SCALPING": 900}   # même confirmation (même sens) : une seule fois par période — la zone qui bouge ne la relance pas
 
@@ -5476,6 +5490,16 @@ def evenements_pine(etat, m, r, cle, now):
             f = lambda v: px(v)
             ev.append(dict(kind="sniper", **base, ordre="vente" if sn["d"] == -1 else "achat", za=f(sn["za"]), zb=f(sn["zb"]), sl=f(sn["sl"]), tp1=f(sn["tp1"]),
                            tp=f(sn["tp2"]), ut=sn["ut"], rejets="+".join(sn["rejets"]), rr=str(round(sn["rr"], 1)).replace(".", ","), rrp=str(round(sn["rr_plan"], 1)).replace(".", ",")))
+    if d and not cle.get("trade"):                       # ↩ SCALP INVERSE : une fois par niveau, 30 min mini (même règle que le sniper)
+        try:
+            si = scalp_inverse(r, d)
+        except Exception:
+            si = None
+        if si:
+            cle_si = f"{si['d']}:{round(si['e'] / max(si['e'] * 0.0005, 1e-9))}"
+            if mem.get("si_cle") != cle_si and now - mem.get("si_t", 0) >= 1800:
+                mem["si_cle"], mem["si_t"] = cle_si, now
+                ev.append(dict(kind="scalp_inv", **base, si=si, dp=d))
     zp, strat = r.get("zone_pine"), r.get("strat") or ""
     zp = trait_indicateur(r, d) or zp                  # v24.3 : trait blanc « Clôture … ce trait » de l'indicateur sur la vue de validation
     if d and zp and strat and not cle.get("trade") and strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)[1] == "CONFIRMÉ":
@@ -5976,6 +6000,10 @@ def alertes_courtes(etat, chats, derniers, now=None):
         diffuser_messages(etat, chats, modele3)
     for m, r in derniers.items():
         for ev in sorted(evenements_pine(etat, m, r, etat.get(m, {}), now), key=lambda x: _PINE_PRIO[x["kind"]]):
+            if ev["kind"] == "scalp_inv":              # carte complète à part (jamais coupée à 4 lignes par le regroupement)
+                if TOKEN:
+                    diffuser_alerte(etat, chats, texte_scalp(m, ev["si"], ev["dp"]), texte_scalp(m, ev["si"], ev["dp"], True))
+                continue
             evts.append(({m}, texte_pine(etat, ev), texte_pine(etat, ev, True)))
     if evts and TOKEN:
         diffuser_evenements(etat, chats, evts)
@@ -6872,6 +6900,51 @@ def trait_indicateur(r, d):
     except Exception:
         return None
     return dict(za=min(pe["za"], pe["zb"]), zb=max(pe["za"], pe["zb"]), zmil=pe["zmil"]) if pe and pe.get("fvg_ut") else None
+
+SCALP_INV_MIN_VOY = 3       # ↩ 3/5 petites UT (1 à 15 min) contre le plan = le repli se prépare
+
+def scalp_inverse(r, d):
+    """↩ SCALP INVERSE (identique à l'indicateur sur la vue 5 min) : quand ≥ 3/5 petites UT tournent contre le plan, petit trade dans l'autre sens
+    jusqu'à l'ENTRÉE du plan principal. LONG (plan SHORT) : entrée = haut de la FVG verte la plus proche, SL sous la mèche du dernier creux
+    (≥ 1 ATR), TP = entrée du SHORT principal. SHORT (plan LONG) : l'inverse. None si non applicable ou si le gain < 1,2 x le risque."""
+    dirs = r.get("dirs") or []
+    if d not in (1, -1) or len(dirs) < 5 or sum(1 for k in range(5) if dirs[k] == -d) < SCALP_INV_MIN_VOY:
+        return None
+    st = (r.get("struct_ut") or {}).get("5")
+    pl = (r.get("plan_fige") if r.get("plan_fige") and d == r.get("dirPlan") else (r.get("planH") if d == 1 else r.get("planB"))) or None
+    if not st or not pl:
+        return None
+    principal = plan_fvg(d, st, pl["e"], pl["sl"], pl["tp1"], pl["tp2"], "5 min") or pl
+    cible = principal["e"]
+    rTop, rBot, gTop, gBot, swH, swL, aS, cl = st
+    if not aS:
+        return None
+    m_ = max(SL_FVG_MARGE * aS, 0.03)
+    di = -d
+    if di == 1:
+        e = gTop if gTop is not None and gTop <= cl + 0.5 * aS else cl
+        s_ = min(min(swL, gBot if gBot is not None else swL) - m_, e - SL_FVG_MIN * aS)
+    else:
+        e = rBot if rBot is not None and rBot >= cl - 0.5 * aS else cl
+        s_ = max(max(swH, rTop if rTop is not None else swH) + m_, e + SL_FVG_MIN * aS)
+    risque = abs(e - s_)
+    if di * (cible - e) < 1.2 * risque or di * (e - s_) <= 0:
+        return None
+    return dict(d=di, e=e, sl=s_, tp=cible, rr=abs(cible - e) / max(risque, 1e-9), voy=sum(1 for k in range(5) if dirs[k] == -d))
+
+def texte_scalp(m, si, dp, anglais=False):
+    """Carte ↩ SCALP INVERSE : même présentation que la carte d'entrée (sens en couleur en premier, niveaux dans l'ordre du graphique)."""
+    d = si["d"]
+    sens, sensp = ("LONG" if d == 1 else "SHORT"), ("SHORT" if dp == -1 else "LONG")
+    vue = "5 min chart" if anglais else "vue 5 min"
+    niv = [(f"🛑 SL : {px(si['sl'])}", si["sl"]), (f"🎯 {'Entry' if anglais else 'Entrée'} : {px(si['e'])} ({vue})", si["e"]),
+           (f"💰 TP : {px(si['tp'])} (= {sensp} entry)" if anglais else f"💰 TP : {px(si['tp'])} (= entrée du {sensp})", si["tp"])]
+    l = [f"↩ {'🟢' if d == 1 else '🔴'} {m} - SCALP {sens}", ""] + [x for x, _ in sorted(niv, key=lambda z: -z[1])]
+    l.append(f"⚖️ R:R : 1:{si['rr']:.1f}".replace(".", ","))
+    l += ["", (f"⚠️ {si['voy']}/5 small timeframes turned: against the trend, small size" if anglais else
+               f"⚠️ {si['voy']}/5 petites UT retournées : contre la tendance, petite position"),
+          (f"🧭 At TP we go back {sensp} (main plan)" if anglais else f"🧭 Au TP on reprend le {sensp} (plan principal)")]
+    return l
 
 def coach_fvg(r, d, prix, attente=True):
     """Lignes « coach » d'une entrée sur FVG (mêmes niveaux que l'indicateur sur la vue de validation) : zone, alignement 5 min + 15 min,
