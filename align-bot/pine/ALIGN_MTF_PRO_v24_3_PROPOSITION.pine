@@ -1,5 +1,5 @@
 //@version=6
-indicator("ALIGN MTF PRO (Inside)", shorttitle="ALIGN MTF", overlay=true, max_labels_count=200, max_lines_count=30, max_boxes_count=40)
+indicator("ALIGN MTF PRO (Inside)", shorttitle="ALIGN MTF", overlay=true, max_labels_count=200, max_lines_count=40, max_boxes_count=40)
 
 // ═════════ RÉGLAGES ═════════
 grpS = "Signaux"
@@ -480,9 +480,12 @@ var float tp1Mem = na
 var float tp2Mem = na
 var int dirMem = 0
 var bool tp1Hit = false
+var int hitBar = 0
 risqueD = math.abs(entD - slD)
 tp2Calc = dirPlan != 0 and dirPlan * (tpD2 - tpD1) > 0 ? tpD2 : tpD1 + dirPlan * risqueD
-if dirPlan != dirMem or (not tp1Hit and entD != entMem)
+// fin du suivi « TP1 dépassé » : retour à l'entrée, TP2 atteint, ou 40 bougies plus tard (nouvelle situation)
+finHit = tp1Hit and (na(entMem) or (dirPlan == -1 ? close > entMem : close < entMem) or bar_index - hitBar > 40 or (bar_index - hitBar > 3 and not na(tp2Mem) and (dirPlan == -1 ? low <= tp2Mem : high >= tp2Mem)))
+if dirPlan != dirMem or finHit or (not tp1Hit and (na(entMem) or entD != entMem))
     entMem := entD
     tp1Mem := tpD1
     tp2Mem := tp2Calc
@@ -490,11 +493,7 @@ if dirPlan != dirMem or (not tp1Hit and entD != entMem)
     tp1Hit := false
 if dirPlan != 0 and not tp1Hit and not na(tp1Mem) and (dirPlan == -1 ? low <= tp1Mem : high >= tp1Mem)
     tp1Hit := true
-if tp1Hit and not na(slD) and (dirPlan == -1 ? close > entMem : close < entMem)
-    tp1Hit := false
-    entMem := entD
-    tp1Mem := tpD1
-    tp2Mem := tp2Calc
+    hitBar := bar_index
 tpRetour = tp1Hit and (dirPlan == -1 ? close > tp1Mem : close < tp1Mem)
 tpVu1 = tp1Hit ? tp1Mem : tpD1
 tpVu2 = tp1Hit ? tp2Mem : tp2Calc
