@@ -504,28 +504,34 @@ def structure_fvg(bars):
     if not bars or len(bars) < 20:
         return None
     at = atr(bars, 14)
-    rT, rB, gT, gB = [], [], [], []
+    rT, rB, gT, gB, rO, gO = [], [], [], [], [], []      # rO / gO = ORDER BLOCK (haut, bas) de chaque FVG (v24.4, comme le Pine)
+    haussiere = lambda y: y["c"] > y["o"]
     for i in range(len(bars)):
         x = bars[i]; aF = at[i]
         if i >= 2 and aF is not None:
             if x["h"] < bars[i - 2]["l"] and bars[i - 2]["l"] - x["h"] >= 0.3 * aF:
                 rT.append(bars[i - 2]["l"]); rB.append(x["h"])
+                k_ = 2 if haussiere(bars[i - 2]) else 3 if i >= 3 and haussiere(bars[i - 3]) else 2
+                rO.append((bars[i - k_]["h"], bars[i - k_]["l"]))
             if x["l"] > bars[i - 2]["h"] and x["l"] - bars[i - 2]["h"] >= 0.3 * aF:
                 gT.append(x["l"]); gB.append(bars[i - 2]["h"])
+                k_ = 2 if bars[i - 2]["c"] < bars[i - 2]["o"] else 3 if i >= 3 and bars[i - 3]["c"] < bars[i - 3]["o"] else 2
+                gO.append((bars[i - k_]["h"], bars[i - k_]["l"]))
         for k in range(len(rT) - 1, -1, -1):
             if x["c"] > rT[k]:
-                del rT[k], rB[k]
+                del rT[k], rB[k], rO[k]
         for k in range(len(gB) - 1, -1, -1):
             if x["c"] < gB[k]:
-                del gT[k], gB[k]
-        del rT[:-30], rB[:-30], gT[:-30], gB[:-30]
+                del gT[k], gB[k], gO[k]
+        del rT[:-30], rB[:-30], rO[:-30], gT[:-30], gB[:-30], gO[:-30]
     rTop = rBot = gTop = gBot = None
-    for t_, b_ in zip(rT, rB):
+    rOb = gOb = (None, None)
+    for t_, b_, o_ in zip(rT, rB, rO):
         if rBot is None or b_ < rBot:
-            rBot, rTop = b_, t_
-    for t_, b_ in zip(gT, gB):
+            rBot, rTop, rOb = b_, t_, o_
+    for t_, b_, o_ in zip(gT, gB, gO):
         if gTop is None or t_ > gTop:
-            gTop, gBot = t_, b_
+            gTop, gBot, gOb = t_, b_, o_
     ph = pl = None
     for i in range(5, len(bars) - 5):
         fen = bars[i - 5:i + 6]
@@ -535,7 +541,7 @@ def structure_fvg(bars):
             pl = bars[i]["l"]
     hH = max(ph if ph is not None else bars[-1]["h"], max(y["h"] for y in bars[-4:]))
     lL = min(pl if pl is not None else bars[-1]["l"], min(y["l"] for y in bars[-4:]))
-    return (rTop, rBot, gTop, gBot, hH, lL, at[-1], bars[-1]["c"])
+    return (rTop, rBot, gTop, gBot, hH, lL, at[-1], bars[-1]["c"], rOb[0], rOb[1], gOb[0], gOb[1])
 
 SL_FVG_MARGE = 0.3   # SL un peu plus large derrière la mèche (0,15 → 0,3 ATR) : moins de SL touchés de justesse — identique au Pine
 SL_FVG_MIN = 1.0     # distance mini entrée → SL (0,8 → 1 ATR)
@@ -546,15 +552,16 @@ def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
     TP1 = FVG verte ou dernier plus bas (≥ 1,5 x le risque), TP2 = le niveau suivant. LONG : l'inverse."""
     if d not in (1, -1) or not st:
         return None
-    rTop, rBot, gTop, gBot, swH, swL, aS, cl = st
+    rTop, rBot, gTop, gBot, swH, swL, aS, cl = st[:8]
+    obRH, obRL, obGH, obGL = (tuple(st[8:12]) + (None,) * 4)[:4]
     if not aS:
         return None
     m = max(SL_FVG_MARGE * aS, 3 * tick)
     if d == -1:
         if rBot is None or rBot < cl - 0.5 * aS:
             return None
-        e = rBot
-        s = max(max(swH, rTop) + m, rBot + SL_FVG_MIN * aS)
+        e = rBot if obRL is None else max(rBot, obRL)                   # entrée sur l'ORDER BLOCK (bord proche) au-dessus de la FVG
+        s = max(max(swH, rTop, obRH if obRH is not None else rTop) + m, e + SL_FVG_MIN * aS)
         rq = 1.5 * (s - e)
         c1 = gTop if gTop is not None and e - gTop >= rq else None
         c2 = swL if e - swL >= rq else None
@@ -569,12 +576,12 @@ def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
             n2 = "objectif du plan" if t2 != t1 else n1
         else:
             t2 = min(c1, c2); n2 = f"FVG verte {ut_nom}" if t2 == c1 else f"dernier plus bas {ut_nom}"
-        src = f"FVG rouge {ut_nom}"
+        src = f"{'FVG rouge' if obRL is None else 'Order block + FVG rouge'} {ut_nom}"
     else:
         if gTop is None or gTop > cl + 0.5 * aS:
             return None
-        e = gTop
-        s = min(min(swL, gBot) - m, gTop - SL_FVG_MIN * aS)
+        e = gTop if obGH is None else min(gTop, obGH)
+        s = min(min(swL, gBot, obGL if obGL is not None else gBot) - m, e - SL_FVG_MIN * aS)
         rq = 1.5 * (e - s)
         c1 = rBot if rBot is not None and rBot - e >= rq else None
         c2 = swH if swH - e >= rq else None
@@ -589,7 +596,7 @@ def plan_fvg(d, st, ent, sl, tp1, tp2, ut_nom="", tick=0.01):
             n2 = "objectif du plan" if t2 != t1 else n1
         else:
             t2 = max(c1, c2); n2 = f"FVG rouge {ut_nom}" if t2 == c1 else f"dernier plus haut {ut_nom}"
-        src = f"FVG verte {ut_nom}"
+        src = f"{'FVG verte' if obGH is None else 'Order block + FVG verte'} {ut_nom}"
     if d * (t2 - t1) < 0:
         t2, n2 = t1, n1
     if d * (e - s) <= 0 or d * (t1 - e) <= 0:
@@ -2286,13 +2293,13 @@ TRAD.update({   # v24.3 : cartes coach FVG, scalp, suivi, ouvertures — même f
     "✅ 5 min + 15 min alignés": "✅ 5 min + 15 min aligned", "⏳ Alignement :": "⏳ Alignment:", "pour l'instant": "for now",
     "ni 5 min ni 15 min": "neither 5 min nor 15 min", "FVG rouge": "Red FVG", "FVG verte": "Green FVG",
     ": elle bloque la hausse": ": it blocks the rise", ": elle bloque la baisse": ": it blocks the drop",
-    "protégé derrière la FVG et la mèche": "protected behind the FVG and the wick",
+    "protégé derrière la FVG et la mèche": "protected behind the FVG and the wick", "protégé derrière l’order block, la FVG et la mèche": "protected behind the order block, the FVG and the wick",
     "🎣 Mèche qui dépasse puis revient = manipulation (chasse aux stops), c'est normal": "🎣 Wick that pokes through then comes back = manipulation (stop hunt), it's normal",
     "⏳ Patiente : j'entre quand une bougie": "⏳ Be patient: I enter when a", " clôture sous ": " candle closes below ", " clôture au-dessus de ": " candle closes above ", "🧘 Ça peut piquer un peu, t'inquiète pas tant que le SL tient": "🧘 It can sting a bit, don't worry as long as the SL holds",
     "📍 Prix DANS la zone d'entrée": "📍 Price IN the entry zone",
     "🚀 Ça continue vers le TP2 tant que le SL tient": "🚀 It keeps going to TP2 as long as the SL holds",
     "🛡️ Si tu suis la position, je te dis quand remonter ton SL": "🛡️ If you follow the position, I'll tell you when to move your SL",
-    "LONDRES": "LONDON", "Londres": "London", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
+    "LONDRES": "LONDON", "Londres": "London", ": MARCHÉ FERMÉ": ": MARKET CLOSED", "😴 Je ne t'envoie plus rien sur ce marché": "😴 No more messages on this market", "⏰ Réouverture :": "⏰ Reopens:", "lundi": "Monday", "dimanche": "Sunday", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
 })
 _CLES = sorted(TRAD, key=len, reverse=True)
 
@@ -6017,6 +6024,8 @@ def alertes_courtes(etat, chats, derniers, now=None):
     if modele3 and TOKEN:
         diffuser_messages(etat, chats, modele3)
     for m, r in derniers.items():
+        if m != "BTC" and not cme_ouvert(int(now)):          # marché fermé : aucune alerte de l'indicateur
+            continue
         for ev in sorted(evenements_pine(etat, m, r, etat.get(m, {}), now), key=lambda x: _PINE_PRIO[x["kind"]]):
             if ev["kind"] == "scalp_inv":              # carte complète à part (jamais coupée à 4 lignes par le regroupement)
                 if TOKEN:
@@ -6934,7 +6943,7 @@ def scalp_inverse(r, d):
         return None
     principal = plan_fvg(d, st, pl["e"], pl["sl"], pl["tp1"], pl["tp2"], "5 min") or pl
     cible = principal["e"]
-    rTop, rBot, gTop, gBot, swH, swL, aS, cl = st
+    rTop, rBot, gTop, gBot, swH, swL, aS, cl = st[:8]
     if not aS:
         return None
     m_ = max(SL_FVG_MARGE * aS, 0.03)
@@ -6980,8 +6989,8 @@ def coach_fvg(r, d, prix, attente=True):
         l.append(f"📍 Prix DANS la zone d'entrée (vue {ut})")
     al = [n for n, k in (("5 min", 2), ("15 min", 4)) if len(dirs) > k and dirs[k] == d]
     l.append("✅ 5 min + 15 min alignés" if len(al) == 2 else f"⏳ Alignement : {' + '.join(al) if al else 'ni 5 min ni 15 min'} pour l'instant")
-    l.append(f"🧱 FVG {'rouge' if d == -1 else 'verte'} {ut} ({px(pe['e'])}) : elle bloque la {'hausse' if d == -1 else 'baisse'}")
-    l.append(f"🛡️ SL {px(pe['sl'])} protégé derrière la FVG et la mèche")
+    l.append(f"🧱 {'Order block + ' if 'Order block' in str(pe.get('src')) else ''}FVG {'rouge' if d == -1 else 'verte'} {ut} ({px(pe['e'])}) : elle bloque la {'hausse' if d == -1 else 'baisse'}")
+    l.append(f"🛡️ SL {px(pe['sl'])} protégé derrière {'l’order block, ' if 'Order block' in str(pe.get('src')) else ''}la FVG et la mèche")
     bars = (r.get(UT_FVG_BARS.get(UT_FVG.get(r.get("strat") or "", "15"), "b15")) or [])[-4:]
     if any((x["h"] > pe["zmil"] and x["c"] < pe["zmil"]) if d == -1 else (x["l"] < pe["zmil"] and x["c"] > pe["zmil"]) for x in bars):
         l.append("🎣 Mèche qui dépasse puis revient = manipulation (chasse aux stops), c'est normal")
@@ -8216,7 +8225,22 @@ def un_tour(etat, chats):
         except Exception as ex:
             print("macro analyse", nom_marche, ex)
             r["macro_data"] = {"disponible": False, "statut": "DONNÉES MACRO INDISPONIBLES"}
-        ferme = "" if nom_marche == "BTC" or cme_ouvert(r["t"]) else "\n⚠️ Futures CME fermés en ce moment (Topstep) : signal à titre indicatif."
+        if nom_marche != "BTC" and not cme_ouvert(int(time.time())):
+            # Marché FERMÉ (week-end / pause CME) : plus aucune alerte sur ce marché. Une seule annonce si la fermeture dure (> 2 h).
+            reo = prochaine_ouverture_cme(time.time())
+            if not cle.get("ferme_dit") and reo and reo - time.time() > 2 * 3600:
+                cle["ferme_dit"] = True
+                j_ = datetime.datetime.fromtimestamp(reo, PARIS)
+                envois.append(taguer(f"🔒 {ICONE.get(nom_marche, '')} {nom_marche} : MARCHÉ FERMÉ\n😴 Je ne t'envoie plus rien sur ce marché\n"
+                                     f"⏰ Réouverture : {['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'][j_.weekday()]} {j_.strftime('%H:%M')}", nom_marche))
+            derniers[nom_marche] = r; DERNIERS[nom_marche] = r
+            for index, (cid, mq) in enumerate(demandes):
+                if mq in (None, nom_marche) and (index, nom_marche) not in demandes_servies:
+                    envoyer_analyse_a(etat, cid, nom_marche, r, cle)
+                    demandes_servies.add((index, nom_marche))
+            continue
+        cle["ferme_dit"] = False
+        ferme = ""
         nouveaux = [taguer(x, nom_marche) for x in agent(nom_marche, r, cle, ferme)]
         envois += nouveaux
         if TOKEN:
