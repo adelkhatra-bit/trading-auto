@@ -472,6 +472,33 @@ if sigBas
 
 bgcolor(surcharge ?  color.new(color.orange, 92) : na, title="Surcharge (fond)")
 
+// ═════════ TP2 = CONTINUATION (v24.3) ═════════
+// Le TP1 est mémorisé tant que l'entrée ne change pas. Si le prix le dépasse : TP1 ✅ reste à sa place et le TP2 s'allume (ça continue).
+// Si le prix revient ensuite derrière le TP1 : le TP2 s'éteint (« ça revient vers l'entrée »).
+var float entMem = na
+var float tp1Mem = na
+var float tp2Mem = na
+var int dirMem = 0
+var bool tp1Hit = false
+risqueD = math.abs(entD - slD)
+tp2Calc = dirPlan != 0 and dirPlan * (tpD2 - tpD1) > 0 ? tpD2 : tpD1 + dirPlan * risqueD
+if dirPlan != dirMem or (not tp1Hit and entD != entMem)
+    entMem := entD
+    tp1Mem := tpD1
+    tp2Mem := tp2Calc
+    dirMem := dirPlan
+    tp1Hit := false
+if dirPlan != 0 and not tp1Hit and not na(tp1Mem) and (dirPlan == -1 ? low <= tp1Mem : high >= tp1Mem)
+    tp1Hit := true
+if tp1Hit and not na(slD) and (dirPlan == -1 ? close > entMem : close < entMem)
+    tp1Hit := false
+    entMem := entD
+    tp1Mem := tpD1
+    tp2Mem := tp2Calc
+tpRetour = tp1Hit and (dirPlan == -1 ? close > tp1Mem : close < tp1Mem)
+tpVu1 = tp1Hit ? tp1Mem : tpD1
+tpVu2 = tp1Hit ? tp2Mem : tp2Calc
+
 // ═════════ LIGNES DU PLAN (TP1, TP2, STOP) ═════════
 var line lTP1 = na
 var line lTP2 = na
@@ -509,11 +536,13 @@ if barstate.islast
     if voirPlan and dirPlan != 0
         x1 = bar_index - 25
         x2 = bar_index + 3
-        lTP1 := line.new(x1, tpD1, x2, tpD1, color= color.aqua, width=2, extend=extend.right)
+        lTP1 := line.new(x1, tpVu1, x2, tpVu1, color= color.aqua, width=2, extend=extend.right)
+        lTP2 := line.new(x1, tpVu2, x2, tpVu2, color= tp1Hit and not tpRetour ? color.aqua : color.new(color.aqua, 60), width=tp1Hit and not tpRetour ? 2 : 1, style=tp1Hit and not tpRetour ? line.style_solid : line.style_dotted, extend=extend.right)
+        eTP2 := label.new(x1, tpVu2, (tp1Hit and not tpRetour ? "🔥 TP2 " + px(tpVu2) + "  ça continue" : tpRetour ? "TP2 " + px(tpVu2) + "  ↩ retour vers l'entrée" : "TP2 " + px(tpVu2)), style=label.style_label_right, color= color.new(color.aqua, tp1Hit and not tpRetour ? 0 : 60), textcolor= color.black, size=tp1Hit and not tpRetour ? size.normal : size.small, tooltip="Objectif 2 (continuation) : " + px(tpVu2) + "\nS'allume quand le TP1 est dépassé\nS'éteint si le prix revient derrière le TP1")
         lSL  := line.new(x1, slD, x2, slD, color= color.red, width=2, extend=extend.right)
         lE   := line.new(x1, entD, x2, entD, color= color.yellow, width=2, style=line.style_dotted, extend=extend.right)
         eE   := label.new(x1, entD, "ENTRÉE " + px(entD) + (valides != "" ? "  " + valides : ""), style=label.style_label_right, color= color.new(color.yellow, 10), textcolor= color.black, size=size.small, tooltip="Point d'entrée : " + tEnt + "\nJuste devant la zone 1h / 4h, dans le sens des grosses UT")
-        eTP1 := label.new(x1, tpD1, "TP1 " + px(tpD1), style=label.style_label_right, color= color.new(color.aqua, 20), textcolor= color.black, size=size.small, tooltip="Objectif 1 : " + tTP1 + "\nObjectif 2 : " + px(tpD2) + " (" + tTP2 + ")\nGain/risque ≈ " + str.tostring(rr, "#.#"))
+        eTP1 := label.new(x1, tpVu1, (tp1Hit ? "TP1 ✅ " : "TP1 ") + px(tpVu1), style=label.style_label_right, color= color.new(color.aqua, 20), textcolor= color.black, size=size.small, tooltip="Objectif 1 : " + tTP1 + "\nObjectif 2 : " + px(tpD2) + " (" + tTP2 + ")\nGain/risque ≈ " + str.tostring(rr, "#.#"))
         if voirFibo and fR > 0
             // Zone verte transparente = on peut rentrer de tel prix à tel prix
             bZone := box.new(x1, zHaut, bar_index + 20, zBas, border_color= color.new(color.lime, 60), bgcolor= color.new(color.lime, 85), extend=extend.right)
