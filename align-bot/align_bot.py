@@ -2377,7 +2377,7 @@ def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal
     res, sup = niveaux_rs(r)
     if genre == "signal":
         d = tr["d"]
-        l = [f"📍 {m} - {'LONG' if d == 1 else 'SHORT'}", ""]
+        l = [f"{'🟢' if d == 1 else '🔴'} {m} - {'LONG' if d == 1 else 'SHORT'}", ""]      # sens en PREMIER, en couleur (vert LONG / rouge SHORT)
         rr = abs(tr["tp1"] - tr["e"]) / max(abs(tr["e"] - tr["sl"]), 1e-9)
         tps = px(tr["tp1"]) + (f" / {px(tr['tp2'])}" if tr.get("tp2") is not None and tp2_affichable(d, tr["tp1"], tr["tp2"]) else "")
         # Ordre du GRAPHIQUE (du plus haut au plus bas) : SHORT = SL, entrée, TP1, TP2 ; LONG = TP2, TP1, entrée, SL
@@ -2423,10 +2423,13 @@ def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal
           "", f"🤖 Agent Auto-Trade : %%AGENT:{genre}%%", f"🛡️ Action : {action}", "", statut_sys(etat, r)]
     return "\n".join(l)
 
-def carte_suivi(m, titre, lignes, action, r=None, genre="signal"):
+def carte_suivi(m, titre, lignes, action, r=None, genre="signal", d=None):
     """Carte compressée du suivi de position (TP, stop, BE…) : même charte que la carte signal. Rien n'est supprimé (niveaux, raison), les formules en moins."""
     fete = any(k in titre for k in ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"))
-    tete = [f"🎉🥳 {m} - {titre} 🎯💰", "🎊🎊🎊🎊🎊"] if fete else [f"📍 {m} - {titre}"]   # un TP se fête
+    if d is None:                                         # sens de la position en cours : LONG / SHORT toujours en PREMIER (demande d'Adel)
+        d = (((DERNIER_ETAT or {}).get(m) or {}).get("trade") or {}).get("d")
+    sens_ = [f"{'🟢 LONG ⬆️' if d == 1 else '🔴 SHORT ⬇️'} • {ICONE.get(m, '')} {m}"] if d in (1, -1) else []
+    tete = sens_ + ([f"🎉🥳 {m} - {titre} 🎯💰", "🎊🎊🎊🎊🎊"] if fete else [f"📍 {m} - {titre}"])   # un TP se fête
     return "\n".join(tete + [""] + list(lignes) + ["", f"🤖 Agent Auto-Trade : %%AGENT:{genre}%%", f"🛡️ Action : {action}", "", statut_sys(DERNIER_ETAT, r or {})])
 
 def agent_pour(etat, cid, marche, genre):
@@ -5455,7 +5458,7 @@ def evenements_pine(etat, m, r, cle, now):
         x = b15[-2]; rng = x["h"] - x["l"]
         if rng >= 1.5 * atr_ and abs(x["c"] - x["o"]) >= 0.6 * rng and mem.get("imp_t") != x["t"]:
             mem["imp_t"] = x["t"]
-            ev.append(dict(kind="impulsion", **base, fleche="⬆️" if x["c"] > x["o"] else "⬇️", ratio=str(round(rng / atr_, 1)).replace(".", ",")))
+            ev.append(dict(kind="impulsion", **base, fleche=("⬆️ HAUSSIER 🟢" if x["c"] > x["o"] else "⬇️ BAISSIER 🔴"), ratio=str(round(rng / atr_, 1)).replace(".", ",")))
     rd, rc = int(r.get("ret_dir") or 0), bool(r.get("ret_conf"))
     if rd and rc and not mem.get("rc"):
         ev.append(dict(kind="ret_conf", **base, sens="LONG" if rd == 1 else "SHORT", strat=r.get("strat") or "—"))
@@ -5493,6 +5496,7 @@ def texte_pine(etat, ev, anglais=False):
         ev["etat_seuil"] = "reached ✅" if "atteint" in str(ev.get("etat_seuil", "")) else "almost"
         ev["etat_seuil_court"] = "Threshold reached" if "atteint" in str(ev.get("etat_seuil_court", "")) else "Almost at the threshold"
         ev["ordre"] = {"vente": "sell", "achat": "buy"}.get(ev.get("ordre"), ev.get("ordre"))
+        ev["fleche"] = str(ev.get("fleche", "")).replace("HAUSSIER", "BULLISH").replace("BAISSIER", "BEARISH")
     return [l.format(**{k: v for k, v in ev.items() if k != "kind"}) for l in lignes]
 
 def regrouper_alertes(blocs):
@@ -7761,6 +7765,7 @@ def agent(m, r, cle, ferme):
         return out
 
     # ── Trade en cours ──
+    cs_ = lambda *a_, **k_: carte_suivi(*a_, d=tr["d"], **k_)     # LONG / SHORT en premier sur chaque carte de suivi
     # GOLD : les mèches PAXG (marché 24/7, peu liquide le soir) peuvent dépasser le vrai prix XAUUSD.
     # Le SL / TP ne compte que si le VRAI prix spot l'a touché (ou si PAXG l'a nettement dépassé).
     if m == "GOLD" and r.get("spot_lo") is not None:
@@ -7775,7 +7780,7 @@ def agent(m, r, cle, ferme):
         for c_, pos in tr.get("qui", {}).items():
             if isinstance(pos, dict):
                 pos["tp1"] = n1v
-        out.append(carte_suivi(m, "OBJECTIFS REMIS DANS L'ORDRE", [f"💰 TP1 : {px(n1v)} ({n1n})", f"🏁 TP2 : {px(n2v)} ({n2n})", f"🛑 SL : {px(tr['sl'])} (inchangé)"], "Rester en position", r))
+        out.append(cs_(m, "OBJECTIFS REMIS DANS L'ORDRE", [f"💰 TP1 : {px(n1v)} ({n1n})", f"🏁 TP2 : {px(n2v)} ({n2n})", f"🛑 SL : {px(tr['sl'])} (inchangé)"], "Rester en position", r))
     d, e, sl, t1, t2 = tr["d"], tr["e"], tr["sl"], tr["tp1"], tr["tp2"]
     touche_sl = (lo <= sl) if d == 1 else (hi >= sl)
     touche_t1 = (hi >= t1) if d == 1 else (lo <= t1)
@@ -7785,16 +7790,16 @@ def agent(m, r, cle, ferme):
     if tr["statut"] == "entree":
         if touche_sl:
             if tr.get("be_dit"):
-                out.append(carte_suivi(m, "SORTI À BE", [f"🛑 SL : {px(sl)} touché (BE)", "🛡 Aucune perte"], "Hors position", r, "attente"))
+                out.append(cs_(m, "SORTI À BE", [f"🛑 SL : {px(sl)} touché (BE)", "🛡 Aucune perte"], "Hors position", r, "attente"))
             else:
                 inverse = "LONG" if d == -1 else "SHORT"
-                out.append(carte_suivi(m, "STOP TOUCHÉ", [f"🛑 Stop : {px(sl)} touché", f"↩ Retournement possible : {inverse} si 15 min + 1 h confirment"], "Hors position", r, "attente"))
+                out.append(cs_(m, "STOP TOUCHÉ", [f"🛑 Stop : {px(sl)} touché", f"↩ Retournement possible : {inverse} si 15 min + 1 h confirment"], "Hors position", r, "attente"))
                 cle["retournement"] = {"d": -d, "t": r["t"]}
             cle["fin"] = [tr, sl, "🔒 Sorti à BE" if tr.get("be_dit") else "🛑 Stop touché"]; cle["stop_t"] = r["t"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
-            out.append(carte_suivi(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅", f"🔒 SL → BE : {px(e)}", f"🏁 TP2 : {px(t2)}",
+            out.append(cs_(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅", f"🔒 SL → BE : {px(e)}", f"🏁 TP2 : {px(t2)}",
                                                      "🚀 Ça continue vers le TP2 tant que le SL tient", "🛡️ Si tu suis la position, je te dis quand remonter ton SL"],
                                    "Sécuriser une partie, garder le reste", r))
             return out
@@ -7806,7 +7811,7 @@ def agent(m, r, cle, ferme):
         risque_ = abs(e - sl)
         if not tr.get("be_dit") and risque_ > 0 and d * (p - e) >= 1.2 * risque_ and d * (r["b15"][-1]["c"] - e) >= r["atr"]:
             tr["be_dit"] = True; tr["sl"] = e + d * 0.05 * r["atr"]
-            out.append(carte_suivi(m, "METS-TOI À BE", [f"🛑 SL → BE : {px(e)} (entrée)", f"🕯 Clôture 15 min {heure(r['b15'][-1]['t'])} {'au-dessus' if d == 1 else 'sous'} l'entrée",
+            out.append(cs_(m, "METS-TOI À BE", [f"🛑 SL → BE : {px(e)} (entrée)", f"🕯 Clôture 15 min {heure(r['b15'][-1]['t'])} {'au-dessus' if d == 1 else 'sous'} l'entrée",
                                                           f"💰 TP : {px(t1)}"], "SL à BE (plus de perte possible)", r))
             return out
         if progres < 0.25:
@@ -7814,15 +7819,15 @@ def agent(m, r, cle, ferme):
                 tr["encore"] += 1
                 if True:
                     vue_ = f" (vue {tr['sl_ut']})" if tr.get("sl_ut") else ""
-                    niv_ = [(f"🛑 SL : {px(sl)}", sl), (f"🎯 Entrée : {px(p)}{vue_}", p), (f"💰 TP1 : {px(t1)}", t1)]
+                    niv_ = [(f"🛑 SL : {px(sl)}", sl), (f"🎯 Entrée : {px(e)}{vue_}", e), (f"💰 TP1 : {px(t1)}", t1)]
                     if t2 is not None and d * (t2 - t1) > 0:
                         niv_.append((f"🏁 TP2 : {px(t2)}", t2))
-                    lignes_ = [f"🕯 Prix encore près de l'entrée du bot ({px(e)})", ""] + [x for x, _ in sorted(niv_, key=lambda z: -z[1])]   # ordre du graphique
-                    out.append((carte_suivi(m, "ENTRÉE ENCORE POSSIBLE", lignes_, "Entrer (bouton de suivi)", r), boutons(m)))
+                    lignes_ = [f"🕯 Prix actuel {px(p)} : encore près de l'entrée du bot ({px(e)})", ""] + [x for x, _ in sorted(niv_, key=lambda z: -z[1])]   # ordre du graphique
+                    out.append((cs_(m, "ENTRÉE ENCORE POSSIBLE", lignes_, "Entrer (bouton de suivi)", r), boutons(m)))
         elif not tr.get("tard"):
             tr["tard"] = True
             # Le bot reste en position jusqu'au TP ou au SL (son bilan compte toutes ses positions)
-            out.append(carte_suivi(m, "TROP TARD POUR ENTRER", [f"📏 Prix trop loin de l'entrée {px(e)}", f"💰 TP1 : {px(t1)}", "🟢 Position déjà ouverte : suivie"], "NE PAS ENTRER", r))
+            out.append(cs_(m, "TROP TARD POUR ENTRER", [f"📏 Prix trop loin de l'entrée {px(e)}", f"💰 TP1 : {px(t1)}", "🟢 Position déjà ouverte : suivie"], "NE PAS ENTRER", r))
         return out
 
     if tr["statut"] == "tp1":
@@ -7832,13 +7837,13 @@ def agent(m, r, cle, ferme):
             excès = (r["r15"] >= 70) if d == 1 else (r["r15"] <= 30)
             if r["dirs"][9] == d and not excès and suivants and not tr.get("etendu"):
                 tr["etendu"] = True; tr["sl"] = t1; tr["tp2"] = suivants[0][0]
-                out.append(carte_suivi(m, "TP2 TOUCHÉ", [f"🛑 Nouveau SL : {px(t1)} (au TP1)", f"🎯 Nouvel objectif : {px(suivants[0][0])}"], "Rester en position (tendance continue)", r))
+                out.append(cs_(m, "TP2 TOUCHÉ", [f"🛑 Nouveau SL : {px(t1)} (au TP1)", f"🎯 Nouvel objectif : {px(suivants[0][0])}"], "Rester en position (tendance continue)", r))
                 return out
-            out.append(carte_suivi(m, "OBJECTIF FINAL ATTEINT", [f"🎯 TP2 : {px(t2)} ✅"], "Trade terminé", r, "attente"))
+            out.append(cs_(m, "OBJECTIF FINAL ATTEINT", [f"🎯 TP2 : {px(t2)} ✅"], "Trade terminé", r, "attente"))
             cle["fin"] = [tr, t2, "🏆 Objectif final"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
-            out.append(carte_suivi(m, "SORTIE AU STOP SÉCURISÉ", [f"🛑 Sortie : {px(tr['sl'])}", "✅ TP1 encaissé, aucune perte"], "Hors position", r, "attente"))
+            out.append(cs_(m, "SORTIE AU STOP SÉCURISÉ", [f"🛑 Sortie : {px(tr['sl'])}", "✅ TP1 encaissé, aucune perte"], "Hors position", r, "attente"))
             cle["fin"] = [tr, t1 if d * (tr["sl"] - t1) < 0 else tr["sl"], "💰 TP1 encaissé"]
             cle.pop("trade"); cle["aligne"] = 0; return out
     return out

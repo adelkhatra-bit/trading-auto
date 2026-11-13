@@ -43,7 +43,7 @@ class CarteCoach(unittest.TestCase):
             tm.time.return_value = T
             txt = ab.carte_coach("GOLD", self.r(), {}, "signal", tr=self.TR, validite="clôture 15 min (14:15)", signal="Rejet 5 min + 4h/1h", etat=self.etat())
         self.assertEqual(txt.split("\n"), [
-            "📍 GOLD - SHORT", "", "🛑 SL : 3999,99", "🎯 Entrée : 3995,20", "💰 TP1 : 3985", "🏁 TP2 : 3895,54", "⚖️ R:R : 1:2,1", "⏱ Valide : clôture 15 min (14:15)", "",
+            "🔴 GOLD - SHORT", "", "🛑 SL : 3999,99", "🎯 Entrée : 3995,20", "💰 TP1 : 3985", "🏁 TP2 : 3895,54", "⚖️ R:R : 1:2,1", "⏱ Valide : clôture 15 min (14:15)", "",
             "📊 Contexte :", "🔹 Signal : Rejet 5 min + 4h/1h", "🔹 DXY : Haussier ⚠️ +0,13 %/1h", "🔹 News : CPI USA 14:30 (dans 15 min)",
             "🔹 Niveaux : R: 3995 | S: 3970", "", "🤖 Agent Auto-Trade : %%AGENT:signal%%", "🛡️ Action : ENTRER", "", "🔌 Sys: TV❌ News✅ DXY✅ Agent✅"])
 

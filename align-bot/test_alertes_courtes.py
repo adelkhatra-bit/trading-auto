@@ -127,7 +127,7 @@ class EvenementsPine(unittest.TestCase):
         etat, r = {}, self.r()
         r["b15"][-2] = dict(r["b15"][-2], o=100.0, c=105.0, h=105.2, l=99.8)                 # 5,4 d'amplitude pour un ATR de 2 : x2,7, bougie pleine
         evs = self.lance(etat, "GOLD", r)
-        self.assertEqual(self.kinds(evs), ["impulsion"]); self.assertEqual(evs[0]["fleche"], "⬆️")
+        self.assertEqual(self.kinds(evs), ["impulsion"]); self.assertEqual(evs[0]["fleche"], "⬆️ HAUSSIER 🟢")
         self.assertEqual(self.lance(etat, "GOLD", r, self.NOW + 20), [])
 
     def test_reversal_cancel_then_confirmed(self):
