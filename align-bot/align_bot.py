@@ -2389,6 +2389,11 @@ def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal
         l += [x for x, _ in sorted(niv, key=lambda z: -z[1])] + [f"⚖️ R:R : 1:{rr:.1f}".replace(".", ",")]
         if validite:
             l.append(f"⏱ Valide : {validite}")
+        try:
+            co = coach_fvg(r, d, r["m1"][-1]["c"], attente=False) if r.get("m1") else []
+            l += [""] + co if co else []
+        except Exception:
+            pass
         action = "ENTRER"
     else:
         l = [f"📍 {m} - ATTENTE", "", f"⏳ Raison : {raison}"]
@@ -2399,6 +2404,10 @@ def carte_coach(m, r, cle, genre, tr=None, raison=None, declencheur=None, signal
         if o or zp:
             za, zb = (min(o.get("za", o["e"]), o.get("zb", o["e"])), max(o.get("za", o["e"]), o.get("zb", o["e"]))) if o else (min(zp["za"], zp["zb"]), max(zp["za"], zp["zb"]))
             l.append(f"🔑 Zone : {px(za)} → {px(zb)}")
+        try:
+            l += coach_fvg(r, r.get("dirPlan") or 0, r["m1"][-1]["c"]) if r.get("m1") and not o else []
+        except Exception:
+            pass
         action = "NE PAS RENTRER"
         try:
             pr = proximite_marche(m, r, cle, time.time())
@@ -5636,8 +5645,10 @@ def texte_radar(props, derniers, vip=True, anglais=False, now=None, intro=None):
                     l.append(f"🏁 TP2 : {px(es['tp2'])}" + (" (if TP1 breaks, it keeps going)" if anglais else " (si le TP1 casse, ça continue)"))
                 if es.get("fvg"):
                     l.append((f"👀 TradingView : {es['ut']} view = same levels" if anglais else f"👀 TradingView : vue {es['ut']} = mêmes niveaux"))
-                    l.append(("🧘 It's an FVG: it can sting a bit before turning, don't panic while the SL holds" if anglais else
-                              "🧘 C'est une FVG : ça peut piquer un peu avant de repartir, t'inquiète pas tant que le SL tient"))
+                    if anglais:
+                        l.append("🧘 It's an FVG: it can sting a bit before turning, don't panic while the SL holds")
+                    else:
+                        l += [x for x in coach_fvg(r, d, r["m1"][-1]["c"]) if not x.startswith("📍")] if r.get("m1") else []
             if t["rang"] == 0:
                 l.append("🟨 Price is IN the zone" if anglais else "🟨 Le prix est DANS la zone")
             else:
@@ -6855,6 +6866,32 @@ def trait_indicateur(r, d):
         return None
     return dict(za=min(pe["za"], pe["zb"]), zb=max(pe["za"], pe["zb"]), zmil=pe["zmil"]) if pe and pe.get("fvg_ut") else None
 
+def coach_fvg(r, d, prix, attente=True):
+    """Lignes « coach » d'une entrée sur FVG (mêmes niveaux que l'indicateur sur la vue de validation) : zone, alignement 5 min + 15 min,
+    FVG qui bloque, SL protégé, manipulation (mèche qui dépasse puis revient), quand entrer. [] si l'indicateur garde son plan d'origine."""
+    try:
+        pe = pine_entree(r, d) if d in (1, -1) and r.get("b15") and "planH" in r else None
+    except Exception:
+        pe = None
+    if not pe or not pe.get("fvg_ut"):
+        return []
+    ut, za, zb = pe["sl_ut"], min(pe["za"], pe["zb"]), max(pe["za"], pe["zb"])
+    dirs = r.get("dirs") or []
+    l = []
+    if za <= prix <= zb:
+        l.append(f"📍 Prix DANS la zone d'entrée (vue {ut})")
+    al = [n for n, k in (("5 min", 2), ("15 min", 4)) if len(dirs) > k and dirs[k] == d]
+    l.append("✅ 5 min + 15 min alignés" if len(al) == 2 else f"⏳ Alignement : {' + '.join(al) if al else 'ni 5 min ni 15 min'} pour l'instant")
+    l.append(f"🧱 FVG {'rouge' if d == -1 else 'verte'} {ut} à {px(pe['e'])} : elle bloque la {'hausse' if d == -1 else 'baisse'}")
+    l.append(f"🛡️ SL {px(pe['sl'])} protégé derrière la FVG et la mèche")
+    bars = (r.get(UT_FVG_BARS.get(UT_FVG.get(r.get("strat") or "", "15"), "b15")) or [])[-4:]
+    if any((x["h"] > pe["zmil"] and x["c"] < pe["zmil"]) if d == -1 else (x["l"] < pe["zmil"] and x["c"] > pe["zmil"]) for x in bars):
+        l.append("🎣 Mèche qui dépasse puis revient = manipulation (chasse aux stops), c'est normal")
+    if attente:
+        l.append(f"⏳ Patiente : j'entre à la clôture {ut} {'sous' if d == -1 else 'au-dessus de'} {px(pe['zmil'])}")
+    l.append("🧘 Ça peut piquer un peu, t'inquiète pas tant que le SL tient")
+    return l
+
 def pine_entree(r, d):
     """Ordre Telegram = niveaux du graphique : plan figé de l'indicateur Pine v24 (sens du plan) ou plan instantané de l'autre sens."""
     if d not in (1, -1) or not r.get("b15") or "planH" not in r:
@@ -7757,7 +7794,9 @@ def agent(m, r, cle, ferme):
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
-            out.append(carte_suivi(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅", f"🔒 SL → BE : {px(e)}", f"🏁 TP2 : {px(t2)}"], "Sécuriser une partie, garder le reste", r))
+            out.append(carte_suivi(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅", f"🔒 SL → BE : {px(e)}", f"🏁 TP2 : {px(t2)}",
+                                                     "🚀 Ça continue vers le TP2 tant que le SL tient", "🛡️ Si tu suis la position, je te dis quand remonter ton SL"],
+                                   "Sécuriser une partie, garder le reste", r))
             return out
         # ↩ Voyants de retournement (comme l'indicateur) : 3/5 petites unités contre la position = alerte, 1 fois.
         alerte_r = alerte_retournement(m, r, tr)

@@ -64,6 +64,24 @@ class PlanFVG(unittest.TestCase):
         self.assertAlmostEqual(pe["e"], 104)
         self.assertEqual(pe["sl_ut"], "5 min")
 
+    def test_coach_fvg_explique_l_attente(self):
+        b5 = serie_short()
+        st = ab.structure_fvg(b5)
+        pl = dict(e=120, sl=125, tp1=90, n1="15m", tp2=80, n2="1h", rr=6)
+        b15 = [bougie(100 + i, 101 + i, 99 + i, 100.5 + i, i) for i in range(30)]
+        r = dict(b15=b15, b5=b5, planH=pl, planB=pl, dirPlan=-1, strat="DAY", dirs=[-1] * 11,
+                 struct_ut={"5": st, "3": None, "15": None, "1h": None})
+        if ab.pine_entree(r, -1) is None:
+            self.skipTest("zone du plan indisponible sur ces bougies")
+        l = ab.coach_fvg(r, -1, 104.5)
+        txt = "\n".join(l)
+        self.assertIn("✅ 5 min + 15 min alignés", txt)
+        self.assertIn("🧱 FVG rouge 5 min à 104", txt)
+        self.assertIn("🛡️ SL", txt)
+        self.assertIn("⏳ Patiente : j'entre à la clôture 5 min sous", txt)
+        self.assertIn("📍 Prix DANS la zone d'entrée (vue 5 min)", txt)
+        self.assertEqual(ab.coach_fvg(dict(r, struct_ut={}), -1, 104.5), [])        # pas de FVG : rien d'inventé
+
 
 if __name__ == "__main__":
     unittest.main()
