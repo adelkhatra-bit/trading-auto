@@ -76,9 +76,9 @@ class PlanFVG(unittest.TestCase):
         l = ab.coach_fvg(r, -1, 104.5)
         txt = "\n".join(l)
         self.assertIn("✅ 5 min + 15 min alignés", txt)
-        self.assertIn("🧱 FVG rouge 5 min à 104", txt)
+        self.assertIn("🧱 FVG rouge 5 min (104)", txt)
         self.assertIn("🛡️ SL", txt)
-        self.assertIn("⏳ Patiente : j'entre à la clôture 5 min sous", txt)
+        self.assertIn("⏳ Patiente : j'entre quand une bougie 5 min clôture sous", txt)
         self.assertIn("📍 Prix DANS la zone d'entrée (vue 5 min)", txt)
         self.assertEqual(ab.coach_fvg(dict(r, struct_ut={}), -1, 104.5), [])        # pas de FVG : rien d'inventé
 

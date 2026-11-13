@@ -2276,6 +2276,22 @@ TRAD.update({
     "⏳ J'attends : repli ou retournement confirmé en 1h + clôture 5m, ou meilleur prix": "⏳ Waiting for: pullback or reversal confirmed on 1h + 5m close, or a better price",
     "4h + 1h alignées": "4h + 1h aligned", " - EN ATTENTE": " - WAITING", "🕯 Prix encore près de l'entrée du bot": "🕯 Price still close to the bot's entry", "🛑 SL :": "🛑 SL:", "💰 TP1 :": "💰 TP1:", "🏁 TP2 :": "🏁 TP2:", "⚖️ R:R :": "⚖️ R:R:",
 })
+TRAD.update({   # v24.3 : cartes coach FVG, scalp, suivi, ouvertures — même format propre en anglais
+    "ENTRÉE ENCORE POSSIBLE": "ENTRY STILL POSSIBLE", "TROP TARD POUR ENTRER": "TOO LATE TO ENTER", "TP1 TOUCHÉ": "TP1 HIT", "TP2 TOUCHÉ": "TP2 HIT",
+    "OBJECTIF FINAL ATTEINT": "FINAL TARGET REACHED", "METS-TOI À BE": "MOVE TO BE", "SORTIE AU STOP SÉCURISÉ": "EXIT AT PROTECTED SL",
+    "SORTI À BE": "OUT AT BE", "STOP TOUCHÉ": "SL HIT", "OBJECTIFS REMIS DANS L'ORDRE": "TARGETS REORDERED",
+    "🕯 Prix actuel": "🕯 Current price", ": encore près de l'entrée du bot": ": still close to the bot's entry",
+    "✅ 5 min + 15 min alignés": "✅ 5 min + 15 min aligned", "⏳ Alignement :": "⏳ Alignment:", "pour l'instant": "for now",
+    "ni 5 min ni 15 min": "neither 5 min nor 15 min", "FVG rouge": "Red FVG", "FVG verte": "Green FVG",
+    ": elle bloque la hausse": ": it blocks the rise", ": elle bloque la baisse": ": it blocks the drop",
+    "protégé derrière la FVG et la mèche": "protected behind the FVG and the wick",
+    "🎣 Mèche qui dépasse puis revient = manipulation (chasse aux stops), c'est normal": "🎣 Wick that pokes through then comes back = manipulation (stop hunt), it's normal",
+    "⏳ Patiente : j'entre quand une bougie": "⏳ Be patient: I enter when a", " clôture sous ": " candle closes below ", " clôture au-dessus de ": " candle closes above ", "🧘 Ça peut piquer un peu, t'inquiète pas tant que le SL tient": "🧘 It can sting a bit, don't worry as long as the SL holds",
+    "📍 Prix DANS la zone d'entrée": "📍 Price IN the entry zone",
+    "🚀 Ça continue vers le TP2 tant que le SL tient": "🚀 It keeps going to TP2 as long as the SL holds",
+    "🛡️ Si tu suis la position, je te dis quand remonter ton SL": "🛡️ If you follow the position, I'll tell you when to move your SL",
+    "LONDRES": "LONDON", "Londres": "London", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
+})
 _CLES = sorted(TRAD, key=len, reverse=True)
 
 def traduire(t):
@@ -2431,8 +2447,8 @@ def carte_suivi(m, titre, lignes, action, r=None, genre="signal", d=None):
     fete = any(k in titre for k in ("TP1 TOUCHÉ", "TP2 TOUCHÉ", "OBJECTIF FINAL"))
     if d is None:                                         # sens de la position en cours : LONG / SHORT toujours en PREMIER (demande d'Adel)
         d = (((DERNIER_ETAT or {}).get(m) or {}).get("trade") or {}).get("d")
-    sens_ = [f"{'🟢 LONG ⬆️' if d == 1 else '🔴 SHORT ⬇️'} • {ICONE.get(m, '')} {m}"] if d in (1, -1) else []
-    tete = sens_ + ([f"🎉🥳 {m} - {titre} 🎯💰", "🎊🎊🎊🎊🎊"] if fete else [f"📍 {m} - {titre}"])   # un TP se fête
+    sens_ = (f"{'🟢 LONG' if d == 1 else '🔴 SHORT'} " if d in (1, -1) else "")     # UNE seule ligne de titre : le sens en premier, en couleur
+    tete = [f"🎉🥳 {sens_}{m} - {titre} 🎯💰", "🎊🎊🎊🎊🎊"] if fete else [f"{sens_ or '📍 '}{m} - {titre}"]   # un TP se fête
     return "\n".join(tete + [""] + list(lignes) + ["", f"🤖 Agent Auto-Trade : %%AGENT:{genre}%%", f"🛡️ Action : {action}", "", statut_sys(DERNIER_ETAT, r or {})])
 
 def agent_pour(etat, cid, marche, genre):
@@ -6962,13 +6978,13 @@ def coach_fvg(r, d, prix, attente=True):
         l.append(f"📍 Prix DANS la zone d'entrée (vue {ut})")
     al = [n for n, k in (("5 min", 2), ("15 min", 4)) if len(dirs) > k and dirs[k] == d]
     l.append("✅ 5 min + 15 min alignés" if len(al) == 2 else f"⏳ Alignement : {' + '.join(al) if al else 'ni 5 min ni 15 min'} pour l'instant")
-    l.append(f"🧱 FVG {'rouge' if d == -1 else 'verte'} {ut} à {px(pe['e'])} : elle bloque la {'hausse' if d == -1 else 'baisse'}")
+    l.append(f"🧱 FVG {'rouge' if d == -1 else 'verte'} {ut} ({px(pe['e'])}) : elle bloque la {'hausse' if d == -1 else 'baisse'}")
     l.append(f"🛡️ SL {px(pe['sl'])} protégé derrière la FVG et la mèche")
     bars = (r.get(UT_FVG_BARS.get(UT_FVG.get(r.get("strat") or "", "15"), "b15")) or [])[-4:]
     if any((x["h"] > pe["zmil"] and x["c"] < pe["zmil"]) if d == -1 else (x["l"] < pe["zmil"] and x["c"] > pe["zmil"]) for x in bars):
         l.append("🎣 Mèche qui dépasse puis revient = manipulation (chasse aux stops), c'est normal")
     if attente:
-        l.append(f"⏳ Patiente : j'entre à la clôture {ut} {'sous' if d == -1 else 'au-dessus de'} {px(pe['zmil'])}")
+        l.append(f"⏳ Patiente : j'entre quand une bougie {ut} clôture {'sous' if d == -1 else 'au-dessus de'} {px(pe['zmil'])}")
     l.append("🧘 Ça peut piquer un peu, t'inquiète pas tant que le SL tient")
     return l
 
