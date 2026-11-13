@@ -21,25 +21,26 @@ def serie_short():
 class PlanFVG(unittest.TestCase):
     def test_short_entree_bas_fvg_sl_meche(self):
         st = ab.structure_fvg(serie_short())
-        rTop, rBot, gTop, gBot, hH, lL, a, cl = st
+        rTop, rBot, gTop, gBot, hH, lL, a, cl = st[:8]
+        self.assertEqual(st[8:10], (110, 105.8))                                 # order block = dernière bougie haussière avant la chute
         self.assertAlmostEqual(rBot, 104)
         self.assertAlmostEqual(rTop, 106)
         self.assertAlmostEqual(hH, 110)
         fv = ab.plan_fvg(-1, st, 120, 125, 90, 80, "5 min")
         self.assertIsNotNone(fv)
-        self.assertAlmostEqual(fv["e"], 104)                                     # entrée = bas de la FVG rouge
-        self.assertAlmostEqual(fv["sl"], max(110 + max(0.3 * a, 0.03), 104 + 1.0 * a))   # un peu au-dessus de la mèche du dernier plus haut
+        self.assertAlmostEqual(fv["e"], 105.8)                                   # entrée = order block juste au-dessus de la FVG rouge
+        self.assertAlmostEqual(fv["sl"], max(110 + max(0.3 * a, 0.03), 105.8 + 1.0 * a))   # un peu au-dessus de la mèche du dernier plus haut
         self.assertLess(fv["tp1"], fv["e"])
         self.assertGreaterEqual(fv["e"] - fv["tp1"], 1.5 * (fv["sl"] - fv["e"]) - 1e-9)    # TP1 ≥ 1,5 x le risque
         self.assertLessEqual(fv["tp2"], fv["tp1"])                               # TP2 = plus loin (continuation)
-        self.assertEqual((fv["za"], fv["zb"]), (104, fv["sl"] - 0.25 * (fv["sl"] - 104)))   # bande verte du graphique
-        self.assertIn("FVG rouge 5 min", fv["src"])
+        self.assertEqual((fv["za"], fv["zb"]), (105.8, fv["sl"] - 0.25 * (fv["sl"] - 105.8)))   # bande verte du graphique
+        self.assertIn("Order block + FVG rouge 5 min", fv["src"])
 
     def test_long_miroir(self):
         inv = [bougie(-x["o"], -x["l"], -x["h"], -x["c"], x["t"]) for x in serie_short()]
         st = ab.structure_fvg(inv)
         fv = ab.plan_fvg(1, st, -120, -125, -90, -80, "5 min")
-        self.assertAlmostEqual(fv["e"], -104)
+        self.assertAlmostEqual(fv["e"], -105.8)
         self.assertLess(fv["sl"], -110)
         self.assertIn("FVG verte 5 min", fv["src"])
 
@@ -61,7 +62,7 @@ class PlanFVG(unittest.TestCase):
         if pe is None:
             self.skipTest("zone du plan indisponible sur ces bougies")
         self.assertTrue(pe.get("fvg_ut"))
-        self.assertAlmostEqual(pe["e"], 104)
+        self.assertAlmostEqual(pe["e"], 105.8)
         self.assertEqual(pe["sl_ut"], "5 min")
 
     def test_coach_fvg_explique_l_attente(self):
@@ -73,14 +74,14 @@ class PlanFVG(unittest.TestCase):
                  struct_ut={"5": st, "3": None, "15": None, "1h": None})
         if ab.pine_entree(r, -1) is None:
             self.skipTest("zone du plan indisponible sur ces bougies")
-        l = ab.coach_fvg(r, -1, 104.5)
+        l = ab.coach_fvg(r, -1, 106.5)
         txt = "\n".join(l)
         self.assertIn("✅ 5 min + 15 min alignés", txt)
-        self.assertIn("🧱 FVG rouge 5 min (104)", txt)
+        self.assertIn("🧱 Order block + FVG rouge 5 min (105,80)", txt)
         self.assertIn("🛡️ SL", txt)
         self.assertIn("⏳ Patiente : j'entre quand une bougie 5 min clôture sous", txt)
         self.assertIn("📍 Prix DANS la zone d'entrée (vue 5 min)", txt)
-        self.assertEqual(ab.coach_fvg(dict(r, struct_ut={}), -1, 104.5), [])        # pas de FVG : rien d'inventé
+        self.assertEqual(ab.coach_fvg(dict(r, struct_ut={}), -1, 106.5), [])        # pas de FVG : rien d'inventé
 
     def test_scalp_inverse_vers_l_entree_du_plan(self):
         st = (None, None, 100.0, 99.0, 110.0, 98.0, 1.0, 100.2)                 # FVG verte 99–100, plus bas 98, ATR 1
