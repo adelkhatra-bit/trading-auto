@@ -565,6 +565,7 @@ var label eTP1 = na
 var label eTP2 = na
 var label eSL = na
 var box bZone = na
+var box bOB = na
 var box bRisque = na
 var line lF50 = na
 var line lF618 = na
@@ -574,6 +575,11 @@ var line lZH = na
 var label eZH = na
 if barstate.islast
     box.delete(bZone)
+    box.delete(bOB)
+    obH_ = dirVu == -1 ? obRH : obGH
+    obL_ = dirVu == -1 ? obRL : obGL
+    if voirPlan and dirVu != 0 and not siOn and not na(obH_) and not na(obL_) and str.contains(srcD, "Order block")
+        bOB := box.new(bar_index - 25, obH_, bar_index + 20, obL_, border_color=color.new(dirVu == -1 ? color.orange : color.aqua, 30), bgcolor=color.new(dirVu == -1 ? color.orange : color.aqua, 88), border_style=line.style_dashed, extend=extend.right, text="ORDER BLOCK", text_color=color.new(dirVu == -1 ? color.orange : color.aqua, 10), text_size=size.small, text_halign=text.align_right)
     box.delete(bRisque)
     line.delete(lF50)
     line.delete(lF618)
@@ -780,10 +786,10 @@ var int[] fvgSens = array.new_int()
 fvgMin = 0.1 * atrC
 if voirFvg and barstate.isconfirmed
     if low > high[2] and low - high[2] >= fvgMin
-        array.push(fvgs, box.new(bar_index - 2, low, bar_index, high[2], border_color=color.new(color.lime, 60), bgcolor=color.new(color.lime, 85), extend=extend.right))
+        array.push(fvgs, box.new(bar_index - 2, low, bar_index, high[2], border_color=color.new(color.lime, 60), bgcolor=color.new(color.lime, 85), extend=extend.right, text="FVG", text_color=color.new(color.lime, 20), text_size=size.tiny, text_halign=text.align_left))
         array.push(fvgSens, 1)
     if high < low[2] and low[2] - high >= fvgMin
-        array.push(fvgs, box.new(bar_index - 2, low[2], bar_index, high, border_color=color.new(color.red, 60), bgcolor=color.new(color.red, 85), extend=extend.right))
+        array.push(fvgs, box.new(bar_index - 2, low[2], bar_index, high, border_color=color.new(color.red, 60), bgcolor=color.new(color.red, 85), extend=extend.right, text="FVG", text_color=color.new(color.red, 20), text_size=size.tiny, text_halign=text.align_left))
         array.push(fvgSens, -1)
     // comblé = le prix a traversé tout le gap → on l'efface
     i = array.size(fvgs) - 1
