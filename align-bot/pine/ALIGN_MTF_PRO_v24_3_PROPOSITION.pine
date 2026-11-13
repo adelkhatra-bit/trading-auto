@@ -34,7 +34,9 @@ f_etat() =>
     hh20 = ta.highest(high, 20)
     ll20 = ta.lowest(low, 20)
     pos = hh20 > ll20 ? 100 * (close - ll20) / (hh20 - ll20) : 50.0
-    [d, sqz ? 1 : 0, ta.rsi(close, lenRsi), pos]
+    // 0 = rien • 1 = compression (prête à exploser) • 2 = EXPLOSION vers le haut • 3 = EXPLOSION vers le bas (3 bougies après la sortie de compression)
+    sortie = not sqz and (sqz[1] or sqz[2] or sqz[3])
+    [d, sqz ? 1 : sortie ? (close >= basis ? 2 : 3) : 0, ta.rsi(close, lenRsi), pos]
 
 [d1, s1, r1, p1]       = request.security(syminfo.tickerid, "1",   f_etat())
 [d2, s2, r2, p2]       = request.security(syminfo.tickerid, "3",   f_etat())
@@ -72,7 +74,7 @@ for i = 0 to 10
     w = array.get(wts, i)
     bull += dv == 1 ? 1 : 0
     bear += dv == -1 ? 1 : 0
-    comp += array.get(sqzs, i)
+    comp += array.get(sqzs, i) == 1 ? 1 : 0
     sw += w
     ts += w * dv
     rs += w * (array.get(rsis, i) - 50) / 50
@@ -92,7 +94,7 @@ rsiAchat = (ta.crossover(rC, rsiSig) and rC < 50) or ta.crossover(rC, 30) or ta.
 rsiVente = (ta.crossunder(rC, rsiSig) and rC > 50) or ta.crossunder(rC, 70) or ta.crossunder(rC, 50)
 mom = ta.linreg(close - math.avg(math.avg(ta.highest(high, lenSqz), ta.lowest(low, lenSqz)), ta.sma(close, lenSqz)), lenSqz, 0)
 momS = mom > 0 ? (mom > mom[1] ? 1.0 : 0.4) : (mom < mom[1] ? -1.0 : -0.4)
-liberation = sC[1] == 1 and sC == 0
+liberation = sC[1] == 1 and sC != 1
 
 // ═════════ ANTICIPATION : SENS PROBABLE ═════════
 trendS = ts / sw
@@ -573,15 +575,16 @@ if barstate.islast
         dv = array.get(dirs, i)
         sq = array.get(sqzs, i) == 1
         rv = array.get(rsis, i)
-        bg = sq ?  color.rgb(230, 130, 0) : dv == 1 ?  color.rgb(0, 140, 70) : dv == -1 ?  color.rgb(190, 30, 45) :  color.rgb(90, 90, 90)
-        sym = (dv == 1 ? "▲" : dv == -1 ? "▼" : "—") + (rv >= 70 ? "!" : rv <= 30 ? "!" : "") + (dirPlan != 0 and dv == -dirPlan and i <= 4 ? "↩" : "")
+        ex = array.get(sqzs, i)
+        bg = ex == 2 ? (clignote ? color.rgb(0, 230, 118) : color.rgb(0, 160, 80)) : ex == 3 ? (clignote ? color.rgb(255, 40, 60) : color.rgb(170, 20, 35)) : sq ?  color.rgb(230, 130, 0) : dv == 1 ?  color.rgb(0, 140, 70) : dv == -1 ?  color.rgb(190, 30, 45) :  color.rgb(90, 90, 90)
+        sym = (ex == 2 ? "💥▲" : ex == 3 ? "💥▼" : dv == 1 ? "▲" : dv == -1 ? "▼" : "—") + (rv >= 70 ? "!" : rv <= 30 ? "!" : "") + (dirPlan != 0 and dv == -dirPlan and i <= 4 ? "↩" : "")
         roleUT = array.get(array.from("déclenchement SCALP", "timing très court", "déclenchement DAY • structure SCALP", "préparation", "direction SCALP • retracement DAY", "intermédiaire", "intermédiaire", "contexte SCALP • direction DAY • confirmation SWING", "intermédiaire", "contexte DAY • retracement SWING", "direction SWING"), i)
         minUT = array.get(array.from(1, 3, 5, 10, 15, 30, 45, 60, 120, 240, 0), i)
         sensUT = dv == 1 ? "HAUSSE ▲" : dv == -1 ? "BAISSE ▼" : "NEUTRE —"
         tendUT = dv == 1 ? "prix au-dessus de l'EMA 20, EMA 20 au-dessus de l'EMA 50" : dv == -1 ? "prix sous l'EMA 20, EMA 20 sous l'EMA 50" : "prix entre les moyennes : pas de sens net"
         rsiUT = rv >= 70 ? "SURACHAT (risque de baisse)" : rv <= 30 ? "SURVENTE (risque de rebond)" : rv >= 55 ? "acheteurs plus forts" : rv <= 45 ? "vendeurs plus forts" : "équilibré"
         planUT = dirPlan == 0 ? "pas de plan en cours" : dv == dirPlan ? "✅ va dans le sens du plan " + (dirPlan == 1 ? "LONG" : "SHORT") : dv == -dirPlan ? "⛔ contre le plan " + (dirPlan == 1 ? "LONG" : "SHORT") + " : attendre qu'elle se retourne" : "⏳ neutre : pas encore de confirmation"
-        tip = array.get(nomsL, i) + " — " + sensUT + "\n━━━━━━━━━━━━\nTendance : " + tendUT + "\nRSI : " + str.tostring(rv, "#") + " — " + rsiUT + "\nCompression : " + (sq ? "OUI ⚡ prêt à exploser (attendre la direction)" : "non") + "\nRôle : " + roleUT + (minUT > 0 ? "\nClôture dans : " + f_mmss(f_reste(minUT)) : "") + "\n━━━━━━━━━━━━\n" + planUT + (dirPlan != 0 and dv == -dirPlan and i <= 4 ? "\n↩ VOYANT RETOURNEMENT allumé : " + str.tostring(nVoy) + "/5 petites unités (1 à 15 min) ont tourné contre le plan\n3/5 = le retournement se prépare • confirmé quand le 15 min ET la 1h clôturent dans le nouveau sens" : "")
+        tip = array.get(nomsL, i) + " — " + sensUT + "\n━━━━━━━━━━━━\nTendance : " + tendUT + "\nRSI : " + str.tostring(rv, "#") + " — " + rsiUT + "\nCompression : " + (sq ? "OUI ⚡ prêt à exploser (attendre la direction)" : ex == 2 ? "💥 EXPLOSION VERS LE HAUT : le marché part" : ex == 3 ? "💥 EXPLOSION VERS LE BAS : le marché part" : "non") + "\nRôle : " + roleUT + (minUT > 0 ? "\nClôture dans : " + f_mmss(f_reste(minUT)) : "") + "\n━━━━━━━━━━━━\n" + planUT + (dirPlan != 0 and dv == -dirPlan and i <= 4 ? "\n↩ VOYANT RETOURNEMENT allumé : " + str.tostring(nVoy) + "/5 petites unités (1 à 15 min) ont tourné contre le plan\n3/5 = le retournement se prépare • confirmé quand le 15 min ET la 1h clôturent dans le nouveau sens" : "")
         table.cell(t, i, 0, array.get(noms, i), width=largCol, bgcolor=rv >= 70 ?  color.rgb(120, 20, 30) : rv <= 30 ?  color.rgb(0, 90, 50) :  color.rgb(30, 34, 45), text_color=rv >= 70 or rv <= 30 ?  color.white :  color.gray, text_size=size.small, tooltip=tip)
         table.cell(t, i, 1, sym + (dirPlan != 0 and i <= 9 ? "\n" + str.tostring(f_alg(i), "#") + "%" : ""), width=largCol, bgcolor=bg, text_color= color.white, text_size=size.large, tooltip=tip)
     titre = zoneBas ? "RETOURNEMENT ▼" : zoneHaut ? "REBOND ▲" : fortHaut ? "★ ACHAT FORT" : fortBas ? "★ VENTE FORTE" : retHaut ? "RETOURNEMENT ▲" : retBas ? "RETOURNEMENT ▼" : rsiOB >= 3 ? "RSI SURACHAT " + str.tostring(rsiOB) + "/11" : rsiOS >= 3 ? "RSI SURVENTE " + str.tostring(rsiOS) + "/11" : surcharge ? "⚡ SURCHARGE" : sens == 1 ? "HAUSSE" : sens == -1 ? "BAISSE" : "ATTENDRE"
