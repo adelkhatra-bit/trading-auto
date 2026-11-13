@@ -221,3 +221,14 @@ class CourseDesTP(unittest.TestCase):
     def test_fete_pour_tout_tp(self):
         for n in (1, 2, 3, 4, 5):
             self.assertTrue(ab.carte_suivi("GOLD", f"TP{n} TOUCHÉ", ["x"], "S", {}).startswith("🎉🥳"))
+
+
+class ReleveDuWorker(unittest.TestCase):
+    """Un nouveau worker en file = l'ancien s'arrête lui-même et sauve sa mémoire (plus de doublons après redémarrage)."""
+    def test_detecte_le_nouveau_worker(self):
+        self.assertTrue(ab.releve_en_attente([{"id": 10, "status": "in_progress"}, {"id": 12, "status": "pending"}], 10))
+        self.assertTrue(ab.releve_en_attente([{"id": 12, "status": "queued"}], 10))
+
+    def test_ignore_les_anciens_et_les_termines(self):
+        self.assertFalse(ab.releve_en_attente([{"id": 9, "status": "in_progress"}, {"id": 11, "status": "completed"}], 10))
+        self.assertFalse(ab.releve_en_attente([], 10))
