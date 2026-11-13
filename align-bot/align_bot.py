@@ -492,7 +492,8 @@ def fvgs(bars, ut, n=40):
 
 # ═══ v24.3 — jumeau EXACT de f_struct() de l'indicateur « ALIGN MTF PRO (Inside) » : FVG non comblées + mèches, sur UNE unité de temps ═══
 # Le bot donne la même entrée / le même SL / les mêmes TP que le graphique quand on se met sur cette unité (1 min → structure 3 min, comme le Pine).
-UT_FVG = {"SWING": "1h", "DAY": "5", "SCALPING": "3"}   # structure = unité de VALIDATION du profil (1 min → 3 min, comme le Pine) ; sans profil : 15 min
+UT_FVG = {"SCALPING": "3"}   # PLAN UNIQUE : structure 5 min (SCALP : 3 min, vue 1 min comme le Pine) — fini les plans 1h aux zones de 600 points
+PLAN_VUE = {"SCALPING": "1 min"}   # vue à mettre sur TradingView (sinon 5 min)
 # La vue à mettre sur TradingView = HB_UNITE_VALIDATION (SWING 1h, DAY 5 min, SCALPING 1 min) : même zone, même trait « Clôture … », même entrée / SL / TP.
 UT_FVG_NOM = {"1h": "1h", "5": "5 min", "3": "3 min", "15": "15 min"}
 UT_FVG_BARS = {"1h": "b1h", "5": "b5", "3": "b3", "15": "b15"}
@@ -1664,7 +1665,7 @@ def verdict(r, cle):
         sens = "⬆️ ACHAT" if tr["d"] == 1 else "⬇️ VENTE"
         prog = tr["d"] * (p - tr["e"]) / max(abs(tr["tp1"] - tr["e"]), 1e-9)
         if tr["statut"] == "entree" and prog < 0.25 and not tr.get("tard"):
-            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue 15 minutes\n🛑 SL un peu {meche_sl(tr)}\n🙅 Jamais pile sur la mèche\n📍 Repère prix : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.")
+            return (f"🟢 TU PEUX ENTRER\n{SENS[tr['d']]}", f"👀 Vue {tr.get('sl_ut', '5 min')}\n🛑 SL un peu {meche_sl(tr)}\n🙅 Jamais pile sur la mèche\n📍 Repère prix : SL ≈ {px(tr['sl'])} • TP1 ≈ {px(tr['tp1'])}\n📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.")
         return ("🔴🔴 N'ENTRE PAS", f"⏰ Trop tard : la position {sens} est déjà partie\n⏳ J'attends le prochain setup")
     if r.get("annonce"):
         return ("🔴🔴 N'ENTRE PAS", "📰 News dans moins de 15 min\n💥 Le prix peut bouger très fort")
@@ -2299,7 +2300,7 @@ TRAD.update({   # v24.3 : cartes coach FVG, scalp, suivi, ouvertures — même f
     "📍 Prix DANS la zone d'entrée": "📍 Price IN the entry zone",
     "🚀 Ça continue vers le TP2 tant que le SL tient": "🚀 It keeps going to TP2 as long as the SL holds",
     "🛡️ Si tu suis la position, je te dis quand remonter ton SL": "🛡️ If you follow the position, I'll tell you when to move your SL",
-    "LONDRES": "LONDON", "Londres": "London", ": MARCHÉ FERMÉ": ": MARKET CLOSED", "😴 Je ne t'envoie plus rien sur ce marché": "😴 No more messages on this market", "⏰ Réouverture :": "⏰ Reopens:", "lundi": "Monday", "dimanche": "Sunday", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
+    "LONDRES": "LONDON", "Londres": "London", ": pas de FVG / order block exploitable en vue 5 min": ": no usable FVG / order block on the 5 min chart", "😎 Je ne force rien : j'attends un vrai setup": "😎 I don't force anything: waiting for a real setup", "👀 Mets-toi en vue 5 min": "👀 Switch to the 5 min chart", "👀 Vue 5 min": "👀 5 min chart", ": MARCHÉ FERMÉ": ": MARKET CLOSED", "😴 Je ne t'envoie plus rien sur ce marché": "😴 No more messages on this market", "⏰ Réouverture :": "⏰ Reopens:", "lundi": "Monday", "dimanche": "Sunday", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
 })
 _CLES = sorted(TRAD, key=len, reverse=True)
 
@@ -5528,14 +5529,14 @@ def evenements_pine(etat, m, r, cle, now):
     zp, strat = r.get("zone_pine"), r.get("strat") or ""
     zp = trait_indicateur(r, d) or zp                  # v24.3 : trait blanc « Clôture … ce trait » de l'indicateur sur la vue de validation
     if d and zp and strat and not cle.get("trade") and strategie_alignement(r.get("dirs"), d, r.get("dirW") or 0)[1] == "CONFIRMÉ":
-        barres = {"SWING": r.get("b1h"), "DAY": r.get("b5"), "SCALPING": r.get("m1")}.get(strat) or []
+        barres = (r.get("m1") if strat == "SCALPING" else r.get("b5")) or []           # même bougie que le trait de l'indicateur (vue du plan)
         if len(barres) >= 3:
             c1, c0, t1 = barres[-2]["c"], barres[-3]["c"], barres[-2]["t"]
             au_dessus = lambda c: c > zp["zmil"] if d == 1 else c < zp["zmil"]
             deja = mem.get("conf_sens") == d and now - float(mem.get("conf_at", 0)) < CONF_REPIT.get(strat, 3600)
             if au_dessus(c1) and not au_dessus(c0) and mem.get("conf_t") != t1 and not deja:
                 mem["conf_t"], mem["conf_sens"], mem["conf_at"] = t1, d, now
-                ev.append(dict(kind="confirmation", **base, sens="LONG" if d == 1 else "SHORT", u=HB_UNITE_VALIDATION.get(strat, "15 min"),
+                ev.append(dict(kind="confirmation", **base, sens="LONG" if d == 1 else "SHORT", u=PLAN_VUE.get(strat, "5 min"),
                                pos="au-dessus de" if d == 1 else "sous", niv=px(zp["zmil"])))
     return ev
 
@@ -6991,7 +6992,7 @@ def coach_fvg(r, d, prix, attente=True):
     l.append("✅ 5 min + 15 min alignés" if len(al) == 2 else f"⏳ Alignement : {' + '.join(al) if al else 'ni 5 min ni 15 min'} pour l'instant")
     l.append(f"🧱 {'Order block + ' if 'Order block' in str(pe.get('src')) else ''}FVG {'rouge' if d == -1 else 'verte'} {ut} ({px(pe['e'])}) : elle bloque la {'hausse' if d == -1 else 'baisse'}")
     l.append(f"🛡️ SL {px(pe['sl'])} protégé derrière {'l’order block, ' if 'Order block' in str(pe.get('src')) else ''}la FVG et la mèche")
-    bars = (r.get(UT_FVG_BARS.get(UT_FVG.get(r.get("strat") or "", "15"), "b15")) or [])[-4:]
+    bars = (r.get(UT_FVG_BARS.get(UT_FVG.get(r.get("strat") or "", "5"), "b5")) or [])[-4:]
     if any((x["h"] > pe["zmil"] and x["c"] < pe["zmil"]) if d == -1 else (x["l"] < pe["zmil"] and x["c"] > pe["zmil"]) for x in bars):
         l.append("🎣 Mèche qui dépasse puis revient = manipulation (chasse aux stops), c'est normal")
     if attente:
@@ -7019,8 +7020,8 @@ def pine_entree(r, d):
                 src="Fibonacci 50 → 78,6 % (indicateur ALIGN)", za=za, zb=zb, f50=z["f50"], f618=z["f618"], f786=z["f786"],
                 zmil=(za + zb) / 2, sl_h=bougie_protegee(r["b15"][-3:], d, pl["sl"]), sl_ut="15 min")
     # v24.3 : mêmes niveaux que l'indicateur sur l'unité de référence (FVG + mèche). Sinon : plan d'origine, comme le Pine.
-    ut = UT_FVG.get(r.get("strat") or "", "15")
-    vue = HB_UNITE_VALIDATION.get(r.get("strat") or "", "15 min")
+    ut = UT_FVG.get(r.get("strat") or "", "5")
+    vue = PLAN_VUE.get(r.get("strat") or "", "5 min")
     fv = plan_fvg(d, (r.get("struct_ut") or {}).get(ut), pl["e"], pl["sl"], pl["tp1"], pl["tp2"], vue)
     if fv:
         bars_ut = [x for x in (r.get(UT_FVG_BARS[ut]) or [])][-3:]
@@ -7030,10 +7031,10 @@ def pine_entree(r, d):
     return out
 
 def point_entree(r, d, p):
-    """Zone limite basée sur le dernier mouvement 5m ; niveaux 1h/4h et FVG restent des confluences."""
+    """PLAN UNIQUE : l'ordre = FVG / order block de la vue du plan (5 min), comme l'indicateur. Sans ce setup : pas d'ordre (None)."""
     pe = pine_entree(r, d)
     if pe:
-        return pe
+        return pe if pe.get("fvg_ut") else None
     a = r.get("atr5", r["atr"]); b = r["b5"][-24:]
     H = max(x["h"] for x in b); L = min(x["l"] for x in b)
     if d == -1:   # SHORT : on vend un rebond vers une résistance
@@ -7681,10 +7682,11 @@ def agent(m, r, cle, ferme):
         # Daily / Weekly : pas de short tout en bas, pas de long tout en haut
         o = point_entree(r, d, p)
         if o is None:
-            if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                cle["recalc_t"] = r["t"]
-                out.append(f"⛔ {ICONE.get(m, '')} {m} : pas d'entrée — structure M15 absente ou stop trop éloigné. J'attends un setup exploitable sans resserrer le SL.")
+            if not cle.get("sans_setup"):                  # une seule fois, jusqu'au retour d'un vrai setup (pas de répétition)
+                cle["sans_setup"] = True
+                out.append(f"⏳ {ICONE.get(m, '')} {m} : pas de FVG / order block exploitable en vue 5 min\n😎 Je ne force rien : j'attends un vrai setup")
             return out
+        cle["sans_setup"] = False
         # Refuser de poursuivre un mouvement déjà en haut/bas de sa zone, même si le repli projeté semble acceptable.
         bloque = bloque_dw(r, d, o["e"]) or bloque_dw(r, d, p)
         # Marché déjà parti (trop étiré) : on ne court pas après, on attend le repli ou le retournement
@@ -7710,7 +7712,7 @@ def agent(m, r, cle, ferme):
             cle["parti"] = False; cle["retrace_vu"] = False
             if not bloque and time.time() - cle.get("repli_t", 0) > 7200:
                 cle["repli_t"] = time.time()
-                out.append(    f"↩️ {ICONE.get(m, '')} {m} : LE REPLI EST LÀ {'⬇️' if d == 1 else '⬆️'}\n{SENS[d]} se prépare\n👀 Vue 15 min, tiens-toi prêt\n🔔 Prochaine alerte : ÇA ARRIVE")
+                out.append(    f"↩️ {ICONE.get(m, '')} {m} : LE REPLI EST LÀ {'⬇️' if d == 1 else '⬆️'}\n{SENS[d]} se prépare\n👀 Vue {o.get('sl_ut', '5 min')}, tiens-toi prêt\n🔔 Prochaine alerte : ÇA ARRIVE")
         if cle.get("aligne") != d:
             cle["aligne"] = d; cle["prep"] = False
             if bloque:
@@ -7720,13 +7722,13 @@ def agent(m, r, cle, ferme):
                 cle["ordre"] = o
                 out.append((f"🔔 JE PRÉPARE UNE POSITION — {ICONE.get(m, '')} {m}\n{SENS[d]}   {'monte' if d == 1 else 'descend'} sur 15m, 1h et 4h ✅✅✅\n{qualite(o)}"
                            f"⏳ Je n'entre pas encore : j'attends que le prix vienne dans la zone 🟨\n"
-                           f"👀 Mets-toi en vue 15 minutes\n"
+                           f"👀 Mets-toi en vue {o.get('sl_ut', '5 min')}\n"
                            f"🕯 Repère {'le dernier creux (mèche du bas)' if d == 1 else 'le dernier sommet (mèche du haut)'}\n"
                            f"🟨 L'entrée sera à peu près {'au-dessus de ce creux' if d == 1 else 'sous ce sommet'}\n"
                            f"🚦 Attends mon feu vert 🟢\n"
                            f"🅰️ Entrée sur le repli dans la zone 🟨\n{ligne_cassure(r, d)}\n\n"
                            f"{fmt_trade(m, o, p)}\n\n"
-                           f"📐 Zone = Fibonacci 50 → 78,6 % + {o['src'].split(' + ')[0]}{ferme}", bouton_auto(m)))
+                           f"📐 Zone = {o['src']}{ferme}", bouton_auto(m)))
         if (bloque and not cle.get("ordre")) or o["rr"] < GAIN_MIN:
             return out
         # Petit repli en cours avant d'arriver dans la zone : on le dit tout de suite
@@ -7754,7 +7756,7 @@ def agent(m, r, cle, ferme):
         if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
             cle["pret_t"] = time.time()
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}🎯 On est à quelques pips de l'entrée\n👀 Vue 15 minutes\n"
+                out.append((f"⚡⚡ PRÉPARE-TOI — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}🎯 On est à quelques pips de l'entrée\n👀 Vue {o.get('sl_ut', '5 min')}\n"
                         f"🛑 Dès que tu es dedans : SL un peu {meche_sl(o)}\n"
                         f"💰 TP1 juste {'sous la' if d == 1 else 'au-dessus du'} {o['n1']}\n🙅 Jamais de position sans SL{statut_txt(0, o)}",
                         bouton_auto(m)))
