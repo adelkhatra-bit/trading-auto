@@ -474,6 +474,34 @@ if sigBas
 
 bgcolor(surcharge ?  color.new(color.orange, 92) : na, title="Surcharge (fond)")
 
+// ═════════ ↩ SCALP INVERSE (vues 1 à 5 min) ═════════
+// ≥ 3/5 petites UT (1 à 15 min) retournées contre le plan : petit trade dans l'autre sens jusqu'à l'ENTRÉE du plan principal.
+// MÊME DESSIN que le plan (ENTRÉE / STOP / TP / zone) : l'affichage s'inverse tout seul, puis revient au plan quand < 3/5.
+// Plan SHORT → SCALP LONG : entrée = haut de la FVG verte la plus proche, SL sous la mèche du dernier creux (≥ 1 ATR), TP = entrée du SHORT. L'inverse en LONG.
+int voyG = 0
+for k = 0 to 4
+    voyG += dirPlan != 0 and array.get(dirs, k) == -dirPlan ? 1 : 0
+float siE = na
+float siSL = na
+bool siOn = false
+if dirPlan != 0 and tfS <= 300 and voyG >= 3 and not na(atrS)
+    if dirPlan == -1
+        siE := not na(fGTop) and fGTop <= close + 0.5 * atrS ? fGTop : close
+        siSL := math.min(math.min(swL, nz(fGBot, swL)) - margeS, siE - 1.0 * atrS)
+    else
+        siE := not na(fRBot) and fRBot >= close - 0.5 * atrS ? fRBot : close
+        siSL := math.max(math.max(swH, nz(fRTop, swH)) + margeS, siE + 1.0 * atrS)
+    siOn := -dirPlan * (entD - siE) >= 1.2 * math.abs(siE - siSL) and -dirPlan * (siE - siSL) > 0
+dirVu = siOn ? -dirPlan : dirPlan
+entPrin = entD
+if siOn
+    entD := siE
+    slD := siSL
+    tpD1 := entPrin
+    tpD2 := entPrin
+    zBas := dirVu == -1 ? entD : slD + 0.25 * (entD - slD)
+    zHaut := dirVu == -1 ? slD - 0.25 * (slD - entD) : entD
+
 // ═════════ TP2 = CONTINUATION (v24.3) ═════════
 // Le TP1 est mémorisé tant que l'entrée ne change pas. Si le prix le dépasse : TP1 ✅ reste à sa place et le TP2 s'allume (ça continue).
 // Si le prix revient ensuite derrière le TP1 : le TP2 s'éteint (« ça revient vers l'entrée »).
@@ -484,19 +512,19 @@ var int dirMem = 0
 var bool tp1Hit = false
 var int hitBar = 0
 risqueD = math.abs(entD - slD)
-tp2Calc = dirPlan != 0 and dirPlan * (tpD2 - tpD1) > 0 ? tpD2 : tpD1 + dirPlan * risqueD
+tp2Calc = dirVu != 0 and dirVu * (tpD2 - tpD1) > 0 ? tpD2 : tpD1 + dirVu * risqueD
 // fin du suivi « TP1 dépassé » : retour à l'entrée, TP2 atteint, ou 40 bougies plus tard (nouvelle situation)
-finHit = tp1Hit and (na(entMem) or (dirPlan == -1 ? close > entMem : close < entMem) or bar_index - hitBar > 40 or (bar_index - hitBar > 3 and not na(tp2Mem) and (dirPlan == -1 ? low <= tp2Mem : high >= tp2Mem)))
-if dirPlan != dirMem or finHit or (not tp1Hit and (na(entMem) or entD != entMem))
+finHit = tp1Hit and (na(entMem) or (dirVu == -1 ? close > entMem : close < entMem) or bar_index - hitBar > 40 or (bar_index - hitBar > 3 and not na(tp2Mem) and (dirVu == -1 ? low <= tp2Mem : high >= tp2Mem)))
+if dirVu != dirMem or finHit or (not tp1Hit and (na(entMem) or entD != entMem))
     entMem := entD
     tp1Mem := tpD1
     tp2Mem := tp2Calc
-    dirMem := dirPlan
+    dirMem := dirVu
     tp1Hit := false
-if dirPlan != 0 and not tp1Hit and not na(tp1Mem) and (dirPlan == -1 ? low <= tp1Mem : high >= tp1Mem)
+if dirVu != 0 and not tp1Hit and not na(tp1Mem) and (dirVu == -1 ? low <= tp1Mem : high >= tp1Mem)
     tp1Hit := true
     hitBar := bar_index
-tpRetour = tp1Hit and (dirPlan == -1 ? close > tp1Mem : close < tp1Mem)
+tpRetour = tp1Hit and (dirVu == -1 ? close > tp1Mem : close < tp1Mem)
 tpVu1 = tp1Hit ? tp1Mem : tpD1
 tpVu2 = tp1Hit ? tp2Mem : tp2Calc
 
@@ -534,7 +562,7 @@ if barstate.islast
     label.delete(eTP1)
     label.delete(eTP2)
     label.delete(eSL)
-    if voirPlan and dirPlan != 0
+    if voirPlan and dirVu != 0
         x1 = bar_index - 25
         x2 = bar_index + 3
         lTP1 := line.new(x1, tpVu1, x2, tpVu1, color= color.aqua, width=2, extend=extend.right)
@@ -548,18 +576,18 @@ if barstate.islast
             // Zone verte transparente = on peut rentrer de tel prix à tel prix
             bZone := box.new(x1, zHaut, bar_index + 20, zBas, border_color= color.new(color.lime, 60), bgcolor= color.new(color.lime, 85), extend=extend.right)
             // Zone rouge très légère = entre la limite d'entrée et le stop (ne plus rentrer ici)
-            bRisque := box.new(x1, dirPlan == 1 ? zBas : slD, bar_index + 20, dirPlan == 1 ? slD : zHaut, border_color= color.new(color.red, 100), bgcolor= color.new(color.red, 90), extend=extend.right)
+            bRisque := box.new(x1, dirVu == 1 ? zBas : slD, bar_index + 20, dirVu == 1 ? slD : zHaut, border_color= color.new(color.red, 100), bgcolor= color.new(color.red, 90), extend=extend.right)
             lF50  := line.new(x1, f50, x2, f50, color= color.new(color.gray, 40), style=line.style_dotted, extend=extend.right)
             lF618 := line.new(x1, f618, x2, f618, color= color.new(color.orange, 30), style=line.style_dotted, extend=extend.right)
             lF786 := line.new(x1, f786, x2, f786, color= color.new(color.gray, 40), style=line.style_dotted, extend=extend.right)
-            eZone := label.new(bar_index + 6, (zHaut + zBas) / 2, "ZONE " + (dirPlan == -1 ? "▼ " : "▲ ") + px(zBas) + " → " + px(zHaut), style=label.style_label_left, color= color.rgb(0, 120, 60), textcolor= color.white, size=size.normal, tooltip=(dirPlan == -1 ? "ZONE D'ENTRÉE SHORT ▼" : "ZONE D'ENTRÉE LONG ▲") + "\n" + px(zBas) + " → " + px(zHaut) + "\n📺 Vue conseillée pour entrer : " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " (bougie de validation)\n🔒 Niveaux figés jusqu'à la prochaine clôture 15 min\n\n1. Attendre que le prix " + (dirPlan == -1 ? "remonte" : "redescende") + " dans la zone\n2. Entrer si une bougie " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " clôture " + (dirPlan == -1 ? "SOUS" : "AU-DESSUS de") + " la zone\n   = " + (dirPlan == -1 ? "les vendeurs reprennent la main" : "les acheteurs reprennent la main") + "\n⏱ Prochaine clôture " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))) + (etatS == "CONFIRMÉ" ? "\n✅ Clôture validée : alignement " + strat + " confirmé" : "\n⏳ En attente de la clôture de validation") + "\n3. Annulé si une bougie clôture " + (dirPlan == -1 ? "au-dessus" : "en dessous") + " du SL " + px(sl) + "\n\nFibonacci 50 % : " + px(f50) + "\nFibonacci 61,8 % : " + px(f618) + "\nFibonacci 78,6 % : " + px(f786) + "\n\nZone rouge : trop près du stop, ne plus entrer")
+            eZone := label.new(bar_index + 6, (zHaut + zBas) / 2, "ZONE " + (dirVu == -1 ? "▼ " : "▲ ") + px(zBas) + " → " + px(zHaut), style=label.style_label_left, color= color.rgb(0, 120, 60), textcolor= color.white, size=size.normal, tooltip=(dirVu == -1 ? "ZONE D'ENTRÉE SHORT ▼" : "ZONE D'ENTRÉE LONG ▲") + "\n" + px(zBas) + " → " + px(zHaut) + "\n📺 Vue conseillée pour entrer : " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " (bougie de validation)\n🔒 Niveaux figés jusqu'à la prochaine clôture 15 min\n\n1. Attendre que le prix " + (dirVu == -1 ? "remonte" : "redescende") + " dans la zone\n2. Entrer si une bougie " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " clôture " + (dirVu == -1 ? "SOUS" : "AU-DESSUS de") + " la zone\n   = " + (dirVu == -1 ? "les vendeurs reprennent la main" : "les acheteurs reprennent la main") + "\n⏱ Prochaine clôture " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))) + (etatS == "CONFIRMÉ" ? "\n✅ Clôture validée : alignement " + strat + " confirmé" : "\n⏳ En attente de la clôture de validation") + "\n3. Annulé si une bougie clôture " + (dirVu == -1 ? "au-dessus" : "en dessous") + " du SL " + px(sl) + "\n\nFibonacci 50 % : " + px(f50) + "\nFibonacci 61,8 % : " + px(f618) + "\nFibonacci 78,6 % : " + px(f786) + "\n\nZone rouge : trop près du stop, ne plus entrer")
             // Traits blancs de décision : lecture de la clôture sur la zone verte
             uV = strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min"
             chV = f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15)))
             zMil = (zHaut + zBas) / 2
             lZH := line.new(x1, zMil, bar_index + 20, zMil, color= color.white, width=2, style=line.style_dashed, extend=extend.right)
-            eZH := label.new(bar_index + 45, zMil, (dirPlan == -1 ? "⬇️ Clôture " + uV + " SOUS ce trait = SHORT ✅" : "⬆️ Clôture " + uV + " AU-DESSUS de ce trait = LONG ✅"), style=label.style_label_left, color= color.rgb(30, 34, 45), textcolor= color.white, size=size.normal, tooltip="TRAIT BLANC = LIGNE DE DÉCISION ≈ " + px(zMil) + "\n(milieu de la zone verte " + px(zBas) + " → " + px(zHaut) + ")\n\n" + (dirPlan == -1 ? "⬇️ Bougie " + uV + " qui CLÔTURE SOUS le trait :\nles vendeurs gagnent → ça DESCEND → SHORT ✅\n\n⬆️ Bougie qui CLÔTURE AU-DESSUS :\nles acheteurs résistent → j'attends, pas d'entrée\n❌ Annulé si clôture au-dessus du SL " : "⬆️ Bougie " + uV + " qui CLÔTURE AU-DESSUS du trait :\nles acheteurs gagnent → ça MONTE → LONG ✅\n\n⬇️ Bougie qui CLÔTURE SOUS :\nles vendeurs résistent → j'attends, pas d'entrée\n❌ Annulé si clôture sous le SL ") + px(sl) + "\n\n🕯 Une mèche ne compte pas : seule la CLÔTURE compte\n⏱ Prochaine clôture " + uV + " dans " + chV)
-        eSL  := label.new(x1, slD, "STOP " + px(slD), style=label.style_label_right, color= color.new(color.red, 20), textcolor= color.white, size=size.small, tooltip="Stop placé derrière la " + (dirPlan == 1 ? "zone de support" : "zone de résistance") + " 1h / 4h la plus proche (+ marge 0,3 ATR)")
+            eZH := label.new(bar_index + 45, zMil, (dirVu == -1 ? "⬇️ Clôture " + uV + " SOUS ce trait = SHORT ✅" : "⬆️ Clôture " + uV + " AU-DESSUS de ce trait = LONG ✅"), style=label.style_label_left, color= color.rgb(30, 34, 45), textcolor= color.white, size=size.normal, tooltip="TRAIT BLANC = LIGNE DE DÉCISION ≈ " + px(zMil) + "\n(milieu de la zone verte " + px(zBas) + " → " + px(zHaut) + ")\n\n" + (dirVu == -1 ? "⬇️ Bougie " + uV + " qui CLÔTURE SOUS le trait :\nles vendeurs gagnent → ça DESCEND → SHORT ✅\n\n⬆️ Bougie qui CLÔTURE AU-DESSUS :\nles acheteurs résistent → j'attends, pas d'entrée\n❌ Annulé si clôture au-dessus du SL " : "⬆️ Bougie " + uV + " qui CLÔTURE AU-DESSUS du trait :\nles acheteurs gagnent → ça MONTE → LONG ✅\n\n⬇️ Bougie qui CLÔTURE SOUS :\nles vendeurs résistent → j'attends, pas d'entrée\n❌ Annulé si clôture sous le SL ") + px(sl) + "\n\n🕯 Une mèche ne compte pas : seule la CLÔTURE compte\n⏱ Prochaine clôture " + uV + " dans " + chV)
+        eSL  := label.new(x1, slD, "STOP " + px(slD), style=label.style_label_right, color= color.new(color.red, 20), textcolor= color.white, size=size.small, tooltip="Stop placé derrière la " + (dirVu == 1 ? "zone de support" : "zone de résistance") + " 1h / 4h la plus proche (+ marge 0,3 ATR)")
 
 // ═════════ BARRE (en bas, propre, explications au clic) ═════════
 var table t = table.new(pos, 11, 3, border_width=1, frame_color= color.new(color.gray, 70), frame_width=1)
@@ -588,9 +616,9 @@ if barstate.islast
         table.cell(t, i, 0, array.get(noms, i), width=largCol, bgcolor=rv >= 70 ?  color.rgb(120, 20, 30) : rv <= 30 ?  color.rgb(0, 90, 50) :  color.rgb(30, 34, 45), text_color=rv >= 70 or rv <= 30 ?  color.white :  color.gray, text_size=size.small, tooltip=tip)
         table.cell(t, i, 1, sym + (dirPlan != 0 and i <= 9 ? "\n" + str.tostring(f_alg(i), "#") + "%" : ""), width=largCol, bgcolor=bg, text_color= color.white, text_size=size.large, tooltip=tip)
     titre = zoneBas ? "RETOURNEMENT ▼" : zoneHaut ? "REBOND ▲" : fortHaut ? "★ ACHAT FORT" : fortBas ? "★ VENTE FORTE" : retHaut ? "RETOURNEMENT ▲" : retBas ? "RETOURNEMENT ▼" : rsiOB >= 3 ? "RSI SURACHAT " + str.tostring(rsiOB) + "/11" : rsiOS >= 3 ? "RSI SURVENTE " + str.tostring(rsiOS) + "/11" : surcharge ? "⚡ SURCHARGE" : sens == 1 ? "HAUSSE" : sens == -1 ? "BAISSE" : "ATTENDRE"
-    ligne = (retDir != 0 and not retConf ? "↩ RETOURNEMENT  " : nVoy >= 3 ? "↩ " + str.tostring(nVoy) + "/5  " : "") + (dirPlan == 1 ? "▲ LONG" : dirPlan == -1 ? "▼ SHORT" : "ATTENDRE") + (dirPlan != 0 ? (strat != "" ? " • " + (strat == "SCALPING" ? "SCALP" : strat) + (etatS == "CONFIRMÉ" and scoreV >= 75 ? " ✅ " : " ⏳ ") + str.tostring(scoreV) : "") + "  E " + px(entD) + "  TP " + px(tpD1) + "  SL " + px(slD) : "   " + titre)
+    ligne = (retDir != 0 and not retConf ? "↩ RETOURNEMENT  " : nVoy >= 3 ? "↩ " + str.tostring(nVoy) + "/5  " : "") + (siOn ? "SCALP " : "") + (dirVu == 1 ? "▲ LONG" : dirVu == -1 ? "▼ SHORT" : "ATTENDRE") + (dirVu != 0 ? (strat != "" ? " • " + (strat == "SCALPING" ? "SCALP" : strat) + (etatS == "CONFIRMÉ" and scoreV >= 75 ? " ✅ " : " ⏳ ") + str.tostring(scoreV) : "") + "  E " + px(entD) + "  TP " + px(tpD1) + "  SL " + px(slD) : "   " + titre)
     plan = (retTxt != "" ? retTxt + "\n\n" : "") + (dirPlan != 0 ? "STRATÉGIE : " + (strat == "" ? "aucune" : strat + " — " + etatS) + "\nScore : " + str.tostring(scoreV) + " / 100\n• Alignement : " + str.tostring(ptsAlign) + " / 25\n• Structure : " + str.tostring(ptsStruct) + " / 20\n• Zone d'entrée : " + str.tostring(ptsZone) + " / 20\n• Volume : " + str.tostring(ptsVol) + " / 15" + (volOk ? "" : " (indisponible)") + "\n• Indicateurs : " + str.tostring(ptsInd) + " / 10\n• Risque / rendement : " + str.tostring(ptsRR) + " / 10\n⏱ Clôture de validation " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))) + "\nDécision : " + decisionS + "\nMotif : " + motifS + "\nPlan : " + calePlan + "\n\n" : "") + "SENS PROBABLE : " + (sens == 1 ? "HAUSSE " : sens == -1 ? "BAISSE " : "INDÉCIS ") + str.tostring(pctH) + "% hausse / " + str.tostring(100 - pctH) + "% baisse\n" + str.tostring(bull) + " UT en hausse • " + str.tostring(bear) + " en baisse • " + str.tostring(comp) + " comprimées\nRSI : " + str.tostring(rsiOB) + " UT en surachat (>70) • " + str.tostring(rsiOS) + " en survente (<30)" + (rsiOB >= 3 ? "\nSURCHARGE RSI HAUTE : éviter d'acheter, retournement baissier possible" : rsiOS >= 3 ? "\nSURCHARGE RSI BASSE : éviter de vendre, rebond possible" : "") + (retHaut ? "\nLes petites UT montent avant les grandes : retournement HAUSSIER en préparation" : retBas ? "\nLes petites UT baissent avant les grandes : retournement BAISSIER en préparation" : "") + (zoneBas ? "\nPrix sur une résistance " + tH1 + " : risque de retournement à la baisse" : zoneHaut ? "\nPrix sur un support " + tB1 + " : rebond possible" : "") + (dirPlan != 0 ? "\n\nPLAN " + (dirPlan == 1 ? "ACHAT" : "VENTE") + "\nEntrée " + px(ent) + " (" + tEnt + ")\nTP1 " + px(tp1) + " (" + tTP1 + ")\nTP2 " + px(tp2) + " (" + tTP2 + ")\nStop " + px(sl) + "\nGain/risque ≈ " + str.tostring(rr, "#.#") : "")
-    vbg0 = zoneBas or zoneHaut ?  color.rgb(170, 130, 0) : dirPlan == 1 ?  color.rgb(0, 140, 70) : dirPlan == -1 ?  color.rgb(190, 30, 45) :  color.rgb(60, 60, 60)
+    vbg0 = zoneBas or zoneHaut ?  color.rgb(170, 130, 0) : dirVu == 1 ?  color.rgb(0, 140, 70) : dirVu == -1 ?  color.rgb(190, 30, 45) :  color.rgb(60, 60, 60)
     actif = zoneBas or zoneHaut or fortHaut or fortBas or retHaut or retBas or surcharge
     table.cell(t, 0, 2, ligne, bgcolor=actif and clignote ? color.new(vbg0, 50) : vbg0, text_color= color.white, text_size=size.normal, tooltip=titre + "\n" + plan)
     table.merge_cells(t, 0, 2, 10, 2)
@@ -712,9 +740,9 @@ if barstate.islast
     label.delete(eRet)
     line.delete(lConf)
     label.delete(eConf)
-    if voirPlan and dirPlan != 0 and not na(sl) and not na(ent)
+    if voirPlan and dirVu != 0 and not na(sl) and not na(ent)
         lRet := line.new(bar_index, slD, bar_index + 30, slD, color= color.new(color.white, 30), style=line.style_dotted, width=1)
-        eRet := label.new(bar_index + 30, slD, "↩ RETOURNEMENT", style=label.style_label_left, color= color.rgb(30, 34, 45), textcolor= color.white, size=size.normal, tooltip="↩ LIGNE DE RETOURNEMENT : " + px(sl) + "\n\nSi une bougie " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " CLÔTURE " + (dirPlan == -1 ? "AU-DESSUS" : "EN DESSOUS") + " de cette ligne :\n⛔ le " + (dirPlan == -1 ? "SHORT" : "LONG") + " est annulé\n↩ retournement possible vers le " + (dirPlan == -1 ? "LONG" : "SHORT") + "\n\nEntrée dans l'autre sens SEULEMENT si le 15 min et la 1h confirment\n(et les unités de la stratégie SWING / DAY / SCALP)\n\n⏱ Prochaine clôture " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))) + (retTxt != "" ? "\n\n" + retTxt : ""))
+        eRet := label.new(bar_index + 30, slD, "↩ RETOURNEMENT", style=label.style_label_left, color= color.rgb(30, 34, 45), textcolor= color.white, size=size.normal, tooltip="↩ LIGNE DE RETOURNEMENT : " + px(sl) + "\n\nSi une bougie " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " CLÔTURE " + (dirVu == -1 ? "AU-DESSUS" : "EN DESSOUS") + " de cette ligne :\n⛔ le " + (dirVu == -1 ? "SHORT" : "LONG") + " est annulé\n↩ retournement possible vers le " + (dirVu == -1 ? "LONG" : "SHORT") + "\n\nEntrée dans l'autre sens SEULEMENT si le 15 min et la 1h confirment\n(et les unités de la stratégie SWING / DAY / SCALP)\n\n⏱ Prochaine clôture " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))) + (retTxt != "" ? "\n\n" + retTxt : ""))
         lConf := line.new(bar_index, entD, bar_index + 30, entD, color= color.new(color.white, 30), style=line.style_dotted, width=1)
         eConf := label.new(bar_index + 30, entD, "✅ CONFIRMATION  " + (alignOk ? "🔥 ALIGNÉ " : "") + "1m " + str.tostring(f_alg(0), "#") + "% · 3m " + str.tostring(f_alg(1), "#") + "% · 5m " + str.tostring(f_alg(2), "#") + "% · 15m " + str.tostring(f_alg(4), "#") + "%", style=label.style_label_left, color= alignOk ? (second(timenow) % 2 == 0 ? color.rgb(0, 150, 70) : color.rgb(30, 34, 45)) : color.rgb(30, 34, 45), textcolor= color.white, size=size.normal, tooltip="✅ LIGNE DE CONFIRMATION : " + px(ent) + "\n\nPour entrer en " + (dirPlan == -1 ? "SHORT" : "LONG") + " :\n1. le prix revient sur cette ligne\n2. une bougie " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " CLÔTURE " + (dirPlan == -1 ? "EN DESSOUS" : "AU-DESSUS") + "\n3. les unités de la stratégie " + (strat == "" ? "(aucune pour l'instant)" : strat) + " sont alignées\n\nÉtat des unités :\n" + "1h " + (u1h ? "✅" : "⏳") + "  15 min " + (u15 ? "✅" : "⏳") + "  5 min " + (u5 ? "✅" : "⏳") + "  1 min " + (u1 ? "✅" : "⏳") + "  4h " + (u4 ? "✅" : nz(d240) == 0 ? "—" : "⛔") + "  Daily " + (uD ? "✅" : "⏳") + "\n\nÉtat : " + (etatS == "CONFIRMÉ" and scoreV >= 75 ? "✅ entrée possible" : "⏳ pas encore : " + decisionS) + "\n⏱ Prochaine clôture " + (strat == "SWING" ? "1h" : strat == "DAY" ? "5 min" : strat == "SCALPING" ? "1 min" : "15 min") + " dans " + f_mmss(f_reste((strat == "SWING" ? 60 : strat == "DAY" ? 5 : strat == "SCALPING" ? 1 : 15))))
 
