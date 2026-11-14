@@ -82,5 +82,17 @@ class CanalMarche(unittest.TestCase):
         self.assertEqual(envoyes[0][0], "-100")
         self.assertIn("🔒 Niveaux", envoyes[0][1]); self.assertNotIn("130", envoyes[0][1])
 
+class Accueil(unittest.TestCase):
+    def test_questionnaire_puis_liens(self):
+        envoyes = []
+        etat = {"liens_marche": {"BTC": "https://t.me/+abc"}}
+        with mock.patch.object(ab, "_envoi_sur", side_effect=lambda cid, **k: envoyes.append(k) or {"ok": True}):
+            ab.accueil_questionnaire(etat, "7")
+            ab.accueil_marches(etat, "7")
+            ab.accueil_liens(etat, "7", "BTC")
+        self.assertIn("niveau", envoyes[0]["text"]); self.assertIn("marché", envoyes[1]["text"])
+        self.assertIn("https://t.me/+abc", envoyes[2]["reply_markup"])
+        self.assertEqual(ab.marches_choisis(etat, "7"), {"BTC"})
+
 if __name__ == "__main__":
     unittest.main()
