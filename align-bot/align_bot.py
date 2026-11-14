@@ -7719,6 +7719,21 @@ def statut_position(tr, p):
         return f"✅ ENTRÉE ENCORE POSSIBLE — {couleur}\n📍 Le prix est encore près de l'entrée"
     return f"⛔ TROP TARD POUR ENTRER — {couleur} déjà parti\n🧑‍🏫 Si tu es dedans : je te suis jusqu'au TP"
 
+def avant_entree(m, r, cle, o, d):
+    """Le coach parle AVANT l'entrée : combien de temps avant la clôture qui décide, et pourquoi le prix peut rebondir (FVG / order block)."""
+    l = []
+    try:
+        tf = timeframe_attendu(r, cle)
+        reste = max(0, prochaine_cloture_bougie(r, tf, time.time()) - time.time())
+        l.append(f"⏱ La bougie {tf} qui décide clôture dans {mmss(reste)}")
+    except Exception:
+        pass
+    src = str(o.get("src") or "")
+    if "FVG" in src or "Order block" in src:
+        l.append(f"🧲 La zone est une {'order block + ' if 'Order block' in src else ''}FVG : le prix rebondit souvent dessus, on attend le rejet")
+    l.append("🧑‍🏫 Je te dis « ✅ VALIDÉ " + ("🟢 LONG" if d == 1 else "🔴 SHORT") + " » dès que la clôture confirme")
+    return "\n" + "\n".join(l)
+
 def statut_txt(entre, o=None):
     """Toujours clair : est-ce que j'entre ou pas, et quel TP on vise."""
     l = ["🚦 " + ("🟢 J'ENTRE" if entre == 1 else "🙅 JE N'ENTRE PAS" if entre == -1 else "⏳ JE N'ENTRE PAS ENCORE")]
@@ -7945,7 +7960,7 @@ def agent(m, r, cle, ferme):
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟩 Le prix entre dans la ZONE du graphique\n🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min {'AU-DESSUS' if d == 1 else 'EN DESSOUS'}\n🙅 Une mèche seule ne suffit pas\n🛑 SL = ligne rouge du graphique\n⚡ Tiens-toi prêt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}{statut_txt(0, o)}", bouton_auto(m)))
+                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟩 Le prix entre dans la ZONE du graphique\n🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min {'AU-DESSUS' if d == 1 else 'EN DESSOUS'}\n🙅 Une mèche seule ne suffit pas\n🛑 SL = ligne rouge du graphique\n⚡ Tiens-toi prêt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}{statut_txt(0, o)}{avant_entree(m, r, cle, o, d)}", bouton_auto(m)))
         # À quelques pips de l'entrée : « PRÉPARE-TOI » + rappel SL / TP (1 fois par point d'entrée)
         seuil = max(5 * PIP.get(m, 0.1), 0.05 * r["atr"])
         if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
@@ -8093,13 +8108,13 @@ def agent(m, r, cle, ferme):
                 out.append(cs_(m, "SORTI À BE", [f"🛑 SL : {px(sl)} touché (BE)", "🛡 Aucune perte"], "Hors position", r, "attente"))
             else:
                 inverse = "LONG" if d == -1 else "SHORT"
-                out.append(cs_(m, "STOP TOUCHÉ", [f"🛑 Stop : {px(sl)} touché", f"↩ Retournement possible : {inverse} si 15 min + 1 h confirment"], "Hors position", r, "attente"))
+                out.append(cs_(m, "STOP TOUCHÉ", [f"🛑 Stop : {px(sl)} touché", "😤 On va se refaire : le marché sera encore là demain", f"↩ Retournement possible : {inverse} si 15 min + 1 h confirment"], "Hors position", r, "attente"))
                 cle["retournement"] = {"d": -d, "t": r["t"]}
             cle["fin"] = [tr, sl, "🔒 Sorti à BE" if tr.get("be_dit") else "🛑 Stop touché"]; cle["stop_t"] = r["t"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
-            out.append(cs_(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅", f"🔒 SL → BE : {px(e)}", f"🏁 TP2 : {px(t2)}"] + lecture_tp1(r, d),
+            out.append(cs_(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅ 🎆", f"🔒 SL → BE : {px(e)} (plus de perte possible)", "☕ Va boire un café, la suite se fait sans risque", f"🏁 TP2 : {px(t2)}"] + lecture_tp1(r, d),
                                    "Sécuriser une partie, garder le reste", r))
             return out
         # ↩ Voyants de retournement (comme l'indicateur) : 3/5 petites unités contre la position = alerte, 1 fois.
@@ -8112,6 +8127,10 @@ def agent(m, r, cle, ferme):
             tr["be_dit"] = True; tr["sl"] = e + d * 0.05 * r["atr"]
             out.append(cs_(m, "METS-TOI À BE", [f"🛑 SL → BE : {px(e)} (entrée)", f"🕯 Clôture 15 min {heure(r['b15'][-1]['t'])} {'au-dessus' if d == 1 else 'sous'} l'entrée",
                                                           f"💰 TP : {px(t1)}", "🙅 Le prix ne doit plus revenir à ton entrée : on encaisse 💰"], "SL à BE (plus de perte possible)", r))
+            return out
+        if progres >= 0.8 and not tr.get("cafe_dit"):
+            tr["cafe_dit"] = True
+            out.append(f"☕ PRESQUE AU TP1 — {ICONE.get(m, '')} {m}\n🎯 TP1 à {px(t1)}\n😎 Encore un petit effort, ne touche à rien")
             return out
         if progres < 0.25:
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
@@ -8143,7 +8162,7 @@ def agent(m, r, cle, ferme):
                                                      f"🎯 TP{n_tp + 1} : {px(suivants[0][0])}", "🚀 La tendance continue, on laisse courir"],
                                "Rester en position (tendance continue)", r))
                 return out
-            out.append(cs_(m, "OBJECTIF FINAL ATTEINT", [f"🎯 TP{n_tp} : {px(t2)} ✅", f"🏆 {n_tp} TP touchés sur ce trade"], "Trade terminé", r, "attente"))
+            out.append(cs_(m, "OBJECTIF FINAL ATTEINT", [f"🎯 TP{n_tp} : {px(t2)} ✅", f"🏆 {n_tp} TP touchés sur ce trade", "🥳🎆 Jackpot ! Encaisse et souris"], "Trade terminé", r, "attente"))
             cle["fin"] = [tr, t2, f"🏆 Objectif final ({n_tp} TP)"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
