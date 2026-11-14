@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.6
+// @version      4.7
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.6';
+  const VERSION = '4.7';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -183,11 +183,10 @@
       if (!/[━]|ENTRÉE|SL|TP|ZONE|RETOURNEMENT|CONFIRMATION/.test(txt)) return;
       survol = true;
       const r = zoneGraphique();
-      const baissier = /SHORT|baiss/i.test(txt) && !/LONG/.test(txt.split('\n')[0]);
+      // v4.7 : toutes les infobulles (ENTRÉE, SL, TP, unités…) s'ouvrent TOUJOURS au même endroit : en haut à gauche, sous le nom de l'indicateur
       t.style.left = (r.left + 12) + 'px';
       t.style.right = 'auto';
-      if (baissier) { t.style.top = (r.top + 56) + 'px'; t.style.bottom = 'auto'; }
-      else { t.style.top = 'auto'; t.style.bottom = (innerHeight - (r.top + r.height) + 40) + 'px'; }
+      t.style.top = (r.top + 56) + 'px'; t.style.bottom = 'auto';
     });
     bande.style.opacity = survol ? '0' : '1';   // la bande s'efface pendant le survol d'une infobulle
   });
