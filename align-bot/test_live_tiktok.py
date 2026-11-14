@@ -38,6 +38,12 @@ class LiveTikTok(unittest.TestCase):
         ab.live_annonces(self.etat, "BTC", ["🟢🟢🟢 J'ENTRE MAINTENANT — BTC"])
         self.assertEqual(self.publie, [])
 
+    def test_tp_touche_toujours_sur_la_bande(self):
+        ab.live_annonces(self.etat, "BTC", ["🎯 BTC : TP1 TOUCHÉ"])
+        self.assertTrue(any("TP1 TOUCHÉ" in x for x in self.publie))
+        self.assertTrue(any("lien en bio" in x for x in self.publie))
+        self.assertFalse(any("Telegram" in x for x in self.publie))
+
     def test_proprio_lance_le_live_et_tout_le_monde_est_prevenu(self):
         ab.live_callback(self.etat, {"2"}, {"id": "x"}, "liveon", "x", "1")
         self.assertTrue(self.etat["live_on"])
@@ -52,14 +58,14 @@ class LiveTikTok(unittest.TestCase):
     def test_annonces_sans_aucun_niveau(self):
         self.etat["live_on"] = True
         ab.live_annonces(self.etat, "BTC", ["🟢🟢🟢 J'ENTRE MAINTENANT — BTC\n📌 Entrée 68459,14\n🛑 SL 69105", "🎯 TP1 TOUCHÉ — BTC 67167"])
-        self.assertEqual(len(self.publie), 3)          # entrée + TP1 + bulle d'explication du TP1
+        self.assertEqual(len(self.publie), 4)          # entrée + TP1 + bulle d'explication du TP1 + « abonne-toi, lien en bio »
         self.assertTrue(self.publie[2].startswith("BULLE:"))
         for t in self.publie:
             self.assertIsNone(re.search(r"\d{3,}", t), t)
             self.assertNotIn("SHORT", t)
             self.assertNotIn("LONG", t)
         ab.live_annonces(self.etat, "BTC", ["🟢🟢🟢 J'ENTRE MAINTENANT — BTC"])
-        self.assertEqual(len(self.publie), 3)          # pas de doublon
+        self.assertEqual(len(self.publie), 4)          # pas de doublon
 
     def test_bulle_zone(self):
         self.etat["live_on"] = True
