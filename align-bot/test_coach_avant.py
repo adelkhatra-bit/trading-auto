@@ -39,7 +39,7 @@ class CoachEnDirect(unittest.TestCase):
             ab.notifier_coach_live(etat, "BTC", r, {})
             ab.notifier_coach_live(etat, "BTC", r, {})
         self.assertEqual(len(envoyes), 1)
-        self.assertIn("COACH COMMENTATEUR", envoyes[0]); self.assertIn("BAISSE", envoyes[0]); self.assertIn("jaune entrée", envoyes[0])
+        self.assertIn("COACH COMMENTATEUR", envoyes[0]); self.assertIn("Bougie en baisse", envoyes[0]); self.assertIn("BILAN 15 MIN", envoyes[0])
 
     def test_fin_apres_2h_propose_de_continuer(self):
         envoyes = []
@@ -80,7 +80,7 @@ class CanalMarche(unittest.TestCase):
         with mock.patch.object(ab, "_envoi_sur", side_effect=lambda cid, **k: envoyes.append((cid, k["text"])) or {"ok": True}):
             ab.notifier_canal_marche(etat, "BTC", r, cle)
         self.assertEqual(envoyes[0][0], "-100")
-        self.assertIn("🔒 Niveaux", envoyes[0][1]); self.assertNotIn("130", envoyes[0][1])
+        self.assertIn("pas une entrée", envoyes[0][1]); self.assertNotIn("130", envoyes[0][1])
 
 class Accueil(unittest.TestCase):
     def test_questionnaire_puis_liens(self):

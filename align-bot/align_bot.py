@@ -2643,7 +2643,7 @@ def _largeur(t):
     return sum(0 if unicodedata.category(ch) in ("Mn", "Cf") or ch in "\ufe0f\u200d" else 2 if ord(ch) >= 0x2190 else 1 for ch in t)
 
 
-LARGEUR_MAX = _largeur("🎙 COACH COMMENTATEUR") + 1     # règle d'Adel : aucune ligne plus large que ce titre
+LARGEUR_MAX = 26     # largeur réelle d'une bulle Telegram sur iPhone : on ne coupe que si ça dépasse vraiment
 
 
 def colonne_mobile(t):
@@ -2651,8 +2651,8 @@ def colonne_mobile(t):
     if not isinstance(t, str) or not t:
         return t
     out = []
-    for l in t.split("\n"):
-        if _largeur(l) <= LARGEUR_MAX or "http" in l or "t.me/" in l or set(l) <= set("━─- "):
+    for k_, l in enumerate(t.split("\n")):
+        if k_ == 0 or _largeur(l) <= LARGEUR_MAX or "http" in l or "t.me/" in l or set(l) <= set("━─- "):
             out.append(l)
             continue
         mots, cur = [], ""
@@ -2663,7 +2663,7 @@ def colonne_mobile(t):
                 mots.append(w)
         for w in mots:
             essai = (cur + " " + w) if cur else w
-            if cur and _largeur(essai) > LARGEUR_MAX:
+            if cur and _largeur(essai) > LARGEUR_MAX and not cur.rstrip().endswith((":", "→", "•", "(")) and len(cur.strip().split()) > 1:
                 out.append(cur)
                 cur = "   " + w
             else:
@@ -2717,7 +2717,7 @@ def rendu_html(t):
             if m.group(1).startswith(NIVEAUX_GRAS):            # niveaux importants en gras (charte)
                 val = f"<b>{val}</b>"
             out.append(f"<b>{lab} :</b> {val}"); continue
-        if _majuscule(l) and len(l) <= 60:
+        if _majuscule(l) and len(l) <= 60 and not l.startswith("   "):
             sep(); out.append(f"<b>{esc(l)}</b>"); continue
         out.append(_UNITE_RE.sub(lambda u: f"<code>{u.group(1)}</code>", esc(l)))
     while out and out[-1] in ("", SEPARATEUR):
@@ -4486,68 +4486,69 @@ COACH_LIVE_DUREE = 2 * 3600          # le coach en direct parle 2 h, puis demand
 
 
 def texte_coach_live(m, bougie, r, cle, positions=None, public=False):
-    """Coach en direct : une info par ligne « intitulé : valeur », lisible d'un coup d'œil (demande d'Adel)."""
+    """Bilan de clôture 15 min : un titre clair, une info par ligne, chaque ligne tient sur un téléphone
+    sans retour à la ligne (règle d'Adel : jamais plus large que « 🎙 COACH COMMENTATEUR »)."""
     p = (r.get("m1") or [bougie])[-1].get("c", bougie["c"])
     o_, h_, l_, c_ = bougie["o"], bougie["h"], bougie["l"], bougie["c"]
     corps = abs(c_ - o_); rng = max(h_ - l_, 1e-9)
     m_haut, m_bas = h_ - max(o_, c_), min(o_, c_) - l_
-    sens_b = "HAUSSE 🟢" if c_ > o_ else "BAISSE 🔴" if c_ < o_ else "À PLAT ⚪"
+    sens_b = "🟢 Bougie en hausse" if c_ > o_ else "🔴 Bougie en baisse" if c_ < o_ else "⚪ Bougie à plat"
     if m_haut >= 0.5 * rng:
-        lecture = "rejet en haut, les vendeurs poussent ⬇️"
+        lecture = "👁 Mèche haute : rejet"
     elif m_bas >= 0.5 * rng:
-        lecture = "rejet en bas, les acheteurs poussent ⬆️"
+        lecture = "👁 Mèche basse : rejet"
     elif corps >= 0.7 * rng:
-        lecture = "mouvement franc 💪"
+        lecture = "👁 Mouvement franc 💪"
     else:
-        lecture = "le marché hésite 🤏"
+        lecture = "👁 Le marché hésite 🤏"
     d = r.get("confirme") or 0
     tr = cle.get("trade")
     dirs = r.get("dirs") or [0] * 11
-    l = ["🎙 COACH COMMENTATEUR", "👁 EN DIRECT", f"{ICONE.get(m, '')} {m} : {px(p)}", "━━━━━━━━━━━━━━━",
-         f"🕯 Bougie 15 min : {sens_b}",
-         f"📏 Ouverture → clôture : {px(o_)} → {px(c_)}",
-         f"👁 Lecture : {lecture}",
-         f"🧭 Plan : {SENS[d] if d in (1, -1) else 'pas de sens net'}"]
-    l += voyants_unites(r)
+    idx = [i for i in (0, 1, 2, 4, 7, 9, 10) if i < len(dirs)]
+    bas, haut = sum(1 for i in idx if dirs[i] == -1), sum(1 for i in idx if dirs[i] == 1)
+    if bas > haut:
+        unites = f"📉 Unités : {bas}/{len(idx)} ⬇️"
+    elif haut > bas:
+        unites = f"📈 Unités : {haut}/{len(idx)} ⬆️"
+    else:
+        unites = "➖ Unités partagées"
+    l = ["🎙 COACH COMMENTATEUR", "👁 EN DIRECT", SEPARATEUR,
+         "📊 BILAN 15 MIN", f"{ICONE.get(m, '')} {m} : {px(p)}"]
+    if public or not tr:
+        l.append("ℹ️ Info, pas une entrée")
+    l += [SEPARATEUR, sens_b, f"📏 Écart : {'+' if c_ >= o_ else '-'}{px(corps)}", lecture,
+          "🧭 Tendance : " + ("🟢 hausse" if d == 1 else "🔴 baisse" if d == -1 else "➖ floue"), unites]
     if sum((r.get("sqzs") or [0] * 11)[4:10]) >= 3:
-        l.append("⚡ Compression : ça peut partir fort")
+        l.append("⚡ Compression : ça charge")
     if tr and public:
-        l.append(f"📂 Position du bot : {'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'} en cours")
-        l.append("🔒 Niveaux : dans le bot ALIGN")
+        l.append(f"📂 Bot : {'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'} en cours")
     elif tr:
         dd = tr["d"]
         prog = dd * (p - tr["e"]) / max(abs((tr.get("tp1") or tr["e"]) - tr["e"]), 1e-9)
-        l.append("📍 Statut : " + ("✅ entrée encore possible" if prog < 0.25 else "⛔ trop tard pour entrer") + f" ({'🟢 LONG' if dd == 1 else '🔴 SHORT'})")
+        l += [SEPARATEUR, f"📂 Position : {'🟢 LONG' if dd == 1 else '🔴 SHORT'}",
+              "✅ Entrée encore possible" if prog < 0.25 else "⛔ Trop tard pour entrer"]
         t1, t2 = tr.get("tp1"), tr.get("tp2")
         if t1 and dd * (t1 - p) > 0:
-            l.append(f"🎯 TP1 : {px(t1)} (reste {px(abs(t1 - p))})")
+            l.append(f"🎯 TP1 : {px(t1)}")
         elif t1:
-            l.append("🎯 TP1 : dépassé ✅")
+            l.append("🎯 TP1 : touché ✅")
             if t2 and dd * (t2 - p) > 0:
-                l.append(f"🏁 TP2 : {px(t2)} (reste {px(abs(t2 - p))})")
-        l.append(f"🔒 SL : {px(tr['sl'])} (à BE, plus de perte)" if dd * (tr["e"] - tr["sl"]) <= 0 else f"🛑 SL : {px(tr['sl'])}")
-        contre = sum(1 for k in range(5) if dirs[k] == -dd)
-        l.append("👀 Petites unités : " + (f"{contre}/5 contre nous, rebond possible" if contre >= 3 else "elles tiennent, on laisse courir"))
+                l.append(f"🏁 TP2 : {px(t2)}")
+        l.append(f"🔒 SL : {px(tr['sl'])} (BE)" if dd * (tr["e"] - tr["sl"]) <= 0 else f"🛑 SL : {px(tr['sl'])}")
+        contre = sum(1 for k in range(5) if k < len(dirs) and dirs[k] == -dd)
+        l.append("⚠️ Rebond possible" if contre >= 3 else "👍 On laisse courir")
     else:
         zp = r.get("zone_pine") if r.get("dirPlan") else None
         if zp:
-            dedans = zp["za"] <= p <= zp["zb"]
-            l.append(f"🟩 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])}")
-            l.append("📍 Prix : " + ("DANS la zone 👀" if dedans else f"à {px(min(abs(p - zp['za']), abs(p - zp['zb'])))} de la zone"))
-        try:
-            l.append("👀 J'attends : " + declencheur_attente(r, cle, p, dirs[9], dirs[7]))
-        except Exception:
-            pass
+            l.append("👀 Prix DANS la zone" if zp["za"] <= p <= zp["zb"] else f"👀 Zone à {px(min(abs(p - zp['za']), abs(p - zp['zb'])))}")
     try:
-        for tf_, nom_ in (("15m", "15 min"), ("1h", "1h")):
-            fin = prochaine_cloture_bougie(r, tf_, time.time())
-            l.append(f"⏱ Clôture {nom_} : {datetime.datetime.fromtimestamp(fin, PARIS).strftime('%H:%M')} (dans {mmss(max(0, fin - time.time()))})")
+        fin = prochaine_cloture_bougie(r, "15m", time.time())
+        hh = datetime.datetime.fromtimestamp(fin, PARIS)
+        l += [SEPARATEUR, f"⏱ Prochaine : {hh.strftime('%H:%M')}" + (" (+1h)" if hh.minute == 0 else "")]
     except Exception:
         pass
-    l += ce_qui_bloque(r, p, (tr or {}).get("d") or d)
-    if positions:
-        l += ["━━━━━━━━━━━━━━━", "📂 Positions en cours du bot :"] + positions
-    l.append("📺 Live : jaune entrée / rouge SL / bleu TP")
+    if positions and not public:
+        l += [SEPARATEUR, "📂 POSITIONS DU BOT"] + positions
     return "\n".join(l)
 
 
@@ -4574,7 +4575,7 @@ def positions_bot(etat):
     for mk in MARCHES:
         tr = (etat.get(mk) or {}).get("trade")
         if tr and tr.get("d") in (1, -1):
-            l.append(f"{ICONE.get(mk, '')} {mk} : {'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'} • entrée {px(tr['e'])} • SL {px(tr['sl'])} • TP1 {px(tr.get('tp1') or tr['e'])}")
+            l.append(f"{ICONE.get(mk, '')} {mk} : {'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'}")
     return l
 
 
