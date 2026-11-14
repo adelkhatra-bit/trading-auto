@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.8
+// @version      4.9
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.8';
+  const VERSION = '4.9';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -163,6 +163,32 @@
     }, DUREE_MAIN);
   }
 
+  // v4.9 : TP touché = explosion à l'écran (aucune info d'entrée : juste la fête, le coach reste dans le bot)
+  const cssFeu = document.createElement('style');
+  cssFeu.textContent = `#align-feu{position:fixed;inset:0;z-index:10000;pointer-events:none;display:flex;align-items:center;justify-content:center}
+  #align-feu .titre{font:900 78px/1 system-ui,Segoe UI,Arial,sans-serif;color:#fff;text-shadow:0 0 18px #ff2d95,0 0 36px #1e90ff;animation:feuZoom 1.2s ease-out}
+  #align-feu .eclat{position:absolute;font-size:46px;animation:feuVol 1.8s ease-out forwards}
+  @keyframes feuZoom{0%{transform:scale(.2);opacity:0}60%{transform:scale(1.25);opacity:1}100%{transform:scale(1)}}
+  @keyframes feuVol{0%{transform:translate(0,0) scale(.4);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(1.3);opacity:0}}`;
+  document.head.appendChild(cssFeu);
+  function feuArtifice(titre) {
+    try {
+      document.getElementById('align-feu')?.remove();
+      const f = document.createElement('div'); f.id = 'align-feu';
+      f.innerHTML = '<div class="titre">' + esc(titre) + '</div>';
+      const em = ['🎆', '🎇', '✨', '🔥', '💥', '🥳'];
+      for (let i = 0; i < 28; i++) {
+        const e = document.createElement('span'); e.className = 'eclat'; e.textContent = em[i % em.length];
+        const a = (i / 28) * Math.PI * 2, d = 220 + Math.random() * 260;
+        e.style.setProperty('--dx', Math.cos(a) * d + 'px'); e.style.setProperty('--dy', Math.sin(a) * d + 'px');
+        e.style.animationDelay = (Math.random() * 0.4) + 's'; f.appendChild(e);
+      }
+      document.body.appendChild(f);
+      setTimeout(() => f.remove(), 4500);
+    } catch (e) {}
+  }
+  window.__ALIGN_FEU__ = feuArtifice;
+
   function recu(txt) {
     txt = String(txt || '').trim(); if (!txt) return;
     if (txt.startsWith('CMD:')) {
@@ -172,6 +198,7 @@
     }
     const bulle = txt.startsWith('BULLE:');
     if (bulle) txt = txt.slice(6).trim();
+    if (/TP\d? TOUCH|OBJECTIF FINAL|TP2 TOUCH/i.test(txt)) feuArtifice(/TP2|FINAL/i.test(txt) ? '🏆 TP2 TOUCHÉ !' : '🎯 TP TOUCHÉ !');
     montrer(txt, bulle);
     if (!bulle) { extra.push(txt); remplir(); }
   }
