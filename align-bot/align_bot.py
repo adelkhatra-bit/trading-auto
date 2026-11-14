@@ -4767,6 +4767,8 @@ def canal_resultats(etat, m, textes):
             msg = "\n".join(["🎆 TP TOUCHÉ ! 🎆", f"{ic} {m} : TP{n.group(1) if n else ''} ✅",
                              "🔥 Bravo à ceux qui ont suivi", "☕ La suite sans risque (BE)" if (n and n.group(1) == "1") else "🥳 Encaisse et souris",
                              "👇 Coach perso : bouton"])
+        elif "FRÔLÉ" in t:
+            msg = "\n".join(["😅 TP FRÔLÉ !", f"{ic} {m} : à un cheveu", "👀 Petit recul", "😎 T'inquiète, on garde le cap"])
         elif "STOP TOUCHÉ" in t:
             msg = "\n".join(["😤 STOP TOUCHÉ", f"{ic} {m} : on coupe petit", "💪 On va se refaire", "👀 Je cherche la suite"])
         else:
@@ -8155,6 +8157,28 @@ def approche_tp(m, r, d, cible, nom):
             f"🐢 {contre}/5 petites unités ralentissent : le prix peut faire une pause ou un petit rebond avant d'y aller\n"
             "🛡 Garde ton SL à BE : tu ne risques plus rien")
 
+def frole_tp(m, r, tr, d, depart, cible, nom, p):
+    """Le prix est venu frôler le TP (≥ 93 % du chemin) sans le toucher, puis recule : le coach rassure, une fois par TP."""
+    span = abs(cible - depart)
+    m1 = (r.get("m1") or [])[-5:]
+    if span <= 0 or not m1:
+        return None
+    ext = max(x["h"] for x in m1) if d == 1 else min(x["l"] for x in m1)
+    cle_ = f"frole_{nom}"
+    best = max(float(tr.get(cle_ + "_max", 0)), d * (ext - depart) / span)
+    tr[cle_ + "_max"] = best
+    now = d * (p - depart) / span
+    if tr.get(cle_ + "_dit") or not (0.93 <= best < 1) or now > best - 0.2:
+        return None
+    tr[cle_ + "_dit"] = True
+    dirs = r.get("dirs") or [0] * 11
+    raison = ("🧭 Le 15 min est toujours avec nous : on y retourne" if len(dirs) > 4 and dirs[4] == d
+              else "🐢 Les petites unités respirent : pause normale")
+    proteg = "🛡 SL à BE : tu ne risques plus rien" if d * (tr["e"] - tr["sl"]) <= 0 else "🛑 SL en place : on ne touche à rien"
+    return "\n".join([f"😅 {nom} FRÔLÉ — {ICONE.get(m, '')} {m}", f"🎯 {nom} : {px(cible)}",
+                      f"🤏 Il manquait {px(abs(cible - ext))}", "👀 Le prix recule un peu", raison, proteg, "😎 T'inquiète, on garde le cap"])
+
+
 def avant_entree(m, r, cle, o, d):
     """Le coach parle AVANT l'entrée : combien de temps avant la clôture qui décide, et pourquoi le prix peut rebondir (FVG / order block)."""
     l = []
@@ -8564,6 +8588,10 @@ def agent(m, r, cle, ferme):
             out.append(cs_(m, "METS-TOI À BE", [f"🛑 SL → BE : {px(e)} (entrée)", f"🕯 Clôture 15 min {heure(r['b15'][-1]['t'])} {'au-dessus' if d == 1 else 'sous'} l'entrée",
                                                           f"💰 TP : {px(t1)}", "🙅 Le prix ne doit plus revenir à ton entrée : on encaisse 💰"], "SL à BE (plus de perte possible)", r))
             return out
+        fr_ = frole_tp(m, r, tr, d, e, t1, "TP1", p)
+        if fr_:
+            out.append(fr_)
+            return out
         if progres >= 0.8 and not tr.get("cafe_dit"):
             tr["cafe_dit"] = True
             out.append(approche_tp(m, r, d, t1, "TP1"))
@@ -8586,6 +8614,11 @@ def agent(m, r, cle, ferme):
 
     if tr["statut"] == "tp1":
         n_tp = int(tr.get("n_tp") or 2)                  # numéro du TP visé (TP2, puis TP3, TP4…) : la course continue tant que la tendance tient
+        if t2 is not None and not touche_t2:
+            fr_ = frole_tp(m, r, tr, d, t1, t2, f"TP{n_tp}", p)
+            if fr_:
+                out.append(fr_)
+                return out
         if t2 is not None and not touche_t2 and tr.get("approche_tp_n") != n_tp and d * (p - t1) >= 0.7 * abs(t2 - t1) > 0:
             tr["approche_tp_n"] = n_tp
             out.append(approche_tp(m, r, d, t2, f"TP{n_tp}"))
@@ -8755,6 +8788,8 @@ def live_annonces(etat, m, textes):
         elif "OBJECTIF FINAL ATTEINT" in t or re.search(r"TP[2-9] TOUCHÉ", t):
             if live_bande(etat, f"🏆 TP TOUCHÉ sur {ic} {m} ! Bravo à ceux qui ont suivi 🔥", f"tp2{m}", 600, toujours=True):
                 live_publier("BULLE:🎁 Tu veux recevoir les prochaines infos ? Abonne-toi • lien en bio 🎁 gratuit")
+        elif "FRÔLÉ" in t:
+            live_bande(etat, f"BULLE:😅 {ic} {m} : TP frôlé à un cheveu • petit recul, on garde le cap 😎", f"frole{m}", 600)
         elif "STOP TOUCHÉ" in t:
             live_bande(etat, f"😤 {ic} {m} : stop touché • on coupe petit, on va se refaire 💪", f"sl{m}", 600, toujours=True)
         elif "TP1 TOUCHÉ" in t:
