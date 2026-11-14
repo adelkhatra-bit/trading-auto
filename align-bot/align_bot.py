@@ -4605,6 +4605,65 @@ def flash_commentateur(m, r, cle):
     return None
 
 
+LOGO_URL = "https://raw.githubusercontent.com/adelkhatra-bit/trading-auto/main/docs/live/logo_align.jpg"
+BOT_LIEN = "https://t.me/align_mtf_adel_bot"
+# Liens d'invitation des chaînes gratuites par marché (créées par Adel le 14/11) — jamais la chaîne VIP
+LIENS_CHAINES = {"BTC": "https://t.me/+udAxidycXfdmN2Jk", "GOLD": "https://t.me/+BI-VaNlUBmM1N2E0", "NASDAQ": "https://t.me/+E-Im5stFZtZjNjI0"}
+
+
+def photo_canal(cid):
+    """Met le logo ALIGN (le même que le bot) comme photo de la chaîne : envoi multipart de l'image."""
+    try:
+        req = urllib.request.Request(LOGO_URL, headers={"User-Agent": "align-bot"})
+        with urllib.request.urlopen(req, timeout=30) as rep:
+            image = rep.read()
+        borne = "----align" + hashlib.md5(image).hexdigest()
+        corps = (f"--{borne}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{cid}\r\n"
+                 f"--{borne}\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"logo.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n").encode() + image + f"\r\n--{borne}--\r\n".encode()
+        req = urllib.request.Request(f"https://api.telegram.org/bot{TOKEN}/setChatPhoto", data=corps,
+                                     headers={"Content-Type": f"multipart/form-data; boundary={borne}", "User-Agent": "align-bot"})
+        with urllib.request.urlopen(req, timeout=60) as rep:
+            return json.loads(rep.read().decode()).get("ok", False)
+    except Exception as ex:
+        print("photo chaîne", cid, ex)
+        return False
+
+
+def boutons_chaine_marche(etat):
+    """Boutons sous chaque message des chaînes : le coach perso dans le bot, et le live s'il tourne."""
+    l = [[{"text": "🧑‍🏫 Mon coach perso (gratuit)", "url": BOT_LIEN}]]
+    if live_actif(etat):
+        l.append([{"text": "🔴 Regarder le live", "url": LIVE_LIEN}])
+    return json.dumps({"inline_keyboard": l})
+
+
+def accueil_questionnaire(etat, cid):
+    """Accueil : le niveau de l'utilisateur, puis le marché qu'il veut suivre (sa chaîne)."""
+    _envoi_sur(cid, text="👋 BIENVENUE DANS ALIGN\n━━━━━━━━━━━━━━━\n❓ Question 1/2\n🎓 Ton niveau en trading ?",
+               reply_markup=json.dumps({"inline_keyboard": [
+                   [{"text": "🌱 Débutant", "callback_data": "niveau:1"}],
+                   [{"text": "📈 Intermédiaire", "callback_data": "niveau:2"}],
+                   [{"text": "🏆 Confirmé", "callback_data": "niveau:3"}]]}))
+
+
+def accueil_marches(etat, cid):
+    _envoi_sur(cid, text="❓ Question 2/2\n📊 Quel marché veux-tu suivre ?\n🎙 Chaque marché a sa chaîne : commentateur en direct",
+               reply_markup=json.dumps({"inline_keyboard": [
+                   [{"text": "🟠 BTC", "callback_data": "choixcanal:BTC"}, {"text": "🥇 Gold", "callback_data": "choixcanal:GOLD"},
+                    {"text": "🟣 NASDAQ", "callback_data": "choixcanal:NASDAQ"}],
+                   [{"text": "🔥 Les 3", "callback_data": "choixcanal:BOTH"}]]}))
+
+
+def accueil_liens(etat, cid, choix):
+    marches = list(MARCHES) if choix == "BOTH" else [choix]
+    selectionner_marches_suivi(etat, cid, marches)
+    liens = {**LIENS_CHAINES, **(etat.get("liens_marche") or {})}
+    boutons = [[{"text": f"{ICONE.get(mk, '')} Rejoindre ALIGN {mk}", "url": liens[mk]}] for mk in marches if liens.get(mk)]
+    _envoi_sur(cid, text="✅ C'EST PARTI\n━━━━━━━━━━━━━━━\n" + "\n".join(f"{ICONE.get(mk, '')} {mk} : suivi activé" for mk in marches)
+               + ("\n👇 Rejoins ta chaîne commentateur" if boutons else "") + "\n🧑‍🏫 Ici, ton coach perso : analyse, positions, live",
+               **({"reply_markup": json.dumps({"inline_keyboard": boutons})} if boutons else {}))
+
+
 def notifier_canal_marche(etat, m, r, cle):
     """Chaîne du marché (ALIGN BTC / Gold / NASDAQ) : la carte commentateur à chaque clôture 15 min + les flashs, sans niveaux VIP."""
     canal = (etat.get("canaux_marche") or {}).get(m)
@@ -4612,15 +4671,17 @@ def notifier_canal_marche(etat, m, r, cle):
     if not canal or not bars:
         return
     info = etat.setdefault("canal_live", {}).setdefault(m, {})
+    if not info.get("photo_ok") and TOKEN:
+        info["photo_ok"] = photo_canal(canal) or time.time()      # une seule tentative par démarrage si échec
     b = bars[-1]
     if int(info.get("dernier_t", 0)) < int(b["t"]):
-        res = _envoi_sur(canal, text=texte_coach_live(m, b, r, cle, None, public=True))
+        res = _envoi_sur(canal, text=texte_coach_live(m, b, r, cle, None, public=True), reply_markup=boutons_chaine_marche(etat))
         if res is not None and not (isinstance(res, dict) and res.get("ok") is False):
             info["dernier_t"] = int(b["t"])
         return
     flash = flash_commentateur(m, r, cle)
     if flash and time.time() - float(info.get("flash_t", 0)) >= 300:
-        if _envoi_sur(canal, text=flash) is not None:
+        if _envoi_sur(canal, text=flash, reply_markup=boutons_chaine_marche(etat)) is not None:
             info["flash_t"] = time.time()
 
 
@@ -5454,6 +5515,21 @@ def traiter(etat, chats, updates):
                     pass
                 regler_bot(etat, qui, choix == "boton")
                 continue
+            if choix == "niveau":
+                etat.setdefault("niveaux", {})[str(qui)] = mk
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ Noté")
+                except Exception:
+                    pass
+                accueil_marches(etat, qui)
+                continue
+            if choix == "choixcanal" and (mk in MARCHES or mk == "BOTH"):
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="✅ C'est noté")
+                except Exception:
+                    pass
+                accueil_liens(etat, qui, mk)
+                continue
             if choix in ("coachlive", "coachstop") and mk in MARCHES:
                 activer_coach_live(etat, qui, mk, choix == "coachlive")
                 r_now = DERNIERS.get(mk)
@@ -5567,6 +5643,8 @@ def traiter(etat, chats, updates):
                 cmd = "/" + charge
         if cmd in COMMANDES:
             msg["text"] = tx = COMMANDES[cmd]
+        if cmd == "/start" and str(cid) not in (etat.get("niveaux") or {}) and str(cid) not in {str(x) for x in proprio(etat)}:
+            accueil_questionnaire(etat, cid)
         if cmd in ("/start", "/boutons"):
             # Les boutons reviennent toujours (si le clavier du téléphone les a cachés)
             _envoi_sur(cid, text="⬇️ Tes boutons sont là 👇\n💡 Clavier caché ? Appuie sur l'icône ⌘ à droite du champ",
