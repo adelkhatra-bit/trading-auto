@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.0
+// @version      4.1
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,11 +10,12 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.0';
+  const VERSION = '4.1';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
     '👉 ABONNE-TOI • PARTAGE • TAPOTE L\'ÉCRAN',
+    '🔗 LIEN EN BIO : COACH EN DIRECT',
     '📲 Le coach ALIGN est sur Telegram • lien en bio',
     '⚠️ Le trading comporte un risque de perte • ceci n\'est pas un conseil financier'
   ];
@@ -95,13 +96,22 @@
 
   // ───── télécommande 15 s ─────
   let retour = null;
+  // zoom lisible sur téléphone (TikTok) : grosses bougies, prix au-dessus du tableau, place pour la bande
+  function zoom(delai) {
+    setTimeout(() => { try {
+      const c = chart(); if (!c) return;
+      c.applyOverrides({ 'scalesProperties.scaleSeriesOnly': true, 'paneProperties.topMargin': 14, 'paneProperties.bottomMargin': 30 });
+      const ts = c.getTimeScale(); ts.setBarSpacing(18); ts.setRightOffset(10);
+      c.getPanes()[0].getMainSourcePriceScale().setAutoScale(true);
+    } catch (e) {} }, delai || 900);
+  }
+  zoom(300);
   function chart() { try { return window.TradingViewApi.activeChart(); } catch (e) { return null; } }
   function commande(sorte, valeur, prenom) {
     const c = chart(); if (!c) return;
     if (!retour) retour = { tf: c.resolution(), sym: c.symbol() };
     const nom = prenom ? prenom + ' a demandé ' : 'Vue ';
     const fin = ' • ⏳ 15 s • 📸 fais ta capture';
-    const zoom = () => setTimeout(() => { try { chart().executeActionById('timeScaleReset'); } catch (e) {} }, 900);
     if (sorte === 'tf') { c.setResolution(valeur); montrer('🎮 ' + nom + (valeur === '60' ? '1 h' : valeur + ' min') + fin, true); }
     else if (sorte === 'sym') { c.setSymbol(valeur); montrer('🎮 ' + nom + valeur.split(':').pop() + fin, true); }
     else return;
