@@ -2351,6 +2351,15 @@ TRAD.update({   # v24.3 : cartes coach FVG, scalp, suivi, ouvertures — même f
     "🛡️ Si tu suis la position, je te dis quand remonter ton SL": "🛡️ If you follow the position, I'll tell you when to move your SL",
     "LONDRES": "LONDON", "Londres": "London", ": pas de FVG / order block exploitable en vue 5 min": ": no usable FVG / order block on the 5 min chart", "😎 Je ne force rien : j'attends un vrai setup": "😎 I don't force anything: waiting for a real setup", "👀 Mets-toi en vue 5 min": "👀 Switch to the 5 min chart", "👀 Vue 5 min": "👀 5 min chart", ": MARCHÉ FERMÉ": ": MARKET CLOSED", "😴 Je ne t'envoie plus rien sur ce marché": "😴 No more messages on this market", "⏰ Réouverture :": "⏰ Reopens:", "lundi": "Monday", "dimanche": "Sunday", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
 })
+TRAD.update({   # lecture au TP1
+    "⚠️ RISQUE DE RETOUR VERS L'ENTRÉE": "⚠️ RISK OF A PULLBACK TO THE ENTRY", "petites unités repartent contre la position": "small timeframes turning against the trade",
+    ": le marché s'essouffle": ": the market is running out of steam", "✂️ Encaisse une grosse partie maintenant": "✂️ Take a big part of the profit now",
+    "🛡 SL à BE : plus aucune perte possible": "🛡 SL to BE: no more loss possible", "🚀 ÇA PEUT CONTINUER VERS LE TP2": "🚀 IT CAN GO ON TO TP2",
+    "petites unités dans le sens de la position": "small timeframes in the trade direction", "du TP1 = cap sur le TP2": "TP1 = heading for TP2",
+    "en compression : ça peut accélérer": "compressed: it can speed up", "🟨 LE MARCHÉ HÉSITE AU TP1": "🟨 THE MARKET HESITATES AT TP1",
+    "du TP1 = ça continue vers le TP2": "TP1 = it goes on to TP2", "↩ Mèche qui touche puis revient = on sécurise (SL à BE)": "↩ Wick that touches then comes back = secure (SL to BE)",
+    ": essoufflé": ": out of steam", "Bougie 15 min qui CLÔTURE": "15-min candle CLOSING", "Clôture 15 min": "15-min close",
+})
 TRAD.update({   # cartes reliées au graphique (mêmes mots que l'indicateur)
     "🟩 Le prix entre dans la ZONE du graphique": "🟩 Price is entering the chart ZONE",
     "🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min AU-DESSUS": "🟨 Yellow ENTRY line: wait for the 15-min CLOSE ABOVE",
@@ -7037,6 +7046,35 @@ def texte_scalp(m, si, dp, anglais=False):
           (f"🧭 At TP we go back {sensp} (main plan)" if anglais else f"🧭 Au TP on reprend le {sensp} (plan principal)")]
     return l
 
+def lecture_tp1(r, d):
+    """Au TP1 : le marché continue vers le TP2 ou peut revenir vers l'entrée ? Lecture des vraies unités (1 → 15 min),
+    du RSI 5 min / 15 min / 1 h et des compressions. Même logique pour BTC, Gold et NASDAQ (unités relatives, pas de prix fixes)."""
+    dirs = list(r.get("dirs") or [])[:5]
+    rsis = list(r.get("rsis") or [])
+    sqzs = list(r.get("sqzs") or [])[:5]
+    avec = sum(1 for x in dirs if x == d)
+    contre = sum(1 for x in dirs if x == -d)
+    noms = {2: "5 min", 4: "15 min", 7: "1 h"}
+    epuise = [(noms[i], rsis[i]) for i in (2, 4, 7) if i < len(rsis) and rsis[i] is not None and
+              ((d == 1 and rsis[i] >= 70) or (d == -1 and rsis[i] <= 30))]
+    compr = sum(1 for q in sqzs if q == 1)
+    au_dela = "AU-DESSUS" if d == 1 else "EN DESSOUS"
+    if contre >= 3 or (epuise and contre >= 2):
+        lignes = ["⚠️ RISQUE DE RETOUR VERS L'ENTRÉE", f"↩ {contre}/5 petites unités repartent contre la position"]
+        lignes += [f"🧯 RSI {u} {v:.0f} : le marché s'essouffle" for u, v in epuise[:2]]
+        lignes += ["✂️ Encaisse une grosse partie maintenant", "🛡 SL à BE : plus aucune perte possible"]
+    elif avec >= 3 and not epuise:
+        lignes = ["🚀 ÇA PEUT CONTINUER VERS LE TP2", f"✅ {avec}/5 petites unités dans le sens de la position",
+                  f"🕯 Bougie 15 min qui CLÔTURE {au_dela} du TP1 = cap sur le TP2"]
+        if compr:
+            lignes.append(f"⚡ {compr} unité{'s' if compr > 1 else ''} en compression : ça peut accélérer")
+    else:
+        lignes = ["🟨 LE MARCHÉ HÉSITE AU TP1", f"🕯 Clôture 15 min {au_dela} du TP1 = ça continue vers le TP2",
+                  "↩ Mèche qui touche puis revient = on sécurise (SL à BE)"]
+        lignes += [f"🧯 RSI {u} {v:.0f} : essoufflé" for u, v in epuise[:1]]
+    return lignes
+
+
 def coach_fvg(r, d, prix, attente=True):
     """Lignes « coach » d'une entrée sur FVG (mêmes niveaux que l'indicateur sur la vue de validation) : zone, alignement 5 min + 15 min,
     FVG qui bloque, SL protégé, manipulation (mèche qui dépasse puis revient), quand entrer. [] si l'indicateur garde son plan d'origine."""
@@ -7967,8 +8005,7 @@ def agent(m, r, cle, ferme):
             cle.pop("trade"); cle["aligne"] = 0; return out
         if touche_t1:
             tr["statut"] = "tp1"; tr["sl"] = e
-            out.append(cs_(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅", f"🔒 SL → BE : {px(e)}", f"🏁 TP2 : {px(t2)}",
-                                                     "🚀 Ça continue vers le TP2 tant que le SL tient", "🛡️ Si tu suis la position, je te dis quand remonter ton SL"],
+            out.append(cs_(m, "TP1 TOUCHÉ", [f"💰 TP1 : {px(t1)} ✅", f"🔒 SL → BE : {px(e)}", f"🏁 TP2 : {px(t2)}"] + lecture_tp1(r, d),
                                    "Sécuriser une partie, garder le reste", r))
             return out
         # ↩ Voyants de retournement (comme l'indicateur) : 3/5 petites unités contre la position = alerte, 1 fois.
