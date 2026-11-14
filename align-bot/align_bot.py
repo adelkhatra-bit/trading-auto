@@ -4637,6 +4637,18 @@ def boutons_chaine_marche(etat):
     return json.dumps({"inline_keyboard": l})
 
 
+def dans_chaine(etat, cid, m):
+    """L'utilisateur est-il abonné à la chaîne de ce marché ? (le bot y est admin : getChatMember)"""
+    canal = (etat.get("canaux_marche") or {}).get(m)
+    if not canal or not TOKEN:
+        return False
+    try:
+        st = telegram("getChatMember", chat_id=canal, user_id=cid).get("result", {}).get("status")
+        return st in ("member", "administrator", "creator")
+    except Exception:
+        return False
+
+
 def accueil_questionnaire(etat, cid):
     """Accueil : le niveau de l'utilisateur, puis le marché qu'il veut suivre (sa chaîne)."""
     _envoi_sur(cid, text="👋 BIENVENUE DANS ALIGN\n━━━━━━━━━━━━━━━\n❓ Question 1/2\n🎓 Ton niveau en trading ?",
@@ -4660,7 +4672,8 @@ def accueil_liens(etat, cid, choix):
     liens = {**LIENS_CHAINES, **(etat.get("liens_marche") or {})}
     boutons = [[{"text": f"{ICONE.get(mk, '')} Rejoindre ALIGN {mk}", "url": liens[mk]}] for mk in marches if liens.get(mk)]
     _envoi_sur(cid, text="✅ C'EST PARTI\n━━━━━━━━━━━━━━━\n" + "\n".join(f"{ICONE.get(mk, '')} {mk} : suivi activé" for mk in marches)
-               + ("\n👇 Rejoins ta chaîne commentateur" if boutons else "") + "\n🧑‍🏫 Ici, ton coach perso : analyse, positions, live",
+               + ("\n👇 Rejoins ta chaîne commentateur" if boutons else "") + "\n🔔 Active la cloche de la chaîne : tu ne rates rien"
+               + "\n━━━━━━━━━━━━━━━\n🎙 Chaîne = commentateur en direct\n🧑‍🏫 Ici = ton coach perso, positions, live",
                **({"reply_markup": json.dumps({"inline_keyboard": boutons})} if boutons else {}))
 
 
@@ -5529,6 +5542,14 @@ def traiter(etat, chats, updates):
                 except Exception:
                     pass
                 accueil_liens(etat, qui, mk)
+                continue
+            if choix == "coachlive" and mk in MARCHES and dans_chaine(etat, qui, mk):
+                # Pas de doublon : le commentateur tourne déjà dans la chaîne du marché où il est abonné
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🎙 Déjà dans ta chaîne")
+                except Exception:
+                    pass
+                _envoi_sur(qui, text=f"🎙 COMMENTATEUR {ICONE.get(mk, '')} {mk}\n✅ Tu es déjà dans la chaîne\n👀 Il commente là-bas\n🙅 Pas de doublon ici")
                 continue
             if choix in ("coachlive", "coachstop") and mk in MARCHES:
                 activer_coach_live(etat, qui, mk, choix == "coachlive")
