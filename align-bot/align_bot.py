@@ -3686,6 +3686,59 @@ def alerte_retournement(m, r, tr):
             "🙅 Aucune entrée en sens inverse avant cette confirmation")
 
 
+def retournement_marche(m, r, cle):
+    """v71 = Pine « RETOURNEMENT PAR MARCHÉ » (mesuré sur 60 jours de bougies 5 min) :
+    GOLD : 5m + 15m retournés contre le 1h • NASDAQ : idem + gros volume 15 min • BTC : 5m + 15m + 1h retournés contre le 4h.
+    Cibles : haut/bas des 6 dernières bougies 1h puis 4h ; SL : dernier creux/sommet 5 min ; BE dès que le gain = le risque.
+    Une alerte par nouveau sens (comme alert() du Pine), jamais deux fois de suite."""
+    dirs = r.get("dirs") or []
+    b5, b15 = (r.get("b5") or [])[:-1], (r.get("b15") or [])[:-1]
+    b1, b4 = r.get("b1h") or [], r.get("b4h") or []
+    if len(dirs) < 10 or len(b5) < 6 or len(b15) < 41 or len(b1) < 6 or len(b4) < 6:
+        return None
+    d5, d15, d60, d240 = dirs[2], dirs[4], dirs[7], dirs[9]
+    vols = [x.get("v") or 0 for x in b15]
+    vma = sum(vols[-41:-1]) / 40
+    vol_fort = vma > 0 and vols[-1] > 1.3 * vma
+    p = r["m1"][-1]["c"] if r.get("m1") else b15[-1]["c"]
+    h1, l1 = max(x["h"] for x in b1[-6:]), min(x["l"] for x in b1[-6:])
+    h4, l4 = max(x["h"] for x in b4[-6:]), min(x["l"] for x in b4[-6:])
+    def ok(s):
+        casc = d5 == s and d15 == s
+        if m == "BTC":
+            return casc and d60 == s and d240 == -s
+        if m == "NASDAQ":
+            return casc and d60 == -s and vol_fort
+        return casc and d60 == -s
+    sens = 1 if ok(1) and p < h1 else -1 if ok(-1) and p > l1 else 0
+    avant = cle.get("rv_sens", 0)
+    cle["rv_sens"] = sens
+    if sens == 0 or sens == avant or r.get("t", 0) - cle.get("rv_t", {}).get(str(sens), 0) < 3600:
+        return None
+    cle.setdefault("rv_t", {})[str(sens)] = r.get("t", 0)
+    sl = min(x["l"] for x in b5[-6:]) if sens == 1 else max(x["h"] for x in b5[-6:])
+    be = p + sens * abs(p - sl)
+    haut = "haut" if sens == 1 else "bas"
+    camp, autre = ("acheteurs", "vendeurs") if sens == 1 else ("vendeurs", "acheteurs")
+    if m == "BTC":
+        vu = f"le 5 min, le 15 min et même le 1h ont tourné {'à la hausse' if sens == 1 else 'à la baisse'}, alors que le 4h va encore dans l'autre sens"
+        pq = "Sur le BTC je n'entre jamais sur le 5 min seul : c'est souvent un piège. Là, le 1h a suivi, donc c'est sérieux"
+    else:
+        vu = f"le 5 min et le 15 min ont tourné {'à la hausse' if sens == 1 else 'à la baisse'}, alors que le 1h va encore dans l'autre sens"
+        pq = ("Et la bougie 15 min a un gros volume : les " + camp + " sont vraiment là") if m == "NASDAQ" else \
+             f"Sur le Gold, quand les petites unités tournent comme ça, les {autre} s'essoufflent"
+    st = {"GOLD": (47, 24), "NASDAQ": (70, 30), "BTC": (62, 38)}.get(m, (0, 0))
+    return (f"↩️ RETOURNEMENT {'LONG ⬆️' if sens == 1 else 'SHORT ⬇️'} — {ICONE.get(m, '')} {m}\n"
+            f"👀 Regarde ton graphique : {vu}.\n"
+            f"💡 {pq}. Le prix peut aller chercher le {haut} de la 1h, voire de la 4h.\n"
+            f"📊 Sur mes 60 derniers jours, ce signal a atteint le {haut} 1h {st[0]} % du temps, le {haut} 4h {st[1]} %.\n"
+            f"🎯 Cible 1 : {px(h1 if sens == 1 else l1)} ({haut} 1h)\n"
+            f"🚀 Cible 2 : {px(h4 if sens == 1 else l4)} ({haut} 4h)\n"
+            f"🛑 SL : {px(sl)}, juste {'sous le dernier creux' if sens == 1 else 'au-dessus du dernier sommet'} 5 min. S'il casse, je me suis trompé et on sort.\n"
+            f"🛡 Dès que le prix touche {px(be)}, mets-toi à BE : il ne doit plus revenir à ton entrée. Là, on encaisse sans risque 💰\n"
+            "📺 Tu retrouves la même explication sur le graphique (infobulle ↩️)")
+
+
 def court(texte, n=120):
     texte = re.sub(r"\s+", " ", str(texte or "")).strip()
     return texte if len(texte) <= n else texte[:n].rsplit(" ", 1)[0].rstrip(",;: ") + "…"
@@ -7733,6 +7786,12 @@ def agent(m, r, cle, ferme):
         niveaux_cles(out, m, r, cle)
     except Exception as ex:
         print("manipulation", ex)
+    try:
+        rv_ = retournement_marche(m, r, cle)          # v71 : retournement par marché (même règle que le graphique)
+        if rv_ and not (tr and tr.get("d") == (1 if "LONG" in rv_.split("\n")[0] else -1)):
+            out.append(rv_)
+    except Exception as ex:
+        print("retournement_marche", ex)
 
     # ── Pas de trade : tendance 4h confirmée par 1h, puis timing d'entrée en 5m ──
     if not tr and r.get("fermeture"):
@@ -8025,7 +8084,7 @@ def agent(m, r, cle, ferme):
         if not tr.get("be_dit") and risque_ > 0 and d * (p - e) >= 1.2 * risque_ and d * (r["b15"][-1]["c"] - e) >= r["atr"]:
             tr["be_dit"] = True; tr["sl"] = e + d * 0.05 * r["atr"]
             out.append(cs_(m, "METS-TOI À BE", [f"🛑 SL → BE : {px(e)} (entrée)", f"🕯 Clôture 15 min {heure(r['b15'][-1]['t'])} {'au-dessus' if d == 1 else 'sous'} l'entrée",
-                                                          f"💰 TP : {px(t1)}"], "SL à BE (plus de perte possible)", r))
+                                                          f"💰 TP : {px(t1)}", "🙅 Le prix ne doit plus revenir à ton entrée : on encaisse 💰"], "SL à BE (plus de perte possible)", r))
             return out
         if progres < 0.25:
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
