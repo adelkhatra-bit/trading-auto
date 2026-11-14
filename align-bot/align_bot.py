@@ -2717,7 +2717,7 @@ def rendu_html(t):
             if m.group(1).startswith(NIVEAUX_GRAS):            # niveaux importants en gras (charte)
                 val = f"<b>{val}</b>"
             out.append(f"<b>{lab} :</b> {val}"); continue
-        if _majuscule(l) and len(l) <= 60 and not l.startswith("   "):
+        if _majuscule(l) and len(l) <= 60 and not brut.startswith("   "):   # une suite de ligne coupée n'est jamais un titre
             sep(); out.append(f"<b>{esc(l)}</b>"); continue
         out.append(_UNITE_RE.sub(lambda u: f"<code>{u.group(1)}</code>", esc(l)))
     while out and out[-1] in ("", SEPARATEUR):
