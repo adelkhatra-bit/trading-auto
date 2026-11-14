@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.5
+// @version      4.6
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,13 +10,13 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.5';
+  const VERSION = '4.6';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
     '👉 ABONNE-TOI • PARTAGE • TAPOTE L\'ÉCRAN',
     '🔗 LIEN EN BIO : COACH EN DIRECT',
-    '📲 Le coach ALIGN est sur Telegram • lien en bio',
+    '📲 Le coach ALIGN en direct • lien en bio 🎁 gratuit',
     '⚠️ Le trading comporte un risque de perte • ceci n\'est pas un conseil financier'
   ];
   const DUREE_MAIN = 15000, DUREE_MSG = 8000;
