@@ -4529,12 +4529,13 @@ def texte_coach_live(m, bougie, r, cle, positions=None, public=False):
               "✅ Entrée encore possible" if prog < 0.25 else "⛔ Trop tard pour entrer"]
         t1, t2 = tr.get("tp1"), tr.get("tp2")
         if t1 and dd * (t1 - p) > 0:
-            l.append(f"🎯 TP1 : {px(t1)}")
+            l.append(f"🔵 TP1 : {px(t1)}")
         elif t1:
-            l.append("🎯 TP1 : touché ✅")
+            l.append("🔵 TP1 : touché ✅")
             if t2 and dd * (t2 - p) > 0:
-                l.append(f"🏁 TP2 : {px(t2)}")
-        l.append(f"🔒 SL : {px(tr['sl'])} (BE)" if dd * (tr["e"] - tr["sl"]) <= 0 else f"🛑 SL : {px(tr['sl'])}")
+                l.append(f"🔵 TP2 : {px(t2)}")
+        l.append(f"🟡 Entrée : {px(tr['e'])}")
+        l.append(f"🔴 SL : {px(tr['sl'])} (BE)" if dd * (tr["e"] - tr["sl"]) <= 0 else f"🔴 SL : {px(tr['sl'])}")
         contre = sum(1 for k in range(5) if k < len(dirs) and dirs[k] == -dd)
         l.append("⚠️ Rebond possible" if contre >= 3 else "👍 On laisse courir")
     else:
@@ -4767,6 +4768,8 @@ def canal_resultats(etat, m, textes):
             msg = "\n".join(["🎆 TP TOUCHÉ ! 🎆", f"{ic} {m} : TP{n.group(1) if n else ''} ✅",
                              "🔥 Bravo à ceux qui ont suivi", "☕ La suite sans risque (BE)" if (n and n.group(1) == "1") else "🥳 Encaisse et souris",
                              "👇 Coach perso : bouton"])
+        elif "RETOUR VERS L'ENTRÉE" in t:
+            msg = "\n".join(["🔁 Retour vers l'entrée", f"{ic} {m} : le prix respire", "🛡 Le bot est protégé", "😎 T'inquiète, je surveille"])
         elif "FRÔLÉ" in t:
             msg = "\n".join(["😅 TP FRÔLÉ !", f"{ic} {m} : à un cheveu", "👀 Petit recul", "😎 T'inquiète, on garde le cap"])
         elif "STOP TOUCHÉ" in t:
@@ -8174,9 +8177,37 @@ def frole_tp(m, r, tr, d, depart, cible, nom, p):
     dirs = r.get("dirs") or [0] * 11
     raison = ("🧭 Le 15 min est toujours avec nous : on y retourne" if len(dirs) > 4 and dirs[4] == d
               else "🐢 Les petites unités respirent : pause normale")
-    proteg = "🛡 SL à BE : tu ne risques plus rien" if d * (tr["e"] - tr["sl"]) <= 0 else "🛑 SL en place : on ne touche à rien"
-    return "\n".join([f"😅 {nom} FRÔLÉ — {ICONE.get(m, '')} {m}", f"🎯 {nom} : {px(cible)}",
-                      f"🤏 Il manquait {px(abs(cible - ext))}", "👀 Le prix recule un peu", raison, proteg, "😎 T'inquiète, on garde le cap"])
+    be = d * (tr["e"] - tr["sl"]) <= 0
+    return "\n".join([f"😅 {nom} FRÔLÉ — {ICONE.get(m, '')} {m}", f"🔵 {nom} : {px(cible)}",
+                      f"🤏 Il manquait {px(abs(cible - ext))}", "👀 Le prix recule un peu", raison,
+                      f"🟡 Entrée : {px(tr['e'])}", risque_retour(r, d),
+                      f"🔴 SL : {px(tr['sl'])}" + (" (BE)" if be else ""),
+                      "🛡 Au pire 0 € : tu ne risques plus rien" if be else "🛑 SL en place : on ne touche à rien",
+                      "😎 T'inquiète, on garde le cap"])
+
+
+def risque_retour(r, d):
+    """Le prix peut-il revenir au point d'entrée ? Réponse franche d'après le 15 min et le 1 h."""
+    dirs = r.get("dirs") or [0] * 11
+    avec = sum(1 for k in (4, 7) if len(dirs) > k and dirs[k] == d)
+    return ("✅ Retour à l'entrée : peu probable" if avec == 2 else
+            "⚖️ Retour à l'entrée : possible" if avec == 1 else "⚠️ Retour à l'entrée : probable")
+
+
+def retour_entree(m, r, tr, d, e, t1, p):
+    """Après être monté vers le TP, le prix revient vers l'entrée : le coach rassure (pastilles = couleurs du graphique), une fois."""
+    span = abs(t1 - e)
+    if span <= 0 or tr.get("retour_dit"):
+        return None
+    deja = max(float(tr.get("frole_TP1_max", 0)), 0.8 if tr.get("cafe_dit") else 0)
+    if deja < 0.6 or d * (p - e) / span > 0.25:
+        return None
+    tr["retour_dit"] = True
+    be = d * (e - tr["sl"]) <= 0
+    return "\n".join([f"🔁 RETOUR VERS L'ENTRÉE — {ICONE.get(m, '')} {m}", f"🔵 TP1 : {px(t1)}", f"🟡 Entrée : {px(e)}",
+                      f"📍 Prix : {px(p)}", f"🔴 SL : {px(tr['sl'])}" + (" (BE)" if be else ""),
+                      "🛡 SL à BE : au pire 0 €" if be else "🧊 Le SL est là pour ça : on ne bouge rien",
+                      risque_retour(r, d), "😎 T'inquiète, je surveille chaque clôture"])
 
 
 def avant_entree(m, r, cle, o, d):
@@ -8591,6 +8622,10 @@ def agent(m, r, cle, ferme):
         fr_ = frole_tp(m, r, tr, d, e, t1, "TP1", p)
         if fr_:
             out.append(fr_)
+            return out
+        re_ = retour_entree(m, r, tr, d, e, t1, p)
+        if re_:
+            out.append(re_)
             return out
         if progres >= 0.8 and not tr.get("cafe_dit"):
             tr["cafe_dit"] = True
