@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.9
+// @version      5.0
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.9';
+  const VERSION = '5.0';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -123,7 +123,7 @@
   function zoom(delai) {
     setTimeout(() => { try {
       const c = chart(); if (!c) return;
-      c.applyOverrides({ 'scalesProperties.scaleSeriesOnly': true, 'paneProperties.topMargin': 14, 'paneProperties.bottomMargin': 30 });
+      c.applyOverrides({ 'scalesProperties.scaleSeriesOnly': false, 'paneProperties.topMargin': 16, 'paneProperties.bottomMargin': 38 });   // v5.0 : SL / TP inclus dans l'échelle, place pour le tableau en bas
       const ts = c.getTimeScale(); ts.setBarSpacing(18); ts.setRightOffset(10);
       cadrerPrix(c);
       // l'indicateur ALIGN toujours DEVANT les bougies (étiquettes lisibles)
