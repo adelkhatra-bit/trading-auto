@@ -66,9 +66,17 @@ class LiveTikTok(unittest.TestCase):
         ab.live_annonces(self.etat, "GOLD", ["🟥🟥 POINT D'ENTRÉE À VENIR — 🥇 GOLD\n🟨 Le prix entre dans la zone\n📍 Zone ≈ 3990 – 4012"])
         self.assertTrue(self.publie[0].startswith("BULLE:"))
         self.assertIsNone(re.search(r"\d{3,}", self.publie[0]))
-        self.assertEqual(self.publie[0], "BULLE:👉 Connecte-toi au coach sur Telegram pour les infos en temps réel")
+        self.assertEqual(self.publie[0], "BULLE:👉 Le coach en direct t'explique tout : lien en bio 🎁 gratuit")
         for mot in ("GOLD", "SHORT", "LONG", "ZONE", "position"):
             self.assertNotIn(mot, self.publie[0])
+
+    def test_jamais_le_mot_telegram_a_l_ecran(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "align_bot.py"), encoding="utf-8").read()
+        for ligne in src.splitlines():
+            if ("live_bande(" in ligne or "live_publier(" in ligne) and '"' in ligne:
+                self.assertNotIn("Telegram", ligne, ligne)
+        bande = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "live", "align-bande-live.user.js"), encoding="utf-8").read()
+        self.assertNotIn("sur Telegram", bande)
 
     def test_boost_limite_par_personne(self):
         self.etat["live_on"] = True
