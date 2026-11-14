@@ -4451,28 +4451,60 @@ COACH_LIVE_DUREE = 2 * 3600          # le coach en direct parle 2 h, puis demand
 
 
 def texte_coach_live(m, bougie, r, cle):
-    """Coach en direct : à chaque clôture 15 min, ce qui vient de se passer sur le graphique, en 5 lignes, comme un pote à côté."""
+    """Coach en direct : à chaque clôture 15 min, CE QUI SE PASSE sur le graphique (bougie, mèches, unités, zone, position, ce qu'on attend)."""
     p = (r.get("m1") or [bougie])[-1].get("c", bougie["c"])
-    sens_b = "en HAUSSE 🟢" if bougie["c"] > bougie["o"] else "en BAISSE 🔴" if bougie["c"] < bougie["o"] else "à plat ⚪"
+    o_, h_, l_, c_ = bougie["o"], bougie["h"], bougie["l"], bougie["c"]
+    corps = abs(c_ - o_); rng = max(h_ - l_, 1e-9)
+    m_haut, m_bas = h_ - max(o_, c_), min(o_, c_) - l_
+    sens_b = "en HAUSSE 🟢" if c_ > o_ else "en BAISSE 🔴" if c_ < o_ else "à plat ⚪"
+    if m_haut >= 0.5 * rng:
+        lecture = "grosse mèche en haut : les vendeurs ont repoussé le prix ⬇️"
+    elif m_bas >= 0.5 * rng:
+        lecture = "grosse mèche en bas : les acheteurs ont racheté ⬆️"
+    elif corps >= 0.7 * rng:
+        lecture = "grosse bougie pleine : le mouvement est franc 💪"
+    else:
+        lecture = "petite bougie : le marché hésite 🤏"
     d = r.get("confirme") or 0
     tr = cle.get("trade")
+    l = [f"🔴 COACH EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
+         f"🕯 Bougie 15 min clôturée {sens_b} ({px(o_)} → {px(c_)})",
+         f"👁 {lecture}",
+         f"🧭 Le plan : {SENS[d] if d in (1, -1) else 'pas encore de sens net, j’attends'}"]
+    l += voyants_unites(r)
+    if sum((r.get("sqzs") or [0] * 11)[4:10]) >= 3:
+        l.append("⚡ Marché comprimé : ça peut partir fort d'un coup")
     if tr:
-        ou = statut_position(tr, p).split("\n")[0]
+        l.append("📍 " + statut_position(tr, p).split("\n")[0])
+        t1, t2, dd = tr.get("tp1"), tr.get("tp2"), tr["d"]
+        if t1 and dd * (t1 - p) > 0:
+            l.append(f"🎯 TP1 {px(t1)} : encore {px(abs(t1 - p))} • 🛑 SL {px(tr['sl'])}")
+        elif t2 and dd * (t2 - p) > 0:
+            l.append(f"✅ TP1 dépassé • 🏁 TP2 {px(t2)} : encore {px(abs(t2 - p))} • 🛡 SL {px(tr['sl'])}")
+        else:
+            l.append("🏆 Objectifs atteints : encaisse, ne laisse rien repartir")
     else:
-        ou = "⏳ " + court(raison_attente(r, cle), 110)
+        zp = r.get("zone_pine") if r.get("dirPlan") else None
+        if zp:
+            dedans = zp["za"] <= p <= zp["zb"]
+            l.append(f"🟩 Zone d'entrée {px(zp['za'])} – {px(zp['zb'])} : " + ("le prix est DEDANS 👀" if dedans else f"le prix est à {px(min(abs(p - zp['za']), abs(p - zp['zb'])))}"))
+        l.append("⏳ " + court(raison_attente(r, cle), 110))
+    try:
+        dirs = r.get("dirs") or [0] * 11
+        if not tr:
+            l.append("👀 J'attends : " + declencheur_attente(r, cle, p, dirs[9], dirs[7]))
+        else:
+            contre = sum(1 for k in range(5) if dirs[k] == -tr["d"])
+            l.append("👀 " + (f"{contre}/5 petites unités tournent contre nous : je surveille un rebond" if contre >= 3 else "Les petites unités tiennent : on laisse courir"))
+    except Exception:
+        pass
     try:
         fin = prochaine_cloture_bougie(r, "15m", time.time())
-        prochaine = datetime.datetime.fromtimestamp(fin, PARIS).strftime("%H:%M")
+        l.append(f"⏱ Prochaine clôture : {datetime.datetime.fromtimestamp(fin, PARIS).strftime('%H:%M')}")
     except Exception:
-        prochaine = "dans 15 min"
-    return "\n".join([
-        f"🔴 COACH EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
-        f"🕯 La bougie 15 min vient de clôturer {sens_b}",
-        f"🧭 Le plan : {SENS[d] if d in (1, -1) else 'pas encore de sens net, j’attends'}",
-        f"📍 {ou}",
-        f"👀 Prochain point : clôture de {prochaine}",
-        "📺 Sur le live : ligne jaune = entrée • rouge = SL • bleue = TP",
-    ])
+        pass
+    l.append("📺 Sur le live : ligne jaune = entrée • rouge = SL • bleue = TP")
+    return "\n".join(l)
 
 
 def notifier_coach_live(etat, m, r, cle):
@@ -5303,6 +5335,13 @@ def traiter(etat, chats, updates):
                 continue
             if choix in ("coachlive", "coachstop") and mk in MARCHES:
                 activer_coach_live(etat, qui, mk, choix == "coachlive")
+                r_now = DERNIERS.get(mk)
+                if choix == "coachlive" and r_now and len(r_now.get("b15") or []) > 1:
+                    try:
+                        _envoi_sur(qui, text=texte_coach_live(mk, r_now["b15"][-2], r_now, etat.get(mk, {})),
+                                   reply_markup=markup_analyse(etat, mk, r_now, qui))
+                    except Exception as ex:
+                        print("coach live immédiat", ex)
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text=("🔴 Coach en direct activé" if choix == "coachlive" else "⏹ Coach en direct arrêté"))
                 except Exception:
