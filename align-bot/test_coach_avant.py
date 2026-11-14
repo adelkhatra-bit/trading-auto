@@ -19,5 +19,14 @@ class CoachAvantEntree(unittest.TestCase):
         self.assertNotIn("FVG", t)
         self.assertIn("✅ VALIDÉ 🟢 LONG", t)
 
+class ApprocheTP(unittest.TestCase):
+    def test_direction_tp2_si_ca_pousse(self):
+        t = ab.approche_tp("BTC", {"dirs": [-1, -1, -1, 0, -1, 0, 0, -1, 0, -1, -1]}, -1, 65000, "TP2")
+        self.assertIn("DIRECTION TP2", t); self.assertIn("café", t)
+
+    def test_perturbation_expliquee(self):
+        t = ab.approche_tp("GOLD", {"dirs": [1, 1, 1, 0, 0, 0, 0, -1, 0, -1, -1]}, -1, 3800, "TP1")
+        self.assertIn("PETITE PERTURBATION", t); self.assertIn("3/5", t); self.assertIn("BE", t)
+
 if __name__ == "__main__":
     unittest.main()
