@@ -596,7 +596,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual([align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons], [b["text"] for b in en_buttons])
         self.assertEqual([b["text"] for b in en_buttons], [
             "❓ Why this decision?", "🧠 Learn more", "🎯 Levels / prices",
-            "⏱ All timeframes", "🗂 Message history", "🧑‍🏫 Coach: warn me "
+            "⏱ All timeframes", "🗂 Message history", "🧑‍🏫 Coach: warn me ", "🔴 Live coach (every close)"
         ])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):
@@ -2719,7 +2719,7 @@ class TelegramAnalysisActionsRegressionTest(unittest.TestCase):
             callbacks = [b["callback_data"] for row in markup["inline_keyboard"] for b in row]
             self.assertEqual(set(callbacks), {
                 f"why:{market}", f"details:{market}", f"levels:{market}",
-                f"timeframes:{market}", f"history:{market}", f"auto:{market}"
+                f"timeframes:{market}", f"history:{market}", f"auto:{market}", f"coachlive:{market}"
             })
 
     def test_registered_trade_keeps_position_and_exit_actions_with_details(self):

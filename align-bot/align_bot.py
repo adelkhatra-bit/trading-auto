@@ -2220,7 +2220,7 @@ TRAD.update({
     "Choisis une action ALIGN": "Choose an ALIGN action",
     "7️⃣ ⚖️ Risque conseillé : 0,5 à 1 % du compte par position ; jamais sans SL": "7️⃣ ⚖️ Suggested risk: 0.5 to 1% of the account per position; never trade without an SL",
 
-    "🧑‍🏫 Coach : préviens-moi": "🧑‍🏫 Coach: warn me",
+    "🧑‍🏫 Coach : préviens-moi": "🧑‍🏫 Coach: warn me", "🔴 Coach en direct (à chaque clôture)": "🔴 Live coach (every close)", "⏹ Arrêter le coach en direct": "⏹ Stop live coach",
     "✅ Publier": "✅ Publish",
     "❌ Refuser": "❌ Decline",
     "✅ Accepter": "✅ Accept",
@@ -3490,6 +3490,9 @@ def markup_analyse(etat, m, r, cid=None):
     if not tr:
         actions.append({"text": "🧑‍🏫 Coach : préviens-moi ", "callback_data": f"auto:{m}"})
     lignes.append(actions)
+    live_ = cid is not None and str(cid) in (etat.get("coach_live", {}).get(m) or {})
+    lignes.append([{"text": ("⏹ Arrêter le coach en direct" if live_ else "🔴 Coach en direct (à chaque clôture)"),
+                    "callback_data": f"{'coachstop' if live_ else 'coachlive'}:{m}"}])
     return json.dumps({"inline_keyboard": lignes})
 
 
@@ -4443,6 +4446,63 @@ def signature_cloture(texte):
         garde.append(re.sub(r"[\d.,]+", "#", l.strip()))          # les niveaux qui bougent de quelques points ne changent pas la décision
     return "|".join(garde)
 
+COACH_LIVE_DUREE = 2 * 3600          # le coach en direct parle 2 h, puis demande si on continue
+
+
+def texte_coach_live(m, bougie, r, cle):
+    """Coach en direct : à chaque clôture 15 min, ce qui vient de se passer sur le graphique, en 5 lignes, comme un pote à côté."""
+    p = (r.get("m1") or [bougie])[-1].get("c", bougie["c"])
+    sens_b = "en HAUSSE 🟢" if bougie["c"] > bougie["o"] else "en BAISSE 🔴" if bougie["c"] < bougie["o"] else "à plat ⚪"
+    d = r.get("confirme") or 0
+    tr = cle.get("trade")
+    if tr:
+        ou = statut_position(tr, p).split("\n")[0]
+    else:
+        ou = "⏳ " + court(raison_attente(r, cle), 110)
+    try:
+        fin = prochaine_cloture_bougie(r, "15m", time.time())
+        prochaine = datetime.datetime.fromtimestamp(fin, PARIS).strftime("%H:%M")
+    except Exception:
+        prochaine = "dans 15 min"
+    return "\n".join([
+        f"🔴 COACH EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
+        f"🕯 La bougie 15 min vient de clôturer {sens_b}",
+        f"🧭 Le plan : {SENS[d] if d in (1, -1) else 'pas encore de sens net, j’attends'}",
+        f"📍 {ou}",
+        f"👀 Prochain point : clôture de {prochaine}",
+        "📺 Sur le live : ligne jaune = entrée • rouge = SL • bleue = TP",
+    ])
+
+
+def notifier_coach_live(etat, m, r, cle):
+    """Envoie la carte « coach en direct » à chaque nouvelle clôture 15 min, aux abonnés qui l'ont activé pour ce marché."""
+    abonnes = etat.get("coach_live", {}).get(m) or {}
+    bars = (r.get("b15") or [])[:-1]                 # la dernière bougie est en formation
+    if not abonnes or not bars:
+        return
+    b = bars[-1]
+    for cid, info in list(abonnes.items()):
+        if time.time() >= float(info.get("expire", 0)):
+            abonnes.pop(cid, None)
+            _envoi_sur(cid, text=f"⏹ COACH EN DIRECT TERMINÉ — {ICONE.get(m, '')} {m}\n🙌 2 h ensemble, merci !\n🔁 On continue ?",
+                       reply_markup=json.dumps({"inline_keyboard": [[{"text": "🔴 Oui, 2 h de plus", "callback_data": f"coachlive:{m}"}]]}))
+            continue
+        if int(info.get("dernier_t", 0)) >= int(b["t"]):
+            continue
+        res = _envoi_sur(cid, text=texte_coach_live(m, b, r, cle), reply_markup=markup_analyse(etat, m, r, cid))
+        if res is not None and not (isinstance(res, dict) and res.get("ok") is False):
+            info["dernier_t"] = int(b["t"])
+
+
+def activer_coach_live(etat, cid, m, actif=True):
+    abonnes = etat.setdefault("coach_live", {}).setdefault(m, {})
+    if actif:
+        dernier = int(((DERNIERS.get(m) or {}).get("b15") or [{"t": 0}, {"t": 0}])[-2]["t"]) if len((DERNIERS.get(m) or {}).get("b15") or []) > 1 else 0
+        abonnes[str(cid)] = {"expire": time.time() + COACH_LIVE_DUREE, "dernier_t": dernier}
+    else:
+        abonnes.pop(str(cid), None)
+
+
 def notifier_clotures(etat, m, r, cle):
     """Envoie les clôtures nouvelles une fois chacune, sur les UT suivies par l'utilisateur."""
     champs = TF_CHAMPS
@@ -5239,6 +5299,16 @@ def traiter(etat, chats, updates):
                 except Exception:
                     pass
                 regler_bot(etat, qui, choix == "boton")
+                continue
+            if choix in ("coachlive", "coachstop") and mk in MARCHES:
+                activer_coach_live(etat, qui, mk, choix == "coachlive")
+                try:
+                    telegram("answerCallbackQuery", callback_query_id=cb["id"], text=("🔴 Coach en direct activé" if choix == "coachlive" else "⏹ Coach en direct arrêté"))
+                except Exception:
+                    pass
+                _envoi_sur(qui, text=(f"🔴 COACH EN DIRECT ACTIVÉ — {ICONE.get(mk, '')} {mk}\n🕯 Je te parle à chaque clôture 15 min pendant 2 h\n"
+                                      "📺 Mets le live à côté : je t'explique ce qui se passe sur le graphique\n⏹ Pour m'arrêter : le bouton sous mes messages")
+                           if choix == "coachlive" else f"⏹ COACH EN DIRECT ARRÊTÉ — {ICONE.get(mk, '')} {mk}\n😴 Je ne t'envoie plus les clôtures")
                 continue
             if choix == "auto" and mk in MARCHES:
                 # Le marché est déjà connu depuis le bouton de l'analyse : activation en un seul appui.
@@ -8763,7 +8833,7 @@ def un_tour(etat, chats):
                     envois.append(taguer(f"🧠 La leçon de l'IA ALIGN\n{compacter_ia(t_)}", nom_marche))
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         synchroniser_veille_auto(etat, nom_marche, r)
-        notifier_clotures(etat, nom_marche, r, cle)
+        notifier_clotures(etat, nom_marche, r, cle); notifier_coach_live(etat, nom_marche, r, cle)
         # Veille « je surveille » marché par marché remplacée par le RADAR unique (radar_tick, après la boucle des marchés).
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"

@@ -28,5 +28,26 @@ class ApprocheTP(unittest.TestCase):
         t = ab.approche_tp("GOLD", {"dirs": [1, 1, 1, 0, 0, 0, 0, -1, 0, -1, -1]}, -1, 3800, "TP1")
         self.assertIn("PETITE PERTURBATION", t); self.assertIn("3/5", t); self.assertIn("BE", t)
 
+class CoachEnDirect(unittest.TestCase):
+    def test_carte_a_chaque_cloture_puis_pas_de_doublon(self):
+        envoyes = []
+        etat = {"coach_live": {"BTC": {"9": {"expire": 9e12, "dernier_t": 0}}}}
+        b15 = [dict(t=900 * i, o=100, h=101, l=98, c=99) for i in range(5)]
+        r = {"b15": b15, "m1": [dict(c=99)], "confirme": -1, "dirs": [0] * 11}
+        with mock.patch.object(ab, "_envoi_sur", side_effect=lambda cid, **k: envoyes.append(k["text"]) or {"ok": True}), \
+             mock.patch.object(ab, "raison_attente", return_value="J'attends la zone"):
+            ab.notifier_coach_live(etat, "BTC", r, {})
+            ab.notifier_coach_live(etat, "BTC", r, {})
+        self.assertEqual(len(envoyes), 1)
+        self.assertIn("COACH EN DIRECT", envoyes[0]); self.assertIn("BAISSE", envoyes[0]); self.assertIn("ligne jaune", envoyes[0])
+
+    def test_fin_apres_2h_propose_de_continuer(self):
+        envoyes = []
+        etat = {"coach_live": {"GOLD": {"9": {"expire": 0, "dernier_t": 0}}}}
+        r = {"b15": [dict(t=0, o=1, h=1, l=1, c=1), dict(t=900, o=1, h=1, l=1, c=1)]}
+        with mock.patch.object(ab, "_envoi_sur", side_effect=lambda cid, **k: envoyes.append(k["text"]) or {"ok": True}):
+            ab.notifier_coach_live(etat, "GOLD", r, {})
+        self.assertIn("TERMINÉ", envoyes[0]); self.assertEqual(etat["coach_live"]["GOLD"], {})
+
 if __name__ == "__main__":
     unittest.main()
