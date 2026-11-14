@@ -4678,6 +4678,32 @@ def accueil_liens(etat, cid, choix):
                **({"reply_markup": json.dumps({"inline_keyboard": boutons})} if boutons else {}))
 
 
+DESCRIPTIONS_CHAINES = {
+    "BTC": "🎙 Le Bitcoin commenté en direct, à chaque clôture 15 min.\n🧑‍🏫 Coach perso + niveaux : @align_mtf_adel_bot\n⚠️ Pas un conseil financier.",
+    "GOLD": "🎙 Le Gold commenté en direct, à chaque clôture 15 min.\n🧑‍🏫 Coach perso + niveaux : @align_mtf_adel_bot\n⚠️ Pas un conseil financier.",
+    "NASDAQ": "🎙 Le NASDAQ commenté en direct, à chaque clôture 15 min.\n🧑‍🏫 Coach perso + niveaux : @align_mtf_adel_bot\n⚠️ Pas un conseil financier.",
+}
+
+
+def preparer_chaines(etat):
+    """Chaque chaîne de marché a le logo ALIGN et sa description, même quand le marché est fermé.
+    Réussi = fait une fois pour toutes ; échec = nouvel essai au plus toutes les heures."""
+    if not TOKEN:
+        return
+    for m, canal in (etat.get("canaux_marche") or {}).items():
+        info = etat.setdefault("canal_live", {}).setdefault(m, {})
+        if info.get("photo_ok") is not True and time.time() - float(info.get("photo_essai", 0)) >= 3600:
+            info["photo_essai"] = time.time()
+            info["photo_ok"] = bool(photo_canal(canal)) or False
+        desc = DESCRIPTIONS_CHAINES.get(m)
+        if desc and info.get("desc_ok") != desc and time.time() - float(info.get("desc_essai", 0)) >= 3600:
+            info["desc_essai"] = time.time()
+            res = telegram("setChatDescription", chat_id=canal, description=desc)
+            ok = isinstance(res, dict) and (res.get("ok") or "not modified" in str(res.get("description", "")))
+            if ok:
+                info["desc_ok"] = desc
+
+
 def notifier_canal_marche(etat, m, r, cle):
     """Chaîne du marché (ALIGN BTC / Gold / NASDAQ) : la carte commentateur à chaque clôture 15 min + les flashs, sans niveaux VIP."""
     canal = (etat.get("canaux_marche") or {}).get(m)
@@ -4685,8 +4711,6 @@ def notifier_canal_marche(etat, m, r, cle):
     if not canal or not bars:
         return
     info = etat.setdefault("canal_live", {}).setdefault(m, {})
-    if not info.get("photo_ok") and TOKEN:
-        info["photo_ok"] = photo_canal(canal) or time.time()      # une seule tentative par démarrage si échec
     b = bars[-1]
     if int(info.get("dernier_t", 0)) < int(b["t"]):
         res = _envoi_sur(canal, text=texte_coach_live(m, b, r, cle, None, public=True), reply_markup=boutons_chaine_marche(etat))
@@ -9228,6 +9252,10 @@ def un_tour(etat, chats):
             # Visiteurs non abonnés : teaser (positions masquées + bouton de paiement)
             alerte_gratuite_preparation(etat, texte)
             envoyer_prospects(etat, texte, bool(re.search(r"(?<!\w)\d{1,3}(?: \d{3})*\.\d+", texte)) and (est_entree(texte) or "JE PRÉPARE" in texte), clavier)
+        try:
+            preparer_chaines(etat)
+        except Exception as ex:
+            print("préparer chaînes", ex)
         for nom_marche in MARCHES:
             if nom_marche in derniers:
                 maj_jauge(etat, nom_marche, derniers[nom_marche], etat[nom_marche], set() if etat.get("canal") else chats, etat.get("canal"))
