@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.7
+// @version      4.8
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.7';
+  const VERSION = '4.8';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -49,8 +49,19 @@
   document.body.appendChild(bande);
   const piste = bande.querySelector('.piste'), flash = bande.querySelector('.flash');
   let extra = [];
+  // v4.8 : la bande dit toujours ce qu'on regarde (marché + unité), mise à jour dès que la vue change
+  function vueTxt() {
+    const c = chart(); if (!c) return '';
+    const s = String(c.symbol() || ''), r = String(c.resolution() || '');
+    const m = /BTC/i.test(s) ? '🟠 BTC' : /XAU|GOLD/i.test(s) ? '🥇 GOLD' : /NAS|NQ|US100/i.test(s) ? '🟣 NASDAQ' : s.split(':').pop();
+    const u = /^\d+$/.test(r) ? (+r >= 60 ? (+r / 60) + 'H' : r + ' MIN') : r === 'D' || r === '1D' ? '1 JOUR' : r;
+    return '📺 VUE : ' + m + ' • ' + u;
+  }
+  let vueVue = '';
+  setInterval(() => { const v = vueTxt(); if (v !== vueVue) { vueVue = v; remplir(); } }, 2000);
   function remplir() {
-    const items = BASE.concat(extra.slice(-3));
+    const v = vueTxt();
+    const items = (v ? [v] : []).concat(BASE, extra.slice(-3));
     const html = items.map(t => '<span>' + esc(t) + '</span>').join('');
     piste.innerHTML = html + html;
   }
