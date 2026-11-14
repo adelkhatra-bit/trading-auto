@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.1
+// @version      4.2
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.1';
+  const VERSION = '4.2';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -106,6 +106,21 @@
     } catch (e) {} }, delai || 900);
   }
   zoom(300);
+  // suivi automatique : même cadrage sur toutes les unités et marchés, le graphique suit le prix tout seul
+  // (si Adel bouge le graphique à la souris, on lui laisse la main 20 s puis on recadre)
+  let mainUser = 0;
+  ['wheel', 'mousedown', 'touchstart'].forEach(ev => document.addEventListener(ev, e => {
+    if (e.target && e.target.closest && e.target.closest('.chart-markup-table')) mainUser = Date.now();
+  }, { passive: true, capture: true }));
+  try { const c0 = chart(); c0.onIntervalChanged().subscribe(null, () => zoom(1200)); c0.onSymbolChanged().subscribe(null, () => zoom(1200)); } catch (e) {}
+  const suivi = setInterval(() => { try {
+    if (Date.now() - mainUser < 20000) return;
+    const c = chart(); if (!c) return;
+    const ps = c.getPanes()[0].getMainSourcePriceScale(); if (!ps.isAutoScale()) ps.setAutoScale(true);
+    const ts = c.getTimeScale();
+    if (Math.abs(ts.barSpacing() - 18) > 0.5) ts.setBarSpacing(18);
+    if (Math.abs(ts.rightOffset() - 10) > 2) { ts.scrollToRealtime(); ts.setRightOffset(10); }
+  } catch (e) {} }, 3000);
   function chart() { try { return window.TradingViewApi.activeChart(); } catch (e) { return null; } }
   function commande(sorte, valeur, prenom) {
     const c = chart(); if (!c) return;
@@ -166,6 +181,6 @@
 
   window.__ALIGN_BANDE__ = {
     version: VERSION, recu,
-    stop() { cancelAnimationFrame(raf); obs.disconnect(); try { es.close(); } catch (e) {} bande.remove(); css.remove(); }
+    stop() { cancelAnimationFrame(raf); clearInterval(suivi); obs.disconnect(); try { es.close(); } catch (e) {} bande.remove(); css.remove(); }
   };
 })();
