@@ -83,6 +83,19 @@ class LiveTikTok(unittest.TestCase):
         self.assertEqual(json.loads(kw["prices"])[0]["amount"], ab.PRIX_MAIN_STARS)
         self.assertEqual(kw["payload"], "livemain:5")
 
+    def test_admin_prend_la_main_sans_payer(self):
+        self.etat["live_on"] = True
+        ab.live_callback(self.etat, set(), {"id": "x"}, "livemain", "15", "1")
+        self.assertFalse(any(m == "sendInvoice" for m, _ in self.tg))
+        self.assertTrue(self.publie[-1].startswith("CMD:tf:15:"))
+        self.assertIn("capture", self.envoye[-1][1]["text"])
+
+    def test_ordre_btc_gold_nasdaq_en_premier(self):
+        self.etat["live_on"] = True
+        kb = json.loads(ab.clavier_live(self.etat, "2"))["inline_keyboard"]
+        self.assertEqual([b["text"] for b in kb[2]], ["🟠 BTC", "🥇 Gold", "💠 NASDAQ"])
+        self.assertIn("capture", ab.texte_live(self.etat))
+
     def test_paiement_refuse_si_live_eteint(self):
         self.assertFalse(ab.live_pre_checkout(self.etat, {"id": "q", "invoice_payload": "livemain:5"}))
         self.assertEqual(self.tg[-1][1]["ok"], "false")

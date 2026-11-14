@@ -8187,17 +8187,19 @@ def texte_live(etat, anglais=False):
                 "⚫ NO LIVE RIGHT NOW\n🔔 I'll tell you as soon as the live starts")
     if anglais:
         return ("🔴 LIVE IN PROGRESS\n📺 Adel's chart, live\n━━━━━━━━━━━━━━━\n🚀 Boost the live: your name on screen (free)\n"
-                f"🎮 Take control: change the chart for {LIVE_DUREE_MAIN} s\n⭐ {PRIX_MAIN_STARS} Stars\n👇 Choose")
+                f"🎮 Take control: change the chart for {LIVE_DUREE_MAIN} s\n📸 {LIVE_DUREE_MAIN} s to take your screenshot and spot the candles\n"
+                f"⏪ Then the chart goes back to Adel's view automatically\n⭐ {PRIX_MAIN_STARS} Stars\n👇 Choose")
     return ("🔴 LIVE EN COURS\n📺 Le graphique d'Adel, en direct\n━━━━━━━━━━━━━━━\n🚀 Booster le live : ton prénom à l'écran (gratuit)\n"
-            f"🎮 Prends la main : tu changes le graphique {LIVE_DUREE_MAIN} s\n⭐ {PRIX_MAIN_STARS} Stars (≈ 0,50 €)\n👇 Choisis")
+            f"🎮 Prends la main : tu changes le graphique {LIVE_DUREE_MAIN} s\n📸 {LIVE_DUREE_MAIN} s pour faire ta capture et repérer les bougies\n"
+            f"⏪ Ensuite le graphique revient tout seul à la vue d'Adel\n⭐ {PRIX_MAIN_STARS} Stars (≈ 0,50 €)\n👇 Choisis")
 
 def clavier_live(etat, cid, anglais=False):
     lignes = []
     if live_actif(etat):
         lignes.append([{"text": "📺 Watch the live" if anglais else "📺 Regarder le live", "url": LIVE_LIEN}])
         lignes.append([{"text": "🚀 Boost the live" if anglais else "🚀 Booster le live", "callback_data": "liveboost:x"}])
-        lignes.append([{"text": LIVE_CHOIX[k][2], "callback_data": f"livemain:{k}"} for k in ("1", "5", "15", "60")])
         lignes.append([{"text": LIVE_CHOIX[k][2], "callback_data": f"livemain:{k}"} for k in ("BTC", "GOLD", "NASDAQ")])
+        lignes.append([{"text": LIVE_CHOIX[k][2], "callback_data": f"livemain:{k}"} for k in ("1", "5", "15", "60")])
     if str(cid) in {str(x) for x in proprio(etat)}:
         lignes.append([{"text": "⏹ Live terminé" if live_actif(etat) else "🔴 Je lance le live",
                         "callback_data": "liveoff:x" if live_actif(etat) else "liveon:x"}])
@@ -8255,6 +8257,9 @@ def live_callback(etat, chats, cb, choix, mk, qui):
     if mk not in LIVE_CHOIX:
         return True
     nom = LIVE_CHOIX[mk][2]
+    if qui in {str(x) for x in proprio(etat)}:          # l'admin teste gratuitement, sans facture
+        live_paiement_recu(etat, qui, {"invoice_payload": f"livemain:{mk}", "total_amount": 0, "telegram_payment_charge_id": "admin"})
+        return True
     try:
         telegram("sendInvoice", chat_id=qui, title=("🎮 Take control of the live" if anglais else "🎮 Prends la main sur le live"),
                  description=(f"{nom} on Adel's chart for {LIVE_DUREE_MAIN} seconds, then it goes back automatically." if anglais else
@@ -8294,8 +8299,8 @@ def live_paiement_recu(etat, cid, paiement):
                                                   "id": (paiement or {}).get("telegram_payment_charge_id"), "envoye": envoye})
     del etat["live_paiements"][:-200]
     anglais = str(cid) in LANG_EN
-    _envoi_sur(str(cid), text=((f"✅ It's yours! {nom} on the live for {LIVE_DUREE_MAIN} s 👀" if anglais else
-                                f"✅ C'est à toi ! {nom} sur le live pendant {LIVE_DUREE_MAIN} s 👀") +
+    _envoi_sur(str(cid), text=((f"✅ It's yours! {nom} on the live for {LIVE_DUREE_MAIN} s 👀\n📸 Take your screenshot now: back to Adel's view after {LIVE_DUREE_MAIN} s" if anglais else
+                                f"✅ C'est à toi ! {nom} sur le live pendant {LIVE_DUREE_MAIN} s 👀\n📸 Fais ta capture maintenant : retour à la vue d'Adel après {LIVE_DUREE_MAIN} s") +
                                ("\n⏳ If someone is before you, you're next in line" if anglais else "\n⏳ Si quelqu'un est avant toi, tu passes juste après")))
     return True
 
