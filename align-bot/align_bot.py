@@ -8501,9 +8501,12 @@ def texte_live(etat, anglais=False):
         return ("🔴 LIVE IN PROGRESS\n📺 Adel's chart, live\n━━━━━━━━━━━━━━━\n🚀 Boost the live: your name on screen (free)\n"
                 f"🎮 Take control: change the chart for {LIVE_DUREE_MAIN} s\n📸 {LIVE_DUREE_MAIN} s to take your screenshot and spot the candles\n"
                 f"⏪ Then the chart goes back to Adel's view automatically\n⭐ {PRIX_MAIN_STARS} Stars\n👇 Choose")
-    return ("🔴 LIVE EN COURS\n📺 Le graphique d'Adel, en direct\n━━━━━━━━━━━━━━━\n🚀 Booster le live : ton prénom à l'écran (gratuit)\n"
-            f"🎮 Prends la main : tu changes le graphique {LIVE_DUREE_MAIN} s\n📸 {LIVE_DUREE_MAIN} s pour faire ta capture et repérer les bougies\n"
-            f"⏪ Ensuite le graphique revient tout seul à la vue d'Adel\n⭐ {PRIX_MAIN_STARS} Stars (≈ 0,50 €)\n👇 Choisis")
+    return ("🔴 LIVE EN COURS\n📺 Le graphique d'Adel, en direct\n━━━━━━━━━━━━━━━\n"
+            "🎮 PRENDS LA MAIN SUR LE GRAPHIQUE\n"
+            "1️⃣ Ligne marchés : BTC • Gold • NASDAQ\n"
+            "2️⃣ Ligne unités : 1 min • 5 min • 15 min • 1h\n"
+            f"⏱ Durée : {LIVE_DUREE_MAIN} s, puis retour à la vue d'Adel\n📸 Le temps de ta capture\n⭐ Prix : {PRIX_MAIN_STARS} Stars (≈ 0,50 €)\n"
+            "━━━━━━━━━━━━━━━\n🎙 Commentateur : je commente chaque clôture du marché choisi\n🚀 Booster : ton prénom à l'écran (gratuit)\n👇 Choisis")
 
 def clavier_live(etat, cid, anglais=False):
     lignes = []
@@ -8512,6 +8515,7 @@ def clavier_live(etat, cid, anglais=False):
         lignes.append([{"text": "🚀 Boost the live" if anglais else "🚀 Booster le live", "callback_data": "liveboost:x"}])
         lignes.append([{"text": LIVE_CHOIX[k][2], "callback_data": f"livemain:{k}"} for k in ("BTC", "GOLD", "NASDAQ")])
         lignes.append([{"text": LIVE_CHOIX[k][2], "callback_data": f"livemain:{k}"} for k in ("1", "5", "15", "60")])
+        lignes.append([{"text": f"🎙 {k}", "callback_data": f"coachlive:{k}"} for k in ("BTC", "GOLD", "NASDAQ")])
     if str(cid) in {str(x) for x in proprio(etat)}:
         lignes.append([{"text": "⏹ Live terminé" if live_actif(etat) else "🔴 Je lance le live",
                         "callback_data": "liveoff:x" if live_actif(etat) else "liveon:x"}])
@@ -8535,8 +8539,8 @@ def live_annoncer_debut(etat, chats):
         vus.add(cid)
         anglais = cid in LANG_EN
         try:
-            _envoi_sur(cid, text=("🔴 ADEL IS LIVE ON TIKTOK\n📺 The ALIGN chart, live\n🎮 You can take control of the chart"
-                                  if anglais else "🔴 ADEL EST EN LIVE SUR TIKTOK\n📺 Le graphique ALIGN en direct\n🎮 Tu peux prendre la main sur le graphique"),
+            _envoi_sur(cid, text=("🔴 ADEL IS LIVE\n📺 The ALIGN chart, live (YouTube • TikTok)\n🎮 You can take control of the chart"
+                                  if anglais else "🔴 ADEL EST EN LIVE\n📺 Le graphique ALIGN en direct (YouTube • TikTok)\n🎮 Tu peux prendre la main sur le graphique"),
                        reply_markup=clavier_live(etat, cid, anglais))
         except Exception as ex:
             print("live annonce", cid, ex)
@@ -8621,6 +8625,7 @@ def live_paiement_recu(etat, cid, paiement):
     _envoi_sur(str(cid), text=((f"✅ It's yours! {nom} on the live for {LIVE_DUREE_MAIN} s 👀\n📸 Take your screenshot now: back to Adel's view after {LIVE_DUREE_MAIN} s" if anglais else
                                 f"✅ C'est à toi ! {nom} sur le live pendant {LIVE_DUREE_MAIN} s 👀\n📸 Fais ta capture maintenant : retour à la vue d'Adel après {LIVE_DUREE_MAIN} s") +
                                ("\n⏳ If someone is before you, you're next in line" if anglais else "\n⏳ Si quelqu'un est avant toi, tu passes juste après")))
+    menu_live(etat, str(cid))           # le menu du live redescend toujours en bas : on peut reprendre la main tout de suite
     return True
 
 
