@@ -229,6 +229,7 @@ jobs:
           ANTHROPIC_MAX_JOUR: ${{ vars.ANTHROPIC_MAX_JOUR }}
           ALIGN_TV_API_URL: ${{ secrets.ALIGN_TV_API_URL }}
           ALIGN_TV_READ_TOKEN: ${{ secrets.ALIGN_TV_READ_TOKEN }}
+          ALIGN_LIVE_SUJET: ${{ secrets.ALIGN_LIVE_SUJET }}
           DUREE_SEC: "21000"
           PAUSE_SEC: "5"
         run: exec python3 align_bot.py
