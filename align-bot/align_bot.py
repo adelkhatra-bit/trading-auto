@@ -4485,7 +4485,7 @@ def signature_cloture(texte):
 COACH_LIVE_DUREE = 2 * 3600          # le coach en direct parle 2 h, puis demande si on continue
 
 
-def texte_coach_live(m, bougie, r, cle, positions=None):
+def texte_coach_live(m, bougie, r, cle, positions=None, public=False):
     """Coach en direct : une info par ligne « intitulé : valeur », lisible d'un coup d'œil (demande d'Adel)."""
     p = (r.get("m1") or [bougie])[-1].get("c", bougie["c"])
     o_, h_, l_, c_ = bougie["o"], bougie["h"], bougie["l"], bougie["c"]
@@ -4511,7 +4511,10 @@ def texte_coach_live(m, bougie, r, cle, positions=None):
     l += voyants_unites(r)
     if sum((r.get("sqzs") or [0] * 11)[4:10]) >= 3:
         l.append("⚡ Compression : ça peut partir fort")
-    if tr:
+    if tr and public:
+        l.append(f"📂 Position du bot : {'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'} en cours")
+        l.append("🔒 Niveaux : dans le bot ALIGN")
+    elif tr:
         dd = tr["d"]
         prog = dd * (p - tr["e"]) / max(abs((tr.get("tp1") or tr["e"]) - tr["e"]), 1e-9)
         l.append("📍 Statut : " + ("✅ entrée encore possible" if prog < 0.25 else "⛔ trop tard pour entrer") + f" ({'🟢 LONG' if dd == 1 else '🔴 SHORT'})")
@@ -4600,6 +4603,25 @@ def flash_commentateur(m, r, cle):
             if min(x["o"], p) - x["l"] >= 0.5 * rng:
                 return "\n".join(["🎙 GROSSE MÈCHE !", f"{ICONE.get(m, '')} {m} : {px(p)}", f"👀 15 min en cours : rejet à {px(x['l'])}", "🟢 Les acheteurs rachètent"] + ligne_pos)
     return None
+
+
+def notifier_canal_marche(etat, m, r, cle):
+    """Chaîne du marché (ALIGN BTC / Gold / NASDAQ) : la carte commentateur à chaque clôture 15 min + les flashs, sans niveaux VIP."""
+    canal = (etat.get("canaux_marche") or {}).get(m)
+    bars = (r.get("b15") or [])[:-1]
+    if not canal or not bars:
+        return
+    info = etat.setdefault("canal_live", {}).setdefault(m, {})
+    b = bars[-1]
+    if int(info.get("dernier_t", 0)) < int(b["t"]):
+        res = _envoi_sur(canal, text=texte_coach_live(m, b, r, cle, None, public=True))
+        if res is not None and not (isinstance(res, dict) and res.get("ok") is False):
+            info["dernier_t"] = int(b["t"])
+        return
+    flash = flash_commentateur(m, r, cle)
+    if flash and time.time() - float(info.get("flash_t", 0)) >= 300:
+        if _envoi_sur(canal, text=flash) is not None:
+            info["flash_t"] = time.time()
 
 
 def notifier_coach_live(etat, m, r, cle):
@@ -6610,6 +6632,19 @@ def connecter_canal(etat, mcm):
     chat, st = mcm["chat"], mcm["new_chat_member"]["status"]
     cid = str(chat["id"])
     titre = chat.get("title", "")
+    mk_ = next((k for k, mots in (("NASDAQ", ("nasdaq", "nas100")), ("GOLD", ("gold", "xau", " or ")), ("BTC", ("btc", "bitcoin")))
+                if any(w in f" {titre.lower()} " for w in mots)), None)
+    if mk_ and "vip" not in titre.lower():
+        # Chaîne d'un seul marché (ALIGN BTC / ALIGN Gold / ALIGN NASDAQ) : commentateur en direct, sans niveaux VIP.
+        if st == "administrator":
+            etat.setdefault("canaux_marche", {})[mk_] = cid
+            if chat.get("username"):
+                etat.setdefault("liens_marche", {})[mk_] = f"https://t.me/{chat['username']}"
+            for p in proprio(etat):
+                _envoi_sur(p, text=f"✅ Chaîne « {titre} » connectée\n{ICONE.get(mk_, '')} Marché : {mk_}\n🎙 Le commentateur y publie en direct")
+        elif (etat.get("canaux_marche") or {}).get(mk_) == cid:
+            etat["canaux_marche"].pop(mk_, None)
+        return
     if st == "administrator" and any(k in titre.lower() for k in ("résultat", "resultat", "preuve", "gain", "result")):
         etat["canal_preuves"] = cid; etat["canal_preuves_nom"] = titre
         etat["lien_preuves"] = f"https://t.me/{chat['username']}" if chat.get("username") else etat.get("lien_preuves", "")
@@ -8977,7 +9012,7 @@ def un_tour(etat, chats):
                     envois.append(taguer(f"🧠 La leçon de l'IA ALIGN\n{compacter_ia(t_)}", nom_marche))
         derniers[nom_marche] = r; DERNIERS[nom_marche] = r
         synchroniser_veille_auto(etat, nom_marche, r)
-        notifier_clotures(etat, nom_marche, r, cle); notifier_coach_live(etat, nom_marche, r, cle)
+        notifier_clotures(etat, nom_marche, r, cle); notifier_coach_live(etat, nom_marche, r, cle); notifier_canal_marche(etat, nom_marche, r, cle)
         # Veille « je surveille » marché par marché remplacée par le RADAR unique (radar_tick, après la boucle des marchés).
         for cle_p, oui, txt in (("distrib_vu", r.get("distrib"),
                                  f"⚠️ {ICONE.get(nom_marche, '')} {nom_marche} : DISTRIBUTION possible\n🕯 Le haut s'essouffle (divergence RSI {'4h' if r['div4h'][0] else '1h'})\n"

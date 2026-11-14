@@ -64,5 +64,23 @@ class FlashCommentateur(unittest.TestCase):
         r = {"atr": 100, "m1": [dict(o=1000, c=1001)] * 3, "b15": [dict(o=1000, h=1010, l=995, c=1001)]}
         self.assertIsNone(ab.flash_commentateur("BTC", r, {}))
 
+class CanalMarche(unittest.TestCase):
+    def test_connexion_canal_btc_sans_toucher_au_vip(self):
+        etat = {"canal": "VIP"}
+        with mock.patch.object(ab, "_envoi_sur"), mock.patch.object(ab, "proprio", return_value=[]):
+            ab.connecter_canal(etat, {"chat": {"id": -100, "title": "ALIGN BTC", "username": "alignbtc"}, "new_chat_member": {"status": "administrator"}})
+        self.assertEqual(etat["canaux_marche"]["BTC"], "-100"); self.assertEqual(etat["canal"], "VIP")
+
+    def test_canal_sans_niveaux(self):
+        envoyes = []
+        etat = {"canaux_marche": {"BTC": "-100"}}
+        b15 = [dict(t=900 * i, o=100, h=101, l=98, c=99) for i in range(5)]
+        r = {"b15": b15, "m1": [dict(c=99)], "confirme": -1, "dirs": [0] * 11}
+        cle = {"trade": {"d": -1, "e": 120, "sl": 130, "tp1": 90}}
+        with mock.patch.object(ab, "_envoi_sur", side_effect=lambda cid, **k: envoyes.append((cid, k["text"])) or {"ok": True}):
+            ab.notifier_canal_marche(etat, "BTC", r, cle)
+        self.assertEqual(envoyes[0][0], "-100")
+        self.assertIn("🔒 Niveaux", envoyes[0][1]); self.assertNotIn("130", envoyes[0][1])
+
 if __name__ == "__main__":
     unittest.main()
