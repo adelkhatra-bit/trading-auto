@@ -2351,6 +2351,13 @@ TRAD.update({   # v24.3 : cartes coach FVG, scalp, suivi, ouvertures — même f
     "🛡️ Si tu suis la position, je te dis quand remonter ton SL": "🛡️ If you follow the position, I'll tell you when to move your SL",
     "LONDRES": "LONDON", "Londres": "London", ": pas de FVG / order block exploitable en vue 5 min": ": no usable FVG / order block on the 5 min chart", "😎 Je ne force rien : j'attends un vrai setup": "😎 I don't force anything: waiting for a real setup", "👀 Mets-toi en vue 5 min": "👀 Switch to the 5 min chart", "👀 Vue 5 min": "👀 5 min chart", ": MARCHÉ FERMÉ": ": MARKET CLOSED", "😴 Je ne t'envoie plus rien sur ce marché": "😴 No more messages on this market", "⏰ Réouverture :": "⏰ Reopens:", "lundi": "Monday", "dimanche": "Sunday", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
 })
+TRAD.update({   # cartes reliées au graphique (mêmes mots que l'indicateur)
+    "🟩 Le prix entre dans la ZONE du graphique": "🟩 Price is entering the chart ZONE",
+    "🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min AU-DESSUS": "🟨 Yellow ENTRY line: wait for the 15-min CLOSE ABOVE",
+    "🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min EN DESSOUS": "🟨 Yellow ENTRY line: wait for the 15-min CLOSE BELOW",
+    "🙅 Une mèche seule ne suffit pas": "🙅 A wick alone is not enough",
+    "🛑 SL = ligne rouge du graphique": "🛑 SL = red line on the chart",
+})
 _CLES = sorted(TRAD, key=len, reverse=True)
 
 def traduire(t):
@@ -5277,6 +5284,7 @@ def traiter(etat, chats, updates):
                 fr = msg.get("from", {})
                 nom = (fr.get("first_name", "") + (" @" + fr["username"] if fr.get("username") else "")).strip() or cid
                 etat.setdefault("noms", {})[cid] = nom
+                live_bande(etat, f"🎉 BIENVENUE À {(fr.get('first_name') or 'un nouveau').split(' ')[0][:20].upper()} DANS ALIGN ! Rejoins le Telegram 👉 lien en bio")
                 for p in proprio(etat):    # le propriétaire peut offrir l'accès en 1 clic
                     _envoi_sur(p, text=f"👤 Nouveau visiteur : {nom}",
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'accès VIP", "callback_data": f"offrir:{cid}"}]]}))
@@ -7805,7 +7813,7 @@ def agent(m, r, cle, ferme):
         if not cle.get("prep") and abs(p - o["e"]) <= max(0.6 * r["atr"], abs(o["e"] - o["sl"]) * 0.5):
             cle["prep"] = True
             if r["t"] - cle.get("recalc_t", 0) >= 1800:
-                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟨 Le prix entre dans la zone\n⚡ Tiens-toi prêt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}{statut_txt(0, o)}", bouton_auto(m)))
+                out.append((f"{'🟩🟩' if d == 1 else '🟥🟥'} POINT D'ENTRÉE À VENIR — {ICONE.get(m, '')} {m}\n{SENS[d]}\n{qualite(o)}👀 ÇA ARRIVE\n🟩 Le prix entre dans la ZONE du graphique\n🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min {'AU-DESSUS' if d == 1 else 'EN DESSOUS'}\n🙅 Une mèche seule ne suffit pas\n🛑 SL = ligne rouge du graphique\n⚡ Tiens-toi prêt\n🔔 Cloche activée ? Ne rate pas le feu vert\n📍 Zone ≈ {px(o.get('za', o['e']))} – {px(o.get('zb', o['e']))}{statut_txt(0, o)}", bouton_auto(m)))
         # À quelques pips de l'entrée : « PRÉPARE-TOI » + rappel SL / TP (1 fois par point d'entrée)
         seuil = max(5 * PIP.get(m, 0.1), 0.05 * r["atr"])
         if cle.get("prep") and (abs(p - o["e"]) <= seuil or touche) and time.time() - cle.get("pret_t", 0) > 1800:
