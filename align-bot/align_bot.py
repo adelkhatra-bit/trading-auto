@@ -4543,7 +4543,7 @@ def envoyer_analyse_a(etat, cid, m, r, cle):
         utile = [l for l in lignes if l.startswith(("1️⃣", "2️⃣", "3️⃣", "4️⃣", "⏸", "⏳", "↩️", "⚡", "🕯 Prochaine"))]
         _envoi_sur(cid, reply_markup=bouton_rappel(m), text="\n".join(
             [f"😎 RIEN N'A BOUGÉ — {ICONE.get(m, '')} {m}   {px(r['m1'][-1]['c'])}",
-             f"🕒 Analyse de référence : {heure(der['t'])}"] + voyants_unites(r) + utile + [statut_txt(1 if cle.get("trade") else 0, cle.get("trade") or cle.get("ordre")).strip(), "🔔 Je te préviens dès que ça change"]))
+             f"🕒 Analyse de référence : {heure(der['t'])}"] + voyants_unites(r) + utile + [(statut_position(cle["trade"], r["m1"][-1]["c"]) if cle.get("trade") else statut_txt(0, cle.get("ordre")).strip()), "🔔 Je te préviens dès que ça change"]))
         # Un seul message (voyants inclus) ; l'avis IA complet reste derrière « 🧠 En savoir plus ».
         return
     armer_cloture(etat, cid, m, r, cle)
