@@ -3458,7 +3458,8 @@ def bouton_rappel(m):
     """Rappelle la bonne analyse de marché, même si un autre marché a envoyé des messages depuis."""
     return json.dumps({"inline_keyboard": [
         [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
-        [{"text": "🧑‍🏫 Coach : préviens-moi", "callback_data": f"auto:{m}"}]
+        [{"text": "🧑‍🏫 Coach : préviens-moi", "callback_data": f"auto:{m}"}],
+        [{"text": "🔴 Coach en direct (à chaque clôture)", "callback_data": f"coachlive:{m}"}]
     ]})
 
 def markup_analyse(etat, m, r, cid=None):
