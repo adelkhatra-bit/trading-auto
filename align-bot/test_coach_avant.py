@@ -39,7 +39,7 @@ class CoachEnDirect(unittest.TestCase):
             ab.notifier_coach_live(etat, "BTC", r, {})
             ab.notifier_coach_live(etat, "BTC", r, {})
         self.assertEqual(len(envoyes), 1)
-        self.assertIn("COACH EN DIRECT", envoyes[0]); self.assertIn("BAISSE", envoyes[0]); self.assertIn("jaune entrée", envoyes[0])
+        self.assertIn("COACH COMMENTATEUR", envoyes[0]); self.assertIn("BAISSE", envoyes[0]); self.assertIn("jaune entrée", envoyes[0])
 
     def test_fin_apres_2h_propose_de_continuer(self):
         envoyes = []

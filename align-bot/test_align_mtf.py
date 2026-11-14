@@ -596,7 +596,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual([align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons], [b["text"] for b in en_buttons])
         self.assertEqual([b["text"] for b in en_buttons], [
             "❓ Why this decision?", "🧠 Learn more", "🎯 Levels / prices",
-            "⏱ All timeframes", "🗂 Message history", "🧑‍🏫 Coach: warn me ", "🔴 Live coach (every close)"
+            "⏱ All timeframes", "🗂 Message history", "🧑‍🏫 Coach: warn me ", "🎙 Live commentator coach"
         ])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):

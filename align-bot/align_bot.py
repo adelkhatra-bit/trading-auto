@@ -2220,7 +2220,7 @@ TRAD.update({
     "Choisis une action ALIGN": "Choose an ALIGN action",
     "7️⃣ ⚖️ Risque conseillé : 0,5 à 1 % du compte par position ; jamais sans SL": "7️⃣ ⚖️ Suggested risk: 0.5 to 1% of the account per position; never trade without an SL",
 
-    "🧑‍🏫 Coach : préviens-moi": "🧑‍🏫 Coach: warn me", "🔴 Coach en direct (à chaque clôture)": "🔴 Live coach (every close)", "⏹ Arrêter le coach en direct": "⏹ Stop live coach",
+    "🧑‍🏫 Coach : préviens-moi": "🧑‍🏫 Coach: warn me", "🎙 Coach commentateur (en direct)": "🎙 Live commentator coach", "⏹ Arrêter le commentateur": "⏹ Stop commentator",
     "✅ Publier": "✅ Publish",
     "❌ Refuser": "❌ Decline",
     "✅ Accepter": "✅ Accept",
@@ -3459,7 +3459,7 @@ def bouton_rappel(m):
     return json.dumps({"inline_keyboard": [
         [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
         [{"text": "🧑‍🏫 Coach : préviens-moi", "callback_data": f"auto:{m}"}],
-        [{"text": "🔴 Coach en direct (à chaque clôture)", "callback_data": f"coachlive:{m}"}]
+        [{"text": "🎙 Coach commentateur (en direct)", "callback_data": f"coachlive:{m}"}]
     ]})
 
 def markup_analyse(etat, m, r, cid=None):
@@ -3492,7 +3492,7 @@ def markup_analyse(etat, m, r, cid=None):
         actions.append({"text": "🧑‍🏫 Coach : préviens-moi ", "callback_data": f"auto:{m}"})
     lignes.append(actions)
     live_ = cid is not None and str(cid) in (etat.get("coach_live", {}).get(m) or {})
-    lignes.append([{"text": ("⏹ Arrêter le coach en direct" if live_ else "🔴 Coach en direct (à chaque clôture)"),
+    lignes.append([{"text": ("⏹ Arrêter le commentateur" if live_ else "🎙 Coach commentateur (en direct)"),
                     "callback_data": f"{'coachstop' if live_ else 'coachlive'}:{m}"}])
     return json.dumps({"inline_keyboard": lignes})
 
@@ -4450,7 +4450,7 @@ def signature_cloture(texte):
 COACH_LIVE_DUREE = 2 * 3600          # le coach en direct parle 2 h, puis demande si on continue
 
 
-def texte_coach_live(m, bougie, r, cle):
+def texte_coach_live(m, bougie, r, cle, positions=None):
     """Coach en direct : une info par ligne « intitulé : valeur », lisible d'un coup d'œil (demande d'Adel)."""
     p = (r.get("m1") or [bougie])[-1].get("c", bougie["c"])
     o_, h_, l_, c_ = bougie["o"], bougie["h"], bougie["l"], bougie["c"]
@@ -4468,7 +4468,7 @@ def texte_coach_live(m, bougie, r, cle):
     d = r.get("confirme") or 0
     tr = cle.get("trade")
     dirs = r.get("dirs") or [0] * 11
-    l = ["🔴 COACH EN DIRECT", f"{ICONE.get(m, '')} {m} : {px(p)}", "━━━━━━━━━━━━━━━",
+    l = ["🎙 COACH COMMENTATEUR — EN DIRECT", f"{ICONE.get(m, '')} {m} : {px(p)}", "━━━━━━━━━━━━━━━",
          f"🕯 Bougie 15 min : {sens_b}",
          f"📏 Ouverture → clôture : {px(o_)} → {px(c_)}",
          f"👁 Lecture : {lecture}",
@@ -4501,12 +4501,43 @@ def texte_coach_live(m, bougie, r, cle):
         except Exception:
             pass
     try:
-        fin = prochaine_cloture_bougie(r, "15m", time.time())
-        l.append(f"⏱ Prochaine clôture : {datetime.datetime.fromtimestamp(fin, PARIS).strftime('%H:%M')}")
+        for tf_, nom_ in (("15m", "15 min"), ("1h", "1h")):
+            fin = prochaine_cloture_bougie(r, tf_, time.time())
+            l.append(f"⏱ Clôture {nom_} : {datetime.datetime.fromtimestamp(fin, PARIS).strftime('%H:%M')} (dans {mmss(max(0, fin - time.time()))})")
     except Exception:
         pass
+    l += ce_qui_bloque(r, p, (tr or {}).get("d") or d)
+    if positions:
+        l += ["━━━━━━━━━━━━━━━", "📂 Positions en cours du bot :"] + positions
     l.append("📺 Live : jaune entrée / rouge SL / bleu TP")
     return "\n".join(l)
+
+
+def ce_qui_bloque(r, p, d):
+    """Ce qui peut freiner le prix sur le graphique (FVG non comblée, niveau 1h/4h/Daily) dans le sens du plan."""
+    if d not in (1, -1):
+        return []
+    cands = []
+    for champ, ut in (("b15", "15 min"), ("b1h", "1h")):
+        for lo, hi, _, dd in fvgs((r.get(champ) or [])[:-1], ut):
+            bord = hi if d == -1 else lo
+            if d * (bord - p) > 0:
+                cands.append((abs(bord - p), f"🧱 Freins : FVG {ut} {px(lo)} – {px(hi)}"))
+    for v, n in (r.get("niveaux") or []):
+        if v is not None and d * (v - p) > 0:
+            cands.append((abs(v - p), f"🧱 Freins : niveau {n} à {px(v)}"))
+    cands.sort(key=lambda z: z[0])
+    return [txt + f" (à {px(dist)})" for dist, txt in cands[:2]]
+
+
+def positions_bot(etat):
+    """Toutes les positions ouvertes du bot, une par ligne (marché, sens, entrée, SL, TP1)."""
+    l = []
+    for mk in MARCHES:
+        tr = (etat.get(mk) or {}).get("trade")
+        if tr and tr.get("d") in (1, -1):
+            l.append(f"{ICONE.get(mk, '')} {mk} : {'🟢 LONG' if tr['d'] == 1 else '🔴 SHORT'} • entrée {px(tr['e'])} • SL {px(tr['sl'])} • TP1 {px(tr.get('tp1') or tr['e'])}")
+    return l
 
 
 def notifier_coach_live(etat, m, r, cle):
@@ -4524,7 +4555,7 @@ def notifier_coach_live(etat, m, r, cle):
             continue
         if int(info.get("dernier_t", 0)) >= int(b["t"]):
             continue
-        res = _envoi_sur(cid, text=texte_coach_live(m, b, r, cle), reply_markup=markup_analyse(etat, m, r, cid))
+        res = _envoi_sur(cid, text=texte_coach_live(m, b, r, cle, positions_bot(etat)), reply_markup=markup_analyse(etat, m, r, cid))
         if res is not None and not (isinstance(res, dict) and res.get("ok") is False):
             info["dernier_t"] = int(b["t"])
 
@@ -5340,7 +5371,7 @@ def traiter(etat, chats, updates):
                 r_now = DERNIERS.get(mk)
                 if choix == "coachlive" and r_now and len(r_now.get("b15") or []) > 1:
                     try:
-                        _envoi_sur(qui, text=texte_coach_live(mk, r_now["b15"][-2], r_now, etat.get(mk, {})),
+                        _envoi_sur(qui, text=texte_coach_live(mk, r_now["b15"][-2], r_now, etat.get(mk, {}), positions_bot(etat)),
                                    reply_markup=markup_analyse(etat, mk, r_now, qui))
                     except Exception as ex:
                         print("coach live immédiat", ex)
@@ -5348,7 +5379,7 @@ def traiter(etat, chats, updates):
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text=("🔴 Coach en direct activé" if choix == "coachlive" else "⏹ Coach en direct arrêté"))
                 except Exception:
                     pass
-                _envoi_sur(qui, text=(f"🔴 COACH EN DIRECT ACTIVÉ — {ICONE.get(mk, '')} {mk}\n🕯 Je te parle à chaque clôture 15 min pendant 2 h\n"
+                _envoi_sur(qui, text=(f"🎙 COACH COMMENTATEUR ACTIVÉ\n{ICONE.get(mk, '')} {mk}\n🕯 Je commente chaque clôture 15 min pendant 2 h\n"
                                       "📺 Mets le live à côté : je t'explique ce qui se passe sur le graphique\n⏹ Pour m'arrêter : le bouton sous mes messages")
                            if choix == "coachlive" else f"⏹ COACH EN DIRECT ARRÊTÉ — {ICONE.get(mk, '')} {mk}\n😴 Je ne t'envoie plus les clôtures")
                 continue
