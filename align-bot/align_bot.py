@@ -7719,6 +7719,18 @@ def statut_position(tr, p):
         return f"✅ ENTRÉE ENCORE POSSIBLE — {couleur}\n📍 Le prix est encore près de l'entrée"
     return f"⛔ TROP TARD POUR ENTRER — {couleur} déjà parti\n🧑‍🏫 Si tu es dedans : je te suis jusqu'au TP"
 
+def approche_tp(m, r, d, cible, nom):
+    """Près d'un TP : « direction TP » si les petites unités poussent encore, sinon « petite perturbation » expliquée."""
+    dirs = r.get("dirs") or [0] * 11
+    poussent = len(dirs) > 4 and dirs[2] == d and dirs[4] == d
+    contre = sum(1 for k in range(5) if k < len(dirs) and dirs[k] == -d)
+    if poussent:
+        return (f"🚀 DIRECTION {nom} — {ICONE.get(m, '')} {m}\n🎯 {nom} à {px(cible)}\n✅ Le 5 min et le 15 min poussent encore dans notre sens\n"
+                "☕ Va boire un café, ne touche à rien 😎")
+    return (f"⚠️ PETITE PERTURBATION avant le {nom} — {ICONE.get(m, '')} {m}\n🎯 {nom} à {px(cible)}\n"
+            f"🐢 {contre}/5 petites unités ralentissent : le prix peut faire une pause ou un petit rebond avant d'y aller\n"
+            "🛡 Garde ton SL à BE : tu ne risques plus rien")
+
 def avant_entree(m, r, cle, o, d):
     """Le coach parle AVANT l'entrée : combien de temps avant la clôture qui décide, et pourquoi le prix peut rebondir (FVG / order block)."""
     l = []
@@ -8130,7 +8142,7 @@ def agent(m, r, cle, ferme):
             return out
         if progres >= 0.8 and not tr.get("cafe_dit"):
             tr["cafe_dit"] = True
-            out.append(f"☕ PRESQUE AU TP1 — {ICONE.get(m, '')} {m}\n🎯 TP1 à {px(t1)}\n😎 Encore un petit effort, ne touche à rien")
+            out.append(approche_tp(m, r, d, t1, "TP1"))
             return out
         if progres < 0.25:
             if tr["encore"] < 1 and r["t"] - tr["cree"] >= 900:
@@ -8150,6 +8162,10 @@ def agent(m, r, cle, ferme):
 
     if tr["statut"] == "tp1":
         n_tp = int(tr.get("n_tp") or 2)                  # numéro du TP visé (TP2, puis TP3, TP4…) : la course continue tant que la tendance tient
+        if t2 is not None and not touche_t2 and tr.get("approche_tp_n") != n_tp and d * (p - t1) >= 0.7 * abs(t2 - t1) > 0:
+            tr["approche_tp_n"] = n_tp
+            out.append(approche_tp(m, r, d, t2, f"TP{n_tp}"))
+            return out
         if touche_t2:
             # Déplacement du TP : tendance 4h toujours dans le bon sens et RSI 15m pas en excès → on vise plus loin (jusqu'au TP5)
             suivants = sorted([z for z in r["grosses"] if d * (z[0] - t2) >= r["atr"]], key=lambda z: d * z[0])
