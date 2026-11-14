@@ -66,6 +66,9 @@ class LiveTikTok(unittest.TestCase):
         ab.live_annonces(self.etat, "GOLD", ["🟥🟥 POINT D'ENTRÉE À VENIR — 🥇 GOLD\n🟨 Le prix entre dans la zone\n📍 Zone ≈ 3990 – 4012"])
         self.assertTrue(self.publie[0].startswith("BULLE:"))
         self.assertIsNone(re.search(r"\d{3,}", self.publie[0]))
+        self.assertEqual(self.publie[0], "BULLE:👉 Connecte-toi au coach sur Telegram pour les infos en temps réel")
+        for mot in ("GOLD", "SHORT", "LONG", "ZONE", "position"):
+            self.assertNotIn(mot, self.publie[0])
 
     def test_boost_limite_par_personne(self):
         self.etat["live_on"] = True
