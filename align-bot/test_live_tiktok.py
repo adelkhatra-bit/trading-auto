@@ -1,0 +1,103 @@
+"""LIVE TikTok : bande qui défile, bulles, boost, télécommande payante (Stars) — jamais de niveaux sur l'écran."""
+import json
+import os
+import re
+import sys
+import unittest
+from unittest import mock
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import align_bot as ab
+
+
+class LiveTikTok(unittest.TestCase):
+    def setUp(self):
+        ab._LIVE_BOOSTS.clear()
+        ab._LIVE_DERNIER.clear()
+        self.publie = []
+        self.envoye = []
+        self.tg = []
+        self.p = [mock.patch.object(ab, "LIVE_SUJET", "test-sujet"),
+                  mock.patch.object(ab, "live_publier", side_effect=lambda t: self.publie.append(t) or True),
+                  mock.patch.object(ab, "_envoi_sur", side_effect=lambda cid, **kw: self.envoye.append((cid, kw))),
+                  mock.patch.object(ab, "telegram", side_effect=lambda m, **kw: self.tg.append((m, kw)) or {"ok": True})]
+        for x in self.p:
+            x.start()
+        self.etat = {"proprio": ["1"], "prenoms": {"2": "Karim"}, "prospects": ["3"]}
+
+    def tearDown(self):
+        for x in self.p:
+            x.stop()
+
+    def test_bouton_live_dans_les_deux_claviers(self):
+        for c in (ab.CLAVIER, ab.CLAVIER_VISITEUR):
+            textes = [b["text"] for ligne in json.loads(c)["keyboard"] for b in ligne]
+            self.assertIn("🔴 Live TikTok", textes)
+
+    def test_rien_sur_la_bande_si_live_eteint(self):
+        ab.live_annonces(self.etat, "BTC", ["🟢🟢🟢 J'ENTRE MAINTENANT — BTC"])
+        self.assertEqual(self.publie, [])
+
+    def test_proprio_lance_le_live_et_tout_le_monde_est_prevenu(self):
+        ab.live_callback(self.etat, {"2"}, {"id": "x"}, "liveon", "x", "1")
+        self.assertTrue(self.etat["live_on"])
+        dest = {cid for cid, _ in self.envoye}
+        self.assertEqual(dest, {"2", "3"})
+        self.assertTrue(any("EN LIVE" in kw["text"] for _, kw in self.envoye))
+
+    def test_un_abonne_ne_peut_pas_lancer_le_live(self):
+        ab.live_callback(self.etat, {"2"}, {"id": "x"}, "liveon", "x", "2")
+        self.assertFalse(self.etat.get("live_on"))
+
+    def test_annonces_sans_aucun_niveau(self):
+        self.etat["live_on"] = True
+        ab.live_annonces(self.etat, "BTC", ["🟢🟢🟢 J'ENTRE MAINTENANT — BTC\n📌 Entrée 68459,14\n🛑 SL 69105", "🎯 TP1 TOUCHÉ — BTC 67167"])
+        self.assertEqual(len(self.publie), 3)          # entrée + TP1 + bulle d'explication du TP1
+        self.assertTrue(self.publie[2].startswith("BULLE:"))
+        for t in self.publie:
+            self.assertIsNone(re.search(r"\d{3,}", t), t)
+            self.assertNotIn("SHORT", t)
+            self.assertNotIn("LONG", t)
+        ab.live_annonces(self.etat, "BTC", ["🟢🟢🟢 J'ENTRE MAINTENANT — BTC"])
+        self.assertEqual(len(self.publie), 3)          # pas de doublon
+
+    def test_bulle_zone(self):
+        self.etat["live_on"] = True
+        ab.live_annonces(self.etat, "GOLD", ["🟥🟥 POINT D'ENTRÉE À VENIR — 🥇 GOLD\n🟨 Le prix entre dans la zone\n📍 Zone ≈ 3990 – 4012"])
+        self.assertTrue(self.publie[0].startswith("BULLE:"))
+        self.assertIsNone(re.search(r"\d{3,}", self.publie[0]))
+
+    def test_boost_limite_par_personne(self):
+        self.etat["live_on"] = True
+        ab.live_callback(self.etat, set(), {"id": "x"}, "liveboost", "x", "2")
+        ab.live_callback(self.etat, set(), {"id": "y"}, "liveboost", "x", "2")
+        self.assertEqual(self.publie, ["Karim BOOSTE LE LIVE ! 🚀 ABONNE-TOI • PARTAGE"])
+
+    def test_facture_en_stars(self):
+        self.etat["live_on"] = True
+        ab.live_callback(self.etat, set(), {"id": "x"}, "livemain", "5", "2")
+        m, kw = self.tg[-1]
+        self.assertEqual(m, "sendInvoice")
+        self.assertEqual(kw["currency"], "XTR")
+        self.assertEqual(kw["provider_token"], "")
+        self.assertEqual(json.loads(kw["prices"])[0]["amount"], ab.PRIX_MAIN_STARS)
+        self.assertEqual(kw["payload"], "livemain:5")
+
+    def test_paiement_refuse_si_live_eteint(self):
+        self.assertFalse(ab.live_pre_checkout(self.etat, {"id": "q", "invoice_payload": "livemain:5"}))
+        self.assertEqual(self.tg[-1][1]["ok"], "false")
+        self.etat["live_on"] = True
+        self.assertTrue(ab.live_pre_checkout(self.etat, {"id": "q", "invoice_payload": "livemain:5"}))
+        self.assertEqual(self.tg[-1][1]["ok"], "true")
+        self.assertFalse(ab.live_pre_checkout(self.etat, {"id": "q", "invoice_payload": "autre:5"}))
+
+    def test_paiement_recu_envoie_l_ordre_au_graphique(self):
+        self.etat["live_on"] = True
+        ab.live_paiement_recu(self.etat, "2", {"invoice_payload": "livemain:GOLD", "total_amount": 25, "telegram_payment_charge_id": "c1"})
+        self.assertEqual(self.publie, ["CMD:sym:FOREXCOM:XAUUSD:Karim"])
+        self.assertEqual(self.etat["live_paiements"][-1]["id"], "c1")
+        self.assertIn("C'est à toi", self.envoye[-1][1]["text"])
+
+
+if __name__ == "__main__":
+    unittest.main()

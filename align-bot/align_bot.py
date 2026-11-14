@@ -2761,13 +2761,13 @@ CLAVIER = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "�
                                    [{"text": "📊 Faire une analyse"}, {"text": "📡 Mes marchés"}],
                                    [{"text": "🤖 Mon bot"}, {"text": "📈 Mes résultats"}],
                                    [{"text": "📸 Partager mon gain"}, {"text": "🧩 Indicateur TradingView"}],
-                                   [{"text": "🌐 English"}]],
+                                   [{"text": "🔴 Live TikTok"}, {"text": "🌐 English"}]],
                       "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 CLAVIER_VISITEUR = json.dumps({"keyboard": [[{"text": "🥇 Analyse Gold"}, {"text": "🟠 Analyse BTC"}, {"text": "💠 Analyse Nasdaq"}],
                                             [{"text": "📊 Faire une analyse"}, {"text": "📡 Mes marchés"}],
                                             [{"text": "🤖 Mon bot"}, {"text": "💎 Devenir VIP"}],
                                             [{"text": "📸 Partager mon gain"}],
-                                            [{"text": "🌐 English"}]],
+                                            [{"text": "🔴 Live TikTok"}, {"text": "🌐 English"}]],
                                "resize_keyboard": True, "is_persistent": True, "input_field_placeholder": "Choisis une action ALIGN"})
 AVERTISSEMENT = ("ℹ️ Ce sont MES positions personnelles, partagées à titre informatif et éducatif. "
                  "Ce n'est pas un conseil en investissement ni une recommandation personnalisée. "
@@ -4616,6 +4616,7 @@ def repondre(etat, cid, oui, mk=None):
             _envoi_sur(cid, text=f"{ICONE.get(m, '')} {m}\n{alerte}", reply_markup=markup_position(m))
             return
         tr.setdefault("qui", {})[cid] = {"e": e, "sl": tr["sl"], "tp1": tr["tp1"], "d": tr["d"], "t": int(time.time())}
+        live_suivi(etat, cid, m)
         _envoi_sur(cid, reply_markup=markup_position(m), text=(
             f"👊 SUIVI PERSONNEL ACTIVÉ — {ICONE.get(m, '')} {m}\n{SENS[tr['d']]}\n"
             f"📌 Entrée   {px(e)}\n"
@@ -4893,6 +4894,8 @@ def traiter(etat, chats, updates):
             choix, _, mk = cb.get("data", "").partition(":")
             qui = str(cb_chat["id"])
             retenir_prenom(etat, qui, cb.get("from"))
+            if live_callback(etat, chats, cb, choix, mk, qui):
+                continue
             if choix == "analysechoice" and (mk in MARCHES or mk == "BOTH"):
                 try:
                     telegram("answerCallbackQuery", callback_query_id=cb["id"], text="📊 Analyse en cours")
@@ -5257,6 +5260,9 @@ def traiter(etat, chats, updates):
         if tx in INVERSE:
             msg["text"] = tx = INVERSE[tx]
         bas = tx.lower()
+        if "live tiktok" in bas or cmd == "/live":
+            menu_live(etat, cid)
+            continue
         if recevoir_gain(etat, cid, msg):
             continue
         if "english" in bas or "français" in bas or "francais" in bas:
@@ -8097,6 +8103,195 @@ def _ack_callback_rapide(cb, text):
         print("callback ack", ex)
 
 
+# ───────── LIVE TikTok : bande qui défile + télécommande du graphique ─────────
+# Le bot publie sur un canal privé (ntfy, gratuit). Le script Tampermonkey de l'onglet TradingView du live
+# l'écoute : texte → bande qui défile ; « CMD:… » → change l'unité de temps / le marché 15 s puis revient.
+# Jamais le sens, l'entrée, le SL ni le TP sur la bande (règle du live).
+LIVE_SUJET = os.environ.get("ALIGN_LIVE_SUJET", "").strip()          # secret GitHub (canal privé bot → graphique)
+LIVE_LIEN = os.environ.get("ALIGN_LIVE_LIEN", "https://www.tiktok.com/@adelkhatra/live").strip()
+PRIX_MAIN_STARS = int(os.environ.get("PRIX_MAIN_STARS", "25"))         # ≈ 0,50 € pour l'abonné
+LIVE_DUREE_MAIN = 15
+LIVE_BOOST_PAUSE = 120                                                 # 1 boost / personne / 2 min
+LIVE_CHOIX = {"1": ("tf", "1", "⏱ 1 min"), "5": ("tf", "5", "⏱ 5 min"), "15": ("tf", "15", "⏱ 15 min"),
+              "60": ("tf", "60", "⏱ 1 h"), "BTC": ("sym", "CRYPTO:BTCUSD", "🟠 BTC"),
+              "GOLD": ("sym", "FOREXCOM:XAUUSD", "🥇 Gold"), "NASDAQ": ("sym", "FX:NAS100", "💠 NASDAQ")}
+_LIVE_BOOSTS = {}
+_LIVE_DERNIER = {}
+
+def live_actif(etat):
+    return bool(etat.get("live_on"))
+
+def live_publier(texte):
+    """Envoie une ligne au graphique du live. Ne bloque jamais le bot (échec = ignoré)."""
+    if not LIVE_SUJET or not texte:
+        return False
+    try:
+        req = urllib.request.Request("https://ntfy.sh/" + urllib.parse.quote(LIVE_SUJET),
+                                     data=str(texte)[:200].encode("utf-8"), headers={"User-Agent": "align-bot"})
+        with urllib.request.urlopen(req, timeout=8):
+            return True
+    except Exception as ex:
+        print("live publier", ex)
+        return False
+
+def live_bande(etat, texte, cle=None, pause=60):
+    """Message sur la bande, seulement quand le live tourne ; une même annonce au plus 1 fois / pause."""
+    if not live_actif(etat):
+        return False
+    if cle:
+        if time.time() - _LIVE_DERNIER.get(cle, 0) < pause:
+            return False
+        _LIVE_DERNIER[cle] = time.time()
+    return live_publier(texte)
+
+def live_annonces(etat, m, textes):
+    """Ce que le bot envoie sur Telegram → la bande (sans aucun niveau)."""
+    ic = ICONE.get(m, "")
+    for t in textes or []:
+        t = t if isinstance(t, str) else str(t)
+        if "J'ENTRE MAINTENANT" in t:
+            live_bande(etat, f"🚀 ALIGN ENTRE EN POSITION sur {ic} {m} ! 👉 Le coach est sur Telegram", f"entre{m}", 600)
+        elif "OBJECTIF FINAL ATTEINT" in t or "TP2 TOUCHÉ" in t:
+            live_bande(etat, f"🏆 TP2 TOUCHÉ sur {ic} {m} ! Bravo à ceux qui ont suivi 🔥", f"tp2{m}", 600)
+        elif "TP1 TOUCHÉ" in t:
+            if live_bande(etat, f"🎯 TP1 TOUCHÉ sur {ic} {m} ! ✅", f"tp1{m}", 600):
+                live_publier(f"BULLE:🎯 {ic} {m} TP1 touché • bougie qui CLÔTURE AU-DELÀ du TP1 = ça continue vers le TP2 🚀 • "
+                             "bougie qui REVIENT = le SL passe à BE, on protège 🛡")
+        elif "POINT D'ENTRÉE À VENIR" in t:
+            live_bande(etat, f"BULLE:👀 {ic} {m} : le prix arrive dans la ZONE de l'indicateur • une position peut arriver ⚡", f"zone{m}", 900)
+        elif "RETOURNEMENT EN PRÉPARATION" in t:
+            live_bande(etat, f"BULLE:↩ {ic} {m} : regarde la ligne RETOURNEMENT • le marché peut se retourner", f"ret{m}", 900)
+        elif "MANIPULATION" in t or "MÈCHE SUSPECTE" in t:
+            live_bande(etat, f"BULLE:🎣 {ic} {m} : grosse mèche = chasse aux stops • on attend la clôture", f"meche{m}", 900)
+
+def live_suivi(etat, cid, m):
+    """Un abonné entre en position avec le bot → la bande l'annonce (prénom seulement)."""
+    try:
+        n = sum(1 for v in ((etat.get(m) or {}).get("trade") or {}).get("qui", {}).values() if isinstance(v, dict))
+    except Exception:
+        n = 0
+    p = etat.get("prenoms", {}).get(str(cid)) or "Un abonné"
+    live_bande(etat, f"👊 {p} entre en position avec ALIGN sur {ICONE.get(m, '')} {m} • {n} abonné{'s' if n > 1 else ''} dedans 🔥")
+
+def texte_live(etat, anglais=False):
+    if not live_actif(etat):
+        return ("⚫ PAS DE LIVE EN CE MOMENT\n🔔 Je te préviens dès que le live commence" if not anglais else
+                "⚫ NO LIVE RIGHT NOW\n🔔 I'll tell you as soon as the live starts")
+    if anglais:
+        return ("🔴 LIVE IN PROGRESS\n📺 Adel's chart, live\n━━━━━━━━━━━━━━━\n🚀 Boost the live: your name on screen (free)\n"
+                f"🎮 Take control: change the chart for {LIVE_DUREE_MAIN} s\n⭐ {PRIX_MAIN_STARS} Stars\n👇 Choose")
+    return ("🔴 LIVE EN COURS\n📺 Le graphique d'Adel, en direct\n━━━━━━━━━━━━━━━\n🚀 Booster le live : ton prénom à l'écran (gratuit)\n"
+            f"🎮 Prends la main : tu changes le graphique {LIVE_DUREE_MAIN} s\n⭐ {PRIX_MAIN_STARS} Stars (≈ 0,50 €)\n👇 Choisis")
+
+def clavier_live(etat, cid, anglais=False):
+    lignes = []
+    if live_actif(etat):
+        lignes.append([{"text": "📺 Watch the live" if anglais else "📺 Regarder le live", "url": LIVE_LIEN}])
+        lignes.append([{"text": "🚀 Boost the live" if anglais else "🚀 Booster le live", "callback_data": "liveboost:x"}])
+        lignes.append([{"text": LIVE_CHOIX[k][2], "callback_data": f"livemain:{k}"} for k in ("1", "5", "15", "60")])
+        lignes.append([{"text": LIVE_CHOIX[k][2], "callback_data": f"livemain:{k}"} for k in ("BTC", "GOLD", "NASDAQ")])
+    if str(cid) in {str(x) for x in proprio(etat)}:
+        lignes.append([{"text": "⏹ Live terminé" if live_actif(etat) else "🔴 Je lance le live",
+                        "callback_data": "liveoff:x" if live_actif(etat) else "liveon:x"}])
+    return json.dumps({"inline_keyboard": lignes}) if lignes else None
+
+def menu_live(etat, cid):
+    anglais = str(cid) in LANG_EN
+    kb = clavier_live(etat, cid, anglais)
+    _envoi_sur(cid, text=texte_live(etat, anglais), **({"reply_markup": kb} if kb else {}))
+
+def live_annoncer_debut(etat, chats):
+    """Le propriétaire lance le live : tout le monde (VIP + gratuits) reçoit le lien."""
+    vus = set()
+    for cid in list(chats) + list(etat.get("prospects", [])):
+        cid = str(cid)
+        if cid in vus:
+            continue
+        vus.add(cid)
+        anglais = cid in LANG_EN
+        try:
+            _envoi_sur(cid, text=("🔴 ADEL IS LIVE ON TIKTOK\n📺 The ALIGN chart, live\n🎮 You can take control of the chart"
+                                  if anglais else "🔴 ADEL EST EN LIVE SUR TIKTOK\n📺 Le graphique ALIGN en direct\n🎮 Tu peux prendre la main sur le graphique"),
+                       reply_markup=clavier_live(etat, cid, anglais))
+        except Exception as ex:
+            print("live annonce", cid, ex)
+
+def live_callback(etat, chats, cb, choix, mk, qui):
+    """Boutons du live. Renvoie True si le bouton appartenait au live."""
+    if choix not in ("liveon", "liveoff", "liveboost", "livemain"):
+        return False
+    anglais = qui in LANG_EN
+    if choix in ("liveon", "liveoff"):
+        if qui not in {str(x) for x in proprio(etat)}:
+            return True
+        etat["live_on"] = choix == "liveon"
+        if etat["live_on"]:
+            live_publier("🔴 LE LIVE ALIGN COMMENCE ! 👉 ABONNE-TOI • PARTAGE • TAPOTE L'ÉCRAN")
+            live_annoncer_debut(etat, chats)
+        else:
+            _envoi_sur(qui, text="⏹ Live terminé\n🔕 Plus aucune annonce de live")
+        return True
+    if not live_actif(etat):
+        _envoi_sur(qui, text=texte_live(etat, anglais))
+        return True
+    if choix == "liveboost":
+        if time.time() - _LIVE_BOOSTS.get(qui, 0) < LIVE_BOOST_PAUSE:
+            _envoi_sur(qui, text=("⏳ One boost every 2 min" if anglais else "⏳ 1 boost toutes les 2 min"))
+            return True
+        _LIVE_BOOSTS[qui] = time.time()
+        p = etat.get("prenoms", {}).get(qui) or ("A viewer" if anglais else "Un abonné")
+        ok = live_publier(f"{p} BOOSTE LE LIVE ! 🚀 ABONNE-TOI • PARTAGE")
+        _envoi_sur(qui, text=(("🚀 Your name is on screen! Look at the live 👀" if anglais else "🚀 Ton prénom passe à l'écran ! Regarde le live 👀")
+                              if ok else ("⚠️ The live screen is not reachable right now" if anglais else "⚠️ L'écran du live ne répond pas pour l'instant")))
+        return True
+    if mk not in LIVE_CHOIX:
+        return True
+    nom = LIVE_CHOIX[mk][2]
+    try:
+        telegram("sendInvoice", chat_id=qui, title=("🎮 Take control of the live" if anglais else "🎮 Prends la main sur le live"),
+                 description=(f"{nom} on Adel's chart for {LIVE_DUREE_MAIN} seconds, then it goes back automatically." if anglais else
+                              f"{nom} sur le graphique d'Adel pendant {LIVE_DUREE_MAIN} secondes, puis retour automatique."),
+                 payload=f"livemain:{mk}", currency="XTR", provider_token="",
+                 prices=json.dumps([{"label": nom, "amount": PRIX_MAIN_STARS}]))
+    except Exception as ex:
+        print("live facture", ex)
+        _envoi_sur(qui, text="⚠️ Paiement indisponible pour l'instant")
+    return True
+
+def live_pre_checkout(etat, pcq):
+    """Telegram demande la validation AVANT de débiter : on refuse si le live ne tourne pas (l'abonné ne paie rien)."""
+    charge = str(pcq.get("invoice_payload", ""))
+    ok = charge.startswith("livemain:") and charge.split(":", 1)[1] in LIVE_CHOIX and live_actif(etat) and bool(LIVE_SUJET)
+    try:
+        if ok:
+            telegram("answerPreCheckoutQuery", pre_checkout_query_id=pcq["id"], ok="true")
+        else:
+            telegram("answerPreCheckoutQuery", pre_checkout_query_id=pcq["id"], ok="false",
+                     error_message="Le live n'est pas en cours : aucun paiement n'a été fait.")
+    except Exception as ex:
+        print("pre_checkout", ex)
+    return ok
+
+def live_paiement_recu(etat, cid, paiement):
+    """Paiement validé : l'ordre part vers le graphique (file d'attente côté graphique, 15 s chacun)."""
+    charge = str((paiement or {}).get("invoice_payload", ""))
+    mk = charge.split(":", 1)[1] if ":" in charge else ""
+    if mk not in LIVE_CHOIX:
+        return False
+    sorte, valeur, nom = LIVE_CHOIX[mk]
+    p = etat.get("prenoms", {}).get(str(cid)) or "Un abonné"
+    envoye = live_publier(f"CMD:{sorte}:{valeur}:{p}")
+    etat.setdefault("live_paiements", []).append({"t": int(time.time()), "cid": str(cid), "choix": mk,
+                                                  "stars": (paiement or {}).get("total_amount"),
+                                                  "id": (paiement or {}).get("telegram_payment_charge_id"), "envoye": envoye})
+    del etat["live_paiements"][:-200]
+    anglais = str(cid) in LANG_EN
+    _envoi_sur(str(cid), text=((f"✅ It's yours! {nom} on the live for {LIVE_DUREE_MAIN} s 👀" if anglais else
+                                f"✅ C'est à toi ! {nom} sur le live pendant {LIVE_DUREE_MAIN} s 👀") +
+                               ("\n⏳ If someone is before you, you're next in line" if anglais else "\n⏳ Si quelqu'un est avant toi, tu passes juste après")))
+    return True
+
+
 def boucle_polling_telegram(etat, chats):
     """Poll Telegram indépendamment des analyses longues; les actions d'écriture restent dans le thread principal."""
     offset = int(etat.get("offset", 0) or 0)
@@ -8110,6 +8305,12 @@ def boucle_polling_telegram(etat, chats):
             continue
         for update in updates:
             offset = max(offset, int(update.get("update_id", offset - 1)) + 1)
+            if update.get("pre_checkout_query"):
+                live_pre_checkout(etat, update["pre_checkout_query"])
+            paiement = (update.get("message") or {}).get("successful_payment")
+            if paiement:
+                live_paiement_recu(etat, str((update.get("message") or {}).get("chat", {}).get("id", "")), paiement)
+                update["_align_fast_handled"] = True
             cb = update.get("callback_query")
             if cb:
                 chat = (cb.get("message") or {}).get("chat") or {}
@@ -8325,6 +8526,7 @@ def un_tour(etat, chats):
         cle["ferme_dit"] = False
         ferme = ""
         nouveaux = [taguer(x, nom_marche) for x in agent(nom_marche, r, cle, ferme)]
+        live_annonces(etat, nom_marche, nouveaux)
         envois += nouveaux
         if TOKEN:
             envois += [taguer(x, nom_marche) for x in commentaires_ia_temps_reel(etat, nom_marche, r, cle, nouveaux)]
