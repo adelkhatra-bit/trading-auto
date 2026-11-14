@@ -2351,6 +2351,10 @@ TRAD.update({   # v24.3 : cartes coach FVG, scalp, suivi, ouvertures — même f
     "🛡️ Si tu suis la position, je te dis quand remonter ton SL": "🛡️ If you follow the position, I'll tell you when to move your SL",
     "LONDRES": "LONDON", "Londres": "London", ": pas de FVG / order block exploitable en vue 5 min": ": no usable FVG / order block on the 5 min chart", "😎 Je ne force rien : j'attends un vrai setup": "😎 I don't force anything: waiting for a real setup", "👀 Mets-toi en vue 5 min": "👀 Switch to the 5 min chart", "👀 Vue 5 min": "👀 5 min chart", ": MARCHÉ FERMÉ": ": MARKET CLOSED", "😴 Je ne t'envoie plus rien sur ce marché": "😴 No more messages on this market", "⏰ Réouverture :": "⏰ Reopens:", "lundi": "Monday", "dimanche": "Sunday", "⬆️ HAUSSIER 🟢": "⬆️ BULLISH 🟢", "⬇️ BAISSIER 🔴": "⬇️ BEARISH 🔴",
 })
+TRAD.update({   # cartes d'analyse avec les couleurs du graphique
+    "(ligne jaune)": "(yellow line)", "(ligne rouge)": "(red line)", "(ligne bleue)": "(blue line)",
+    "🔒 SL protégé :": "🔒 Protected SL:", "(plus de perte possible)": "(no more loss possible)",
+})
 TRAD.update({   # lecture au TP1
     "⚠️ RISQUE DE RETOUR VERS L'ENTRÉE": "⚠️ RISK OF A PULLBACK TO THE ENTRY", "petites unités repartent contre la position": "small timeframes turning against the trade",
     ": le marché s'essouffle": ": the market is running out of steam", "✂️ Encaisse une grosse partie maintenant": "✂️ Take a big part of the profit now",
@@ -3781,7 +3785,10 @@ def texte_apercu(m, r, cle, vip=True):
         "",
     ] + voyants_unites(r) + [""]
     # Position ouverte : les niveaux du trade font foi (pas de cible différente du TP).
-    obj = ([f"📌 Entrée : {px(tr['e'])}", f"🛑 Stop : {px(tr['sl'])}", f"🎯 TP1 : {px(tr['tp1'])}"]
+    obj = ([f"🟨 Entrée : {px(tr['e'])} (ligne jaune)",
+            (f"🔒 SL protégé : {px(tr['sl'])} (plus de perte possible)" if tr.get("d") and tr["d"] * (tr["e"] - tr["sl"]) <= 0
+             else f"🛑 SL : {px(tr['sl'])} (ligne rouge)"),
+            f"🎯 TP1 : {px(tr['tp1'])} (ligne bleue)"]
            + ([f"🏁 TP2 : {px(tr['tp2'])}"] if tr.get("tp2") else [])) if tr else objectifs_marche(r, sens)
     if obj:
         lignes += obj + [""]
@@ -3916,6 +3923,7 @@ def chrono_txt(m, r, cle, t0):
             f"⏱ SUIVI EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
             f"🎯 Suivi en cours depuis {duree_humaine(now - t0)}",
             f"🟢 POSITION OUVERTE — {SENS[tr['d']]}",
+            f"🟨 Entrée {px(tr['e'])} • 🛑 SL {px(tr['sl'])} • 🎯 TP1 {px(tr['tp1'])}",
             statut_txt(1, tr).strip(),
             "🎯 Le coach surveille le SL, le passage à BE et les TP."
         ])

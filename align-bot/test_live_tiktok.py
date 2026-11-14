@@ -159,5 +159,13 @@ class LectureTP1(unittest.TestCase):
         self.assertIn("IT CAN GO ON TO TP2", ab.traduire("🚀 ÇA PEUT CONTINUER VERS LE TP2"))
 
 
+class CartesCouleursGraphique(unittest.TestCase):
+    def test_cartes_parlent_des_lignes(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "align_bot.py"), encoding="utf-8").read()
+        for mot in ("(ligne jaune)", "(ligne rouge)", "(ligne bleue)", "🔒 SL protégé", "🟨 Entrée {px(tr['e'])} • 🛑 SL"):
+            self.assertIn(mot, src)
+        self.assertIn("(red line)", ab.traduire("🛑 SL : 1 (ligne rouge)"))
+
+
 if __name__ == "__main__":
     unittest.main()
