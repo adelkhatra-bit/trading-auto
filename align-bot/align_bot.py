@@ -4699,6 +4699,26 @@ def notifier_canal_marche(etat, m, r, cle):
             info["flash_t"] = time.time()
 
 
+def canal_resultats(etat, m, textes):
+    """Chaîne du marché : TP touché / stop touché, tout de suite (sans niveaux, version gratuite)."""
+    canal = (etat.get("canaux_marche") or {}).get(m)
+    if not canal:
+        return
+    ic = ICONE.get(m, "")
+    for t in textes or []:
+        t = t if isinstance(t, str) else str(t)
+        n = re.search(r"TP(\d) TOUCHÉ", t)
+        if n or "OBJECTIF FINAL ATTEINT" in t:
+            msg = "\n".join(["🎆 TP TOUCHÉ ! 🎆", f"{ic} {m} : TP{n.group(1) if n else ''} ✅",
+                             "🔥 Bravo à ceux qui ont suivi", "☕ La suite sans risque (BE)" if (n and n.group(1) == "1") else "🥳 Encaisse et souris",
+                             "👇 Coach perso : bouton"])
+        elif "STOP TOUCHÉ" in t:
+            msg = "\n".join(["😤 STOP TOUCHÉ", f"{ic} {m} : on coupe petit", "💪 On va se refaire", "👀 Je cherche la suite"])
+        else:
+            continue
+        _envoi_sur(canal, text=msg, reply_markup=boutons_chaine_marche(etat))
+
+
 def notifier_coach_live(etat, m, r, cle):
     """Envoie la carte « coach en direct » à chaque nouvelle clôture 15 min, aux abonnés qui l'ont activé pour ce marché."""
     abonnes = etat.get("coach_live", {}).get(m) or {}
@@ -8654,9 +8674,10 @@ def live_publier(texte):
         print("live publier", ex)
         return False
 
-def live_bande(etat, texte, cle=None, pause=60):
-    """Message sur la bande, seulement quand le live tourne ; une même annonce au plus 1 fois / pause."""
-    if not live_actif(etat):
+def live_bande(etat, texte, cle=None, pause=60, toujours=False):
+    """Message sur la bande, seulement quand le live tourne ; une même annonce au plus 1 fois / pause.
+    toujours=True : TP / SL / entrée partent même si le live n'a pas été déclaré (la bande n'existe que sur l'écran du live)."""
+    if not live_actif(etat) and not toujours:
         return False
     if cle:
         if time.time() - _LIVE_DERNIER.get(cle, 0) < pause:
@@ -8671,12 +8692,16 @@ def live_annonces(etat, m, textes):
         t = t if isinstance(t, str) else str(t)
         if "J'ENTRE MAINTENANT" in t:
             live_bande(etat, f"🚀 ALIGN ENTRE EN POSITION sur {ic} {m} ! 👉 Le coach en direct : lien en bio 🎁", f"entre{m}", 600)
-        elif "OBJECTIF FINAL ATTEINT" in t or "TP2 TOUCHÉ" in t:
-            live_bande(etat, f"🏆 TP2 TOUCHÉ sur {ic} {m} ! Bravo à ceux qui ont suivi 🔥", f"tp2{m}", 600)
+        elif "OBJECTIF FINAL ATTEINT" in t or re.search(r"TP[2-9] TOUCHÉ", t):
+            if live_bande(etat, f"🏆 TP TOUCHÉ sur {ic} {m} ! Bravo à ceux qui ont suivi 🔥", f"tp2{m}", 600, toujours=True):
+                live_publier("BULLE:🎁 Tu veux recevoir les prochaines infos ? Abonne-toi • lien en bio 🎁 gratuit")
+        elif "STOP TOUCHÉ" in t:
+            live_bande(etat, f"😤 {ic} {m} : stop touché • on coupe petit, on va se refaire 💪", f"sl{m}", 600, toujours=True)
         elif "TP1 TOUCHÉ" in t:
-            if live_bande(etat, f"🎯 TP1 TOUCHÉ sur {ic} {m} ! ✅", f"tp1{m}", 600):
+            if live_bande(etat, f"🎯 TP1 TOUCHÉ sur {ic} {m} ! ✅", f"tp1{m}", 600, toujours=True):
                 live_publier(f"BULLE:🎯 {ic} {m} TP1 touché • bougie qui CLÔTURE AU-DELÀ du TP1 = ça continue vers le TP2 🚀 • "
                              "bougie qui REVIENT = le SL passe à BE, on protège 🛡")
+                live_publier("BULLE:🎁 Tu veux recevoir les prochaines infos ? Abonne-toi • lien en bio 🎁 gratuit")
         elif "POINT D'ENTRÉE À VENIR" in t:
             # Règle live : aucune info (ni sens, ni niveau, ni marché) ; jamais le mot « Telegram » à l'écran (TikTok réduit la portée des lives qui renvoient ailleurs) → « lien en bio »
             live_bande(etat, "BULLE:👉 Le coach en direct t'explique tout : lien en bio 🎁 gratuit", f"zone{m}", 900)
@@ -9071,6 +9096,10 @@ def un_tour(etat, chats):
         ferme = ""
         nouveaux = [taguer(x, nom_marche) for x in agent(nom_marche, r, cle, ferme)]
         live_annonces(etat, nom_marche, nouveaux)
+        try:
+            canal_resultats(etat, nom_marche, nouveaux)
+        except Exception as ex:
+            print("canal résultats", ex)
         envois += nouveaux
         if TOKEN:
             envois += [taguer(x, nom_marche) for x in commentaires_ia_temps_reel(etat, nom_marche, r, cle, nouveaux)]
