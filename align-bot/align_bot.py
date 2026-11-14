@@ -4590,11 +4590,21 @@ def flash_commentateur(m, r, cle):
     tr = cle.get("trade")
     ligne_pos = []
     if tr:
-        ligne_pos = ["✅ Dans notre sens : on laisse courir" if tr["d"] * move > 0 else "⚠️ Contre nous : on garde la tête froide"]
+        dd = tr["d"]
+        t1_fait = bool(tr.get("tp1")) and dd * (p - tr["tp1"]) >= 0
+        if dd * move > 0:
+            ligne_pos = ["✅ Dans le sens du bot", "🚀 Direction TP2" if t1_fait else "🎯 Direction TP1", "👍 On laisse courir"]
+        else:
+            ligne_pos = ["⚠️ Contre le bot", "🔒 SL à BE : zéro risque" if dd * (tr["e"] - tr["sl"]) <= 0 else "🧊 On garde la tête froide",
+                         "⏳ La clôture 15 min décide"]
+    else:
+        d_ = r.get("confirme") or 0
+        ligne_pos = ["🧭 Dans le sens de la tendance" if d_ * move > 0 else "↩ Contre la tendance : rebond ?" if d_ else "➖ Pas de tendance nette",
+                     "⏳ J'attends la clôture 15 min"]
     if abs(move) >= 0.5 * a:
         return "\n".join(["🎙 ÇA BOUGE !", f"{ICONE.get(m, '')} {m} : {px(p)}",
-                          ("🔴 Les vendeurs accélèrent !" if move < 0 else "🟢 Les acheteurs accélèrent !"),
-                          f"📏 {px(abs(move))} en 3 min"] + ligne_pos)
+                          ("🔴 Les vendeurs accélèrent" if move < 0 else "🟢 Les acheteurs accélèrent"),
+                          f"📏 {'-' if move < 0 else '+'}{px(abs(move))} en 3 min"] + ligne_pos)
     b15 = (r.get("b15") or [])[-1:]
     if b15:
         x = b15[0]; rng = x["h"] - x["l"]
@@ -4638,16 +4648,37 @@ def boutons_chaine_marche(etat):
     return json.dumps({"inline_keyboard": l})
 
 
+_CACHE_CHAINE = {}
+
 def dans_chaine(etat, cid, m):
-    """L'utilisateur est-il abonné à la chaîne de ce marché ? (le bot y est admin : getChatMember)"""
+    """L'utilisateur est-il abonné à la chaîne de ce marché ? (le bot y est admin : getChatMember, mis en cache 10 min)"""
     canal = (etat.get("canaux_marche") or {}).get(m)
     if not canal or not TOKEN:
         return False
+    k = (str(cid), m)
+    if k in _CACHE_CHAINE and time.time() - _CACHE_CHAINE[k][1] < 600:
+        return _CACHE_CHAINE[k][0]
     try:
         st = telegram("getChatMember", chat_id=canal, user_id=cid).get("result", {}).get("status")
-        return st in ("member", "administrator", "creator")
+        ok = st in ("member", "administrator", "creator")
     except Exception:
+        ok = False
+    _CACHE_CHAINE[k] = (ok, time.time())
+    return ok
+
+
+# Commentaires de marché : ils vivent dans la chaîne du marché. Un abonné qui est déjà dans la chaîne
+# ne les reçoit plus en double dans le bot (le bot garde ce qui est perso : entrées, sa position, ses demandes).
+COMMENTAIRES_CHAINE = ("mouvement fort", "MOUVEMENT FORT", "ÇA BOUGE", "GROSSE MÈCHE", "Grosse bougie", "RETOURNEMENT EN PRÉPARATION",
+                       "MANIPULATION", "MÈCHE SUSPECTE", "COACH COMMENTATEUR")
+
+def doublon_chaine(etat, cid, texte):
+    """True si ce message est un commentaire de marché que l'abonné reçoit déjà dans la chaîne de ce marché."""
+    if not any(c in texte for c in COMMENTAIRES_CHAINE) or str(cid) == str(etat.get("canal") or ""):
         return False
+    hd = texte.upper()
+    mk = [m for m in MARCHES if re.search(rf"\b{m}\b", hd)]
+    return bool(mk) and all(dans_chaine(etat, cid, m) for m in mk)
 
 
 def accueil_questionnaire(etat, cid):
@@ -4751,6 +4782,11 @@ def notifier_coach_live(etat, m, r, cle):
         return
     b = bars[-1]
     for cid, info in list(abonnes.items()):
+        if dans_chaine(etat, cid, m):
+            abonnes.pop(cid, None)
+            _envoi_sur(cid, text=f"🎙 Ton commentateur {ICONE.get(m, '')} {m}\n👉 Il est dans ta chaîne\n🔕 Ici, plus de doublon",
+                       reply_markup=json.dumps({"inline_keyboard": [[{"text": f"🎙 Ouvrir {m}", "url": LIENS_CHAINES.get(m, BOT_LIEN)}]]}))
+            continue
         if time.time() >= float(info.get("expire", 0)):
             abonnes.pop(cid, None)
             _envoi_sur(cid, text=f"⏹ COACH EN DIRECT TERMINÉ — {ICONE.get(m, '')} {m}\n🙌 2 h ensemble, merci !\n🔁 On continue ?",
@@ -9230,6 +9266,11 @@ def un_tour(etat, chats):
                 print("anti-répétition : message identique ignoré —", texte.splitlines()[0][:80])
                 continue
             for cid in destinataires_message(etat, chats, texte):
+                try:
+                    if doublon_chaine(etat, cid, texte):
+                        continue                                        # déjà dans la chaîne du marché
+                except Exception:
+                    pass
                 if cid != str(etat.get("canal") or "") and etat.get("marches_par_chat", {}).get(str(cid)) is not None:
                     texte_cid = filtrer_texte_par_marches(texte, marches_choisis(etat, cid))
                     if not texte_cid:

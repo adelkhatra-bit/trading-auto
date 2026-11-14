@@ -53,7 +53,7 @@ class FlashCommentateur(unittest.TestCase):
     def test_mouvement_brusque(self):
         r = {"atr": 100, "m1": [dict(o=1000, c=990), dict(o=990, c=960), dict(o=960, c=930)], "b15": []}
         t = ab.flash_commentateur("BTC", r, {"trade": {"d": -1}})
-        self.assertIn("ÇA BOUGE", t); self.assertIn("vendeurs", t); self.assertIn("Dans notre sens", t)
+        self.assertIn("ÇA BOUGE", t); self.assertIn("vendeurs", t); self.assertIn("Dans le sens du bot", t)
 
     def test_grosse_meche(self):
         r = {"atr": 100, "m1": [dict(o=1000, c=1000)] * 3, "b15": [dict(o=990, h=1080, l=985, c=1000)]}
