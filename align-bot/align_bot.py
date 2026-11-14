@@ -5354,7 +5354,7 @@ def traiter(etat, chats, updates):
                 fr = msg.get("from", {})
                 nom = (fr.get("first_name", "") + (" @" + fr["username"] if fr.get("username") else "")).strip() or cid
                 etat.setdefault("noms", {})[cid] = nom
-                live_bande(etat, f"🎉 BIENVENUE À {(fr.get('first_name') or 'un nouveau').split(' ')[0][:20].upper()} DANS ALIGN ! Rejoins le Telegram 👉 lien en bio")
+                live_bande(etat, f"🎉 BIENVENUE À {(fr.get('first_name') or 'un nouveau').split(' ')[0][:20].upper()} DANS ALIGN ! Rejoins le coach 👉 lien en bio 🎁")
                 for p in proprio(etat):    # le propriétaire peut offrir l'accès en 1 clic
                     _envoi_sur(p, text=f"👤 Nouveau visiteur : {nom}",
                                reply_markup=json.dumps({"inline_keyboard": [[{"text": "🎁 Offrir l'accès VIP", "callback_data": f"offrir:{cid}"}]]}))
@@ -8264,7 +8264,7 @@ def live_annonces(etat, m, textes):
     for t in textes or []:
         t = t if isinstance(t, str) else str(t)
         if "J'ENTRE MAINTENANT" in t:
-            live_bande(etat, f"🚀 ALIGN ENTRE EN POSITION sur {ic} {m} ! 👉 Le coach est sur Telegram", f"entre{m}", 600)
+            live_bande(etat, f"🚀 ALIGN ENTRE EN POSITION sur {ic} {m} ! 👉 Le coach en direct : lien en bio 🎁", f"entre{m}", 600)
         elif "OBJECTIF FINAL ATTEINT" in t or "TP2 TOUCHÉ" in t:
             live_bande(etat, f"🏆 TP2 TOUCHÉ sur {ic} {m} ! Bravo à ceux qui ont suivi 🔥", f"tp2{m}", 600)
         elif "TP1 TOUCHÉ" in t:
@@ -8272,8 +8272,8 @@ def live_annonces(etat, m, textes):
                 live_publier(f"BULLE:🎯 {ic} {m} TP1 touché • bougie qui CLÔTURE AU-DELÀ du TP1 = ça continue vers le TP2 🚀 • "
                              "bougie qui REVIENT = le SL passe à BE, on protège 🛡")
         elif "POINT D'ENTRÉE À VENIR" in t:
-            # Règle live : aucune info (ni sens, ni niveau, ni marché) → seulement l'invitation au coach Telegram
-            live_bande(etat, "BULLE:👉 Connecte-toi au coach sur Telegram pour les infos en temps réel", f"zone{m}", 900)
+            # Règle live : aucune info (ni sens, ni niveau, ni marché) ; jamais le mot « Telegram » à l'écran (TikTok réduit la portée des lives qui renvoient ailleurs) → « lien en bio »
+            live_bande(etat, "BULLE:👉 Le coach en direct t'explique tout : lien en bio 🎁 gratuit", f"zone{m}", 900)
         elif "RETOURNEMENT EN PRÉPARATION" in t:
             live_bande(etat, f"BULLE:↩ {ic} {m} : regarde la ligne RETOURNEMENT • le marché peut se retourner", f"ret{m}", 900)
         elif "MANIPULATION" in t or "MÈCHE SUSPECTE" in t:
