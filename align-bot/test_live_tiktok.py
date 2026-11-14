@@ -98,6 +98,18 @@ class LiveTikTok(unittest.TestCase):
         self.assertEqual(self.etat["live_paiements"][-1]["id"], "c1")
         self.assertIn("C'est à toi", self.envoye[-1][1]["text"])
 
+class CartesRelieesAuGraphique(unittest.TestCase):
+    def test_zone_parle_comme_le_graphique_en_anglais_aussi(self):
+        fr = ("🟩 Le prix entre dans la ZONE du graphique\n🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min EN DESSOUS\n"
+              "🙅 Une mèche seule ne suffit pas\n🛑 SL = ligne rouge du graphique")
+        en = ab.traduire(fr)
+        self.assertIn("chart ZONE", en)
+        self.assertIn("CLOSE BELOW", en)
+        self.assertIn("red line", en)
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "align_bot.py"), encoding="utf-8").read()
+        self.assertIn("🟨 Ligne jaune ENTRÉE : attends la CLÔTURE 15 min", src)
+        self.assertIn("BIENVENUE À", src)
+
 
 if __name__ == "__main__":
     unittest.main()
