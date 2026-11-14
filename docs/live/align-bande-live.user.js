@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      3.9
+// @version      4.0
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '3.9';
+  const VERSION = '4.0';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -24,16 +24,17 @@
   const css = document.createElement('style');
   css.id = 'align-bande-css';
   css.textContent = `
-  #align-bande{position:fixed;z-index:9999;height:54px;overflow:hidden;pointer-events:none;
+  #align-bande{position:fixed;z-index:9999;height:62px;overflow:hidden;pointer-events:none;
     background:linear-gradient(90deg,#ff2d95,#8a2be2 50%,#1e90ff);border-radius:0 0 10px 10px;
-    box-shadow:0 4px 14px rgba(0,0,0,.5);font:900 26px/54px system-ui,Segoe UI,Arial,sans-serif;color:#fff;
+    box-shadow:0 4px 14px rgba(0,0,0,.5);font:900 31px/62px system-ui,Segoe UI,Arial,sans-serif;color:#fff;
     text-shadow:0 2px 3px rgba(0,0,0,.45);transition:opacity .2s}
   #align-bande .piste{position:absolute;white-space:nowrap;will-change:transform}
   #align-bande .piste span{margin-right:70px}
-  #align-bande .flash{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-    padding:0 14px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-    background:linear-gradient(90deg,#ff4fa3,#ffd400);color:#000;font-size:25px}
+  #align-bande .flash{position:absolute;inset:0;display:none;align-items:center;justify-content:flex-start;
+    padding:0;white-space:nowrap;overflow:hidden;
+    background:linear-gradient(90deg,#ff4fa3,#ffd400);color:#000;font-size:30px}
   #align-bande .flash.bulle{background:linear-gradient(90deg,#ffc0dc,#fff);color:#000}
+  #align-bande .flash span{display:inline-block;will-change:transform}
   #align-bande.on .piste{visibility:hidden} #align-bande.on .flash{display:flex}
   [class*="common-tooltip__body"]{background:#ffc0dc!important;color:#000!important;max-width:330px!important;
     width:330px!important;font-weight:600!important;border:2px solid #ff4fa3!important;border-radius:10px!important}
@@ -83,10 +84,13 @@
     if (occupe || !file.length) return;
     occupe = true;
     const m = file.shift();
-    flash.textContent = m.texte;
+    flash.innerHTML = '<span>' + esc(m.texte) + '</span>';   // le message défile vite (lisible sur téléphone, même si TikTok coupe les bords)
     flash.classList.toggle('bulle', !!m.bulle);
     bande.classList.add('on');
-    setTimeout(() => { bande.classList.remove('on'); occupe = false; suivant(); }, DUREE_MSG);
+    const sp = flash.firstChild, W = bande.clientWidth, w = sp.offsetWidth;
+    const dur = Math.max(5000, (W + w) / 0.28);
+    sp.animate([{ transform: 'translateX(' + W + 'px)' }, { transform: 'translateX(' + (-w) + 'px)' }], { duration: dur, easing: 'linear' });
+    setTimeout(() => { bande.classList.remove('on'); occupe = false; suivant(); }, dur);
   }
 
   // ───── télécommande 15 s ─────
