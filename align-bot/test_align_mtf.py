@@ -596,15 +596,15 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertEqual([align_bot.TRAD.get(b["text"], b["text"]) for b in fr_buttons], [b["text"] for b in en_buttons])
         self.assertEqual([b["text"] for b in en_buttons], [
             "❓ Why this decision?", "🧠 Learn more", "🎯 Levels / prices",
-            "⏱ All timeframes", "🗂 Message history", "🔔 Follow the next position"
+            "⏱ All timeframes", "🗂 Message history", "🧑‍🏫 Coach: warn me "
         ])
 
     def test_all_static_telegram_inline_button_labels_have_english_translations(self):
         labels = [
-            "🎯 Suivre la prochaine position", "❓ Pourquoi cette décision ?",
+            "🧑‍🏫 Coach : préviens-moi", "❓ Pourquoi cette décision ?",
             "📊 Analyse complète", "🧠 En savoir plus", "🎯 Niveaux / prix", "⏱ Toutes les unités",
             "🗂 Historique des messages", "🟢 Je suis rentré",
-            "🔔 Suivre la prochaine position", "📍 Ma position • SL / TP",
+            "🧑‍🏫 Coach : préviens-moi ", "📍 Ma position • SL / TP",
             "🗂 Historique", "🔔 Suivre le prochain setup",
             "✅ Publier", "❌ Refuser", "✅ Accepter", "👀 Voir son profil",
             "⬅️ Plus récents", "Plus anciens ➡️", "↩️ Retour à l'analyse",
@@ -856,7 +856,7 @@ class AlignMtfRulesTest(unittest.TestCase):
         callbacks = [button.get("callback_data") for row in keyboard for button in row if button.get("callback_data")]
         self.assertTrue({"❓ Pourquoi cette décision ?", "🧠 En savoir plus", "🎯 Niveaux / prix",
                          "⏱ Toutes les unités", "🗂 Historique des messages",
-                         "🔔 Suivre la prochaine position"}.issubset(set(labels)))
+                         "🧑‍🏫 Coach : préviens-moi "}.issubset(set(labels)))
         self.assertTrue({"why:GOLD", "details:GOLD", "levels:GOLD", "timeframes:GOLD",
                          "history:GOLD", "auto:GOLD"}.issubset(set(callbacks)))
 
@@ -1069,7 +1069,8 @@ class AlignMtfRulesTest(unittest.TestCase):
              patch.object(align_bot, "inscrire_auto") as register, \
              patch.object(align_bot, "_envoi_sur"):
             align_bot.traiter({}, set(), [update])
-        select.assert_not_called()      # aucun choix encore fait : tous les marchés restent actifs
+        # Règle d'Adel : sans choix, suivre le BTC = recevoir uniquement le BTC (pas le Gold ni le NASDAQ)
+        select.assert_called_once_with(unittest.mock.ANY, "123", ["BTC"])
         register.assert_called_once_with(unittest.mock.ANY, "123", "BTC", notifier=False)
         menu.assert_not_called()
 
@@ -2591,7 +2592,7 @@ class TestTelegramPositionStateClarity(unittest.TestCase):
         buttons = json.loads(align_bot.boutons("BTC"))["inline_keyboard"]
         labels = [b["text"] for row in buttons for b in row]
         callbacks = [b["callback_data"] for row in buttons for b in row]
-        self.assertEqual(labels, ["📍 Suivre cette position"])
+        self.assertEqual(labels, ["🧑‍🏫 Coach : suis ma position"])
         self.assertEqual(callbacks, ["in:BTC"])
 
     def test_active_trade_keyboard_is_personalized_for_untracked_user(self):

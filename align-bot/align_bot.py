@@ -1738,7 +1738,7 @@ TRAD = {
 # Boutons
 "🟠 Analyse BTC": "🟠 BTC Analysis", "🥇 Analyse Gold": "🥇 Gold Analysis", "💠 Analyse Nasdaq": "💠 Nasdaq Analysis", "📡 Choisir mes marchés": "📡 Choose my markets", "📡 Mes marchés cochés": "📡 My ticked markets", "📊 Faire une analyse": "📊 Run an analysis",
 "📡 Mes marchés": "📡 My markets", "🔔 Son pièce": "🔔 Coin sound", "🔔 Son envoyé": "🔔 Sound sent",
-"📍 Suivre cette position": "📍 Follow this position", "📍 Ma position • SL / TP": "📍 My position • SL / TP", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
+"🧑‍🏫 Coach : suis ma position": "🧑‍🏫 Coach: follow my position", "📍 Ma position • SL / TP": "📍 My position • SL / TP", "📍 Si tu prends cette position, active son suivi avec le bouton ci-dessous.": "📍 If you take this position, activate its tracking with the button below.",
  "🟠 BTC uniquement": "🟠 BTC only", "🥇 GOLD uniquement": "🥇 GOLD only",
 "🟠 BTC + 🥇 GOLD": "🟠 BTC + 🥇 GOLD", "🏷 Type :": "🏷 Type:", "position de plusieurs jours": "multi-day position", "position dans la journée": "intraday position", "position courte, quelques minutes à 1-2 h": "short position, a few minutes to 1-2 h", "validation clôture": "confirmation close", "SL derrière la zone": "SL behind the zone", "💎 TU ES DÉJÀ VIP": "💎 YOU ARE ALREADY VIP", "✅ Toutes les positions, les niveaux et le coach sont actifs pour toi": "✅ All positions, levels and the coach are active for you", "📲 Le canal ALIGN VIP 💎 est accessible avec le bouton ci-dessous": "📲 Open the ALIGN VIP 💎 channel with the button below", "📲 Ouvrir le canal ALIGN VIP 💎": "📲 Open ALIGN VIP 💎 channel", "📡 Choisir les marchés suivis": "📡 Choose followed markets",
 "✅ Sélection enregistrée": "✅ Selection saved", "🥇 + 🟠 Les deux": "🥇 + 🟠 Both",
@@ -2212,7 +2212,7 @@ TRAD.update({
     "⏱ Toutes les unités": "⏱ All timeframes",
     "🗂 Historique des messages": "🗂 Message history",
     "🟢 Je suis rentré": "🟢 I'm in",
-    "🔔 Suivre la prochaine position": "🔔 Follow the next position",
+    "🧑‍🏫 Coach : préviens-moi ": "🧑‍🏫 Coach: warn me ",
     "📌 Revoir l'analyse ": "📌 Review analysis: ",
     "📍 Ma position • SL / TP": "📍 My position • SL / TP",
     "🗂 Historique": "🗂 History",
@@ -2220,7 +2220,7 @@ TRAD.update({
     "Choisis une action ALIGN": "Choose an ALIGN action",
     "7️⃣ ⚖️ Risque conseillé : 0,5 à 1 % du compte par position ; jamais sans SL": "7️⃣ ⚖️ Suggested risk: 0.5 to 1% of the account per position; never trade without an SL",
 
-    "🎯 Suivre la prochaine position": "🎯 Follow the next position",
+    "🧑‍🏫 Coach : préviens-moi": "🧑‍🏫 Coach: warn me",
     "✅ Publier": "✅ Publish",
     "❌ Refuser": "❌ Decline",
     "✅ Accepter": "✅ Accept",
@@ -3440,7 +3440,7 @@ def url_tradingview(m, timeframe):
     return "https://www.tradingview.com/chart/?symbol=" + urllib.parse.quote(symbole, safe="") + "&interval=" + str(timeframe)
 
 def bouton_auto(m):
-    return json.dumps({"inline_keyboard": [[{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]]})
+    return json.dumps({"inline_keyboard": [[{"text": "🧑‍🏫 Coach : préviens-moi", "callback_data": f"auto:{m}"}]]})
 
 def menu_suivi(etat, cid):
     """Demande quels marchés l'utilisateur veut suivre avant l'inscription."""
@@ -3458,7 +3458,7 @@ def bouton_rappel(m):
     """Rappelle la bonne analyse de marché, même si un autre marché a envoyé des messages depuis."""
     return json.dumps({"inline_keyboard": [
         [{"text": f"📌 Revoir l'analyse {m}", "callback_data": f"previous:{m}"}],
-        [{"text": "🎯 Suivre la prochaine position", "callback_data": f"auto:{m}"}]
+        [{"text": "🧑‍🏫 Coach : préviens-moi", "callback_data": f"auto:{m}"}]
     ]})
 
 def markup_analyse(etat, m, r, cid=None):
@@ -3473,7 +3473,7 @@ def markup_analyse(etat, m, r, cid=None):
             {"text": "🚪 Je suis sorti", "callback_data": f"out:{m}"},
         ])
     elif tr:
-        lignes.append([{"text": "📍 Suivre cette position", "callback_data": f"in:{m}"}])
+        lignes.append([{"text": "🧑‍🏫 Coach : suis ma position", "callback_data": f"in:{m}"}])
     lignes.extend([
         [
             {"text": "❓ Pourquoi cette décision ?", "callback_data": f"why:{m}"},
@@ -3488,7 +3488,7 @@ def markup_analyse(etat, m, r, cid=None):
         {"text": "🗂 Historique des messages", "callback_data": f"history:{m}"},
     ]
     if not tr:
-        actions.append({"text": "🔔 Suivre la prochaine position", "callback_data": f"auto:{m}"})
+        actions.append({"text": "🧑‍🏫 Coach : préviens-moi ", "callback_data": f"auto:{m}"})
     lignes.append(actions)
     return json.dumps({"inline_keyboard": lignes})
 
@@ -3980,8 +3980,8 @@ def chrono_txt(m, r, cle, t0):
             f"🎯 Suivi en cours depuis {duree_humaine(now - t0)}",
             f"🟢 POSITION OUVERTE — {SENS[tr['d']]}",
             f"🟨 Entrée {px(tr['e'])} • 🛑 SL {px(tr['sl'])} • 🎯 TP1 {px(tr['tp1'])}",
-            statut_txt(1, tr).strip(),
-            "🎯 Le coach surveille le SL, le passage à BE et les TP."
+            statut_position(tr, p),
+            "🧑‍🏫 Le coach surveille le SL, le passage à BE et les TP."
         ])
     tf = timeframe_attendu(r, cle)
     cible = prochaine_cloture_bougie(r, tf, now)
@@ -4985,6 +4985,7 @@ def traiter(etat, chats, updates):
                     # Visiteur : jamais les niveaux VIP, seulement l'état du marché + bouton VIP
                     analyse_visiteur(etat, qui, None if mk == "BOTH" else mk)
                     continue
+                premier_choix_marche(etat, qui, mk)
                 for marche in (tuple(sorted(marches_choisis(etat, qui))) if mk == "BOTH" else (mk,)):
                     demandes.append((qui, marche))
                 continue
@@ -5243,14 +5244,18 @@ def traiter(etat, chats, updates):
                 # Le marché est déjà connu depuis le bouton de l'analyse : activation en un seul appui.
                 if autorise(etat, qui, cb["from"]["id"]) or qui not in etat.get("bienvenue", {}):
                     # Un abonné BTC + GOLD garde les deux marchés : suivre BTC ne doit pas couper GOLD.
-                    if etat.get("marches_par_chat", {}).get(str(qui)) is not None and mk not in marches_choisis(etat, qui):
+                    if etat.get("marches_par_chat", {}).get(str(qui)) is None:
+                        selectionner_marches_suivi(etat, qui, [mk])          # pas encore de choix : uniquement ce marché
+                    elif mk not in marches_choisis(etat, qui):
                         basculer_marche(etat, qui, mk)
                     inscrire_auto(etat, qui, mk, notifier=False)
                     try:
                         telegram("answerCallbackQuery", callback_query_id=cb["id"], text="🔔 Suivi activé pour " + mk)
                     except Exception:
                         pass
-                    _envoi_sur(qui, text=(f"🔔 SUIVI ACTIVÉ : {mk}\nJe t'alerterai dès qu'une entrée sera confirmée."
+                    _deja = (etat.get(mk) or {}).get("trade")
+                    _envoi_sur(qui, text=(f"🧑‍🏫 COACH ACTIVÉ : {mk}\n" + (f"📍 Une position {'🟢 LONG' if _deja['d'] == 1 else '🔴 SHORT'} est déjà ouverte : je surveille SL, BE et TP\n🔔 Et je te préviens avant la prochaine entrée" if _deja else "🔔 Je te préviens AVANT la prochaine entrée, puis à la validation")
+                                          + "\n🔕 Tu peux me couper à tout moment : « Mon bot »"
                                           if qui not in LANG_EN else
                                           f"🔔 FOLLOWING {mk}\nI'll alert you when an entry is confirmed."))
                 else:
@@ -5413,10 +5418,14 @@ def traiter(etat, chats, updates):
                        reply_markup=json.dumps({"inline_keyboard": [
                            [{"text": "🥇 GOLD", "callback_data": "analysechoice:GOLD"}],
                            [{"text": "🟠 BTC", "callback_data": "analysechoice:BTC"}],
-                           [{"text": "🥇 + 🟠 Les deux", "callback_data": "analysechoice:BOTH"}]
+                           [{"text": "🟣 NASDAQ", "callback_data": "analysechoice:NASDAQ"}],
+                           [{"text": "📊 Mes marchés", "callback_data": "analysechoice:BOTH"}]
                        ]}))
         elif "analyse" in txt or "etat" in txt:
-            demandes.append((cid, marche_demande(txt)))
+            md_ = marche_demande(txt)
+            if any(k in txt for k in ("btc", "bitcoin", "gold", "xau", "nasdaq", "nas100")):
+                premier_choix_marche(etat, cid, md_)
+            demandes.append((cid, md_))
         elif "rentre" in txt or txt.strip() == "oui":
             repondre(etat, cid, True)
         elif "sorti" in txt or "non" in txt:
@@ -6427,6 +6436,12 @@ def _vers_ensemble(choix):
         return set(MARCHES)
     return {choix} if choix in MARCHES else set()
 
+def premier_choix_marche(etat, cid, m):
+    """L'utilisateur décide : sans choix enregistré, analyser un marché = ne recevoir que ce marché (pas le Gold s'il regarde le BTC).
+    Il ajoute les autres avec « Mes marchés » ou le bouton Coach d'une autre analyse."""
+    if m in MARCHES and etat.setdefault("marches_par_chat", {}).get(str(cid)) is None:
+        selectionner_marches_suivi(etat, cid, [m])
+
 def selectionner_marches_suivi(etat, cid, choix):
     """Enregistre le choix explicite et retire uniquement les suivis en attente des autres marchés."""
     cid = str(cid)
@@ -6657,7 +6672,7 @@ def destinataires(etat, chats):
 def boutons(m):
     """Sur une alerte d'entrée, le seul choix proposé est de suivre cette position."""
     return json.dumps({"inline_keyboard": [[
-        {"text": "📍 Suivre cette position", "callback_data": f"in:{m}"}
+        {"text": "🧑‍🏫 Coach : suis ma position", "callback_data": f"in:{m}"}
     ]]})
 
 def barre_pct(pct, n=10):
@@ -7694,6 +7709,15 @@ def manipulation(out, m, r, cle):
     if not tr:
         l.append(statut_txt(0 if r["confirme"] == dm else -1, cle.get("ordre") if r["confirme"] == dm else None).strip())
     out.append(("\n".join(l), bouton_auto(m)) if not tr else "\n".join(l))
+
+def statut_position(tr, p):
+    """Position déjà ouverte : dire clairement si un nouvel arrivant peut encore entrer (comme les grandes salles de trading)."""
+    d, e, t1 = tr["d"], tr["e"], tr.get("tp1") or tr["e"]
+    couleur = "🟢 LONG ⬆️" if d == 1 else "🔴 SHORT ⬇️"
+    progres = d * (p - e) / max(abs(t1 - e), 1e-9)
+    if progres < 0.25:
+        return f"✅ ENTRÉE ENCORE POSSIBLE — {couleur}\n📍 Le prix est encore près de l'entrée"
+    return f"⛔ TROP TARD POUR ENTRER — {couleur} déjà parti\n🧑‍🏫 Si tu es dedans : je te suis jusqu'au TP"
 
 def statut_txt(entre, o=None):
     """Toujours clair : est-ce que j'entre ou pas, et quel TP on vise."""
