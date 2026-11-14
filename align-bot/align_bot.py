@@ -8115,7 +8115,9 @@ def _ack_callback_rapide(cb, text):
 # Le bot publie sur un canal privé (ntfy, gratuit). Le script Tampermonkey de l'onglet TradingView du live
 # l'écoute : texte → bande qui défile ; « CMD:… » → change l'unité de temps / le marché 15 s puis revient.
 # Jamais le sens, l'entrée, le SL ni le TP sur la bande (règle du live).
-LIVE_SUJET = os.environ.get("ALIGN_LIVE_SUJET", "").strip()          # secret GitHub (canal privé bot → graphique)
+# Canal privé bot → graphique : secret GitHub ALIGN_LIVE_SUJET, sinon dérivé du jeton Telegram (jamais écrit dans le dépôt public)
+LIVE_SUJET = (os.environ.get("ALIGN_LIVE_SUJET", "").strip() or
+              ("align-live-" + hashlib.sha256(("align-live:" + TOKEN).encode()).hexdigest()[:16] if TOKEN else ""))
 LIVE_LIEN = os.environ.get("ALIGN_LIVE_LIEN", "https://www.tiktok.com/@adelkhatra/live").strip()
 PRIX_MAIN_STARS = int(os.environ.get("PRIX_MAIN_STARS", "25"))         # ≈ 0,50 € pour l'abonné
 LIVE_DUREE_MAIN = 15
@@ -8208,7 +8210,10 @@ def clavier_live(etat, cid, anglais=False):
 def menu_live(etat, cid):
     anglais = str(cid) in LANG_EN
     kb = clavier_live(etat, cid, anglais)
-    _envoi_sur(cid, text=texte_live(etat, anglais), **({"reply_markup": kb} if kb else {}))
+    texte = texte_live(etat, anglais)
+    if str(cid) in {str(x) for x in proprio(etat)}:      # admin seulement : le code à mettre dans le script de l'écran
+        texte += f"\n━━━━━━━━━━━━━━━\n🔐 Code écran (admin) : {LIVE_SUJET or 'absent'}"
+    _envoi_sur(cid, text=texte, **({"reply_markup": kb} if kb else {}))
 
 def live_annoncer_debut(etat, chats):
     """Le propriétaire lance le live : tout le monde (VIP + gratuits) reçoit le lien."""
@@ -8299,6 +8304,10 @@ def live_paiement_recu(etat, cid, paiement):
                                                   "id": (paiement or {}).get("telegram_payment_charge_id"), "envoye": envoye})
     del etat["live_paiements"][:-200]
     anglais = str(cid) in LANG_EN
+    if not envoye:
+        _envoi_sur(str(cid), text=("⚠️ The live screen did not answer: try again in a moment" if anglais else
+                                   "⚠️ L'écran du live n'a pas répondu : réessaie dans un instant"))
+        return False
     _envoi_sur(str(cid), text=((f"✅ It's yours! {nom} on the live for {LIVE_DUREE_MAIN} s 👀\n📸 Take your screenshot now: back to Adel's view after {LIVE_DUREE_MAIN} s" if anglais else
                                 f"✅ C'est à toi ! {nom} sur le live pendant {LIVE_DUREE_MAIN} s 👀\n📸 Fais ta capture maintenant : retour à la vue d'Adel après {LIVE_DUREE_MAIN} s") +
                                ("\n⏳ If someone is before you, you're next in line" if anglais else "\n⏳ Si quelqu'un est avant toi, tu passes juste après")))

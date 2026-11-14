@@ -104,6 +104,18 @@ class LiveTikTok(unittest.TestCase):
         self.assertEqual(self.tg[-1][1]["ok"], "true")
         self.assertFalse(ab.live_pre_checkout(self.etat, {"id": "q", "invoice_payload": "autre:5"}))
 
+    def test_ecran_muet_l_abonne_est_prevenu(self):
+        self.etat["live_on"] = True
+        with mock.patch.object(ab, "live_publier", return_value=False):
+            self.assertFalse(ab.live_paiement_recu(self.etat, "2", {"invoice_payload": "livemain:5"}))
+        self.assertIn("n'a pas répondu", self.envoye[-1][1]["text"])
+
+    def test_admin_voit_le_code_ecran(self):
+        ab.menu_live(self.etat, "1")
+        self.assertIn("Code écran (admin) : test-sujet", self.envoye[-1][1]["text"])
+        ab.menu_live(self.etat, "2")
+        self.assertNotIn("Code écran", self.envoye[-1][1]["text"])
+
     def test_paiement_recu_envoie_l_ordre_au_graphique(self):
         self.etat["live_on"] = True
         ab.live_paiement_recu(self.etat, "2", {"invoice_payload": "livemain:GOLD", "total_amount": 25, "telegram_payment_charge_id": "c1"})
