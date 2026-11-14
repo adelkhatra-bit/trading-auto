@@ -8685,7 +8685,8 @@ def texte_live(etat, anglais=False):
             "1️⃣ Ligne marchés : BTC • Gold • NASDAQ\n"
             "2️⃣ Ligne unités : 1 min • 5 min • 15 min • 1h\n"
             f"⏱ Durée : {LIVE_DUREE_MAIN} s, puis retour à la vue d'Adel\n📸 Le temps de ta capture\n⭐ Prix : {PRIX_MAIN_STARS} Stars (≈ 0,50 €)\n"
-            "━━━━━━━━━━━━━━━\n🎙 Commentateur : je commente chaque clôture du marché choisi\n🚀 Booster : ton prénom à l'écran (gratuit)\n👇 Choisis")
+            "━━━━━━━━━━━━━━━\n🎙 Commentateur : je commente chaque clôture du marché choisi\n🚀 Booster : ton prénom à l'écran (gratuit)\n"
+            "━━━━━━━━━━━━━━━\n🙏 Petit service sur le live :\n❤️ Tapote l'écran\n➕ Abonne-toi\n🔁 Partage\n💡 Sans ça, TikTok coupe le live\n👇 Choisis")
 
 def clavier_live(etat, cid, anglais=False):
     lignes = []
@@ -8748,7 +8749,7 @@ def live_callback(etat, chats, cb, choix, mk, qui):
             return True
         _LIVE_BOOSTS[qui] = time.time()
         p = etat.get("prenoms", {}).get(qui) or ("A viewer" if anglais else "Un abonné")
-        ok = live_publier(f"{p} BOOSTE LE LIVE ! 🚀 ABONNE-TOI • PARTAGE")
+        ok = live_publier(f"🙏 MERCI {p.upper()} ! {p} BOOSTE LE LIVE 🚀 ABONNE-TOI • PARTAGE")
         _envoi_sur(qui, text=(("🚀 Your name is on screen! Look at the live 👀" if anglais else "🚀 Ton prénom passe à l'écran ! Regarde le live 👀")
                               if ok else ("⚠️ The live screen is not reachable right now" if anglais else "⚠️ L'écran du live ne répond pas pour l'instant")))
         return True
