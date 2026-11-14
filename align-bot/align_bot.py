@@ -8635,7 +8635,7 @@ def agent(m, r, cle, ferme):
                                                      f"🎯 TP{n_tp + 1} : {px(suivants[0][0])}", "🚀 La tendance continue, on laisse courir"],
                                "Rester en position (tendance continue)", r))
                 return out
-            out.append(cs_(m, "OBJECTIF FINAL ATTEINT", [f"🎯 TP{n_tp} : {px(t2)} ✅", f"🏆 {n_tp} TP touchés sur ce trade", "🥳🎆 Jackpot ! Encaisse et souris"], "Trade terminé", r, "attente"))
+            out.append(cs_(m, f"TP{n_tp} TOUCHÉ · OBJECTIF FINAL ATTEINT", [f"🔵 TP{n_tp} (ligne bleue) : {px(t2)} ✅", f"🏆 {n_tp} TP touchés sur ce trade", "🥳🎆 Jackpot ! Encaisse et souris"], "Trade terminé", r, "attente"))
             cle["fin"] = [tr, t2, f"🏆 Objectif final ({n_tp} TP)"]
             cle.pop("trade"); cle["aligne"] = 0; return out
         if (lo <= tr["sl"]) if d == 1 else (hi >= tr["sl"]):
