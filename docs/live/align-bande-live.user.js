@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      3.8
+// @version      3.9
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '3.8';
+  const VERSION = '3.9';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -37,8 +37,7 @@
   #align-bande.on .piste{visibility:hidden} #align-bande.on .flash{display:flex}
   [class*="common-tooltip__body"]{background:#ffc0dc!important;color:#000!important;max-width:330px!important;
     width:330px!important;font-weight:600!important;border:2px solid #ff4fa3!important;border-radius:10px!important}
-  [class*="common-tooltip__body"] *{color:#000!important}
-  [class*="common-tooltip__ear"]{display:none!important}`;
+  [class*="common-tooltip__body"] *{color:#000!important}`;
   document.head.appendChild(css);
 
   // ───── bande ─────
