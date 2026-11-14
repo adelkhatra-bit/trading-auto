@@ -60,5 +60,30 @@ class PasDeDoublon(unittest.TestCase):
         self.assertIn("sens de la tendance", t)
 
 
+class TpFrole(unittest.TestCase):
+    def test_frole_puis_recule_rassure_une_fois(self):
+        tr = {"e": 100, "sl": 100}                        # SHORT, SL à BE
+        r = {"m1": [{"h": 99, "l": 80.5, "c": 81}], "dirs": [-1] * 11}
+        self.assertIsNone(ab.frole_tp("BTC", r, tr, -1, 100, 80, "TP1", 81))      # tout près : pas encore de recul
+        t = ab.frole_tp("BTC", {"m1": [{"h": 88, "l": 85, "c": 86}], "dirs": [-1] * 11}, tr, -1, 100, 80, "TP1", 86)
+        self.assertIn("TP1 FRÔLÉ", t); self.assertIn("T'inquiète", t); self.assertIn("BE", t); self.assertIn("on y retourne", t)
+        self.assertIsNone(ab.frole_tp("BTC", {"m1": [{"h": 88, "l": 85, "c": 86}], "dirs": [-1] * 11}, tr, -1, 100, 80, "TP1", 86))
+
+    def test_pas_de_frole_si_loin(self):
+        tr = {"e": 100, "sl": 110}
+        self.assertIsNone(ab.frole_tp("BTC", {"m1": [{"h": 99, "l": 90, "c": 95}]}, tr, -1, 100, 80, "TP1", 95))
+
+    def test_chaine_et_bande_sans_niveaux(self):
+        env, pub = [], []
+        with mock.patch.object(ab, "_envoi_sur", side_effect=lambda c, **k: env.append(k["text"])), \
+             mock.patch.object(ab, "live_publier", side_effect=lambda t: pub.append(t) or True), \
+             mock.patch.object(ab, "LIVE_SUJET", "x"):
+            etat = {"canaux_marche": {"BTC": -1}, "live_on": True}
+            ab.canal_resultats(etat, "BTC", ["😅 TP1 FRÔLÉ — 🟠 BTC\n🎯 TP1 : 80"])
+            ab.live_annonces(etat, "BTC", ["😅 TP1 FRÔLÉ — 🟠 BTC\n🎯 TP1 : 80"])
+        self.assertIn("TP FRÔLÉ", env[0]); self.assertNotIn("80", env[0])
+        self.assertIn("frôlé", pub[0]); self.assertNotIn("Telegram", pub[0])
+
+
 if __name__ == "__main__":
     unittest.main()
