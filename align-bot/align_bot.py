@@ -4451,59 +4451,61 @@ COACH_LIVE_DUREE = 2 * 3600          # le coach en direct parle 2 h, puis demand
 
 
 def texte_coach_live(m, bougie, r, cle):
-    """Coach en direct : à chaque clôture 15 min, CE QUI SE PASSE sur le graphique (bougie, mèches, unités, zone, position, ce qu'on attend)."""
+    """Coach en direct : une info par ligne « intitulé : valeur », lisible d'un coup d'œil (demande d'Adel)."""
     p = (r.get("m1") or [bougie])[-1].get("c", bougie["c"])
     o_, h_, l_, c_ = bougie["o"], bougie["h"], bougie["l"], bougie["c"]
     corps = abs(c_ - o_); rng = max(h_ - l_, 1e-9)
     m_haut, m_bas = h_ - max(o_, c_), min(o_, c_) - l_
-    sens_b = "en HAUSSE 🟢" if c_ > o_ else "en BAISSE 🔴" if c_ < o_ else "à plat ⚪"
+    sens_b = "HAUSSE 🟢" if c_ > o_ else "BAISSE 🔴" if c_ < o_ else "À PLAT ⚪"
     if m_haut >= 0.5 * rng:
-        lecture = "grosse mèche en haut : les vendeurs ont repoussé le prix ⬇️"
+        lecture = "rejet en haut, les vendeurs poussent ⬇️"
     elif m_bas >= 0.5 * rng:
-        lecture = "grosse mèche en bas : les acheteurs ont racheté ⬆️"
+        lecture = "rejet en bas, les acheteurs poussent ⬆️"
     elif corps >= 0.7 * rng:
-        lecture = "grosse bougie pleine : le mouvement est franc 💪"
+        lecture = "mouvement franc 💪"
     else:
-        lecture = "petite bougie : le marché hésite 🤏"
+        lecture = "le marché hésite 🤏"
     d = r.get("confirme") or 0
     tr = cle.get("trade")
-    l = [f"🔴 COACH EN DIRECT — {ICONE.get(m, '')} {m}  {px(p)}",
-         f"🕯 Bougie 15 min clôturée {sens_b} ({px(o_)} → {px(c_)})",
-         f"👁 {lecture}",
-         f"🧭 Le plan : {SENS[d] if d in (1, -1) else 'pas encore de sens net, j’attends'}"]
+    dirs = r.get("dirs") or [0] * 11
+    l = ["🔴 COACH EN DIRECT", f"{ICONE.get(m, '')} {m} : {px(p)}", "━━━━━━━━━━━━━━━",
+         f"🕯 Bougie 15 min : {sens_b}",
+         f"📏 Ouverture → clôture : {px(o_)} → {px(c_)}",
+         f"👁 Lecture : {lecture}",
+         f"🧭 Plan : {SENS[d] if d in (1, -1) else 'pas de sens net'}"]
     l += voyants_unites(r)
     if sum((r.get("sqzs") or [0] * 11)[4:10]) >= 3:
-        l.append("⚡ Marché comprimé : ça peut partir fort d'un coup")
+        l.append("⚡ Compression : ça peut partir fort")
     if tr:
-        l.append("📍 " + statut_position(tr, p).split("\n")[0])
-        t1, t2, dd = tr.get("tp1"), tr.get("tp2"), tr["d"]
+        dd = tr["d"]
+        prog = dd * (p - tr["e"]) / max(abs((tr.get("tp1") or tr["e"]) - tr["e"]), 1e-9)
+        l.append("📍 Statut : " + ("✅ entrée encore possible" if prog < 0.25 else "⛔ trop tard pour entrer") + f" ({'🟢 LONG' if dd == 1 else '🔴 SHORT'})")
+        t1, t2 = tr.get("tp1"), tr.get("tp2")
         if t1 and dd * (t1 - p) > 0:
-            l.append(f"🎯 TP1 {px(t1)} : encore {px(abs(t1 - p))} • 🛑 SL {px(tr['sl'])}")
-        elif t2 and dd * (t2 - p) > 0:
-            l.append(f"✅ TP1 dépassé • 🏁 TP2 {px(t2)} : encore {px(abs(t2 - p))} • 🛡 SL {px(tr['sl'])}")
-        else:
-            l.append("🏆 Objectifs atteints : encaisse, ne laisse rien repartir")
+            l.append(f"🎯 TP1 : {px(t1)} (reste {px(abs(t1 - p))})")
+        elif t1:
+            l.append("🎯 TP1 : dépassé ✅")
+            if t2 and dd * (t2 - p) > 0:
+                l.append(f"🏁 TP2 : {px(t2)} (reste {px(abs(t2 - p))})")
+        l.append(f"🔒 SL : {px(tr['sl'])} (à BE, plus de perte)" if dd * (tr["e"] - tr["sl"]) <= 0 else f"🛑 SL : {px(tr['sl'])}")
+        contre = sum(1 for k in range(5) if dirs[k] == -dd)
+        l.append("👀 Petites unités : " + (f"{contre}/5 contre nous, rebond possible" if contre >= 3 else "elles tiennent, on laisse courir"))
     else:
         zp = r.get("zone_pine") if r.get("dirPlan") else None
         if zp:
             dedans = zp["za"] <= p <= zp["zb"]
-            l.append(f"🟩 Zone d'entrée {px(zp['za'])} – {px(zp['zb'])} : " + ("le prix est DEDANS 👀" if dedans else f"le prix est à {px(min(abs(p - zp['za']), abs(p - zp['zb'])))}"))
-        l.append("⏳ " + court(raison_attente(r, cle), 110))
-    try:
-        dirs = r.get("dirs") or [0] * 11
-        if not tr:
+            l.append(f"🟩 Zone d'entrée : {px(zp['za'])} – {px(zp['zb'])}")
+            l.append("📍 Prix : " + ("DANS la zone 👀" if dedans else f"à {px(min(abs(p - zp['za']), abs(p - zp['zb'])))} de la zone"))
+        try:
             l.append("👀 J'attends : " + declencheur_attente(r, cle, p, dirs[9], dirs[7]))
-        else:
-            contre = sum(1 for k in range(5) if dirs[k] == -tr["d"])
-            l.append("👀 " + (f"{contre}/5 petites unités tournent contre nous : je surveille un rebond" if contre >= 3 else "Les petites unités tiennent : on laisse courir"))
-    except Exception:
-        pass
+        except Exception:
+            pass
     try:
         fin = prochaine_cloture_bougie(r, "15m", time.time())
         l.append(f"⏱ Prochaine clôture : {datetime.datetime.fromtimestamp(fin, PARIS).strftime('%H:%M')}")
     except Exception:
         pass
-    l.append("📺 Sur le live : ligne jaune = entrée • rouge = SL • bleue = TP")
+    l.append("📺 Live : jaune entrée / rouge SL / bleu TP")
     return "\n".join(l)
 
 
