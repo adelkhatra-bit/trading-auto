@@ -3826,6 +3826,8 @@ def texte_apercu(m, r, cle, vip=True):
         decision = "⛔ NE PAS ENTRER"
         direction = "LONG ⬆️" if maj == 1 else "SHORT ⬇️" if maj == -1 else direction_attente(r)
 
+    if r.get("ferme_txt"):
+        decision = "🔒 MARCHÉ FERMÉ — rien ne bouge 😴"
     prof = profil_strategie(r) if r.get("dirs") and len(r.get("dirs")) >= 11 else {}
     # Même sens que la décision : pas de cible tant que la 4 h + 1 h ne donnent pas de direction.
     sens = (tr or {}).get("d") or maj or 0
@@ -3834,7 +3836,8 @@ def texte_apercu(m, r, cle, vip=True):
         f"{ICONE.get(m, '📊')} {m} — {px(prix)}",
         f"🚦 {decision}",
         f"🧭 Biais à surveiller : {direction}" + (f" ({type_})" if type_ and not direction.startswith(('AUCUNE', 'Non confirmée', 'À confirmer')) else ""),
-        "⚠️ Le biais n'est pas une autorisation d'entrée." if not tr else "📍 Position ouverte : suis les alertes du coach.",
+        (f"⏰ Réouverture : {r['ferme_txt']} (heure de Paris)" + (" • ta position est en pause, je la reprends à la réouverture" if tr else ""))
+        if r.get("ferme_txt") else "⚠️ Le biais n'est pas une autorisation d'entrée." if not tr else "📍 Position ouverte : suis les alertes du coach.",
         "",
     ] + voyants_unites(r) + [""]
     # Position ouverte : les niveaux du trade font foi (pas de cible différente du TP).
@@ -8639,6 +8642,11 @@ def un_tour(etat, chats):
         if nom_marche != "BTC" and not cme_ouvert(int(time.time())):
             # Marché FERMÉ (week-end / pause CME) : plus aucune alerte sur ce marché. Une seule annonce si la fermeture dure (> 2 h).
             reo = prochaine_ouverture_cme(time.time())
+            if reo:
+                j0_ = datetime.datetime.fromtimestamp(reo, PARIS)
+                r["ferme_txt"] = f"{['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'][j0_.weekday()]} {j0_.strftime('%H:%M')}"
+            else:
+                r["ferme_txt"] = "bientôt"
             if not cle.get("ferme_dit") and reo and reo - time.time() > 2 * 3600:
                 cle["ferme_dit"] = True
                 j_ = datetime.datetime.fromtimestamp(reo, PARIS)
