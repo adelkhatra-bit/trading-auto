@@ -82,7 +82,7 @@ class LiveTikTok(unittest.TestCase):
         self.etat["live_on"] = True
         ab.live_callback(self.etat, set(), {"id": "x"}, "liveboost", "x", "2")
         ab.live_callback(self.etat, set(), {"id": "y"}, "liveboost", "x", "2")
-        self.assertEqual(self.publie, ["Karim BOOSTE LE LIVE ! 🚀 ABONNE-TOI • PARTAGE"])
+        self.assertEqual(self.publie, ["🙏 MERCI KARIM ! Karim BOOSTE LE LIVE 🚀 ABONNE-TOI • PARTAGE"])
 
     def test_facture_en_stars(self):
         self.etat["live_on"] = True
