@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALIGN Bande Live
 // @namespace    align-live
-// @version      4.3
+// @version      4.4
 // @description  Bande du live ALIGN sur TradingView : messages Telegram, bulles, télécommande 15 s, infobulles roses
 // @match        https://*.tradingview.com/chart/*
 // @run-at       document-idle
@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   if (window.__ALIGN_BANDE__) { try { window.__ALIGN_BANDE__.stop(); } catch (e) {} }
-  const VERSION = '4.3';
+  const VERSION = '4.4';
   const SUJET = 'align-live-2a4bccafd9548d93';
   const BASE = [
     '🔴 LIVE ALIGN • BTC • GOLD • NASDAQ',
@@ -97,12 +97,24 @@
   // ───── télécommande 15 s ─────
   let retour = null;
   // zoom lisible sur téléphone (TikTok) : grosses bougies, prix au-dessus du tableau, place pour la bande
+  // petites unités (1m à 5m) : prix cadré serré autour du dernier cours pour que ENTRÉE / SL / ZONE ne se chevauchent pas
+  const SPAN = { '1': 0.005, '2': 0.006, '3': 0.007, '5': 0.009 };
+  function dernierPrix() {
+    const m = document.title.match(/\d[\d\s\u00a0\u202f]*,\d+/);
+    return m ? parseFloat(m[0].replace(/[\s\u00a0\u202f]/g, '').replace(',', '.')) : NaN;
+  }
+  function cadrerPrix(c) {
+    const ps = c.getPanes()[0].getMainSourcePriceScale();
+    const k = SPAN[c.resolution()], p = dernierPrix();
+    if (k && p > 0) { const e = p * k; ps.setAutoScale(false); ps.setVisiblePriceRange({ from: p - e * 0.55, to: p + e * 0.45 }); }
+    else if (!ps.isAutoScale()) ps.setAutoScale(true);
+  }
   function zoom(delai) {
     setTimeout(() => { try {
       const c = chart(); if (!c) return;
       c.applyOverrides({ 'scalesProperties.scaleSeriesOnly': true, 'paneProperties.topMargin': 14, 'paneProperties.bottomMargin': 30 });
       const ts = c.getTimeScale(); ts.setBarSpacing(18); ts.setRightOffset(10);
-      c.getPanes()[0].getMainSourcePriceScale().setAutoScale(true);
+      cadrerPrix(c);
       // l'indicateur ALIGN toujours DEVANT les bougies (étiquettes lisibles)
       const al = c.getAllStudies().filter(x => /^ALIGN/.test(x.name)).map(x => x.id); if (al.length) c.bringToFront(al);
     } catch (e) {} }, delai || 900);
@@ -118,7 +130,7 @@
   const suivi = setInterval(() => { try {
     if (Date.now() - mainUser < 20000) return;
     const c = chart(); if (!c) return;
-    const ps = c.getPanes()[0].getMainSourcePriceScale(); if (!ps.isAutoScale()) ps.setAutoScale(true);
+    cadrerPrix(c);
     const ts = c.getTimeScale();
     if (Math.abs(ts.barSpacing() - 18) > 0.5) ts.setBarSpacing(18);
     if (Math.abs(ts.rightOffset() - 10) > 2) { ts.scrollToRealtime(); ts.setRightOffset(10); }
