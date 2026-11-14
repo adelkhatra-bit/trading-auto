@@ -132,7 +132,8 @@ class LiveTikTok(unittest.TestCase):
         ab.live_paiement_recu(self.etat, "2", {"invoice_payload": "livemain:GOLD", "total_amount": 25, "telegram_payment_charge_id": "c1"})
         self.assertEqual(self.publie, ["CMD:sym:FOREXCOM:XAUUSD:Karim"])
         self.assertEqual(self.etat["live_paiements"][-1]["id"], "c1")
-        self.assertIn("C'est à toi", self.envoye[-1][1]["text"])
+        self.assertIn("C'est à toi", self.envoye[-2][1]["text"])
+        self.assertIn("PRENDS LA MAIN", self.envoye[-1][1]["text"])      # le menu du live redescend en bas
 
 class CartesRelieesAuGraphique(unittest.TestCase):
     def test_zone_parle_comme_le_graphique_en_anglais_aussi(self):
