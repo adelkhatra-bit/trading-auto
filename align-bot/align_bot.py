@@ -8213,7 +8213,8 @@ def live_annonces(etat, m, textes):
                 live_publier(f"BULLE:🎯 {ic} {m} TP1 touché • bougie qui CLÔTURE AU-DELÀ du TP1 = ça continue vers le TP2 🚀 • "
                              "bougie qui REVIENT = le SL passe à BE, on protège 🛡")
         elif "POINT D'ENTRÉE À VENIR" in t:
-            live_bande(etat, f"BULLE:👀 {ic} {m} : le prix arrive dans la ZONE de l'indicateur • une position peut arriver ⚡", f"zone{m}", 900)
+            # Règle live : aucune info (ni sens, ni niveau, ni marché) → seulement l'invitation au coach Telegram
+            live_bande(etat, "BULLE:👉 Connecte-toi au coach sur Telegram pour les infos en temps réel", f"zone{m}", 900)
         elif "RETOURNEMENT EN PRÉPARATION" in t:
             live_bande(etat, f"BULLE:↩ {ic} {m} : regarde la ligne RETOURNEMENT • le marché peut se retourner", f"ret{m}", 900)
         elif "MANIPULATION" in t or "MÈCHE SUSPECTE" in t:
