@@ -2,7 +2,7 @@
 """ALIGN MTF BOT — même logique que l'indicateur TradingView ALIGN MTF PRO.
 Prix gratuits : BTC = Kraken XBTUSD, Gold = XAUUSD spot (bougies COMEX Yahoo recalées sur le prix spot Swissquote).
 Tourne toutes les 5 minutes (GitHub Actions). Aucune dépendance externe."""
-import json, os, re, time, hashlib, urllib.request, urllib.error, urllib.parse, datetime, threading, queue, signal
+import json, unicodedata, os, re, time, hashlib, urllib.request, urllib.error, urllib.parse, datetime, threading, queue, signal
 from zoneinfo import ZoneInfo
 import sys
 try:
@@ -2638,6 +2638,41 @@ def mise_en_forme(t):
     txt = "\n".join(out)
     return re.sub(r"\n{3,}", "\n\n", txt).strip()
 
+def _largeur(t):
+    """Largeur visuelle approximative sur téléphone : un emoji compte pour 2 caractères."""
+    return sum(0 if unicodedata.category(ch) in ("Mn", "Cf") or ch in "\ufe0f\u200d" else 2 if ord(ch) >= 0x2190 else 1 for ch in t)
+
+
+LARGEUR_MAX = _largeur("🎙 COACH COMMENTATEUR") + 1     # règle d'Adel : aucune ligne plus large que ce titre
+
+
+def colonne_mobile(t):
+    """Coupe proprement toute ligne plus large que « 🎙 COACH COMMENTATEUR » : la suite passe à la ligne, mots entiers."""
+    if not isinstance(t, str) or not t:
+        return t
+    out = []
+    for l in t.split("\n"):
+        if _largeur(l) <= LARGEUR_MAX or "http" in l or "t.me/" in l or set(l) <= set("━─- "):
+            out.append(l)
+            continue
+        mots, cur = [], ""
+        for w in l.split(" "):
+            if mots and re.fullmatch(r"[\u2190-\u2bff\U0001F000-\U0001FAFF\ufe0f]+", w):
+                mots[-1] += " " + w                      # « 1m ⬇️ » : la flèche reste avec son unité
+            elif w:
+                mots.append(w)
+        for w in mots:
+            essai = (cur + " " + w) if cur else w
+            if cur and _largeur(essai) > LARGEUR_MAX:
+                out.append(cur)
+                cur = "   " + w
+            else:
+                cur = essai
+        if cur:
+            out.append(cur)
+    return "\n".join(out)
+
+
 TELEGRAM_HTML = os.environ.get("TELEGRAM_HTML", "1") == "1"   # 0 = retour à l'ancien rendu texte brut
 SEPARATEUR = "━━━━━━━━━━━━━━━"
 _UNITE_RE = re.compile(r"(?<![\w<])(1m|2m|3m|5m|10m|15m|30m|45m|1h|2h|4h|D)(?= (?:⬆️|⬇️|➖))")
@@ -2742,7 +2777,7 @@ def telegram(methode, **params):
     if methode in ("sendMessage", "editMessageText", "sendPhoto"):      # traduit d'abord, rangé ensuite
         for k in ("text", "caption"):
             if k in params:
-                params[k] = mise_en_forme(params[k])
+                params[k] = colonne_mobile(mise_en_forme(params[k]))
         if TELEGRAM_HTML and "parse_mode" not in params and any(k in params for k in ("text", "caption")):
             for k in ("text", "caption"):
                 if k in params:
@@ -4468,7 +4503,7 @@ def texte_coach_live(m, bougie, r, cle, positions=None):
     d = r.get("confirme") or 0
     tr = cle.get("trade")
     dirs = r.get("dirs") or [0] * 11
-    l = ["🎙 COACH COMMENTATEUR — EN DIRECT", f"{ICONE.get(m, '')} {m} : {px(p)}", "━━━━━━━━━━━━━━━",
+    l = ["🎙 COACH COMMENTATEUR", "👁 EN DIRECT", f"{ICONE.get(m, '')} {m} : {px(p)}", "━━━━━━━━━━━━━━━",
          f"🕯 Bougie 15 min : {sens_b}",
          f"📏 Ouverture → clôture : {px(o_)} → {px(c_)}",
          f"👁 Lecture : {lecture}",
@@ -4540,6 +4575,33 @@ def positions_bot(etat):
     return l
 
 
+def flash_commentateur(m, r, cle):
+    """Entre deux clôtures, comme un commentateur de match : un mouvement brusque ou une grosse mèche sur la 15 min en cours."""
+    m1 = (r.get("m1") or [])[-4:]
+    a = float(r.get("atr") or 0)
+    if len(m1) < 3 or a <= 0:
+        return None
+    p = m1[-1]["c"]
+    move = p - m1[0]["o"]
+    tr = cle.get("trade")
+    ligne_pos = []
+    if tr:
+        ligne_pos = ["✅ Dans notre sens : on laisse courir" if tr["d"] * move > 0 else "⚠️ Contre nous : on garde la tête froide"]
+    if abs(move) >= 0.5 * a:
+        return "\n".join(["🎙 ÇA BOUGE !", f"{ICONE.get(m, '')} {m} : {px(p)}",
+                          ("🔴 Les vendeurs accélèrent !" if move < 0 else "🟢 Les acheteurs accélèrent !"),
+                          f"📏 {px(abs(move))} en 3 min"] + ligne_pos)
+    b15 = (r.get("b15") or [])[-1:]
+    if b15:
+        x = b15[0]; rng = x["h"] - x["l"]
+        if rng >= 0.6 * a:
+            if x["h"] - max(x["o"], p) >= 0.5 * rng:
+                return "\n".join(["🎙 GROSSE MÈCHE !", f"{ICONE.get(m, '')} {m} : {px(p)}", f"👀 15 min en cours : rejet à {px(x['h'])}", "🔴 Les vendeurs repoussent le prix"] + ligne_pos)
+            if min(x["o"], p) - x["l"] >= 0.5 * rng:
+                return "\n".join(["🎙 GROSSE MÈCHE !", f"{ICONE.get(m, '')} {m} : {px(p)}", f"👀 15 min en cours : rejet à {px(x['l'])}", "🟢 Les acheteurs rachètent"] + ligne_pos)
+    return None
+
+
 def notifier_coach_live(etat, m, r, cle):
     """Envoie la carte « coach en direct » à chaque nouvelle clôture 15 min, aux abonnés qui l'ont activé pour ce marché."""
     abonnes = etat.get("coach_live", {}).get(m) or {}
@@ -4554,6 +4616,10 @@ def notifier_coach_live(etat, m, r, cle):
                        reply_markup=json.dumps({"inline_keyboard": [[{"text": "🔴 Oui, 2 h de plus", "callback_data": f"coachlive:{m}"}]]}))
             continue
         if int(info.get("dernier_t", 0)) >= int(b["t"]):
+            flash = flash_commentateur(m, r, cle)
+            if flash and time.time() - float(info.get("flash_t", 0)) >= 300:
+                if _envoi_sur(cid, text=flash) is not None:
+                    info["flash_t"] = time.time()
             continue
         res = _envoi_sur(cid, text=texte_coach_live(m, b, r, cle, positions_bot(etat)), reply_markup=markup_analyse(etat, m, r, cid))
         if res is not None and not (isinstance(res, dict) and res.get("ok") is False):
