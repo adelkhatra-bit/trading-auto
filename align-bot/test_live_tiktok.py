@@ -136,5 +136,28 @@ class CartesRelieesAuGraphique(unittest.TestCase):
         self.assertIn("BIENVENUE À", src)
 
 
+
+class LectureTP1(unittest.TestCase):
+    def r_(self, dirs, rsis=None, sqzs=None):
+        return {"dirs": dirs + [0] * (11 - len(dirs)), "rsis": rsis or [50] * 11, "sqzs": sqzs or [0] * 11}
+
+    def test_continue_vers_tp2(self):
+        l = ab.lecture_tp1(self.r_([-1, -1, -1, -1, 0]), -1)
+        self.assertIn("🚀 ÇA PEUT CONTINUER VERS LE TP2", l)
+        self.assertTrue(any("EN DESSOUS" in x for x in l))
+
+    def test_risque_de_retour(self):
+        rs = [50] * 11; rs[4] = 25
+        l = ab.lecture_tp1(self.r_([1, 1, 1, 0, -1], rs), -1)
+        self.assertEqual(l[0], "⚠️ RISQUE DE RETOUR VERS L'ENTRÉE")
+        self.assertTrue(any("RSI 15 min 25" in x for x in l))
+
+    def test_hesitation_et_long(self):
+        l = ab.lecture_tp1(self.r_([1, 0, -1, 0, 1]), 1)
+        self.assertEqual(l[0], "🟨 LE MARCHÉ HÉSITE AU TP1")
+        self.assertTrue(any("AU-DESSUS" in x for x in l))
+        self.assertIn("IT CAN GO ON TO TP2", ab.traduire("🚀 ÇA PEUT CONTINUER VERS LE TP2"))
+
+
 if __name__ == "__main__":
     unittest.main()
