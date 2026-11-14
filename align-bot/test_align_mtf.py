@@ -1459,6 +1459,16 @@ class AlignMtfRulesTest(unittest.TestCase):
         self.assertIn("\n", text)
         self.assertNotIn("\\n", text)
 
+    def test_marche_ferme_ne_dit_pas_position_en_cours(self):
+        from unittest.mock import patch
+        r = {"dirs": [0] * 11, "confirme": -1, "m1": [candle(1, c=3884.66)], "ferme_txt": "dimanche 23:00"}
+        tr = {"d": -1, "e": 3877.19, "sl": 3892.0, "tp1": 3850.0, "tp2": 3820.0}
+        with patch.object(align_bot, "verdict", return_value=("🟡 PATIENCE", "x")):
+            message = align_bot.texte_apercu("GOLD", r, {"trade": tr})
+        self.assertIn("MARCHÉ FERMÉ", message)
+        self.assertIn("Réouverture : dimanche 23:00", message)
+        self.assertNotIn("POSITION EN COURS", message)
+
     def test_compact_analysis_puts_entry_permission_first_and_separates_bias(self):
         from unittest.mock import patch
         r = {"dirs": [0] * 11, "confirme": -1, "m1": [candle(1, c=73665.2)]}
