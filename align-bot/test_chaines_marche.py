@@ -69,6 +69,13 @@ class TpFrole(unittest.TestCase):
         self.assertIn("TP1 FRÔLÉ", t); self.assertIn("T'inquiète", t); self.assertIn("BE", t); self.assertIn("on y retourne", t)
         self.assertIsNone(ab.frole_tp("BTC", {"m1": [{"h": 88, "l": 85, "c": 86}], "dirs": [-1] * 11}, tr, -1, 100, 80, "TP1", 86))
 
+    def test_retour_vers_entree_rassure_avec_pastilles(self):
+        tr = {"e": 100, "sl": 100, "frole_TP1_max": 0.95}
+        t = ab.retour_entree("BTC", {"dirs": [-1] * 11}, tr, -1, 100, 80, 97)
+        for x in ("RETOUR VERS L'ENTRÉE", "🔵 TP1", "🟡 Entrée", "🔴 SL", "BE", "peu probable", "T'inquiète"):
+            self.assertIn(x, t)
+        self.assertIsNone(ab.retour_entree("BTC", {"dirs": [-1] * 11}, tr, -1, 100, 80, 97))   # une seule fois
+
     def test_pas_de_frole_si_loin(self):
         tr = {"e": 100, "sl": 110}
         self.assertIsNone(ab.frole_tp("BTC", {"m1": [{"h": 99, "l": 90, "c": 95}]}, tr, -1, 100, 80, "TP1", 95))
