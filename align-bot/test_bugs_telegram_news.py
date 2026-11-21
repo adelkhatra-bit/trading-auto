@@ -14,6 +14,7 @@ class TelegramPullAuthorization(unittest.TestCase):
         self.old_mode = ab.TELEGRAM_PULL_MODE
         self.old_chat = getattr(ab.TELEGRAM_PULL_CONTEXT, "chat_id", None)
         self.old_private = getattr(ab.TELEGRAM_PULL_CONTEXT, "private", False)
+        self.old_news_chat = getattr(ab.TELEGRAM_PULL_CONTEXT, "news_chat_id", None)
         self.old_state = ab.DERNIER_ETAT
         ab.TELEGRAM_PULL_MODE = True
         ab.DERNIER_ETAT = None
@@ -22,6 +23,7 @@ class TelegramPullAuthorization(unittest.TestCase):
         ab.TELEGRAM_PULL_MODE = self.old_mode
         ab.TELEGRAM_PULL_CONTEXT.chat_id = self.old_chat
         ab.TELEGRAM_PULL_CONTEXT.private = self.old_private
+        ab.TELEGRAM_PULL_CONTEXT.news_chat_id = self.old_news_chat
         ab.DERNIER_ETAT = self.old_state
 
     def test_private_reply_allowed_only_for_requesting_chat(self):
@@ -33,6 +35,19 @@ class TelegramPullAuthorization(unittest.TestCase):
         self.assertFalse(ab._telegram_sortant_autorise(
             "sendMessage", {"chat_id": "43", "text": "Réponse à ta demande"}
         ))
+
+    def test_scoped_urgent_news_allowed_only_to_marked_market_channel(self):
+        ab.TELEGRAM_PULL_CONTEXT.chat_id = None
+        ab.TELEGRAM_PULL_CONTEXT.private = False
+        ab.TELEGRAM_PULL_CONTEXT.news_chat_id = "-100123"
+        ab.DERNIER_ETAT = {"canaux_marche": {"BTC": "-100123", "GOLD": "-100456"}}
+        news = "🚨 NEWS DE DERNIÈ MINUTE\n📰 Headline\nDYOR"
+        self.assertTrue(ab._telegram_sortant_autorise("sendMessage", {"chat_id": "-100123", "text": news}))
+        self.assertFalse(ab._telegram_sortant_autorise("sendMessage", {"chat_id": "-100456", "text": news}))
+        self.assertFalse(ab._telegram_sortant_autorise("sendMessage", {"chat_id": "-100123", "text": "Statut du marché"}))
+        self.assertFalse(ab._telegram_sortant_autorise("editMessageText", {"chat_id": "-100123", "text": news}))
+        ab.TELEGRAM_PULL_CONTEXT.news_chat_id = None
+        self.assertFalse(ab._telegram_sortant_autorise("sendMessage", {"chat_id": "-100123", "text": news}))
 
     def test_unsolicited_status_message_remains_blocked(self):
         ab.TELEGRAM_PULL_CONTEXT.chat_id = None
