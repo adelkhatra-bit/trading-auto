@@ -1164,6 +1164,18 @@ class VoixNaturelleSeulementV1228(unittest.TestCase):
         self.assertIn("voixEnAttente = item", bande)
         self.assertIn("bulle ? 'marche' : 'live'", bande)
 
+    def test_voice_button_replays_last_visible_ai_comment_without_greeting(self):
+        bande = self._lire(["docs", "live", "align-bande-live.user.js"])
+        self.assertIn("let dernierCommentaireIA = null", bande)
+        self.assertIn("if (m.source === 'ia') dernierCommentaireIA = m", bande)
+        self.assertIn("market: source === 'ia' ? codeMarche() : ''", bande)
+        self.assertIn("if (dernier && (!dernier.market || dernier.market === codeMarche())) parlerLive(dernier, true)", bande)
+        self.assertIn("function parlerLive(item, forcer = false)", bande)
+        self.assertIn("if (anglais && !suiteAnglaise && !forcer) return 0", bande)
+        self.assertIn("if (phrase.length < 12 || (!forcer && phrase === (anglais ? voixTexteEN : voixTexte))) return 0", bande)
+        self.assertNotIn("Le coach ALIGN est en direct", bande)
+        self.assertNotIn("I am now commenting on market action", bande)
+
     def test_bande_sens_suit_le_plan_reel(self):
         """Le sens LONG/SHORT de la bannière vient du plan réel du tableau, pas de l'horloge seule."""
         bande = self._lire(["docs", "live", "align-bande-live.user.js"])
